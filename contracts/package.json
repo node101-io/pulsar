@@ -1,0 +1,45 @@
+{
+  "name": "pulsar",
+  "version": "0.1.0",
+  "description": "",
+  "author": "",
+  "license": "",
+  "keywords": [
+    "mina-zkapp",
+    "mina-zk-app",
+    "mina-dapp",
+    "zkapp"
+  ],
+  "type": "module",
+  "main": "build/src/index.js",
+  "types": "build/src/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "buildw": "tsc --watch",
+    "coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "format": "prettier --write --ignore-unknown **/*",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
+    "testw": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "lint": "npx eslint src/* --fix",
+    "format:check": "prettier --check .",
+    "benchmark": "tsc && node --experimental-vm-modules build/src/benchmark/node/benchmark.js",
+    "clean": "rimraf build coverage node_modules src/benchmark/browser/.next src/benchmark/browser/.next-cache src/benchmark/browser/node_modules"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.16.4",
+    "@babel/preset-typescript": "^7.16.0",
+    "@types/jest": "^27.0.3",
+    "@typescript-eslint/eslint-plugin": "^8.26.0",
+    "@typescript-eslint/parser": "^8.26.0",
+    "eslint": "^9.21.0",
+    "eslint-plugin-o1js": "^0.4.0",
+    "jest": "^28.1.3",
+    "prettier": "^2.3.2",
+    "ts-jest": "^28.0.8",
+    "typescript": "^5.1",
+    "rimraf": "^6.0.1"
+  },
+  "peerDependencies": {
+    "o1js": "^2.4.0"
+  }
+}

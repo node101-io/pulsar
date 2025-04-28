@@ -1,0 +1,22 @@
+# TypeScript files
+src
+benchmarks
+
+build/src/benchmark
+build/src/test
+# Editor
+.vscode
+.prettierrc
+.prettierignore
+.gitattributes
+
+# System
+.DS_Store
+
+# Never reveal your keys!
+keys
+
+node_modules
+coverage
+
+.github
