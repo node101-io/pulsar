@@ -1,7 +1,7 @@
 import { Bool, Field, Poseidon, Provable, PublicKey, Struct } from 'o1js';
 import { VALIDATOR_NUMBER } from './constants';
 
-export { PublicKeyList, VALIDATOR_NUMBER };
+export { PublicKeyList };
 
 class PublicKeyList extends Struct({
   list: Provable.Array(Field, VALIDATOR_NUMBER),

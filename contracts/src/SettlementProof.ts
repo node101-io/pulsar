@@ -57,8 +57,21 @@ class SettlementPublicInputs extends Struct({
       )
     );
   }
+
+  hash() {
+    return Poseidon.hash([
+      this.InitialMerkleListRoot,
+      this.InitialStateRoot,
+      this.InitialBlockHeight,
+      this.NewMerkleListRoot,
+      this.NewStateRoot,
+      this.NewBlockHeight,
+    ]);
+  }
 }
 
+// In case we need to add more fields in the future
+// to the public output, we can do it here
 class SettlementPublicOutputs extends Struct({
   numberOfSettlementProofs: Field,
 }) {
@@ -95,7 +108,7 @@ const MultisigVerifierProgram = ZkProgram({
   publicOutput: SettlementPublicOutputs,
 
   methods: {
-    verifySignaturesAndAppend: {
+    verifySignatures: {
       privateInputs: [SignaturePublicKeyList, PublicKey],
       async method(
         publicInputs: SettlementPublicInputs,
@@ -110,13 +123,7 @@ const MultisigVerifierProgram = ZkProgram({
 
           const isValid = signature.verify(
             publicKey,
-            Poseidon.hash([
-              publicInputs.InitialMerkleListRoot,
-              publicInputs.InitialStateRoot,
-              publicInputs.NewMerkleListRoot,
-              publicInputs.NewStateRoot,
-              publicInputs.NewBlockHeight,
-            ]).toFields()
+            publicInputs.hash().toFields()
           );
           counter = Provable.if(isValid, counter.add(1), counter);
 
