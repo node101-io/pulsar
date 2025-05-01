@@ -1,4 +1,5 @@
 import { Bool, Field, PublicKey, Struct } from 'o1js';
+import { ProofGenerators } from './proofGenerators';
 
 export class ActionType extends Struct({
   type: Field, // settlement (0), deposit (1), or withdrawal (2)
@@ -7,13 +8,15 @@ export class ActionType extends Struct({
   initialState: Field, // only defined for types of settlement
   newState: Field, // only defined for types of settlement
   initialMerkleListRoot: Field, // only defined for types of settlement
-  newMerkleListRoot: Field, // only defined for types of settlement
+  newMerkleListRoot: Field, // only defined for types of settlement,
+  rewardListUpdate: ProofGenerators, // only defined for types of settlement and withdrawal
 }) {
   static settlement(
     initialState: Field,
     newState: Field,
     initialMerkleListRoot: Field,
-    newMerkleListRoot: Field
+    newMerkleListRoot: Field,
+    rewardListUpdate: ProofGenerators
   ) {
     return new this({
       type: Field(0),
@@ -23,6 +26,7 @@ export class ActionType extends Struct({
       newState,
       initialMerkleListRoot,
       newMerkleListRoot,
+      rewardListUpdate,
     });
   }
 
@@ -35,10 +39,15 @@ export class ActionType extends Struct({
       newState: Field(0),
       initialMerkleListRoot: Field(0),
       newMerkleListRoot: Field(0),
+      rewardListUpdate: ProofGenerators.empty(),
     });
   }
 
-  static withdrawal(account: PublicKey, amount: Field) {
+  static withdrawal(
+    account: PublicKey,
+    amount: Field,
+    rewardListUpdate: ProofGenerators
+  ) {
     return new this({
       type: Field(2),
       account,
@@ -47,6 +56,7 @@ export class ActionType extends Struct({
       newState: Field(0),
       initialMerkleListRoot: Field(0),
       newMerkleListRoot: Field(0),
+      rewardListUpdate,
     });
   }
 

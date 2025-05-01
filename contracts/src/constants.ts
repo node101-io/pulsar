@@ -1,2 +1,0 @@
-export { VALIDATOR_NUMBER };
-const VALIDATOR_NUMBER = 60;
