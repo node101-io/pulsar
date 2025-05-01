@@ -6,8 +6,11 @@ import {
   Field,
   method,
   Experimental,
+  UInt64,
+  AccountUpdate,
 } from 'o1js';
-import { ActionType } from './Action';
+import { ActionType } from './utils/action';
+import { SettlementProof } from './SettlementProof';
 
 const { BatchReducer } = Experimental;
 
@@ -38,8 +41,8 @@ class SettlementContract extends SmartContract {
   @state(Field) depositTreeRoot = State<Field>();
   // The withdrawal tree root is the root of the withdrawal tree.
   @state(Field) withdrawalTreeRoot = State<Field>();
-  // The rewards tree root is the root of the rewards tree.
-  @state(Field) rewardsTreeRoot = State<Field>();
+
+  @state(Field) rewardListHash = State<Field>();
 
   async deploy() {
     await super.deploy();
@@ -55,10 +58,53 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async settle() {}
+  async settle(settlementProof: SettlementProof) {
+    settlementProof.verify();
+
+    const {
+      InitialMerkleListRoot,
+      InitialStateRoot,
+      InitialBlockHeight,
+      NewBlockHeight,
+      NewMerkleListRoot,
+      NewStateRoot,
+      ProofGeneratorsList,
+    } = settlementProof.publicInput;
+
+    InitialBlockHeight.assertEquals(
+      this.blockHeight.getAndRequireEquals(),
+      'Initial block height mismatch with on-chain state'
+    );
+    InitialMerkleListRoot.assertEquals(
+      this.merkleListRoot.getAndRequireEquals(),
+      'Initial MerkleList root mismatch with on-chain state'
+    );
+    InitialStateRoot.assertEquals(
+      this.stateRoot.getAndRequireEquals(),
+      'Initial Pulsar state root mismatch with on-chain state'
+    );
+    NewBlockHeight.assertGreaterThan(
+      this.blockHeight.getAndRequireEquals(),
+      'New block height must be greater than on-chain state'
+    );
+
+    batchReducer.dispatch(
+      ActionType.settlement(
+        InitialStateRoot,
+        NewStateRoot,
+        InitialMerkleListRoot,
+        NewMerkleListRoot,
+        ProofGeneratorsList
+      )
+    );
+  }
 
   @method
-  async deposit() {}
+  async deposit(amount: UInt64) {
+    const sender = this.sender.getUnconstrained();
+    const depositAccountUpdate = AccountUpdate.createSigned(sender);
+    depositAccountUpdate.send({ to: this.address, amount });
+  }
 
   @method
   async withdraw() {}

@@ -9,8 +9,8 @@ import {
   Struct,
   ZkProgram,
 } from 'o1js';
-import { PublicKeyList } from './utils';
-import { VALIDATOR_NUMBER } from './constants';
+import { ProofGenerators } from './utils/proofGenerators';
+import { AGGREGATE_THRESHOLD, VALIDATOR_NUMBER } from './utils/constants';
 
 export {
   SettlementProof,
@@ -30,7 +30,7 @@ class SettlementPublicInputs extends Struct({
   NewStateRoot: Field,
   NewBlockHeight: Field,
 
-  ProofGeneratorsList: PublicKeyList,
+  ProofGeneratorsList: ProofGenerators,
 }) {
   static default = new this({
     InitialMerkleListRoot: Field(0),
@@ -39,7 +39,7 @@ class SettlementPublicInputs extends Struct({
     NewMerkleListRoot: Field(0),
     NewStateRoot: Field(0),
     NewBlockHeight: Field(0),
-    ProofGeneratorsList: PublicKeyList.empty(),
+    ProofGeneratorsList: ProofGenerators.empty(),
   });
 
   isEmpty() {
@@ -112,14 +112,14 @@ const MultisigVerifierProgram = ZkProgram({
       privateInputs: [SignaturePublicKeyList, PublicKey],
       async method(
         publicInputs: SettlementPublicInputs,
-        privateInputs: SignaturePublicKeyList,
+        signaturePublicKeyList: SignaturePublicKeyList,
         proofGenerator: PublicKey
       ) {
         let counter = Field.from(0);
         let list = List.empty();
 
         for (let i = 0; i < VALIDATOR_NUMBER; i++) {
-          const { signature, publicKey } = privateInputs.list[i];
+          const { signature, publicKey } = signaturePublicKeyList.list[i];
 
           const isValid = signature.verify(
             publicKey,
@@ -139,7 +139,7 @@ const MultisigVerifierProgram = ZkProgram({
           'Not enough valid signatures'
         );
 
-        let proofGeneratorsList = PublicKeyList.empty().insertAt(
+        let proofGeneratorsList = ProofGenerators.empty().insertAt(
           Field(0),
           Poseidon.hash(proofGenerator.toFields())
         );
@@ -227,7 +227,7 @@ const MultisigVerifierProgram = ZkProgram({
           );
 
         numberOfSettlementProofs.assertLessThanOrEqual(
-          Field(64),
+          Field(AGGREGATE_THRESHOLD),
           'Number of settlement proofs exceeds limit'
         );
 
