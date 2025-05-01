@@ -1,5 +1,5 @@
-import { ActionType } from './Action';
-import { VALIDATOR_NUMBER } from './constants';
+import { ActionType } from './utils/action';
+import { VALIDATOR_NUMBER } from './utils/constants';
 import {
   List,
   MultisigVerifierProgram,
@@ -8,7 +8,7 @@ import {
   SettlementPublicOutputs,
   SignaturePublicKeyList,
 } from './SettlementProof';
-import { PublicKeyList } from './utils';
+import { ProofGenerators } from './utils/proofGenerators';
 
 export {
   ActionType,
@@ -19,5 +19,5 @@ export {
   SignaturePublicKeyList,
   SettlementPublicInputs,
   SettlementPublicOutputs,
-  PublicKeyList,
+  ProofGenerators,
 };

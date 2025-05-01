@@ -15,10 +15,10 @@ import {
   SettlementProof,
   SignaturePublicKeyList,
 } from '../SettlementProof';
-import { VALIDATOR_NUMBER } from '../constants';
-import { PublicKeyList } from '../utils';
+import { VALIDATOR_NUMBER } from '../utils/constants';
+import { ProofGenerators } from '../utils/proofGenerators';
 
-describe('MultisigVerifierProgram tests', () => {
+describe('SettlementProof tests', () => {
   const logsEnabled = true;
   let proofsEnabled = false;
   let validators: Array<[PrivateKey, PublicKey]>;
@@ -77,7 +77,7 @@ describe('MultisigVerifierProgram tests', () => {
       const NewMerkleListRoot = Field.random();
       const NewStateRoot = Field.random();
       const NewBlockHeight = Field.random();
-      const ProofGeneratorsList = PublicKeyList.empty();
+      const ProofGeneratorsList = ProofGenerators.empty();
 
       const settlementPublicInputs = new SettlementPublicInputs({
         InitialMerkleListRoot,
@@ -115,8 +115,8 @@ describe('MultisigVerifierProgram tests', () => {
         NewBlockHeight: Field.from(1),
         NewMerkleListRoot: merkleList.hash,
         NewStateRoot: Field.random(),
-        ProofGeneratorsList: Provable.witness(PublicKeyList, () =>
-          PublicKeyList.empty().insertAt(
+        ProofGeneratorsList: Provable.witness(ProofGenerators, () =>
+          ProofGenerators.empty().insertAt(
             Field(0),
             Poseidon.hash(validators[0][1].toFields())
           )
@@ -169,7 +169,7 @@ describe('MultisigVerifierProgram tests', () => {
         NewBlockHeight: Field.from(2),
         NewMerkleListRoot: merkleList.hash,
         NewStateRoot: Field.random(),
-        ProofGeneratorsList: PublicKeyList.empty().insertAt(
+        ProofGeneratorsList: ProofGenerators.empty().insertAt(
           Field(0),
           Poseidon.hash(validators[1][1].toFields())
         ),
@@ -209,7 +209,7 @@ describe('MultisigVerifierProgram tests', () => {
         NewBlockHeight: afterPublicInputs.NewBlockHeight,
         NewMerkleListRoot: afterPublicInputs.NewMerkleListRoot,
         NewStateRoot: afterPublicInputs.NewStateRoot,
-        ProofGeneratorsList: PublicKeyList.empty()
+        ProofGeneratorsList: ProofGenerators.empty()
           .insertAt(Field(0), Poseidon.hash(validators[0][1].toFields()))
           .insertAt(Field(1), Poseidon.hash(validators[1][1].toFields())),
       });
