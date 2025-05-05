@@ -1,36 +1,39 @@
 import { Bool, Field, Poseidon, Provable, PublicKey, Struct } from 'o1js';
-import { AGGREGATE_THRESHOLD } from './constants';
+import { LIST_LENGTH, TOTAL_GENERATORS } from './constants';
 
 export { ProofGenerators };
 
 class ProofGenerators extends Struct({
-  // AGGREGATE_THRESHOLD -> PublicKey x Field
-  // 1 -> PublicKey isOdd Field concatenated
-  list: Provable.Array(Field, AGGREGATE_THRESHOLD + 1),
+  list: Provable.Array(Field, LIST_LENGTH),
 }) {
   static empty() {
-    const list = Array<Field>(AGGREGATE_THRESHOLD + 1).fill(Field.from(0));
+    const list = Array<Field>(LIST_LENGTH).fill(Field.from(0));
     return new ProofGenerators({ list });
   }
 
   isEmpty() {
     let empty = Bool(true);
-    for (let i = 0; i < AGGREGATE_THRESHOLD + 1; i++) {
+    for (let i = 0; i < LIST_LENGTH; i++) {
       empty = empty.and(this.list[i].equals(Field(0)));
     }
     return empty;
   }
 
+  /**
+   * Creates a ProofGenerators instance from an array of PublicKey. This method meant to be used outside of the provable code.
+   * @param arr - An array of PublicKeys. The length of the array must be equal to TOTAL_GENERATORS.
+   * @returns A ProofGenerators instance.
+   */
   static fromPubkeyArray(arr: Array<PublicKey>) {
-    if (arr.length !== AGGREGATE_THRESHOLD) {
+    if (arr.length !== TOTAL_GENERATORS) {
       throw new Error(
-        `Array length must be ${AGGREGATE_THRESHOLD}, but got ${arr.length}`
+        `Array length must be ${TOTAL_GENERATORS}, but got ${arr.length}`
       );
     }
     const list = this.empty().list;
-    for (let i = 0; i < AGGREGATE_THRESHOLD; i++) {
+    for (let i = 0; i < TOTAL_GENERATORS; i++) {
       list[i] = arr[i].x;
-      list[AGGREGATE_THRESHOLD] = list[AGGREGATE_THRESHOLD].add(
+      list[TOTAL_GENERATORS] = list[TOTAL_GENERATORS].add(
         Number(arr[i].isOdd.toField().toBigInt()) * 2 ** i
       );
     }
@@ -39,7 +42,14 @@ class ProofGenerators extends Struct({
 
   insertAt(index: Field, publicKey: PublicKey) {
     let power = Field(1);
-    for (let i = 0; i < AGGREGATE_THRESHOLD; i++) {
+    let previousValue = this.list[0];
+    for (let i = 0; i < TOTAL_GENERATORS; i++) {
+      previousValue = Provable.if(
+        index.equals(Field(i)),
+        this.list[i],
+        previousValue
+      );
+
       this.list[i] = Provable.if(
         index.equals(Field(i)),
         publicKey.x,
@@ -47,8 +57,13 @@ class ProofGenerators extends Struct({
       );
       power = Provable.if(Field(i).lessThan(index), power.add(power), power);
     }
-    // Todo first reset
-    this.list[AGGREGATE_THRESHOLD] = this.list[AGGREGATE_THRESHOLD].add(
+
+    previousValue.assertEquals(
+      Field(0),
+      `ProofGenerators: index already occupied`
+    );
+
+    this.list[TOTAL_GENERATORS] = this.list[TOTAL_GENERATORS].add(
       power.mul(publicKey.isOdd.toField())
     );
     return this;
@@ -56,7 +71,7 @@ class ProofGenerators extends Struct({
 
   getXAt(index: Field) {
     let x = Field(0);
-    for (let i = 0; i < AGGREGATE_THRESHOLD; i++) {
+    for (let i = 0; i < TOTAL_GENERATORS; i++) {
       x = Provable.if(index.equals(Field(i)), this.list[i], x);
     }
     return x;
@@ -64,9 +79,8 @@ class ProofGenerators extends Struct({
 
   getIsOddAt(index: Field) {
     let isOdd = Bool(false);
-    let isOddFields =
-      this.list[AGGREGATE_THRESHOLD].toBits(AGGREGATE_THRESHOLD);
-    for (let i = 0; i < AGGREGATE_THRESHOLD; i++) {
+    let isOddFields = this.list[TOTAL_GENERATORS].toBits(TOTAL_GENERATORS);
+    for (let i = 0; i < TOTAL_GENERATORS; i++) {
       isOdd = Provable.if(index.equals(Field(i)), isOddFields[i], isOdd);
     }
     return isOdd;
@@ -80,7 +94,7 @@ class ProofGenerators extends Struct({
 
   assertEquals(other: ProofGenerators) {
     let equal = Bool(true);
-    for (let i = 0; i < AGGREGATE_THRESHOLD + 1; i++) {
+    for (let i = 0; i < LIST_LENGTH; i++) {
       equal = equal.and(this.list[i].equals(other.list[i]));
     }
     equal.assertTrue('Proof generators list mismatch');
@@ -97,7 +111,7 @@ class ProofGenerators extends Struct({
   appendList(length: Field, other: ProofGenerators) {
     let newList = ProofGenerators.empty();
     let power = Field(1);
-    for (let i = 0; i < AGGREGATE_THRESHOLD; i++) {
+    for (let i = 0; i < TOTAL_GENERATORS; i++) {
       newList.list[i] = Provable.if(
         Field(i).lessThan(length),
         this.list[i],
@@ -110,8 +124,8 @@ class ProofGenerators extends Struct({
       power = Provable.if(Field(i).lessThan(length), power.add(power), power);
     }
 
-    newList.list[AGGREGATE_THRESHOLD] = this.list[AGGREGATE_THRESHOLD].add(
-      power.mul(other.list[AGGREGATE_THRESHOLD])
+    newList.list[TOTAL_GENERATORS] = this.list[TOTAL_GENERATORS].add(
+      power.mul(other.list[TOTAL_GENERATORS])
     );
     return newList;
   }

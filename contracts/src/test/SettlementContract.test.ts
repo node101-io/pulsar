@@ -6,7 +6,6 @@ import {
   PublicKey,
   AccountUpdate,
   Poseidon,
-  UInt64,
   fetchAccount,
   Lightnet,
   VerificationKey,
@@ -17,10 +16,8 @@ import {
   MultisigVerifierProgram,
   SettlementPublicInputs,
   SettlementProof,
-  SignaturePublicKeyList,
 } from '../SettlementProof';
 import { VALIDATOR_NUMBER } from '../utils/constants';
-import { ProofGenerators } from '../utils/proofGenerators';
 import {
   BatchReducerInstance,
   SettlementContract,
