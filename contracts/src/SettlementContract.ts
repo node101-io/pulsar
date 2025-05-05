@@ -37,11 +37,9 @@ class SettlementContract extends SmartContract {
   @state(Field) stateRoot = State<Field>();
   // The block height is the height of the Minamos block.
   @state(Field) blockHeight = State<Field>();
-  // The deposit tree root is the root of the deposit tree.
-  @state(Field) depositTreeRoot = State<Field>();
-  // The withdrawal tree root is the root of the withdrawal tree.
-  @state(Field) withdrawalTreeRoot = State<Field>();
 
+  @state(Field) depositListHash = State<Field>();
+  @state(Field) withdrawalListHash = State<Field>();
   @state(Field) rewardListHash = State<Field>();
 
   async deploy() {
@@ -52,6 +50,7 @@ class SettlementContract extends SmartContract {
     });
   }
 
+  @method
   async initialize(merkleListRoot: Field) {
     super.init();
     this.merkleListRoot.set(merkleListRoot);
@@ -104,6 +103,8 @@ class SettlementContract extends SmartContract {
     const sender = this.sender.getUnconstrained();
     const depositAccountUpdate = AccountUpdate.createSigned(sender);
     depositAccountUpdate.send({ to: this.address, amount });
+
+    batchReducer.dispatch(ActionType.deposit(sender, amount.value));
   }
 
   @method

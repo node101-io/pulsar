@@ -120,7 +120,6 @@ const MultisigVerifierProgram = ZkProgram({
 
         for (let i = 0; i < VALIDATOR_NUMBER; i++) {
           const { signature, publicKey } = signaturePublicKeyList.list[i];
-
           const isValid = signature.verify(
             publicKey,
             publicInputs.hash().toFields()
@@ -141,7 +140,7 @@ const MultisigVerifierProgram = ZkProgram({
 
         let proofGeneratorsList = ProofGenerators.empty().insertAt(
           Field(0),
-          Poseidon.hash(proofGenerator.toFields())
+          proofGenerator
         );
         publicInputs.ProofGeneratorsList.assertEquals(proofGeneratorsList);
 
