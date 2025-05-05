@@ -116,10 +116,7 @@ describe('SettlementProof tests', () => {
         NewMerkleListRoot: merkleList.hash,
         NewStateRoot: Field.random(),
         ProofGeneratorsList: Provable.witness(ProofGenerators, () =>
-          ProofGenerators.empty().insertAt(
-            Field(0),
-            Poseidon.hash(validators[0][1].toFields())
-          )
+          ProofGenerators.empty().insertAt(Field(0), validators[0][1])
         ),
       });
 
@@ -171,7 +168,7 @@ describe('SettlementProof tests', () => {
         NewStateRoot: Field.random(),
         ProofGeneratorsList: ProofGenerators.empty().insertAt(
           Field(0),
-          Poseidon.hash(validators[1][1].toFields())
+          validators[1][1]
         ),
       });
 
@@ -210,8 +207,8 @@ describe('SettlementProof tests', () => {
         NewMerkleListRoot: afterPublicInputs.NewMerkleListRoot,
         NewStateRoot: afterPublicInputs.NewStateRoot,
         ProofGeneratorsList: ProofGenerators.empty()
-          .insertAt(Field(0), Poseidon.hash(validators[0][1].toFields()))
-          .insertAt(Field(1), Poseidon.hash(validators[1][1].toFields())),
+          .insertAt(Field(0), validators[0][1])
+          .insertAt(Field(1), validators[1][1]),
       });
 
       const start = performance.now();

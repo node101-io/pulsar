@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import {
   Field,
   Mina,
@@ -20,7 +21,10 @@ import {
 } from '../SettlementProof';
 import { VALIDATOR_NUMBER } from '../utils/constants';
 import { ProofGenerators } from '../utils/proofGenerators';
-import { SettlementContract } from '../SettlementContract';
+import {
+  BatchReducerInstance,
+  SettlementContract,
+} from '../SettlementContract';
 import { devnetTestAccounts } from './mock';
 
 describe('SettlementProof tests', () => {
@@ -28,7 +32,7 @@ describe('SettlementProof tests', () => {
   const logsEnabled = process.env.LOGS_ENABLED === '1';
   const localTest = testEnvironment === 'local';
   let fee = localTest ? 0 : 1e9;
-  let proofsEnabled = false;
+  let proofsEnabled = true;
   let MINA_NODE_ENDPOINT: string;
   let MINA_ARCHIVE_ENDPOINT: string;
   let MINA_EXPLORER: string;
@@ -208,6 +212,12 @@ describe('SettlementProof tests', () => {
   }
 
   beforeAll(async () => {
+    zkappPrivateKey = PrivateKey.random();
+    zkappAddress = zkappPrivateKey.toPublicKey();
+    zkapp = new SettlementContract(zkappAddress);
+
+    BatchReducerInstance.setContractInstance(zkapp);
+
     log(await MultisigVerifierProgram.analyzeMethods());
     log(await SettlementContract.analyzeMethods());
 
@@ -216,7 +226,10 @@ describe('SettlementProof tests', () => {
         proofsEnabled,
       })
     ).verificationKey;
-    if (!proofsEnabled) {
+
+    await BatchReducerInstance.compile();
+
+    if (proofsEnabled) {
       await SettlementContract.compile();
     }
 
@@ -271,10 +284,6 @@ describe('SettlementProof tests', () => {
       feePayerKey = (await Lightnet.acquireKeyPair()).privateKey;
       feePayerAccount = feePayerKey.toPublicKey();
     }
-
-    zkappPrivateKey = PrivateKey.random();
-    zkappAddress = zkappPrivateKey.toPublicKey();
-    zkapp = new SettlementContract(zkappAddress);
   });
 
   describe('Deploy & Initialize Flow', () => {
@@ -291,9 +300,9 @@ describe('SettlementProof tests', () => {
 
       expect(zkapp.merkleListRoot.get()).toEqual(merkleList.hash);
       expect(zkapp.stateRoot.get()).toEqual(Field(0));
-      expect(zkapp.blockHeight.get()).toEqual(UInt64.from(0));
-      expect(zkapp.depositTreeRoot.get()).toEqual(Field(0));
-      expect(zkapp.withdrawalTreeRoot.get()).toEqual(Field(0));
+      expect(zkapp.blockHeight.get()).toEqual(Field.from(0));
+      expect(zkapp.depositListHash.get()).toEqual(Field(0));
+      expect(zkapp.withdrawalListHash.get()).toEqual(Field(0));
       expect(zkapp.rewardListHash.get()).toEqual(Field(0));
     });
   });
