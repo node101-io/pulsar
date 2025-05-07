@@ -117,13 +117,11 @@ const MultisigVerifierProgram = ZkProgram({
       ) {
         let counter = Field.from(0);
         let list = List.empty();
+        const signatureMessage = publicInputs.hash().toFields();
 
         for (let i = 0; i < VALIDATOR_NUMBER; i++) {
           const { signature, publicKey } = signaturePublicKeyList.list[i];
-          const isValid = signature.verify(
-            publicKey,
-            publicInputs.hash().toFields()
-          );
+          const isValid = signature.verify(publicKey, signatureMessage);
           counter = Provable.if(isValid, counter.add(1), counter);
 
           list.push(Poseidon.hash(publicKey.toFields()));
@@ -164,6 +162,16 @@ const MultisigVerifierProgram = ZkProgram({
       ) {
         previousProof.verify();
         afterProof.verify();
+
+        let numberOfSettlementProofs =
+          previousProof.publicOutput.numberOfSettlementProofs.add(
+            afterProof.publicOutput.numberOfSettlementProofs
+          );
+
+        numberOfSettlementProofs.assertLessThanOrEqual(
+          Field(AGGREGATE_THRESHOLD),
+          'Number of settlement proofs exceeds limit'
+        );
 
         const { publicInput: previousPublicInput } = previousProof;
         const { publicInput: afterPublicInput } = afterProof;
@@ -218,16 +226,6 @@ const MultisigVerifierProgram = ZkProgram({
             previousProof.publicOutput.numberOfSettlementProofs,
             afterPublicInput.ProofGeneratorsList
           )
-        );
-
-        let numberOfSettlementProofs =
-          previousProof.publicOutput.numberOfSettlementProofs.add(
-            afterProof.publicOutput.numberOfSettlementProofs
-          );
-
-        numberOfSettlementProofs.assertLessThanOrEqual(
-          Field(AGGREGATE_THRESHOLD),
-          'Number of settlement proofs exceeds limit'
         );
 
         return {
