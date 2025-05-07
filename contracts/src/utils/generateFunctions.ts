@@ -7,7 +7,11 @@ import {
 } from '../SettlementProof';
 import { ProofGenerators } from './proofGenerators';
 
-export { GenerateSettlementProof, MergeSettlementProofs };
+export {
+  GenerateSettlementProof,
+  MergeSettlementProofs,
+  GenerateSettlementPublicInput,
+};
 
 async function GenerateSettlementProof(
   publicInputs: SettlementPublicInputs,
@@ -53,21 +57,15 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     proofs.map((proof) => proof.publicInput.NewBlockHeight.toString())
   );
 
-  let ProofGeneratorsList = ProofGenerators.empty();
-  for (let i = 0; i < proofs.length; i++) {
-    ProofGeneratorsList.list[i] =
-      proofs[i].publicInput.ProofGeneratorsList.list[0];
-  }
-
   let mergedProof = proofs[0];
 
   try {
     for (let i = 1; i < proofs.length; i++) {
       const proof = proofs[i];
       const publicInput = new SettlementPublicInputs({
-        InitialMerkleListRoot: mergedProof.publicInput.NewMerkleListRoot,
-        InitialStateRoot: mergedProof.publicInput.NewStateRoot,
-        InitialBlockHeight: mergedProof.publicInput.NewBlockHeight,
+        InitialMerkleListRoot: mergedProof.publicInput.InitialMerkleListRoot,
+        InitialStateRoot: mergedProof.publicInput.InitialStateRoot,
+        InitialBlockHeight: mergedProof.publicInput.InitialBlockHeight,
         NewBlockHeight: proof.publicInput.NewBlockHeight,
         NewMerkleListRoot: proof.publicInput.NewMerkleListRoot,
         NewStateRoot: proof.publicInput.NewStateRoot,
@@ -91,4 +89,29 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     throw error;
   }
   return mergedProof;
+}
+
+function GenerateSettlementPublicInput(
+  initialMerkleListRoot: Field,
+  initialStateRoot: Field,
+  initialBlockHeight: Field,
+  newMerkleListRoot: Field,
+  newStateRoot: Field,
+  newBlockHeight: Field,
+  proofGeneratorsList: Array<PublicKey>
+) {
+  let proofGenerators = ProofGenerators.empty();
+  for (let i = 0; i < proofGeneratorsList.length; i++) {
+    proofGenerators.insertAt(Field(i), proofGeneratorsList[i]);
+  }
+
+  return new SettlementPublicInputs({
+    InitialMerkleListRoot: initialMerkleListRoot,
+    InitialStateRoot: initialStateRoot,
+    InitialBlockHeight: initialBlockHeight,
+    NewBlockHeight: newBlockHeight,
+    NewMerkleListRoot: newMerkleListRoot,
+    NewStateRoot: newStateRoot,
+    ProofGeneratorsList: proofGenerators,
+  });
 }
