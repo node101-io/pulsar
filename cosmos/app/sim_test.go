@@ -32,7 +32,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"cosmos/app"
+	"github.com/node101-io/pulsar/cosmos/app"
 )
 
 const (

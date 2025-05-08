@@ -24,7 +24,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"cosmos/app"
+	"github.com/node101-io/pulsar/cosmos/app"
 )
 
 func initRootCmd(

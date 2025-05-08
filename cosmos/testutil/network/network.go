@@ -7,7 +7,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/testutil/network"
 	"github.com/stretchr/testify/require"
 
-	"cosmos/app"
+	"github.com/node101-io/pulsar/cosmos/app"
 )
 
 type (

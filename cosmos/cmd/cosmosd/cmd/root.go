@@ -21,7 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"cosmos/app"
+	"github.com/node101-io/pulsar/cosmos/app"
 )
 
 // NewRootCmd creates a new root command for cosmosd. It is called once in the main function.
