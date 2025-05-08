@@ -14,6 +14,8 @@ import {
 import { ActionType } from './utils/action';
 import { SettlementProof } from './SettlementProof';
 import { MINIMUM_DEPOSIT_AMOUNT } from './utils/constants';
+import { ReduceVerifyProof } from './ReducerVerifierProof';
+// import { Actions } from 'o1js/dist/node/lib/mina/v1/account-update';
 const { BatchReducer } = Experimental;
 
 export { BatchReducerInstance, Batch, BatchProof, SettlementContract };
@@ -100,6 +102,22 @@ class SettlementContract extends SmartContract {
         ProofGeneratorsList
       )
     );
+    // let action = ActionType.settlement(
+    //   InitialStateRoot,
+    //   NewStateRoot,
+    //   InitialMerkleListRoot,
+    //   NewMerkleListRoot,
+    //   InitialBlockHeight,
+    //   NewBlockHeight,
+    //   ProofGeneratorsList
+    // );
+    // let update = this.self;
+    // let canonical = Provable.toCanonical(
+    //   ActionType,
+    //   ActionType.fromValue(action)
+    // );
+    // let fields = ActionType.toFields(canonical).slice(0, 16);
+    // update.body.actions = Actions.pushEvent(update.body.actions, fields);
   }
 
   @method
@@ -119,7 +137,11 @@ class SettlementContract extends SmartContract {
   async withdraw() {}
 
   @method
-  async reduce(batch: Batch, proof: BatchProof) {
+  async reduce(
+    batch: Batch,
+    proof: BatchProof,
+    reduceProof: ReduceVerifyProof
+  ) {
     let stateRoot = this.stateRoot.getAndRequireEquals();
     let merkleListRoot = this.merkleListRoot.getAndRequireEquals();
     let blockHeight = this.blockHeight.getAndRequireEquals();
@@ -179,5 +201,21 @@ class SettlementContract extends SmartContract {
         rewardListHash
       );
     });
+
+    reduceProof.verify();
+
+    stateRoot.assertEquals(reduceProof.publicInput.stateRoot);
+    merkleListRoot.assertEquals(reduceProof.publicInput.merkleListRoot);
+    blockHeight.assertEquals(reduceProof.publicInput.blockHeight);
+    depositListHash.assertEquals(reduceProof.publicInput.depositListHash);
+    withdrawalListHash.assertEquals(reduceProof.publicInput.withdrawalListHash);
+    rewardListHash.assertEquals(reduceProof.publicInput.rewardListHash);
+
+    this.stateRoot.set(stateRoot);
+    this.merkleListRoot.set(merkleListRoot);
+    this.blockHeight.set(blockHeight);
+    this.depositListHash.set(depositListHash);
+    this.withdrawalListHash.set(withdrawalListHash);
+    this.rewardListHash.set(rewardListHash);
   }
 }
