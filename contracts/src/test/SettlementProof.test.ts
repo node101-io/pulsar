@@ -113,14 +113,14 @@ describe('SettlementProof tests', () => {
             .NewMerkleListRoot,
           settlementPublicInputs[settlementPublicInputs.length - 1]
             .NewStateRoot,
+          settlementPublicInputs[settlementPublicInputs.length - 1]
+            .NewBlockHeight,
+          settlementPublicInputs[settlementPublicInputs.length - 1]
+            .NewMerkleListRoot,
+          Field.from(100),
           settlementPublicInputs[
             settlementPublicInputs.length - 1
           ].NewBlockHeight.add(1),
-          settlementPublicInputs[settlementPublicInputs.length - 1]
-            .NewMerkleListRoot,
-          settlementPublicInputs[settlementPublicInputs.length - 1]
-            .NewBlockHeight,
-          Field.from(100),
           [validatorSet[1][1]]
         )
       );
@@ -166,14 +166,14 @@ describe('SettlementProof tests', () => {
             .NewMerkleListRoot,
           settlementPublicInputs[settlementPublicInputs.length - 1]
             .NewStateRoot,
+          settlementPublicInputs[settlementPublicInputs.length - 1]
+            .NewBlockHeight,
+          settlementPublicInputs[settlementPublicInputs.length - 1]
+            .NewMerkleListRoot,
+          Field.from(200),
           settlementPublicInputs[
             settlementPublicInputs.length - 1
           ].NewBlockHeight.add(1),
-          settlementPublicInputs[settlementPublicInputs.length - 1]
-            .NewMerkleListRoot,
-          settlementPublicInputs[settlementPublicInputs.length - 1]
-            .NewBlockHeight,
-          Field.from(200),
           [validatorSet[2][1]]
         )
       );

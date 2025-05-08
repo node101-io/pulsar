@@ -52,9 +52,25 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     );
   });
 
-  console.log(
-    'Sorted proofs:',
-    proofs.map((proof) => proof.publicInput.NewBlockHeight.toString())
+  console.table(
+    proofs.map((proof) => ({
+      InitialBlockHeight: proof.publicInput.InitialBlockHeight.toString().slice(
+        0,
+        10
+      ),
+      InitialMerkleListRoot:
+        proof.publicInput.InitialMerkleListRoot.toString().slice(0, 10),
+      InitialStateRoot: proof.publicInput.InitialStateRoot.toString().slice(
+        0,
+        10
+      ),
+      NewBlockHeight: proof.publicInput.NewBlockHeight.toString().slice(0, 10),
+      NewMerkleListRoot: proof.publicInput.NewMerkleListRoot.toString().slice(
+        0,
+        10
+      ),
+      NewStateRoot: proof.publicInput.NewStateRoot.toString().slice(0, 10),
+    }))
   );
 
   let mergedProof = proofs[0];
