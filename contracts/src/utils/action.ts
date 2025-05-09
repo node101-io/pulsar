@@ -1,4 +1,4 @@
-import { Bool, Field, PublicKey, Struct } from 'o1js';
+import { Bool, Field, Poseidon, PublicKey, Struct } from 'o1js';
 import { ProofGenerators } from './proofGenerators';
 
 export class ActionType extends Struct({
@@ -11,7 +11,8 @@ export class ActionType extends Struct({
   newMerkleListRoot: Field, // only defined for types of settlement,
   initialBlockHeight: Field, // only defined for types of settlement
   newBlockHeight: Field, // only defined for types of settlement
-  rewardListUpdate: ProofGenerators, // only defined for types of settlement and withdrawal
+  // rewardListUpdate: ProofGenerators, // only defined for types of settlement and withdrawal
+  rewardListUpdateHash: Field, // only defined for types of settlement and withdrawal
 }) {
   static settlement(
     initialState: Field,
@@ -32,7 +33,8 @@ export class ActionType extends Struct({
       newMerkleListRoot,
       initialBlockHeight,
       newBlockHeight,
-      rewardListUpdate,
+      // rewardListUpdate,
+      rewardListUpdateHash: Poseidon.hash(rewardListUpdate.toFields()),
     });
   }
 
@@ -47,7 +49,8 @@ export class ActionType extends Struct({
       newMerkleListRoot: Field(0),
       initialBlockHeight: Field(0),
       newBlockHeight: Field(0),
-      rewardListUpdate: ProofGenerators.empty(),
+      // rewardListUpdate: ProofGenerators.empty(),
+      rewardListUpdateHash: Field(0),
     });
   }
 
@@ -66,7 +69,8 @@ export class ActionType extends Struct({
       newMerkleListRoot: Field(0),
       initialBlockHeight: Field(0),
       newBlockHeight: Field(0),
-      rewardListUpdate,
+      // rewardListUpdate,
+      rewardListUpdateHash: Poseidon.hash(rewardListUpdate.toFields()),
     });
   }
 
