@@ -6,11 +6,17 @@ import {
   SignaturePublicKeyList,
 } from '../SettlementProof';
 import { ProofGenerators } from './proofGenerators';
+import {
+  ReducePublicInputs,
+  ReduceVerifierProgram,
+  ReduceVerifierProof,
+} from '../ReducerVerifierProof';
 
 export {
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
+  GenerateReducerVerifierProof,
 };
 
 async function GenerateSettlementProof(
@@ -131,3 +137,23 @@ function GenerateSettlementPublicInput(
     ProofGeneratorsList: proofGenerators,
   });
 }
+
+async function GenerateReducerVerifierProof(
+  publicInputs: ReducePublicInputs,
+  signaturePublicKeyList: SignaturePublicKeyList
+) {
+  let proof: ReduceVerifierProof;
+  try {
+    proof = (
+      await ReduceVerifierProgram.verifySignatures(
+        publicInputs,
+        signaturePublicKeyList
+      )
+    ).proof;
+  } catch (error) {
+    console.error('Error generating reducer verifier proof:', error);
+    throw error;
+  }
+  return proof;
+}
+
