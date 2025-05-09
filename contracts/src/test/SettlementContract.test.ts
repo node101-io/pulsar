@@ -433,6 +433,7 @@ describe('SettlementProof tests', () => {
     });
 
     it('Reduce actions', async () => {
+      settlementActionStack = [];
       await reduce(feePayerKey);
       expect(zkapp.stateRoot.get()).toEqual(
         settlementProof.publicInput.NewStateRoot
@@ -479,9 +480,38 @@ describe('SettlementProof tests', () => {
   });
 
   describe('Combined flow', () => {
-    it('Settle method', async () => {});
-    it('Deposit method', async () => {});
+    it('Generate a settlement proof', async () => {
+      settlementProof = await GenerateTestSettlementProof(activeSet, 16, 32);
+      settlementActionStack.push(settlementProof.publicInput);
+    });
+    it('Settle method', async () => {
+      await settle(feePayerKey, settlementProof);
+    });
+    it('Deposit method', async () => {
+      await deposit(feePayerKey, UInt64.from(1e10 + 123));
+    });
     it('Withdraw method', async () => {});
-    it('Reduce actions', async () => {});
+    it('Reduce actions', async () => {
+      const depositListHash = zkapp.depositListHash.get();
+      const withdrawalListHash = zkapp.withdrawalListHash.get();
+      await reduce(feePayerKey);
+      expect(zkapp.stateRoot.get()).toEqual(
+        settlementProof.publicInput.NewStateRoot
+      );
+      expect(zkapp.blockHeight.get()).toEqual(
+        settlementProof.publicInput.NewBlockHeight
+      );
+      expect(zkapp.merkleListRoot.get()).toEqual(
+        settlementProof.publicInput.NewMerkleListRoot
+      );
+
+      expect(zkapp.depositListHash.get()).toEqual(
+        Poseidon.hash([
+          depositListHash,
+          ...feePayerAccount.toFields(),
+          Field(1e10 + 123),
+        ])
+      );
+    });
   });
 });
