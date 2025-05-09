@@ -1,8 +1,8 @@
-import { Field, Poseidon, Provable, PublicKey, Struct, ZkProgram } from 'o1js';
+import { Field, Poseidon, Provable, Struct, ZkProgram } from 'o1js';
 import { VALIDATOR_NUMBER } from './utils/constants';
 import { List, SignaturePublicKeyList } from './SettlementProof';
 
-export { ReduceVerifyProof, ReduceVerifierProgram, ReducePublicInputs };
+export { ReduceVerifierProof, ReduceVerifierProgram, ReducePublicInputs };
 
 class ReducePublicInputs extends Struct({
   stateRoot: Field,
@@ -31,7 +31,7 @@ const ReduceVerifierProgram = ZkProgram({
 
   methods: {
     verifySignatures: {
-      privateInputs: [SignaturePublicKeyList, PublicKey],
+      privateInputs: [SignaturePublicKeyList],
       async method(
         publicInputs: ReducePublicInputs,
         signaturePublicKeyList: SignaturePublicKeyList
@@ -61,4 +61,4 @@ const ReduceVerifierProgram = ZkProgram({
   },
 });
 
-class ReduceVerifyProof extends ZkProgram.Proof(ReduceVerifierProgram) {}
+class ReduceVerifierProof extends ZkProgram.Proof(ReduceVerifierProgram) {}
