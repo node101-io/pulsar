@@ -23,7 +23,15 @@ var (
 )
 
 const (
-// this line is used by starport scaffolding # simapp/module/const
+	opWeightMsgCreateKeyStore = "op_weight_msg_key_store"
+	// TODO: Determine the simulation weight value
+	defaultWeightMsgCreateKeyStore int = 100
+
+	opWeightMsgUpdateKeyStore = "op_weight_msg_key_store"
+	// TODO: Determine the simulation weight value
+	defaultWeightMsgUpdateKeyStore int = 100
+
+	// this line is used by starport scaffolding # simapp/module/const
 )
 
 // GenerateGenesisState creates a randomized GenState of the module.
@@ -34,6 +42,16 @@ func (AppModule) GenerateGenesisState(simState *module.SimulationState) {
 	}
 	minakeysGenesis := types.GenesisState{
 		Params: types.DefaultParams(),
+		KeyStoreList: []types.KeyStore{
+			{
+				Creator:         sample.AccAddress(),
+				CosmosPublicKey: "0",
+			},
+			{
+				Creator:         sample.AccAddress(),
+				CosmosPublicKey: "1",
+			},
+		},
 		// this line is used by starport scaffolding # simapp/module/genesisState
 	}
 	simState.GenState[types.ModuleName] = simState.Cdc.MustMarshalJSON(&minakeysGenesis)
@@ -46,6 +64,28 @@ func (am AppModule) RegisterStoreDecoder(_ simtypes.StoreDecoderRegistry) {}
 func (am AppModule) WeightedOperations(simState module.SimulationState) []simtypes.WeightedOperation {
 	operations := make([]simtypes.WeightedOperation, 0)
 
+	var weightMsgCreateKeyStore int
+	simState.AppParams.GetOrGenerate(opWeightMsgCreateKeyStore, &weightMsgCreateKeyStore, nil,
+		func(_ *rand.Rand) {
+			weightMsgCreateKeyStore = defaultWeightMsgCreateKeyStore
+		},
+	)
+	operations = append(operations, simulation.NewWeightedOperation(
+		weightMsgCreateKeyStore,
+		minakeyssimulation.SimulateMsgCreateKeyStore(am.accountKeeper, am.bankKeeper, am.keeper),
+	))
+
+	var weightMsgUpdateKeyStore int
+	simState.AppParams.GetOrGenerate(opWeightMsgUpdateKeyStore, &weightMsgUpdateKeyStore, nil,
+		func(_ *rand.Rand) {
+			weightMsgUpdateKeyStore = defaultWeightMsgUpdateKeyStore
+		},
+	)
+	operations = append(operations, simulation.NewWeightedOperation(
+		weightMsgUpdateKeyStore,
+		minakeyssimulation.SimulateMsgUpdateKeyStore(am.accountKeeper, am.bankKeeper, am.keeper),
+	))
+
 	// this line is used by starport scaffolding # simapp/module/operation
 
 	return operations
@@ -54,6 +94,22 @@ func (am AppModule) WeightedOperations(simState module.SimulationState) []simtyp
 // ProposalMsgs returns msgs used for governance proposals for simulations.
 func (am AppModule) ProposalMsgs(simState module.SimulationState) []simtypes.WeightedProposalMsg {
 	return []simtypes.WeightedProposalMsg{
+		simulation.NewWeightedProposalMsg(
+			opWeightMsgCreateKeyStore,
+			defaultWeightMsgCreateKeyStore,
+			func(r *rand.Rand, ctx sdk.Context, accs []simtypes.Account) sdk.Msg {
+				minakeyssimulation.SimulateMsgCreateKeyStore(am.accountKeeper, am.bankKeeper, am.keeper)
+				return nil
+			},
+		),
+		simulation.NewWeightedProposalMsg(
+			opWeightMsgUpdateKeyStore,
+			defaultWeightMsgUpdateKeyStore,
+			func(r *rand.Rand, ctx sdk.Context, accs []simtypes.Account) sdk.Msg {
+				minakeyssimulation.SimulateMsgUpdateKeyStore(am.accountKeeper, am.bankKeeper, am.keeper)
+				return nil
+			},
+		),
 		// this line is used by starport scaffolding # simapp/module/OpMsg
 	}
 }

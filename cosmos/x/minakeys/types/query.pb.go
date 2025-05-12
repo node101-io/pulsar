@@ -6,7 +6,7 @@ package types
 import (
 	context "context"
 	fmt "fmt"
-	_ "github.com/cosmos/cosmos-sdk/types/query"
+	query "github.com/cosmos/cosmos-sdk/types/query"
 	_ "github.com/cosmos/cosmos-sdk/types/tx/amino"
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	grpc1 "github.com/cosmos/gogoproto/grpc"
@@ -114,36 +114,236 @@ func (m *QueryParamsResponse) GetParams() Params {
 	return Params{}
 }
 
+type QueryGetKeyStoreRequest struct {
+	Index string `protobuf:"bytes,1,opt,name=index,proto3" json:"index,omitempty"`
+}
+
+func (m *QueryGetKeyStoreRequest) Reset()         { *m = QueryGetKeyStoreRequest{} }
+func (m *QueryGetKeyStoreRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryGetKeyStoreRequest) ProtoMessage()    {}
+func (*QueryGetKeyStoreRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ad0e5f6405635afe, []int{2}
+}
+func (m *QueryGetKeyStoreRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryGetKeyStoreRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryGetKeyStoreRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryGetKeyStoreRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryGetKeyStoreRequest.Merge(m, src)
+}
+func (m *QueryGetKeyStoreRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryGetKeyStoreRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryGetKeyStoreRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryGetKeyStoreRequest proto.InternalMessageInfo
+
+func (m *QueryGetKeyStoreRequest) GetIndex() string {
+	if m != nil {
+		return m.Index
+	}
+	return ""
+}
+
+type QueryGetKeyStoreResponse struct {
+	KeyStore KeyStore `protobuf:"bytes,1,opt,name=keyStore,proto3" json:"keyStore"`
+}
+
+func (m *QueryGetKeyStoreResponse) Reset()         { *m = QueryGetKeyStoreResponse{} }
+func (m *QueryGetKeyStoreResponse) String() string { return proto.CompactTextString(m) }
+func (*QueryGetKeyStoreResponse) ProtoMessage()    {}
+func (*QueryGetKeyStoreResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ad0e5f6405635afe, []int{3}
+}
+func (m *QueryGetKeyStoreResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryGetKeyStoreResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryGetKeyStoreResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryGetKeyStoreResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryGetKeyStoreResponse.Merge(m, src)
+}
+func (m *QueryGetKeyStoreResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryGetKeyStoreResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryGetKeyStoreResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryGetKeyStoreResponse proto.InternalMessageInfo
+
+func (m *QueryGetKeyStoreResponse) GetKeyStore() KeyStore {
+	if m != nil {
+		return m.KeyStore
+	}
+	return KeyStore{}
+}
+
+type QueryAllKeyStoreRequest struct {
+	Pagination *query.PageRequest `protobuf:"bytes,1,opt,name=pagination,proto3" json:"pagination,omitempty"`
+}
+
+func (m *QueryAllKeyStoreRequest) Reset()         { *m = QueryAllKeyStoreRequest{} }
+func (m *QueryAllKeyStoreRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryAllKeyStoreRequest) ProtoMessage()    {}
+func (*QueryAllKeyStoreRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ad0e5f6405635afe, []int{4}
+}
+func (m *QueryAllKeyStoreRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryAllKeyStoreRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryAllKeyStoreRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryAllKeyStoreRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryAllKeyStoreRequest.Merge(m, src)
+}
+func (m *QueryAllKeyStoreRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryAllKeyStoreRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryAllKeyStoreRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryAllKeyStoreRequest proto.InternalMessageInfo
+
+func (m *QueryAllKeyStoreRequest) GetPagination() *query.PageRequest {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
+type QueryAllKeyStoreResponse struct {
+	KeyStore   []KeyStore          `protobuf:"bytes,1,rep,name=keyStore,proto3" json:"keyStore"`
+	Pagination *query.PageResponse `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
+}
+
+func (m *QueryAllKeyStoreResponse) Reset()         { *m = QueryAllKeyStoreResponse{} }
+func (m *QueryAllKeyStoreResponse) String() string { return proto.CompactTextString(m) }
+func (*QueryAllKeyStoreResponse) ProtoMessage()    {}
+func (*QueryAllKeyStoreResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ad0e5f6405635afe, []int{5}
+}
+func (m *QueryAllKeyStoreResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryAllKeyStoreResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryAllKeyStoreResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryAllKeyStoreResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryAllKeyStoreResponse.Merge(m, src)
+}
+func (m *QueryAllKeyStoreResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryAllKeyStoreResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryAllKeyStoreResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryAllKeyStoreResponse proto.InternalMessageInfo
+
+func (m *QueryAllKeyStoreResponse) GetKeyStore() []KeyStore {
+	if m != nil {
+		return m.KeyStore
+	}
+	return nil
+}
+
+func (m *QueryAllKeyStoreResponse) GetPagination() *query.PageResponse {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterType((*QueryParamsRequest)(nil), "cosmos.minakeys.QueryParamsRequest")
 	proto.RegisterType((*QueryParamsResponse)(nil), "cosmos.minakeys.QueryParamsResponse")
+	proto.RegisterType((*QueryGetKeyStoreRequest)(nil), "cosmos.minakeys.QueryGetKeyStoreRequest")
+	proto.RegisterType((*QueryGetKeyStoreResponse)(nil), "cosmos.minakeys.QueryGetKeyStoreResponse")
+	proto.RegisterType((*QueryAllKeyStoreRequest)(nil), "cosmos.minakeys.QueryAllKeyStoreRequest")
+	proto.RegisterType((*QueryAllKeyStoreResponse)(nil), "cosmos.minakeys.QueryAllKeyStoreResponse")
 }
 
 func init() { proto.RegisterFile("cosmos/minakeys/query.proto", fileDescriptor_ad0e5f6405635afe) }
 
 var fileDescriptor_ad0e5f6405635afe = []byte{
-	// 321 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x50, 0x4f, 0x4a, 0x33, 0x31,
-	0x14, 0x9f, 0x7c, 0xf0, 0x15, 0x1c, 0x17, 0x62, 0x2c, 0x28, 0x55, 0x62, 0xa9, 0x22, 0x52, 0x70,
-	0xe2, 0x54, 0x57, 0x2e, 0x7b, 0x00, 0xb1, 0x5d, 0xba, 0xcb, 0xd4, 0x10, 0x83, 0x9d, 0xbc, 0x74,
-	0x92, 0x11, 0x8b, 0x3b, 0xf1, 0x00, 0x82, 0x97, 0x70, 0xe9, 0x31, 0xba, 0x2c, 0xb8, 0x71, 0x25,
-	0xd2, 0x0a, 0x5e, 0x43, 0x9a, 0x4c, 0x11, 0xa7, 0xe2, 0x26, 0x3c, 0x7e, 0xff, 0xde, 0xef, 0x25,
-	0xdc, 0xec, 0x81, 0x49, 0xc1, 0xd0, 0x54, 0x2a, 0x76, 0xc5, 0x87, 0x86, 0x0e, 0x72, 0x9e, 0x0d,
-	0x23, 0x9d, 0x81, 0x05, 0xbc, 0xe2, 0xc9, 0x68, 0x4e, 0xd6, 0x56, 0x59, 0x2a, 0x15, 0x50, 0xf7,
-	0x7a, 0x4d, 0xad, 0x2a, 0x40, 0x80, 0x1b, 0xe9, 0x6c, 0x2a, 0xd0, 0x2d, 0x01, 0x20, 0xfa, 0x9c,
-	0x32, 0x2d, 0x29, 0x53, 0x0a, 0x2c, 0xb3, 0x12, 0x94, 0x29, 0xd8, 0x66, 0xb1, 0x34, 0x61, 0x86,
-	0xfb, 0x85, 0xf4, 0x3a, 0x4e, 0xb8, 0x65, 0x31, 0xd5, 0x4c, 0x48, 0xe5, 0xc4, 0xf3, 0xa4, 0x72,
-	0x41, 0xcd, 0x32, 0x96, 0x16, 0x49, 0x8d, 0x6a, 0x88, 0x3b, 0x33, 0xff, 0x99, 0x03, 0xbb, 0x7c,
-	0x90, 0x73, 0x63, 0x1b, 0x9d, 0x70, 0xed, 0x07, 0x6a, 0x34, 0x28, 0xc3, 0xf1, 0x49, 0x58, 0xf1,
-	0xe6, 0x0d, 0x54, 0x47, 0xfb, 0xcb, 0xad, 0xf5, 0xa8, 0x74, 0x5f, 0xe4, 0x0d, 0xed, 0xa5, 0xd1,
-	0xdb, 0x76, 0xf0, 0xf4, 0xf9, 0xdc, 0x44, 0xdd, 0xc2, 0xd1, 0xba, 0x47, 0xe1, 0x7f, 0x97, 0x89,
-	0x6f, 0xc3, 0x8a, 0x97, 0xe1, 0x9d, 0x05, 0xff, 0x62, 0x97, 0xda, 0xee, 0xdf, 0x22, 0x5f, 0xad,
-	0xb1, 0x77, 0xf7, 0xf2, 0xf1, 0xf8, 0xaf, 0x8e, 0x09, 0xd5, 0x79, 0xdf, 0xb0, 0x8c, 0xfe, 0x7e,
-	0x75, 0xfb, 0x74, 0x34, 0x21, 0x68, 0x3c, 0x21, 0xe8, 0x7d, 0x42, 0xd0, 0xc3, 0x94, 0x04, 0xe3,
-	0x29, 0x09, 0x5e, 0xa7, 0x24, 0x38, 0x3f, 0x16, 0xd2, 0x5e, 0xe6, 0x49, 0xd4, 0x83, 0x94, 0x2a,
-	0xb8, 0xe0, 0xf1, 0x61, 0x7c, 0x20, 0xa1, 0x14, 0x77, 0xf3, 0x1d, 0x68, 0x87, 0x9a, 0x9b, 0xa4,
-	0xe2, 0xbe, 0xf1, 0xe8, 0x2b, 0x00, 0x00, 0xff, 0xff, 0x50, 0x3c, 0xac, 0x53, 0x07, 0x02, 0x00,
-	0x00,
+	// 524 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x93, 0x3f, 0x6f, 0xd3, 0x40,
+	0x18, 0xc6, 0x73, 0x2d, 0x8d, 0xda, 0xeb, 0x80, 0x38, 0x22, 0xb5, 0x04, 0xe4, 0x16, 0x17, 0x95,
+	0xa6, 0x08, 0x1f, 0x2e, 0x4c, 0x30, 0x35, 0x03, 0x1d, 0x90, 0x50, 0x6b, 0x06, 0x24, 0x16, 0x74,
+	0x69, 0x4f, 0xc6, 0x8a, 0x7d, 0xe7, 0xfa, 0x2e, 0xa8, 0x56, 0xc5, 0xc2, 0x8e, 0x84, 0xe0, 0x0b,
+	0x30, 0xc2, 0xc6, 0xc7, 0xe8, 0x58, 0x89, 0x85, 0x09, 0xa1, 0x04, 0x89, 0xaf, 0x81, 0x7c, 0x7f,
+	0xda, 0xc6, 0x76, 0x08, 0x2c, 0x91, 0x73, 0xef, 0xfb, 0x3c, 0xcf, 0xcf, 0x7e, 0xdf, 0x83, 0xd7,
+	0xf7, 0xb9, 0x48, 0xb8, 0xc0, 0x49, 0xc4, 0x48, 0x9f, 0xe6, 0x02, 0x1f, 0x0e, 0x68, 0x96, 0x7b,
+	0x69, 0xc6, 0x25, 0x47, 0x97, 0x75, 0xd1, 0xb3, 0xc5, 0xf6, 0x15, 0x92, 0x44, 0x8c, 0x63, 0xf5,
+	0xab, 0x7b, 0xda, 0xad, 0x90, 0x87, 0x5c, 0x3d, 0xe2, 0xe2, 0xc9, 0x9c, 0xde, 0x08, 0x39, 0x0f,
+	0x63, 0x8a, 0x49, 0x1a, 0x61, 0xc2, 0x18, 0x97, 0x44, 0x46, 0x9c, 0x09, 0x53, 0xdd, 0x34, 0xa1,
+	0x3d, 0x22, 0xa8, 0x0e, 0xc4, 0xaf, 0xfd, 0x1e, 0x95, 0xc4, 0xc7, 0x29, 0x09, 0x23, 0xa6, 0x9a,
+	0xad, 0x53, 0x19, 0x30, 0x25, 0x19, 0x49, 0xac, 0xd3, 0x4a, 0xb9, 0xda, 0xa7, 0xf9, 0x4b, 0x21,
+	0x79, 0x46, 0x75, 0x83, 0xdb, 0x82, 0x68, 0xaf, 0x08, 0xd8, 0x55, 0xaa, 0x80, 0x1e, 0x0e, 0xa8,
+	0x90, 0xee, 0x1e, 0xbc, 0x3a, 0x76, 0x2a, 0x52, 0xce, 0x04, 0x45, 0x0f, 0x61, 0x53, 0xbb, 0x2f,
+	0x83, 0x55, 0xb0, 0xb1, 0xb8, 0xb5, 0xe4, 0x95, 0x3e, 0x80, 0xa7, 0x05, 0xdd, 0x85, 0x93, 0x1f,
+	0x2b, 0x8d, 0xcf, 0xbf, 0xbf, 0x6e, 0x82, 0xc0, 0x28, 0x5c, 0x0c, 0x97, 0x94, 0xe5, 0x0e, 0x95,
+	0x4f, 0x68, 0xfe, 0xac, 0x40, 0x30, 0x69, 0xa8, 0x05, 0xe7, 0x22, 0x76, 0x40, 0x8f, 0x94, 0xeb,
+	0x42, 0xa0, 0xff, 0xb8, 0xcf, 0xe1, 0x72, 0x55, 0x60, 0x40, 0x1e, 0xc1, 0xf9, 0xbe, 0x39, 0x33,
+	0x28, 0xd7, 0x2a, 0x28, 0x56, 0xd4, 0xbd, 0x54, 0xc0, 0x04, 0x67, 0x02, 0x97, 0x18, 0x92, 0xed,
+	0x38, 0x2e, 0x93, 0x3c, 0x86, 0xf0, 0xfc, 0x03, 0x1b, 0xe7, 0x75, 0xeb, 0x5c, 0x4c, 0xc3, 0xd3,
+	0xe3, 0x37, 0xd3, 0xf0, 0x76, 0x49, 0x68, 0xb5, 0xc1, 0x05, 0xa5, 0xfb, 0x09, 0x18, 0xf8, 0xb1,
+	0x8c, 0x5a, 0xf8, 0xd9, 0xff, 0x82, 0x47, 0x3b, 0x63, 0x84, 0x33, 0x8a, 0xf0, 0xf6, 0x54, 0x42,
+	0x9d, 0x7c, 0x11, 0x71, 0xeb, 0xcb, 0x2c, 0x9c, 0x53, 0x88, 0xe8, 0x18, 0x36, 0xf5, 0xd8, 0xd0,
+	0x5a, 0x85, 0xa3, 0xba, 0x1b, 0xed, 0x5b, 0x7f, 0x6f, 0xd2, 0x51, 0xee, 0xfa, 0xdb, 0x6f, 0xbf,
+	0x3e, 0xce, 0xac, 0x22, 0x07, 0xa7, 0x83, 0x58, 0x90, 0x0c, 0xd7, 0xaf, 0x29, 0xfa, 0x00, 0xe0,
+	0xbc, 0x7d, 0x59, 0xb4, 0x51, 0x6f, 0x5d, 0x5d, 0x99, 0x76, 0xe7, 0x1f, 0x3a, 0x0d, 0x89, 0xaf,
+	0x48, 0xee, 0xa0, 0xce, 0x24, 0x92, 0xb3, 0x2b, 0x81, 0x8f, 0xd5, 0xe6, 0xbd, 0x41, 0xef, 0x00,
+	0x5c, 0xb4, 0x3e, 0xdb, 0x71, 0x3c, 0x89, 0xab, 0xba, 0x40, 0x93, 0xb8, 0x6a, 0xd6, 0xc0, 0xed,
+	0x28, 0xae, 0x35, 0x74, 0x73, 0x2a, 0x57, 0xf7, 0xe9, 0xc9, 0xd0, 0x01, 0xa7, 0x43, 0x07, 0xfc,
+	0x1c, 0x3a, 0xe0, 0xfd, 0xc8, 0x69, 0x9c, 0x8e, 0x9c, 0xc6, 0xf7, 0x91, 0xd3, 0x78, 0xf1, 0x20,
+	0x8c, 0xe4, 0xab, 0x41, 0xcf, 0xdb, 0xe7, 0x09, 0x66, 0xfc, 0x80, 0xfa, 0xf7, 0xfc, 0xbb, 0x11,
+	0x2f, 0x39, 0x1e, 0x9d, 0x7b, 0xca, 0x3c, 0xa5, 0xa2, 0xd7, 0x54, 0x77, 0xff, 0xfe, 0x9f, 0x00,
+	0x00, 0x00, 0xff, 0xff, 0x70, 0xc0, 0xcb, 0xe8, 0xdd, 0x04, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -160,6 +360,9 @@ const _ = grpc.SupportPackageIsVersion4
 type QueryClient interface {
 	// Parameters queries the parameters of the module.
 	Params(ctx context.Context, in *QueryParamsRequest, opts ...grpc.CallOption) (*QueryParamsResponse, error)
+	// Queries a list of KeyStore items.
+	KeyStore(ctx context.Context, in *QueryGetKeyStoreRequest, opts ...grpc.CallOption) (*QueryGetKeyStoreResponse, error)
+	KeyStoreAll(ctx context.Context, in *QueryAllKeyStoreRequest, opts ...grpc.CallOption) (*QueryAllKeyStoreResponse, error)
 }
 
 type queryClient struct {
@@ -179,10 +382,31 @@ func (c *queryClient) Params(ctx context.Context, in *QueryParamsRequest, opts .
 	return out, nil
 }
 
+func (c *queryClient) KeyStore(ctx context.Context, in *QueryGetKeyStoreRequest, opts ...grpc.CallOption) (*QueryGetKeyStoreResponse, error) {
+	out := new(QueryGetKeyStoreResponse)
+	err := c.cc.Invoke(ctx, "/cosmos.minakeys.Query/KeyStore", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) KeyStoreAll(ctx context.Context, in *QueryAllKeyStoreRequest, opts ...grpc.CallOption) (*QueryAllKeyStoreResponse, error) {
+	out := new(QueryAllKeyStoreResponse)
+	err := c.cc.Invoke(ctx, "/cosmos.minakeys.Query/KeyStoreAll", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QueryServer is the server API for Query service.
 type QueryServer interface {
 	// Parameters queries the parameters of the module.
 	Params(context.Context, *QueryParamsRequest) (*QueryParamsResponse, error)
+	// Queries a list of KeyStore items.
+	KeyStore(context.Context, *QueryGetKeyStoreRequest) (*QueryGetKeyStoreResponse, error)
+	KeyStoreAll(context.Context, *QueryAllKeyStoreRequest) (*QueryAllKeyStoreResponse, error)
 }
 
 // UnimplementedQueryServer can be embedded to have forward compatible implementations.
@@ -191,6 +415,12 @@ type UnimplementedQueryServer struct {
 
 func (*UnimplementedQueryServer) Params(ctx context.Context, req *QueryParamsRequest) (*QueryParamsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Params not implemented")
+}
+func (*UnimplementedQueryServer) KeyStore(ctx context.Context, req *QueryGetKeyStoreRequest) (*QueryGetKeyStoreResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KeyStore not implemented")
+}
+func (*UnimplementedQueryServer) KeyStoreAll(ctx context.Context, req *QueryAllKeyStoreRequest) (*QueryAllKeyStoreResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KeyStoreAll not implemented")
 }
 
 func RegisterQueryServer(s grpc1.Server, srv QueryServer) {
@@ -215,6 +445,42 @@ func _Query_Params_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Query_KeyStore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryGetKeyStoreRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).KeyStore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cosmos.minakeys.Query/KeyStore",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).KeyStore(ctx, req.(*QueryGetKeyStoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_KeyStoreAll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAllKeyStoreRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).KeyStoreAll(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cosmos.minakeys.Query/KeyStoreAll",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).KeyStoreAll(ctx, req.(*QueryAllKeyStoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var Query_serviceDesc = _Query_serviceDesc
 var _Query_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "cosmos.minakeys.Query",
@@ -223,6 +489,14 @@ var _Query_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Params",
 			Handler:    _Query_Params_Handler,
+		},
+		{
+			MethodName: "KeyStore",
+			Handler:    _Query_KeyStore_Handler,
+		},
+		{
+			MethodName: "KeyStoreAll",
+			Handler:    _Query_KeyStoreAll_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -285,6 +559,153 @@ func (m *QueryParamsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *QueryGetKeyStoreRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryGetKeyStoreRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryGetKeyStoreRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Index) > 0 {
+		i -= len(m.Index)
+		copy(dAtA[i:], m.Index)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.Index)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryGetKeyStoreResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryGetKeyStoreResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryGetKeyStoreResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	{
+		size, err := m.KeyStore.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintQuery(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryAllKeyStoreRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryAllKeyStoreRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryAllKeyStoreRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Pagination != nil {
+		{
+			size, err := m.Pagination.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintQuery(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryAllKeyStoreResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryAllKeyStoreResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryAllKeyStoreResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Pagination != nil {
+		{
+			size, err := m.Pagination.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintQuery(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.KeyStore) > 0 {
+		for iNdEx := len(m.KeyStore) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.KeyStore[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintQuery(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintQuery(dAtA []byte, offset int, v uint64) int {
 	offset -= sovQuery(v)
 	base := offset
@@ -313,6 +734,62 @@ func (m *QueryParamsResponse) Size() (n int) {
 	_ = l
 	l = m.Params.Size()
 	n += 1 + l + sovQuery(uint64(l))
+	return n
+}
+
+func (m *QueryGetKeyStoreRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Index)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryGetKeyStoreResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = m.KeyStore.Size()
+	n += 1 + l + sovQuery(uint64(l))
+	return n
+}
+
+func (m *QueryAllKeyStoreRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Pagination != nil {
+		l = m.Pagination.Size()
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryAllKeyStoreResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.KeyStore) > 0 {
+		for _, e := range m.KeyStore {
+			l = e.Size()
+			n += 1 + l + sovQuery(uint64(l))
+		}
+	}
+	if m.Pagination != nil {
+		l = m.Pagination.Size()
+		n += 1 + l + sovQuery(uint64(l))
+	}
 	return n
 }
 
@@ -431,6 +908,377 @@ func (m *QueryParamsResponse) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if err := m.Params.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryGetKeyStoreRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryGetKeyStoreRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryGetKeyStoreRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Index", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Index = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryGetKeyStoreResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryGetKeyStoreResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryGetKeyStoreResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field KeyStore", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.KeyStore.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryAllKeyStoreRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryAllKeyStoreRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryAllKeyStoreRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Pagination", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Pagination == nil {
+				m.Pagination = &query.PageRequest{}
+			}
+			if err := m.Pagination.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryAllKeyStoreResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryAllKeyStoreResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryAllKeyStoreResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field KeyStore", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.KeyStore = append(m.KeyStore, KeyStore{})
+			if err := m.KeyStore[len(m.KeyStore)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Pagination", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Pagination == nil {
+				m.Pagination = &query.PageResponse{}
+			}
+			if err := m.Pagination.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

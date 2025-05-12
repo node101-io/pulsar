@@ -19,12 +19,34 @@ func TestGenesisState_Validate(t *testing.T) {
 			valid:    true,
 		},
 		{
-			desc:     "valid genesis state",
+			desc: "valid genesis state",
 			genState: &types.GenesisState{
 
+				KeyStoreList: []types.KeyStore{
+					{
+						CosmosPublicKey: "0",
+					},
+					{
+						CosmosPublicKey: "1",
+					},
+				},
 				// this line is used by starport scaffolding # types/genesis/validField
 			},
 			valid: true,
+		},
+		{
+			desc: "duplicated keyStore",
+			genState: &types.GenesisState{
+				KeyStoreList: []types.KeyStore{
+					{
+						CosmosPublicKey: "0",
+					},
+					{
+						CosmosPublicKey: "0",
+					},
+				},
+			},
+			valid: false,
 		},
 		// this line is used by starport scaffolding # types/genesis/testcase
 	}

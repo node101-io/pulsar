@@ -19,7 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Msg_UpdateParams_FullMethodName = "/cosmos.minakeys.Msg/UpdateParams"
+	Msg_UpdateParams_FullMethodName   = "/cosmos.minakeys.Msg/UpdateParams"
+	Msg_CreateKeyStore_FullMethodName = "/cosmos.minakeys.Msg/CreateKeyStore"
+	Msg_UpdateKeyStore_FullMethodName = "/cosmos.minakeys.Msg/UpdateKeyStore"
 )
 
 // MsgClient is the client API for Msg service.
@@ -29,6 +31,8 @@ type MsgClient interface {
 	// UpdateParams defines a (governance) operation for updating the module
 	// parameters. The authority defaults to the x/gov module account.
 	UpdateParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error)
+	CreateKeyStore(ctx context.Context, in *MsgCreateKeyStore, opts ...grpc.CallOption) (*MsgCreateKeyStoreResponse, error)
+	UpdateKeyStore(ctx context.Context, in *MsgUpdateKeyStore, opts ...grpc.CallOption) (*MsgUpdateKeyStoreResponse, error)
 }
 
 type msgClient struct {
@@ -48,6 +52,24 @@ func (c *msgClient) UpdateParams(ctx context.Context, in *MsgUpdateParams, opts 
 	return out, nil
 }
 
+func (c *msgClient) CreateKeyStore(ctx context.Context, in *MsgCreateKeyStore, opts ...grpc.CallOption) (*MsgCreateKeyStoreResponse, error) {
+	out := new(MsgCreateKeyStoreResponse)
+	err := c.cc.Invoke(ctx, Msg_CreateKeyStore_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) UpdateKeyStore(ctx context.Context, in *MsgUpdateKeyStore, opts ...grpc.CallOption) (*MsgUpdateKeyStoreResponse, error) {
+	out := new(MsgUpdateKeyStoreResponse)
+	err := c.cc.Invoke(ctx, Msg_UpdateKeyStore_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MsgServer is the server API for Msg service.
 // All implementations must embed UnimplementedMsgServer
 // for forward compatibility
@@ -55,6 +77,8 @@ type MsgServer interface {
 	// UpdateParams defines a (governance) operation for updating the module
 	// parameters. The authority defaults to the x/gov module account.
 	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
+	CreateKeyStore(context.Context, *MsgCreateKeyStore) (*MsgCreateKeyStoreResponse, error)
+	UpdateKeyStore(context.Context, *MsgUpdateKeyStore) (*MsgUpdateKeyStoreResponse, error)
 	mustEmbedUnimplementedMsgServer()
 }
 
@@ -64,6 +88,12 @@ type UnimplementedMsgServer struct {
 
 func (UnimplementedMsgServer) UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateParams not implemented")
+}
+func (UnimplementedMsgServer) CreateKeyStore(context.Context, *MsgCreateKeyStore) (*MsgCreateKeyStoreResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateKeyStore not implemented")
+}
+func (UnimplementedMsgServer) UpdateKeyStore(context.Context, *MsgUpdateKeyStore) (*MsgUpdateKeyStoreResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateKeyStore not implemented")
 }
 func (UnimplementedMsgServer) mustEmbedUnimplementedMsgServer() {}
 
@@ -96,6 +126,42 @@ func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Msg_CreateKeyStore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgCreateKeyStore)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).CreateKeyStore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_CreateKeyStore_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).CreateKeyStore(ctx, req.(*MsgCreateKeyStore))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_UpdateKeyStore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateKeyStore)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).UpdateKeyStore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_UpdateKeyStore_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).UpdateKeyStore(ctx, req.(*MsgUpdateKeyStore))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Msg_ServiceDesc is the grpc.ServiceDesc for Msg service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -106,6 +172,14 @@ var Msg_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateParams",
 			Handler:    _Msg_UpdateParams_Handler,
+		},
+		{
+			MethodName: "CreateKeyStore",
+			Handler:    _Msg_CreateKeyStore_Handler,
+		},
+		{
+			MethodName: "UpdateKeyStore",
+			Handler:    _Msg_UpdateKeyStore_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

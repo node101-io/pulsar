@@ -17,6 +17,17 @@ func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 					Use:       "params",
 					Short:     "Shows the parameters of the module",
 				},
+				{
+					RpcMethod: "KeyStoreAll",
+					Use:       "list-key-store",
+					Short:     "List all KeyStore",
+				},
+				{
+					RpcMethod:      "KeyStore",
+					Use:            "show-key-store [id]",
+					Short:          "Shows a KeyStore",
+					PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "index"}},
+				},
 				// this line is used by ignite scaffolding # autocli/query
 			},
 		},
@@ -27,6 +38,18 @@ func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 				{
 					RpcMethod: "UpdateParams",
 					Skip:      true, // skipped because authority gated
+				},
+				{
+					RpcMethod:      "CreateKeyStore",
+					Use:            "create-key-store [cosmosPublicKey] [minaPublicKey] [cosmosSignature] [minaSignature]",
+					Short:          "Create a new KeyStore entry",
+					PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "cosmosPublicKey"}, {ProtoField: "minaPublicKey"}, {ProtoField: "cosmosSignature"}, {ProtoField: "minaSignature"}},
+				},
+				{
+					RpcMethod:      "UpdateKeyStore",
+					Use:            "update-key-store [cosmosPublicKey] [minaPublicKey] [cosmosSignature] [minaSignature]",
+					Short:          "Update an existing KeyStore entry",
+					PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "cosmosPublicKey"}, {ProtoField: "minaPublicKey"}, {ProtoField: "cosmosSignature"}, {ProtoField: "minaSignature"}},
 				},
 				// this line is used by ignite scaffolding # autocli/tx
 			},

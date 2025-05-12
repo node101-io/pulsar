@@ -19,7 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Query_Params_FullMethodName = "/cosmos.minakeys.Query/Params"
+	Query_Params_FullMethodName      = "/cosmos.minakeys.Query/Params"
+	Query_KeyStore_FullMethodName    = "/cosmos.minakeys.Query/KeyStore"
+	Query_KeyStoreAll_FullMethodName = "/cosmos.minakeys.Query/KeyStoreAll"
 )
 
 // QueryClient is the client API for Query service.
@@ -28,6 +30,9 @@ const (
 type QueryClient interface {
 	// Parameters queries the parameters of the module.
 	Params(ctx context.Context, in *QueryParamsRequest, opts ...grpc.CallOption) (*QueryParamsResponse, error)
+	// Queries a list of KeyStore items.
+	KeyStore(ctx context.Context, in *QueryGetKeyStoreRequest, opts ...grpc.CallOption) (*QueryGetKeyStoreResponse, error)
+	KeyStoreAll(ctx context.Context, in *QueryAllKeyStoreRequest, opts ...grpc.CallOption) (*QueryAllKeyStoreResponse, error)
 }
 
 type queryClient struct {
@@ -47,12 +52,33 @@ func (c *queryClient) Params(ctx context.Context, in *QueryParamsRequest, opts .
 	return out, nil
 }
 
+func (c *queryClient) KeyStore(ctx context.Context, in *QueryGetKeyStoreRequest, opts ...grpc.CallOption) (*QueryGetKeyStoreResponse, error) {
+	out := new(QueryGetKeyStoreResponse)
+	err := c.cc.Invoke(ctx, Query_KeyStore_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) KeyStoreAll(ctx context.Context, in *QueryAllKeyStoreRequest, opts ...grpc.CallOption) (*QueryAllKeyStoreResponse, error) {
+	out := new(QueryAllKeyStoreResponse)
+	err := c.cc.Invoke(ctx, Query_KeyStoreAll_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QueryServer is the server API for Query service.
 // All implementations must embed UnimplementedQueryServer
 // for forward compatibility
 type QueryServer interface {
 	// Parameters queries the parameters of the module.
 	Params(context.Context, *QueryParamsRequest) (*QueryParamsResponse, error)
+	// Queries a list of KeyStore items.
+	KeyStore(context.Context, *QueryGetKeyStoreRequest) (*QueryGetKeyStoreResponse, error)
+	KeyStoreAll(context.Context, *QueryAllKeyStoreRequest) (*QueryAllKeyStoreResponse, error)
 	mustEmbedUnimplementedQueryServer()
 }
 
@@ -62,6 +88,12 @@ type UnimplementedQueryServer struct {
 
 func (UnimplementedQueryServer) Params(context.Context, *QueryParamsRequest) (*QueryParamsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Params not implemented")
+}
+func (UnimplementedQueryServer) KeyStore(context.Context, *QueryGetKeyStoreRequest) (*QueryGetKeyStoreResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KeyStore not implemented")
+}
+func (UnimplementedQueryServer) KeyStoreAll(context.Context, *QueryAllKeyStoreRequest) (*QueryAllKeyStoreResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KeyStoreAll not implemented")
 }
 func (UnimplementedQueryServer) mustEmbedUnimplementedQueryServer() {}
 
@@ -94,6 +126,42 @@ func _Query_Params_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Query_KeyStore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryGetKeyStoreRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).KeyStore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_KeyStore_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).KeyStore(ctx, req.(*QueryGetKeyStoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_KeyStoreAll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAllKeyStoreRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).KeyStoreAll(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_KeyStoreAll_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).KeyStoreAll(ctx, req.(*QueryAllKeyStoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Query_ServiceDesc is the grpc.ServiceDesc for Query service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -104,6 +172,14 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Params",
 			Handler:    _Query_Params_Handler,
+		},
+		{
+			MethodName: "KeyStore",
+			Handler:    _Query_KeyStore_Handler,
+		},
+		{
+			MethodName: "KeyStoreAll",
+			Handler:    _Query_KeyStoreAll_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
