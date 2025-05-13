@@ -8,11 +8,9 @@ import {
   Signature,
 } from 'o1js';
 import {
-  List,
   MultisigVerifierProgram,
   SettlementProof,
   SettlementPublicInputs,
-  SignaturePublicKeyList,
 } from '../SettlementProof';
 import {
   GenerateReducerVerifierProof,
@@ -21,6 +19,7 @@ import {
 } from './generateFunctions';
 import { SettlementContract } from '../SettlementContract';
 import { ReducePublicInputs } from '../ReducerVerifierProof';
+import { List, SignaturePublicKeyList } from '../types';
 
 export {
   GenerateSettlementSignatureList,

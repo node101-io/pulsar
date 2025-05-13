@@ -1,6 +1,5 @@
 import { Field, Poseidon, verify, VerificationKey } from 'o1js';
 import {
-  List,
   MultisigVerifierProgram,
   SettlementPublicInputs,
   SettlementProof,
@@ -13,6 +12,7 @@ import {
   MergeSettlementProofs,
 } from '../utils/generateFunctions';
 import { GenerateSettlementSignatureList } from '../utils/testUtils';
+import { List } from '../types';
 
 describe('SettlementProof tests', () => {
   const logsEnabled = true;

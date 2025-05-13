@@ -1,6 +1,6 @@
 import { Field, Poseidon, Provable, Struct, ZkProgram } from 'o1js';
 import { VALIDATOR_NUMBER } from './utils/constants';
-import { List, SignaturePublicKeyList } from './SettlementProof';
+import { List, SignaturePublicKeyList } from './types';
 
 export { ReduceVerifierProof, ReduceVerifierProgram, ReducePublicInputs };
 

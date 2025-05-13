@@ -12,7 +12,6 @@ import {
   UInt64,
 } from 'o1js';
 import {
-  List,
   MultisigVerifierProgram,
   SettlementPublicInputs,
   SettlementProof,
@@ -34,6 +33,8 @@ import {
 } from '../ReducerVerifierProof';
 import { GenerateReducerVerifierProof } from '../utils/generateFunctions';
 import { ProofGenerators } from '../utils/proofGenerators';
+import { List } from '../types';
+import { WithdrawProgram } from '../Withdraw';
 
 describe('SettlementProof tests', () => {
   const testEnvironment = process.env.TEST_ENV ?? 'local';
@@ -75,6 +76,7 @@ describe('SettlementProof tests', () => {
   let withdrawActionStack: Array<[PublicKey, UInt64, ProofGenerators]> = [];
 
   // artifacts
+  let WithdrawProgramVK: VerificationKey;
   let MultisigVerifierProgramVK: VerificationKey;
   let ReducerVerifierProgramVK: VerificationKey;
 
@@ -339,9 +341,16 @@ describe('SettlementProof tests', () => {
 
     BatchReducerInstance.setContractInstance(zkapp);
 
+    analyzeMethods(await WithdrawProgram.analyzeMethods());
     analyzeMethods(await ReduceVerifierProgram.analyzeMethods());
     analyzeMethods(await MultisigVerifierProgram.analyzeMethods());
     analyzeMethods(await SettlementContract.analyzeMethods());
+
+    WithdrawProgramVK = (
+      await WithdrawProgram.compile({
+        proofsEnabled,
+      })
+    ).verificationKey;
 
     MultisigVerifierProgramVK = (
       await MultisigVerifierProgram.compile({

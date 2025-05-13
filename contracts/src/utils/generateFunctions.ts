@@ -3,7 +3,6 @@ import {
   MultisigVerifierProgram,
   SettlementProof,
   SettlementPublicInputs,
-  SignaturePublicKeyList,
 } from '../SettlementProof';
 import { ProofGenerators } from './proofGenerators';
 import {
@@ -11,6 +10,7 @@ import {
   ReduceVerifierProgram,
   ReduceVerifierProof,
 } from '../ReducerVerifierProof';
+import { SignaturePublicKeyList } from '../types';
 
 export {
   GenerateSettlementProof,
@@ -156,4 +156,3 @@ async function GenerateReducerVerifierProof(
   }
   return proof;
 }
-
