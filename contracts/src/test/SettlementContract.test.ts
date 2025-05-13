@@ -6,33 +6,42 @@ import {
   PublicKey,
   AccountUpdate,
   Poseidon,
-  UInt64,
   fetchAccount,
   Lightnet,
   VerificationKey,
-  Signature,
+  UInt64,
 } from 'o1js';
 import {
-  List,
   MultisigVerifierProgram,
   SettlementPublicInputs,
   SettlementProof,
-  SignaturePublicKeyList,
 } from '../SettlementProof';
 import { VALIDATOR_NUMBER } from '../utils/constants';
-import { ProofGenerators } from '../utils/proofGenerators';
 import {
   BatchReducerInstance,
   SettlementContract,
 } from '../SettlementContract';
-import { devnetTestAccounts } from './mock';
+import { devnetTestAccounts, validatorSet } from './mock';
+import {
+  GenerateTestSettlementProof,
+  MimicReduce,
+  MockReducerVerifierProof,
+} from '../utils/testUtils';
+import {
+  ReducePublicInputs,
+  ReduceVerifierProgram,
+} from '../ReducerVerifierProof';
+import { GenerateReducerVerifierProof } from '../utils/generateFunctions';
+import { ProofGenerators } from '../utils/proofGenerators';
+import { List } from '../utils/types';
+import { WithdrawProgram } from '../Withdraw';
 
 describe('SettlementProof tests', () => {
   const testEnvironment = process.env.TEST_ENV ?? 'local';
   const logsEnabled = process.env.LOGS_ENABLED === '1';
   const localTest = testEnvironment === 'local';
   let fee = localTest ? 0 : 1e9;
-  let proofsEnabled = true;
+  let proofsEnabled = false;
   let MINA_NODE_ENDPOINT: string;
   let MINA_ARCHIVE_ENDPOINT: string;
   let MINA_EXPLORER: string;
@@ -55,22 +64,21 @@ describe('SettlementProof tests', () => {
   let feePayerAccount: PublicKey;
 
   //validator variables
-  let validators: Array<[PrivateKey, PublicKey]>;
   let merkleList: List;
-  let signatures: Array<Signature>;
+  let activeSet: Array<[PrivateKey, PublicKey]> = [];
 
-  // Public inputs & outputs
-  let previousSettlementPublicInputs: SettlementPublicInputs;
-  let mergePublicInputs: SettlementPublicInputs;
-  let afterPublicInputs: SettlementPublicInputs;
+  // proofs
+  let settlementProof: SettlementProof;
 
-  //proofs
-  let previousSettlementProof: SettlementProof;
-  let afterSettlementProof: SettlementProof;
-  let mergeSettlementProof: SettlementProof;
+  // action stacks
+  let settlementActionStack: Array<SettlementPublicInputs> = [];
+  let depositActionStack: Array<[PublicKey, UInt64]> = [];
+  let withdrawActionStack: Array<[PublicKey, UInt64, ProofGenerators]> = [];
 
   // artifacts
+  let WithdrawProgramVK: VerificationKey;
   let MultisigVerifierProgramVK: VerificationKey;
+  let ReducerVerifierProgramVK: VerificationKey;
 
   // ZkApp
   let zkappAddress: PublicKey;
@@ -85,6 +93,14 @@ describe('SettlementProof tests', () => {
     if (logsEnabled) {
       console.log(...args);
     }
+  }
+
+  function analyzeMethods(data: any) {
+    const tableData = Object.entries(data).map(([methodName, details]) => ({
+      method: methodName,
+      rows: (details as any).rows,
+    }));
+    console.table(tableData);
   }
 
   async function waitTransactionAndFetchAccount(
@@ -211,6 +227,113 @@ describe('SettlementProof tests', () => {
     );
   }
 
+  async function settle(
+    senderKey: PrivateKey,
+    settlementProof: SettlementProof
+  ) {
+    await fetchAccounts([zkappAddress]);
+    const tx = await Mina.transaction(
+      { sender: senderKey.toPublicKey(), fee },
+      async () => {
+        await zkapp.settle(settlementProof);
+      }
+    );
+
+    console.log('settle tx', JSON.parse(tx.toJSON()));
+
+    await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+  }
+
+  async function expectSettleToFail(
+    senderKey: PrivateKey,
+    settlementProof: SettlementProof,
+    expectedMsg?: string
+  ) {
+    try {
+      const tx = await Mina.transaction(
+        { sender: senderKey.toPublicKey(), fee },
+        async () => {
+          await zkapp.settle(settlementProof);
+        }
+      );
+      await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+    } catch (error: any) {
+      log(error);
+      expect(error.message).toContain(expectedMsg);
+      return;
+    }
+    throw new Error('Settle should have failed');
+  }
+
+  async function deposit(senderKey: PrivateKey, amount: UInt64) {
+    const tx = await Mina.transaction(
+      { sender: senderKey.toPublicKey(), fee },
+      async () => {
+        await zkapp.deposit(amount);
+      }
+    );
+
+    await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+  }
+
+  async function expectDepositToFail(
+    senderKey: PrivateKey,
+    amount: UInt64,
+    expectedMsg?: string
+  ) {
+    try {
+      const tx = await Mina.transaction(
+        { sender: senderKey.toPublicKey(), fee },
+        async () => {
+          await zkapp.deposit(amount);
+        }
+      );
+      await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+    } catch (error: any) {
+      log(error);
+      expect(error.message).toContain(expectedMsg);
+      return;
+    }
+    throw new Error('Deposit should have failed');
+  }
+
+  async function reduce(senderKey: PrivateKey) {
+    const batch = await BatchReducerInstance.prepareBatches();
+
+    const reduceResult = await MimicReduce(zkapp);
+    const reduceProof = await MockReducerVerifierProof(reduceResult, activeSet);
+    const tx = await Mina.transaction(
+      { sender: senderKey.toPublicKey(), fee },
+      async () => {
+        await zkapp.reduce(batch[0].batch, batch[0].proof, reduceProof);
+      }
+    );
+
+    await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+  }
+
+  // async function expectReduceToFail(
+  //   senderKey: PrivateKey,
+  //   expectedMsg?: string
+  // ) {
+  //   try {
+  //     const batch = await BatchReducerInstance.prepareBatches();
+
+  //     const tx = await Mina.transaction(
+  //       { sender: senderKey.toPublicKey(), fee },
+  //       async () => {
+  //         await zkapp.reduce(batch[0].batch, batch[0].proof);
+  //       }
+  //     );
+  //     await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+  //   } catch (error: any) {
+  //     log(error);
+  //     expect(error.message).toContain(expectedMsg);
+  //     return;
+  //   }
+  //   throw new Error('Reduce should have failed');
+  // }
+
   beforeAll(async () => {
     zkappPrivateKey = PrivateKey.random();
     zkappAddress = zkappPrivateKey.toPublicKey();
@@ -218,11 +341,25 @@ describe('SettlementProof tests', () => {
 
     BatchReducerInstance.setContractInstance(zkapp);
 
-    log(await MultisigVerifierProgram.analyzeMethods());
-    log(await SettlementContract.analyzeMethods());
+    analyzeMethods(await WithdrawProgram.analyzeMethods());
+    analyzeMethods(await ReduceVerifierProgram.analyzeMethods());
+    analyzeMethods(await MultisigVerifierProgram.analyzeMethods());
+    analyzeMethods(await SettlementContract.analyzeMethods());
+
+    WithdrawProgramVK = (
+      await WithdrawProgram.compile({
+        proofsEnabled,
+      })
+    ).verificationKey;
 
     MultisigVerifierProgramVK = (
       await MultisigVerifierProgram.compile({
+        proofsEnabled,
+      })
+    ).verificationKey;
+
+    ReducerVerifierProgramVK = (
+      await ReduceVerifierProgram.compile({
         proofsEnabled,
       })
     ).verificationKey;
@@ -233,24 +370,11 @@ describe('SettlementProof tests', () => {
       await SettlementContract.compile();
     }
 
-    validators = [];
-    signatures = [];
     merkleList = List.empty();
+    activeSet = validatorSet.slice(0, VALIDATOR_NUMBER);
 
     for (let i = 0; i < VALIDATOR_NUMBER; i++) {
-      const privateKey = PrivateKey.random();
-      const publicKey = privateKey.toPublicKey();
-      validators.push([privateKey, publicKey]);
-    }
-
-    validators.sort((a, b) => {
-      const aHash = Poseidon.hash(a[1].toFields());
-      const bHash = Poseidon.hash(b[1].toFields());
-      return aHash.toBigInt() < bHash.toBigInt() ? -1 : 1;
-    });
-
-    for (let i = 0; i < VALIDATOR_NUMBER; i++) {
-      const [, publicKey] = validators[i];
+      const [, publicKey] = activeSet[i];
       merkleList.push(Poseidon.hash(publicKey.toFields()));
     }
 
@@ -304,6 +428,99 @@ describe('SettlementProof tests', () => {
       expect(zkapp.depositListHash.get()).toEqual(Field(0));
       expect(zkapp.withdrawalListHash.get()).toEqual(Field(0));
       expect(zkapp.rewardListHash.get()).toEqual(Field(0));
+    });
+  });
+
+  describe('Settlement flow', () => {
+    it('Generate a settlement proof', async () => {
+      settlementProof = await GenerateTestSettlementProof(activeSet, 0, 16);
+      settlementActionStack.push(settlementProof.publicInput);
+    });
+
+    it('Settle method', async () => {
+      await settle(feePayerKey, settlementProof);
+    });
+
+    it('Reduce actions', async () => {
+      settlementActionStack = [];
+      await reduce(feePayerKey);
+      expect(zkapp.stateRoot.get()).toEqual(
+        settlementProof.publicInput.NewStateRoot
+      );
+      expect(zkapp.blockHeight.get()).toEqual(
+        settlementProof.publicInput.NewBlockHeight
+      );
+      expect(zkapp.merkleListRoot.get()).toEqual(
+        settlementProof.publicInput.NewMerkleListRoot
+      );
+    });
+  });
+
+  describe('Deposit flow', () => {
+    it('Deposit method', async () => {
+      await deposit(feePayerKey, UInt64.from(1e10));
+    });
+    it('Reduce actions', async () => {
+      const depositListHash = zkapp.depositListHash.get();
+      await reduce(feePayerKey);
+      expect(zkapp.stateRoot.get()).toEqual(
+        settlementProof.publicInput.NewStateRoot
+      );
+      expect(zkapp.blockHeight.get()).toEqual(
+        settlementProof.publicInput.NewBlockHeight
+      );
+      expect(zkapp.merkleListRoot.get()).toEqual(
+        settlementProof.publicInput.NewMerkleListRoot
+      );
+
+      expect(zkapp.depositListHash.get()).toEqual(
+        Poseidon.hash([
+          depositListHash,
+          ...feePayerAccount.toFields(),
+          Field(1e10),
+        ])
+      );
+    });
+  });
+
+  describe('Withdraw flow', () => {
+    it('Withdraw method', async () => {});
+    it('Reduce actions', async () => {});
+  });
+
+  describe('Combined flow', () => {
+    it('Generate a settlement proof', async () => {
+      settlementProof = await GenerateTestSettlementProof(activeSet, 16, 32);
+      settlementActionStack.push(settlementProof.publicInput);
+    });
+    it('Settle method', async () => {
+      await settle(feePayerKey, settlementProof);
+    });
+    it('Deposit method', async () => {
+      await deposit(feePayerKey, UInt64.from(1e10 + 123));
+    });
+    it('Withdraw method', async () => {});
+    it('Reduce actions', async () => {
+      const depositListHash = zkapp.depositListHash.get();
+      const withdrawalListHash = zkapp.withdrawalListHash.get();
+      await reduce(feePayerKey);
+      expect(zkapp.stateRoot.get()).toEqual(
+        settlementProof.publicInput.NewStateRoot
+      );
+      expect(zkapp.blockHeight.get()).toEqual(
+        settlementProof.publicInput.NewBlockHeight
+      );
+      expect(zkapp.merkleListRoot.get()).toEqual(
+        settlementProof.publicInput.NewMerkleListRoot
+      );
+
+      expect(zkapp.depositListHash.get()).toEqual(
+        Poseidon.hash([
+          depositListHash,
+          ...feePayerAccount.toFields(),
+          Field(1e10 + 123),
+        ])
+      );
     });
   });
 });

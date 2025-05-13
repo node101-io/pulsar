@@ -3,11 +3,21 @@ import {
   MultisigVerifierProgram,
   SettlementProof,
   SettlementPublicInputs,
-  SignaturePublicKeyList,
 } from '../SettlementProof';
 import { ProofGenerators } from './proofGenerators';
+import {
+  ReducePublicInputs,
+  ReduceVerifierProgram,
+  ReduceVerifierProof,
+} from '../ReducerVerifierProof';
+import { SignaturePublicKeyList } from './types';
 
-export { GenerateSettlementProof, MergeSettlementProofs };
+export {
+  GenerateSettlementProof,
+  MergeSettlementProofs,
+  GenerateSettlementPublicInput,
+  GenerateReducerVerifierProof,
+};
 
 async function GenerateSettlementProof(
   publicInputs: SettlementPublicInputs,
@@ -48,16 +58,26 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     );
   });
 
-  console.log(
-    'Sorted proofs:',
-    proofs.map((proof) => proof.publicInput.NewBlockHeight.toString())
+  console.table(
+    proofs.map((proof) => ({
+      InitialBlockHeight: proof.publicInput.InitialBlockHeight.toString().slice(
+        0,
+        10
+      ),
+      InitialMerkleListRoot:
+        proof.publicInput.InitialMerkleListRoot.toString().slice(0, 10),
+      InitialStateRoot: proof.publicInput.InitialStateRoot.toString().slice(
+        0,
+        10
+      ),
+      NewBlockHeight: proof.publicInput.NewBlockHeight.toString().slice(0, 10),
+      NewMerkleListRoot: proof.publicInput.NewMerkleListRoot.toString().slice(
+        0,
+        10
+      ),
+      NewStateRoot: proof.publicInput.NewStateRoot.toString().slice(0, 10),
+    }))
   );
-
-  let ProofGeneratorsList = ProofGenerators.empty();
-  for (let i = 0; i < proofs.length; i++) {
-    ProofGeneratorsList.list[i] =
-      proofs[i].publicInput.ProofGeneratorsList.list[0];
-  }
 
   let mergedProof = proofs[0];
 
@@ -65,9 +85,9 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     for (let i = 1; i < proofs.length; i++) {
       const proof = proofs[i];
       const publicInput = new SettlementPublicInputs({
-        InitialMerkleListRoot: mergedProof.publicInput.NewMerkleListRoot,
-        InitialStateRoot: mergedProof.publicInput.NewStateRoot,
-        InitialBlockHeight: mergedProof.publicInput.NewBlockHeight,
+        InitialMerkleListRoot: mergedProof.publicInput.InitialMerkleListRoot,
+        InitialStateRoot: mergedProof.publicInput.InitialStateRoot,
+        InitialBlockHeight: mergedProof.publicInput.InitialBlockHeight,
         NewBlockHeight: proof.publicInput.NewBlockHeight,
         NewMerkleListRoot: proof.publicInput.NewMerkleListRoot,
         NewStateRoot: proof.publicInput.NewStateRoot,
@@ -91,4 +111,48 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     throw error;
   }
   return mergedProof;
+}
+
+function GenerateSettlementPublicInput(
+  initialMerkleListRoot: Field,
+  initialStateRoot: Field,
+  initialBlockHeight: Field,
+  newMerkleListRoot: Field,
+  newStateRoot: Field,
+  newBlockHeight: Field,
+  proofGeneratorsList: Array<PublicKey>
+) {
+  let proofGenerators = ProofGenerators.empty();
+  for (let i = 0; i < proofGeneratorsList.length; i++) {
+    proofGenerators.insertAt(Field(i), proofGeneratorsList[i]);
+  }
+
+  return new SettlementPublicInputs({
+    InitialMerkleListRoot: initialMerkleListRoot,
+    InitialStateRoot: initialStateRoot,
+    InitialBlockHeight: initialBlockHeight,
+    NewBlockHeight: newBlockHeight,
+    NewMerkleListRoot: newMerkleListRoot,
+    NewStateRoot: newStateRoot,
+    ProofGeneratorsList: proofGenerators,
+  });
+}
+
+async function GenerateReducerVerifierProof(
+  publicInputs: ReducePublicInputs,
+  signaturePublicKeyList: SignaturePublicKeyList
+) {
+  let proof: ReduceVerifierProof;
+  try {
+    proof = (
+      await ReduceVerifierProgram.verifySignatures(
+        publicInputs,
+        signaturePublicKeyList
+      )
+    ).proof;
+  } catch (error) {
+    console.error('Error generating reducer verifier proof:', error);
+    throw error;
+  }
+  return proof;
 }

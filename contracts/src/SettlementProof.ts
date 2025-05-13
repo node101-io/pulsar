@@ -1,22 +1,19 @@
 import {
   Field,
-  MerkleList,
   Poseidon,
   Provable,
   PublicKey,
   SelfProof,
-  Signature,
   Struct,
   ZkProgram,
 } from 'o1js';
 import { ProofGenerators } from './utils/proofGenerators';
 import { AGGREGATE_THRESHOLD, VALIDATOR_NUMBER } from './utils/constants';
+import { List, SignaturePublicKeyList } from './utils/types';
 
 export {
   SettlementProof,
   MultisigVerifierProgram,
-  List,
-  SignaturePublicKeyList,
   SettlementPublicInputs,
   SettlementPublicOutputs,
 };
@@ -80,28 +77,6 @@ class SettlementPublicOutputs extends Struct({
   });
 }
 
-class SignaturePublicKey extends Struct({
-  signature: Signature,
-  publicKey: PublicKey,
-}) {}
-
-class SignaturePublicKeyList extends Struct({
-  list: Provable.Array(SignaturePublicKey, VALIDATOR_NUMBER),
-}) {
-  static fromArray(arr: Array<[Signature, PublicKey]>): SignaturePublicKeyList {
-    return new SignaturePublicKeyList({
-      list: arr.map(
-        ([signature, publicKey]) =>
-          new SignaturePublicKey({ signature, publicKey })
-      ),
-    });
-  }
-}
-
-const emptyHash = Poseidon.hash([Field(0)]);
-const nextHash = (hash: Field, value: Field) => Poseidon.hash([hash, value]);
-class List extends MerkleList.create(Field, nextHash, emptyHash) {}
-
 const MultisigVerifierProgram = ZkProgram({
   name: 'state-settlement-verifier',
   publicInput: SettlementPublicInputs,
@@ -117,13 +92,11 @@ const MultisigVerifierProgram = ZkProgram({
       ) {
         let counter = Field.from(0);
         let list = List.empty();
+        const signatureMessage = publicInputs.hash().toFields();
 
         for (let i = 0; i < VALIDATOR_NUMBER; i++) {
           const { signature, publicKey } = signaturePublicKeyList.list[i];
-          const isValid = signature.verify(
-            publicKey,
-            publicInputs.hash().toFields()
-          );
+          const isValid = signature.verify(publicKey, signatureMessage);
           counter = Provable.if(isValid, counter.add(1), counter);
 
           list.push(Poseidon.hash(publicKey.toFields()));
@@ -164,6 +137,16 @@ const MultisigVerifierProgram = ZkProgram({
       ) {
         previousProof.verify();
         afterProof.verify();
+
+        let numberOfSettlementProofs =
+          previousProof.publicOutput.numberOfSettlementProofs.add(
+            afterProof.publicOutput.numberOfSettlementProofs
+          );
+
+        numberOfSettlementProofs.assertLessThanOrEqual(
+          Field(AGGREGATE_THRESHOLD),
+          'Number of settlement proofs exceeds limit'
+        );
 
         const { publicInput: previousPublicInput } = previousProof;
         const { publicInput: afterPublicInput } = afterProof;
@@ -218,16 +201,6 @@ const MultisigVerifierProgram = ZkProgram({
             previousProof.publicOutput.numberOfSettlementProofs,
             afterPublicInput.ProofGeneratorsList
           )
-        );
-
-        let numberOfSettlementProofs =
-          previousProof.publicOutput.numberOfSettlementProofs.add(
-            afterProof.publicOutput.numberOfSettlementProofs
-          );
-
-        numberOfSettlementProofs.assertLessThanOrEqual(
-          Field(AGGREGATE_THRESHOLD),
-          'Number of settlement proofs exceeds limit'
         );
 
         return {
