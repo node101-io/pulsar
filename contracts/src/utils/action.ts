@@ -55,9 +55,11 @@ export class ActionType extends Struct({
   }
 
   static withdrawal(
+    initialMerkleListRoot: Field,
+    newMerkleListRoot: Field,
     account: PublicKey,
-    amount: Field,
-    rewardListUpdate: ProofGenerators
+    amount: Field
+    // rewardListUpdate: ProofGenerators
   ) {
     return new this({
       type: Field(3),
@@ -65,12 +67,15 @@ export class ActionType extends Struct({
       amount,
       initialState: Field(0),
       newState: Field(0),
-      initialMerkleListRoot: Field(0),
-      newMerkleListRoot: Field(0),
+      // initialMerkleListRoot: Field(0),
+      // newMerkleListRoot: Field(0),
+      initialMerkleListRoot,
+      newMerkleListRoot,
       initialBlockHeight: Field(0),
       newBlockHeight: Field(0),
       // rewardListUpdate,
-      rewardListUpdateHash: Poseidon.hash(rewardListUpdate.toFields()),
+      // rewardListUpdateHash: Poseidon.hash(rewardListUpdate.toFields()),
+      rewardListUpdateHash: Field(0),
     });
   }
 

@@ -15,6 +15,7 @@ import { ActionType } from './utils/action';
 import { SettlementProof } from './SettlementProof';
 import { MINIMUM_DEPOSIT_AMOUNT } from './utils/constants';
 import { ReduceVerifierProof } from './ReducerVerifierProof';
+import { WithdrawalProof } from './Withdraw';
 const { BatchReducer } = Experimental;
 
 export { BatchReducerInstance, Batch, BatchProof, SettlementContract };
@@ -117,7 +118,23 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async withdraw() {}
+  async withdraw(withdrawalProof: WithdrawalProof) {
+    this.sender.getAndRequireSignature();
+
+    withdrawalProof.verify();
+
+    const { InitialMerkleListRoot, NewMerkleListRoot, account, amount } =
+      withdrawalProof.publicInput;
+
+    batchReducer.dispatch(
+      ActionType.withdrawal(
+        InitialMerkleListRoot,
+        NewMerkleListRoot,
+        account,
+        amount
+      )
+    );
+  }
 
   @method
   async reduce(

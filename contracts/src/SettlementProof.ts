@@ -1,22 +1,19 @@
 import {
   Field,
-  MerkleList,
   Poseidon,
   Provable,
   PublicKey,
   SelfProof,
-  Signature,
   Struct,
   ZkProgram,
 } from 'o1js';
 import { ProofGenerators } from './utils/proofGenerators';
 import { AGGREGATE_THRESHOLD, VALIDATOR_NUMBER } from './utils/constants';
+import { List, SignaturePublicKeyList } from './types';
 
 export {
   SettlementProof,
   MultisigVerifierProgram,
-  List,
-  SignaturePublicKeyList,
   SettlementPublicInputs,
   SettlementPublicOutputs,
 };
@@ -79,28 +76,6 @@ class SettlementPublicOutputs extends Struct({
     numberOfSettlementProofs: Field(0),
   });
 }
-
-class SignaturePublicKey extends Struct({
-  signature: Signature,
-  publicKey: PublicKey,
-}) {}
-
-class SignaturePublicKeyList extends Struct({
-  list: Provable.Array(SignaturePublicKey, VALIDATOR_NUMBER),
-}) {
-  static fromArray(arr: Array<[Signature, PublicKey]>): SignaturePublicKeyList {
-    return new SignaturePublicKeyList({
-      list: arr.map(
-        ([signature, publicKey]) =>
-          new SignaturePublicKey({ signature, publicKey })
-      ),
-    });
-  }
-}
-
-const emptyHash = Poseidon.hash([Field(0)]);
-const nextHash = (hash: Field, value: Field) => Poseidon.hash([hash, value]);
-class List extends MerkleList.create(Field, nextHash, emptyHash) {}
 
 const MultisigVerifierProgram = ZkProgram({
   name: 'state-settlement-verifier',
