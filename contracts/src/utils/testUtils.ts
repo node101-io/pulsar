@@ -19,7 +19,7 @@ import {
 } from './generateFunctions';
 import { SettlementContract } from '../SettlementContract';
 import { ReducePublicInputs } from '../ReducerVerifierProof';
-import { List, SignaturePublicKeyList } from '../types';
+import { List, SignaturePublicKeyList } from './types';
 
 export {
   GenerateSettlementSignatureList,

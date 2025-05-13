@@ -1,6 +1,6 @@
 import { Field, Poseidon, Provable, PublicKey, Struct, ZkProgram } from 'o1js';
 import { VALIDATOR_NUMBER } from './utils/constants';
-import { List, SignaturePublicKeyList } from './types';
+import { List, SignaturePublicKeyList } from './utils/types';
 
 export { WithdrawProgram, WithdrawalProof };
 

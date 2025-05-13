@@ -33,7 +33,7 @@ import {
 } from '../ReducerVerifierProof';
 import { GenerateReducerVerifierProof } from '../utils/generateFunctions';
 import { ProofGenerators } from '../utils/proofGenerators';
-import { List } from '../types';
+import { List } from '../utils/types';
 import { WithdrawProgram } from '../Withdraw';
 
 describe('SettlementProof tests', () => {

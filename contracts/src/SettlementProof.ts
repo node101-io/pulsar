@@ -9,7 +9,7 @@ import {
 } from 'o1js';
 import { ProofGenerators } from './utils/proofGenerators';
 import { AGGREGATE_THRESHOLD, VALIDATOR_NUMBER } from './utils/constants';
-import { List, SignaturePublicKeyList } from './types';
+import { List, SignaturePublicKeyList } from './utils/types';
 
 export {
   SettlementProof,

@@ -12,7 +12,7 @@ import {
   MergeSettlementProofs,
 } from '../utils/generateFunctions';
 import { GenerateSettlementSignatureList } from '../utils/testUtils';
-import { List } from '../types';
+import { List } from '../utils/types';
 
 describe('SettlementProof tests', () => {
   const logsEnabled = true;

@@ -7,14 +7,13 @@ import {
   MINIMUM_DEPOSIT_AMOUNT,
 } from './utils/constants';
 import {
-  List,
   MultisigVerifierProgram,
   SettlementProof,
   SettlementPublicInputs,
   SettlementPublicOutputs,
-  SignaturePublicKeyList,
 } from './SettlementProof';
 import { ProofGenerators } from './utils/proofGenerators';
+import { List, SignaturePublicKeyList } from './utils/types';
 
 export {
   ActionType,

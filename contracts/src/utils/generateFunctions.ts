@@ -10,7 +10,7 @@ import {
   ReduceVerifierProgram,
   ReduceVerifierProof,
 } from '../ReducerVerifierProof';
-import { SignaturePublicKeyList } from '../types';
+import { SignaturePublicKeyList } from './types';
 
 export {
   GenerateSettlementProof,
