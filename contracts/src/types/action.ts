@@ -1,5 +1,5 @@
 import { Bool, Field, Poseidon, PublicKey, Struct } from 'o1js';
-import { ProofGenerators } from './proofGenerators';
+import { ProofGenerators } from '../types/proofGenerators';
 
 export class ActionType extends Struct({
   type: Field, // settlement (1), deposit (2), or withdrawal (3)
@@ -11,7 +11,6 @@ export class ActionType extends Struct({
   newMerkleListRoot: Field, // only defined for types of settlement,
   initialBlockHeight: Field, // only defined for types of settlement
   newBlockHeight: Field, // only defined for types of settlement
-  // rewardListUpdate: ProofGenerators, // only defined for types of settlement and withdrawal
   rewardListUpdateHash: Field, // only defined for types of settlement and withdrawal
 }) {
   static settlement(
@@ -33,7 +32,6 @@ export class ActionType extends Struct({
       newMerkleListRoot,
       initialBlockHeight,
       newBlockHeight,
-      // rewardListUpdate,
       rewardListUpdateHash: Poseidon.hash(rewardListUpdate.toFields()),
     });
   }
@@ -49,32 +47,21 @@ export class ActionType extends Struct({
       newMerkleListRoot: Field(0),
       initialBlockHeight: Field(0),
       newBlockHeight: Field(0),
-      // rewardListUpdate: ProofGenerators.empty(),
       rewardListUpdateHash: Field(0),
     });
   }
 
-  static withdrawal(
-    initialMerkleListRoot: Field,
-    newMerkleListRoot: Field,
-    account: PublicKey,
-    amount: Field
-    // rewardListUpdate: ProofGenerators
-  ) {
+  static withdrawal(account: PublicKey, amount: Field) {
     return new this({
       type: Field(3),
       account,
       amount,
       initialState: Field(0),
       newState: Field(0),
-      // initialMerkleListRoot: Field(0),
-      // newMerkleListRoot: Field(0),
-      initialMerkleListRoot,
-      newMerkleListRoot,
+      initialMerkleListRoot: Field(0),
+      newMerkleListRoot: Field(0),
       initialBlockHeight: Field(0),
       newBlockHeight: Field(0),
-      // rewardListUpdate,
-      // rewardListUpdateHash: Poseidon.hash(rewardListUpdate.toFields()),
       rewardListUpdateHash: Field(0),
     });
   }
@@ -89,5 +76,49 @@ export class ActionType extends Struct({
 
   static isWithdrawal(action: ActionType): Bool {
     return action.type.equals(Field(3));
+  }
+
+  unconstrainedHash() {
+    if (ActionType.isSettlement(this).toBoolean()) {
+      return Poseidon.hash([
+        this.type,
+        this.initialState,
+        this.newState,
+        this.initialMerkleListRoot,
+        this.newMerkleListRoot,
+        this.initialBlockHeight,
+        this.newBlockHeight,
+        this.rewardListUpdateHash,
+      ]);
+    } else if (ActionType.isDeposit(this).toBoolean()) {
+      return Poseidon.hash([
+        this.type,
+        ...this.account.toFields(),
+        this.amount,
+      ]);
+    } else if (ActionType.isWithdrawal(this).toBoolean()) {
+      return Poseidon.hash([
+        this.type,
+        ...this.account.toFields(),
+        this.amount,
+      ]);
+    } else {
+      return Field(0);
+    }
+  }
+
+  toJSON() {
+    return {
+      type: this.type.toString(),
+      account: this.account.toBase58(),
+      amount: this.amount.toString(),
+      initialState: this.initialState.toString(),
+      newState: this.newState.toString(),
+      initialMerkleListRoot: this.initialMerkleListRoot.toString(),
+      newMerkleListRoot: this.newMerkleListRoot.toString(),
+      initialBlockHeight: this.initialBlockHeight.toString(),
+      newBlockHeight: this.newBlockHeight.toString(),
+      rewardListUpdateHash: this.rewardListUpdateHash.toString(),
+    };
   }
 }

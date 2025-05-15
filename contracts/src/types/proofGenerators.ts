@@ -1,5 +1,5 @@
 import { Bool, Field, Poseidon, Provable, PublicKey, Struct } from 'o1js';
-import { LIST_LENGTH, TOTAL_GENERATORS } from './constants';
+import { LIST_LENGTH, TOTAL_GENERATORS } from '../utils/constants';
 
 export { ProofGenerators };
 
@@ -128,5 +128,11 @@ class ProofGenerators extends Struct({
       power.mul(other.list[TOTAL_GENERATORS])
     );
     return newList;
+  }
+
+  toJSON() {
+    return {
+      list: this.list.map((field) => field.toString()),
+    };
   }
 }

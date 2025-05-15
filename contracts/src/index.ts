@@ -1,4 +1,3 @@
-import { ActionType } from './utils/action';
 import {
   VALIDATOR_NUMBER,
   AGGREGATE_THRESHOLD,
@@ -12,8 +11,10 @@ import {
   SettlementPublicInputs,
   SettlementPublicOutputs,
 } from './SettlementProof';
-import { ProofGenerators } from './utils/proofGenerators';
-import { List, SignaturePublicKeyList } from './utils/types';
+import { ProofGenerators } from './types/proofGenerators';
+import { List } from './types/common';
+import { SignaturePublicKeyList } from './types/signaturePubKeyList';
+import { ActionType } from './types/action';
 
 export {
   ActionType,
