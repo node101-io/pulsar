@@ -201,14 +201,6 @@ class SettlementContract extends SmartContract {
         withdrawalListHash
       );
 
-      // const au = AccountUpdate.createIf(shouldWithdraw, this.address);
-      // au.send({
-      //   to: action.account,
-      //   amount: UInt64.Unsafe.fromField(action.amount).add(
-      //     WITHDRAW_DOWN_PAYMENT
-      //   ),
-      // });
-
       this.send({
         to: Provable.if(shouldWithdraw, action.account, PublicKey.empty()),
         amount: Provable.if(
@@ -217,8 +209,6 @@ class SettlementContract extends SmartContract {
           UInt64.from(0)
         ),
       });
-
-      // this.approve(au);
 
       rewardListHash = Provable.if(
         shouldSettle,

@@ -15,6 +15,7 @@ import { BATCH_SIZE } from './constants';
 import { ActionType } from '../types/action';
 import { SettlementContract } from '../SettlementContract';
 import { ReduceMask } from '../types/common';
+import { log, table } from './testUtils';
 
 export {
   GenerateSettlementProof,
@@ -50,7 +51,7 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     throw new Error('At least two proofs are required to merge');
   }
 
-  console.log(
+  log(
     'Unsorted proofs:',
     proofs.map((proof) => proof.publicInput.NewBlockHeight.toString())
   );
@@ -63,7 +64,7 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     );
   });
 
-  console.table(
+  table(
     proofs.map((proof) => ({
       InitialBlockHeight: proof.publicInput.InitialBlockHeight.toString().slice(
         0,
@@ -177,9 +178,9 @@ async function PrepareReduce(
     rewardListHash: contractInstance.rewardListHash.get(),
   });
 
-  console.log('publicInput:', publicInput.toJSON());
+  log('publicInput:', publicInput.toJSON());
 
-  console.log(
+  log(
     'actions:',
     actions.map((action) => action.toJSON())
   );
@@ -187,17 +188,17 @@ async function PrepareReduce(
   for (let i = 0; i < BATCH_SIZE && i < actions.length; i++) {
     const action = actions[i];
 
-    // console.log('index:', i, 'action:', action.toJSON());
+    // log('index:', i, 'action:', action.toJSON());
 
     const hash = action.unconstrainedHash().toString();
 
-    // console.log('hash:', hash.toString());
-    // console.log('has', actionStack.has(hash));
-    // console.log('get', actionStack.get(hash));
-    // console.log(
+    // log('hash:', hash.toString());
+    // log('has', actionStack.has(hash));
+    // log('get', actionStack.get(hash));
+    // log(
     //   'actionStack:',
     //   actionStack.forEach((v, k) => {
-    //     console.log(k.toString(), v);
+    //     log(k.toString(), v);
     //   })
     // );
 
@@ -214,7 +215,7 @@ async function PrepareReduce(
       actionStack.set(hash, count - 1);
 
       if (ActionType.isSettlement(action).toBoolean()) {
-        console.log('Settlement');
+        log('Settlement');
         publicInput = new ReducePublicInputs({
           ...publicInput,
           stateRoot: action.newState,
@@ -226,7 +227,7 @@ async function PrepareReduce(
           ]),
         });
       } else if (ActionType.isDeposit(action).toBoolean()) {
-        console.log('Deposit');
+        log('Deposit');
         publicInput = new ReducePublicInputs({
           ...publicInput,
           depositListHash: Poseidon.hash([
@@ -236,7 +237,7 @@ async function PrepareReduce(
           ]),
         });
       } else if (ActionType.isWithdrawal(action).toBoolean()) {
-        console.log('Withdrawal');
+        log('Withdrawal');
         publicInput = new ReducePublicInputs({
           ...publicInput,
           withdrawalListHash: Poseidon.hash([
@@ -246,7 +247,7 @@ async function PrepareReduce(
           ]),
         });
       }
-      console.log('updated publicInput:', publicInput.toJSON());
+      log('updated publicInput:', publicInput.toJSON());
     }
   }
 

@@ -31,7 +31,23 @@ export {
   GenerateTestSettlementProof,
   MockReducerVerifierProof,
   MimicReduce,
+  log,
+  table,
 };
+
+let logsEnabled = false;
+
+function log(...args: any[]) {
+  if (logsEnabled) {
+    log(...args);
+  }
+}
+
+function table(...args: any[]) {
+  if (logsEnabled) {
+    console.table(...args);
+  }
+}
 
 function GenerateSignaturePubKeyList(
   signatureMessage: Field[],
@@ -149,7 +165,7 @@ async function MimicReduce(zkapp: SettlementContract, fetch: boolean = false) {
     console.error('Unexpected error:', error);
   }
 
-  console.log('Actions:', actions);
+  log('Actions:', actions);
 
   for (let action of actions) {
     const [
@@ -201,7 +217,7 @@ async function MimicReduce(zkapp: SettlementContract, fetch: boolean = false) {
     rewardListHash,
   });
 
-  console.log('Public Input:', publicInput);
+  log('Public Input:', publicInput);
 
   return publicInput;
 }
@@ -230,7 +246,7 @@ async function MockReducerVerifierProof(
     console.error('Unexpected error:', error);
   }
 
-  console.log('pre Actions:', actions);
+  log('pre Actions:', actions);
 
   let actionArray: Array<ActionType> = [];
 
@@ -265,7 +281,7 @@ async function MockReducerVerifierProof(
     );
   }
 
-  console.log(
+  log(
     'Action Array:',
     actionArray.map((action) => action.toJSON())
   );
@@ -273,12 +289,12 @@ async function MockReducerVerifierProof(
   const actionStack = new Map<string, number>();
 
   for (const field of includedActions.map((x) => x.toString())) {
-    console.log('field:', field.toString());
+    log('field:', field.toString());
     const count = actionStack.get(field) || 0;
     actionStack.set(field, count + 1);
 
-    console.log('actionStack:', actionStack);
-    console.log('actionStack.get(field):', actionStack.get(field));
+    log('actionStack:', actionStack);
+    log('actionStack.get(field):', actionStack.get(field));
   }
 
   const { publicInput, mask } = await PrepareReduce(
