@@ -10,19 +10,25 @@ import {
   AccountUpdate,
   Provable,
   Poseidon,
+  PublicKey,
 } from 'o1js';
-import { ActionType } from './utils/action';
 import { SettlementProof } from './SettlementProof';
-import { MINIMUM_DEPOSIT_AMOUNT } from './utils/constants';
+import {
+  BATCH_SIZE,
+  MINIMUM_DEPOSIT_AMOUNT,
+  WITHDRAW_DOWN_PAYMENT,
+} from './utils/constants';
 import { ReduceVerifierProof } from './ReducerVerifierProof';
-import { WithdrawalProof } from './Withdraw';
+import { ActionType } from './types/action';
+import { ReduceMask } from './types/common';
+
 const { BatchReducer } = Experimental;
 
 export { BatchReducerInstance, Batch, BatchProof, SettlementContract };
 
 let batchReducer = new BatchReducer({
   actionType: ActionType,
-  batchSize: 10,
+  batchSize: BATCH_SIZE,
   maxUpdatesFinalProof: 100,
   maxUpdatesPerProof: 300,
 });
@@ -118,28 +124,23 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async withdraw(withdrawalProof: WithdrawalProof) {
-    this.sender.getAndRequireSignature();
+  async withdraw(amount: UInt64) {
+    const account = this.sender.getUnconstrained();
+    const withdrawalUpdate = AccountUpdate.createSigned(account);
 
-    withdrawalProof.verify();
+    withdrawalUpdate.send({
+      to: this.address,
+      amount: amount.add(UInt64.from(WITHDRAW_DOWN_PAYMENT)),
+    });
 
-    const { InitialMerkleListRoot, NewMerkleListRoot, account, amount } =
-      withdrawalProof.publicInput;
-
-    batchReducer.dispatch(
-      ActionType.withdrawal(
-        InitialMerkleListRoot,
-        NewMerkleListRoot,
-        account,
-        amount
-      )
-    );
+    batchReducer.dispatch(ActionType.withdrawal(account, amount.value));
   }
 
   @method
   async reduce(
     batch: Batch,
     proof: BatchProof,
+    mask: ReduceMask,
     reduceProof: ReduceVerifierProof
   ) {
     let stateRoot = this.stateRoot.getAndRequireEquals();
@@ -150,16 +151,21 @@ class SettlementContract extends SmartContract {
     let withdrawalListHash = this.withdrawalListHash.getAndRequireEquals();
     let rewardListHash = this.rewardListHash.getAndRequireEquals();
 
-    batchReducer.processBatch({ batch, proof }, (action, isDummy) => {
+    batchReducer.processBatch({ batch, proof }, (action, isDummy, i) => {
       const shouldSettle = ActionType.isSettlement(action)
         .and(action.initialState.equals(stateRoot))
         .and(action.initialMerkleListRoot.equals(merkleListRoot))
         .and(action.initialBlockHeight.equals(blockHeight))
-        .and(isDummy.not());
+        .and(isDummy.not())
+        .and(mask.list[i]);
 
-      const shouldDeposit = ActionType.isDeposit(action).and(isDummy.not());
+      const shouldDeposit = ActionType.isDeposit(action)
+        .and(isDummy.not())
+        .and(mask.list[i]);
 
-      const shouldWithdraw = ActionType.isWithdrawal(action).and(isDummy.not());
+      const shouldWithdraw = ActionType.isWithdrawal(action)
+        .and(isDummy.not())
+        .and(mask.list[i]);
 
       stateRoot = Provable.if(shouldSettle, action.newState, stateRoot);
 
@@ -195,9 +201,27 @@ class SettlementContract extends SmartContract {
         withdrawalListHash
       );
 
+      // const au = AccountUpdate.createIf(shouldWithdraw, this.address);
+      // au.send({
+      //   to: action.account,
+      //   amount: UInt64.Unsafe.fromField(action.amount).add(
+      //     WITHDRAW_DOWN_PAYMENT
+      //   ),
+      // });
+
+      this.send({
+        to: Provable.if(shouldWithdraw, action.account, PublicKey.empty()),
+        amount: Provable.if(
+          shouldWithdraw,
+          UInt64.Unsafe.fromField(action.amount).add(WITHDRAW_DOWN_PAYMENT),
+          UInt64.from(0)
+        ),
+      });
+
+      // this.approve(au);
+
       rewardListHash = Provable.if(
-        shouldSettle.or(shouldWithdraw),
-        // Poseidon.hash([rewardListHash, ...action.rewardListUpdate.toFields()]),
+        shouldSettle,
         Poseidon.hash([rewardListHash, action.rewardListUpdateHash]),
         rewardListHash
       );

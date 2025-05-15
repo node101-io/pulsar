@@ -1,22 +1,27 @@
-import { Field, PublicKey } from 'o1js';
+import { Field, Poseidon, PublicKey } from 'o1js';
 import {
   MultisigVerifierProgram,
   SettlementProof,
   SettlementPublicInputs,
 } from '../SettlementProof';
-import { ProofGenerators } from './proofGenerators';
+import { ProofGenerators } from '../types/proofGenerators';
 import {
   ReducePublicInputs,
   ReduceVerifierProgram,
   ReduceVerifierProof,
 } from '../ReducerVerifierProof';
-import { SignaturePublicKeyList } from './types';
+import { SignaturePublicKeyList } from '../types/signaturePubKeyList';
+import { BATCH_SIZE } from './constants';
+import { ActionType } from '../types/action';
+import { SettlementContract } from '../SettlementContract';
+import { ReduceMask } from '../types/common';
 
 export {
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
   GenerateReducerVerifierProof,
+  PrepareReduce,
 };
 
 async function GenerateSettlementProof(
@@ -155,4 +160,98 @@ async function GenerateReducerVerifierProof(
     throw error;
   }
   return proof;
+}
+
+async function PrepareReduce(
+  contractInstance: SettlementContract,
+  actionStack: Map<string, number>,
+  actions: Array<ActionType>
+) {
+  let mask = new Array<boolean>(BATCH_SIZE).fill(false);
+  let publicInput = new ReducePublicInputs({
+    stateRoot: contractInstance.stateRoot.get(),
+    merkleListRoot: contractInstance.merkleListRoot.get(),
+    blockHeight: contractInstance.blockHeight.get(),
+    depositListHash: contractInstance.depositListHash.get(),
+    withdrawalListHash: contractInstance.withdrawalListHash.get(),
+    rewardListHash: contractInstance.rewardListHash.get(),
+  });
+
+  console.log('publicInput:', publicInput.toJSON());
+
+  console.log(
+    'actions:',
+    actions.map((action) => action.toJSON())
+  );
+
+  for (let i = 0; i < BATCH_SIZE && i < actions.length; i++) {
+    const action = actions[i];
+
+    // console.log('index:', i, 'action:', action.toJSON());
+
+    const hash = action.unconstrainedHash().toString();
+
+    // console.log('hash:', hash.toString());
+    // console.log('has', actionStack.has(hash));
+    // console.log('get', actionStack.get(hash));
+    // console.log(
+    //   'actionStack:',
+    //   actionStack.forEach((v, k) => {
+    //     console.log(k.toString(), v);
+    //   })
+    // );
+
+    const count = actionStack.get(hash);
+
+    if (
+      Number(action.type.toString()) !== 0 &&
+      count !== undefined &&
+      count > 0
+    ) {
+      const count = actionStack.get(hash)!;
+
+      mask[i] = true;
+      actionStack.set(hash, count - 1);
+
+      if (ActionType.isSettlement(action).toBoolean()) {
+        console.log('Settlement');
+        publicInput = new ReducePublicInputs({
+          ...publicInput,
+          stateRoot: action.newState,
+          merkleListRoot: action.newMerkleListRoot,
+          blockHeight: action.newBlockHeight,
+          rewardListHash: Poseidon.hash([
+            publicInput.rewardListHash,
+            action.rewardListUpdateHash,
+          ]),
+        });
+      } else if (ActionType.isDeposit(action).toBoolean()) {
+        console.log('Deposit');
+        publicInput = new ReducePublicInputs({
+          ...publicInput,
+          depositListHash: Poseidon.hash([
+            publicInput.depositListHash,
+            ...action.account.toFields(),
+            action.amount,
+          ]),
+        });
+      } else if (ActionType.isWithdrawal(action).toBoolean()) {
+        console.log('Withdrawal');
+        publicInput = new ReducePublicInputs({
+          ...publicInput,
+          withdrawalListHash: Poseidon.hash([
+            publicInput.withdrawalListHash,
+            ...action.account.toFields(),
+            action.amount,
+          ]),
+        });
+      }
+      console.log('updated publicInput:', publicInput.toJSON());
+    }
+  }
+
+  return {
+    publicInput,
+    mask: ReduceMask.fromArray(mask),
+  };
 }

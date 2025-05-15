@@ -1,4 +1,5 @@
 import {
+  Bool,
   fetchAccount,
   Field,
   Mina,
@@ -16,33 +17,34 @@ import {
   GenerateReducerVerifierProof,
   GenerateSettlementPublicInput,
   MergeSettlementProofs,
+  PrepareReduce,
 } from './generateFunctions';
 import { SettlementContract } from '../SettlementContract';
 import { ReducePublicInputs } from '../ReducerVerifierProof';
-import { List, SignaturePublicKeyList } from './types';
+import { SignaturePublicKeyList } from '../types/signaturePubKeyList';
+import { List } from '../types/common';
+import { ActionType } from '../types/action';
 
 export {
-  GenerateSettlementSignatureList,
+  GenerateSignaturePubKeyList,
   GenerateReducerSignatureList,
   GenerateTestSettlementProof,
   MockReducerVerifierProof,
   MimicReduce,
 };
 
-function GenerateSettlementSignatureList(
-  publicInput: SettlementPublicInputs,
-  proofGeneratorsList: Array<[PrivateKey, PublicKey]>
+function GenerateSignaturePubKeyList(
+  signatureMessage: Field[],
+  signerSet: Array<[PrivateKey, PublicKey]>
 ) {
   const signatures = [];
 
-  for (let i = 0; i < proofGeneratorsList.length; i++) {
-    signatures.push(
-      Signature.create(proofGeneratorsList[i][0], publicInput.hash().toFields())
-    );
+  for (let i = 0; i < signerSet.length; i++) {
+    signatures.push(Signature.create(signerSet[i][0], signatureMessage));
   }
 
   return SignaturePublicKeyList.fromArray(
-    signatures.map((signature, i) => [signature, proofGeneratorsList[i][1]])
+    signatures.map((signature, i) => [signature, signerSet[i][1]])
   );
 }
 
@@ -52,15 +54,28 @@ function GenerateReducerSignatureList(
 ) {
   const signatures = [];
 
+  const message = publicInput.hash().toFields();
+
   for (let i = 0; i < proofGeneratorsList.length; i++) {
-    signatures.push(
-      Signature.create(proofGeneratorsList[i][0], publicInput.hash().toFields())
-    );
+    signatures.push(Signature.create(proofGeneratorsList[i][0], message));
   }
 
   return SignaturePublicKeyList.fromArray(
     signatures.map((signature, i) => [signature, proofGeneratorsList[i][1]])
   );
+}
+
+function CreateValidatorMerkleList(
+  validatorSet: Array<[PrivateKey, PublicKey]>
+) {
+  const merkleList = List.empty();
+
+  for (let i = 0; i < validatorSet.length; i++) {
+    const [, publicKey] = validatorSet[i];
+    merkleList.push(Poseidon.hash(publicKey.toFields()));
+  }
+
+  return merkleList;
 }
 
 async function GenerateTestSettlementProof(
@@ -71,12 +86,7 @@ async function GenerateTestSettlementProof(
   const settlementPublicInputs: SettlementPublicInputs[] = [];
   const settlementProofs: SettlementProof[] = [];
 
-  const merkleList = List.empty();
-
-  for (let i = 0; i < validatorSet.length; i++) {
-    const [, publicKey] = validatorSet[i];
-    merkleList.push(Poseidon.hash(publicKey.toFields()));
-  }
+  const merkleList = CreateValidatorMerkleList(validatorSet);
 
   for (let i = initialBlockHeight; i < newBlockHeight; i++) {
     const publicInput = GenerateSettlementPublicInput(
@@ -90,8 +100,8 @@ async function GenerateTestSettlementProof(
     );
     settlementPublicInputs.push(publicInput);
 
-    const privateInput = GenerateSettlementSignatureList(
-      publicInput,
+    const privateInput = GenerateSignaturePubKeyList(
+      publicInput.hash().toFields(),
       validatorSet
     );
 
@@ -197,10 +207,90 @@ async function MimicReduce(zkapp: SettlementContract, fetch: boolean = false) {
 }
 
 async function MockReducerVerifierProof(
-  publicInput: ReducePublicInputs,
+  contractInstance: SettlementContract,
+  includedActions: Field[],
   validatorSet: Array<[PrivateKey, PublicKey]>
 ) {
+  let actions: string[][] = [];
+
+  // maybe add fetchAccount here
+
+  try {
+    const result = await Mina.fetchActions(contractInstance.address, {
+      fromActionState: contractInstance.actionState.get(),
+      endActionState: undefined,
+    });
+
+    if (Array.isArray(result)) {
+      actions = result.flatMap((entry) => entry.actions);
+    } else {
+      console.error('Error fetching actions:', result.error);
+    }
+  } catch (error) {
+    console.error('Unexpected error:', error);
+  }
+
+  console.log('pre Actions:', actions);
+
+  let actionArray: Array<ActionType> = [];
+
+  for (let i = 0; i < actions.length; i++) {
+    const [
+      type,
+      x,
+      isOdd,
+      amount,
+      initialState,
+      newState,
+      initialMerkleListRoot,
+      newMerkleListRoot,
+      initialBlockHeight,
+      newBlockHeight,
+      rewardListUpdateHash,
+    ] = actions[i].map((x) => Field.from(x));
+
+    actionArray.push(
+      new ActionType({
+        type,
+        account: PublicKey.fromValue({ x, isOdd: Bool.fromFields([isOdd]) }),
+        amount,
+        initialState,
+        newState,
+        initialMerkleListRoot,
+        newMerkleListRoot,
+        initialBlockHeight,
+        newBlockHeight,
+        rewardListUpdateHash,
+      })
+    );
+  }
+
+  console.log(
+    'Action Array:',
+    actionArray.map((action) => action.toJSON())
+  );
+
+  const actionStack = new Map<string, number>();
+
+  for (const field of includedActions.map((x) => x.toString())) {
+    console.log('field:', field.toString());
+    const count = actionStack.get(field) || 0;
+    actionStack.set(field, count + 1);
+
+    console.log('actionStack:', actionStack);
+    console.log('actionStack.get(field):', actionStack.get(field));
+  }
+
+  const { publicInput, mask } = await PrepareReduce(
+    contractInstance,
+    actionStack,
+    actionArray
+  );
+
   const signatureList = GenerateReducerSignatureList(publicInput, validatorSet);
 
-  return await GenerateReducerVerifierProof(publicInput, signatureList);
+  return {
+    proof: await GenerateReducerVerifierProof(publicInput, signatureList),
+    mask,
+  };
 }

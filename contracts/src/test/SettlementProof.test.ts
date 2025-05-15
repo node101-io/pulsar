@@ -5,14 +5,14 @@ import {
   SettlementProof,
 } from '../SettlementProof';
 import { VALIDATOR_NUMBER } from '../utils/constants';
-import { ProofGenerators } from '../utils/proofGenerators';
+import { ProofGenerators } from '../types/proofGenerators';
 import { validatorSet } from './mock';
 import {
   GenerateSettlementPublicInput,
   MergeSettlementProofs,
 } from '../utils/generateFunctions';
-import { GenerateSettlementSignatureList } from '../utils/testUtils';
-import { List } from '../utils/types';
+import { GenerateSignaturePubKeyList } from '../utils/testUtils';
+import { List } from '../types/common';
 
 describe('SettlementProof tests', () => {
   const logsEnabled = true;
@@ -72,8 +72,10 @@ describe('SettlementProof tests', () => {
 
   describe('verifySignatures method', () => {
     it('should verify signatures and create a valid SettlementProof', async () => {
-      const privateInputs = GenerateSettlementSignatureList(
-        settlementPublicInputs[settlementPublicInputs.length - 1],
+      const privateInputs = GenerateSignaturePubKeyList(
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .hash()
+          .toFields(),
         validatorSet
       );
 
@@ -125,8 +127,10 @@ describe('SettlementProof tests', () => {
         )
       );
 
-      const privateInputs = GenerateSettlementSignatureList(
-        settlementPublicInputs[settlementPublicInputs.length - 1],
+      const privateInputs = GenerateSignaturePubKeyList(
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .hash()
+          .toFields(),
         validatorSet
       );
 
@@ -178,8 +182,10 @@ describe('SettlementProof tests', () => {
         )
       );
 
-      const privateInputs = GenerateSettlementSignatureList(
-        settlementPublicInputs[settlementPublicInputs.length - 1],
+      const privateInputs = GenerateSignaturePubKeyList(
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .hash()
+          .toFields(),
         validatorSet
       );
 
