@@ -18,7 +18,7 @@ var _ = strconv.IntSize
 func createNKeyStore(keeper keeper.Keeper, ctx context.Context, n int) []types.KeyStore {
 	items := make([]types.KeyStore, n)
 	for i := range items {
-		items[i].Index = strconv.Itoa(i)
+		items[i].CosmosPublicKey = strconv.Itoa(i)
 
 		keeper.SetKeyStore(ctx, items[i])
 	}
@@ -30,7 +30,7 @@ func TestKeyStoreGet(t *testing.T) {
 	items := createNKeyStore(keeper, ctx, 10)
 	for _, item := range items {
 		rst, found := keeper.GetKeyStore(ctx,
-			item.Index,
+			item.CosmosPublicKey,
 		)
 		require.True(t, found)
 		require.Equal(t,
@@ -44,10 +44,10 @@ func TestKeyStoreRemove(t *testing.T) {
 	items := createNKeyStore(keeper, ctx, 10)
 	for _, item := range items {
 		keeper.RemoveKeyStore(ctx,
-			item.Index,
+			item.CosmosPublicKey,
 		)
 		_, found := keeper.GetKeyStore(ctx,
-			item.Index,
+			item.CosmosPublicKey,
 		)
 		require.False(t, found)
 	}

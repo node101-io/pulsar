@@ -29,14 +29,14 @@ func TestKeyStoreQuerySingle(t *testing.T) {
 		{
 			desc: "First",
 			request: &types.QueryGetKeyStoreRequest{
-				Index: msgs[0].Index,
+				Index: msgs[0].CosmosPublicKey,
 			},
 			response: &types.QueryGetKeyStoreResponse{KeyStore: msgs[0]},
 		},
 		{
 			desc: "Second",
 			request: &types.QueryGetKeyStoreRequest{
-				Index: msgs[1].Index,
+				Index: msgs[1].CosmosPublicKey,
 			},
 			response: &types.QueryGetKeyStoreResponse{KeyStore: msgs[1]},
 		},
