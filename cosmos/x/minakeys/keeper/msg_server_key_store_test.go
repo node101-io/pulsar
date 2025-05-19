@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	ckeys "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/coinbase/kryptology/pkg/signatures/schnorr/mina"
@@ -17,6 +18,7 @@ import (
 // Prevent strconv unused error
 var _ = strconv.IntSize
 
+// TestCreateKeyStore_Success tests that a valid CreateKeyStore message succeeds.
 func TestCreateKeyStore_Success(t *testing.T) {
 	// fresh keeper+context
 	k, ctx := keepertest.MinakeysKeeper(t)
@@ -26,6 +28,9 @@ func TestCreateKeyStore_Success(t *testing.T) {
 	cosmosPriv := ckeys.GenPrivKey()
 	cosmosPub := cosmosPriv.PubKey().Bytes()
 	cosmosPubHex := hex.EncodeToString(cosmosPub)
+
+	// derive creator address from cosmosPub
+	creator := sdk.AccAddress(cosmosPriv.PubKey().Address()).String()
 
 	// --- generate Mina schnorr keypair ---
 	minaPub, minaPriv, err := mina.NewKeys()
@@ -47,7 +52,7 @@ func TestCreateKeyStore_Success(t *testing.T) {
 
 	// --- build message ---
 	msg := &types.MsgCreateKeyStore{
-		Creator:         "cosmos1testaddress...",
+		Creator:         creator,
 		CosmosPublicKey: cosmosPubHex,
 		MinaPublicKey:   minaPubHex,
 		CosmosSignature: cosmosSig,
@@ -59,29 +64,30 @@ func TestCreateKeyStore_Success(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestCreateKeyStore_DuplicateIndex tests that creating a duplicate entry fails.
 func TestCreateKeyStore_DuplicateIndex(t *testing.T) {
-	// fresh keeper+context
 	k, ctx := keepertest.MinakeysKeeper(t)
 	srv := keeper.NewMsgServerImpl(k)
 
-	// inline valid message generation (same as success case)...
 	cosmosPriv := ckeys.GenPrivKey()
 	cosmosPubHex := hex.EncodeToString(cosmosPriv.PubKey().Bytes())
+	creator := sdk.AccAddress(cosmosPriv.PubKey().Address()).String()
+
 	minaPub, minaPriv, err := mina.NewKeys()
 	require.NoError(t, err)
-	minaPubHex := func() string {
-		b, _ := minaPub.MarshalBinary()
-		return hex.EncodeToString(b)
-	}()
+	minaPubBytes, err := minaPub.MarshalBinary()
+	require.NoError(t, err)
+	minaPubHex := hex.EncodeToString(minaPubBytes)
+
+	cosmosSig, err := cosmosPriv.Sign([]byte(minaPubHex))
+	require.NoError(t, err)
 	minaSig, err := minaPriv.SignMessage(cosmosPubHex)
 	require.NoError(t, err)
 	minaSigBytes, err := minaSig.MarshalBinary()
 	require.NoError(t, err)
-	cosmosSig, err := cosmosPriv.Sign([]byte(minaPubHex))
-	require.NoError(t, err)
 
 	msg := &types.MsgCreateKeyStore{
-		Creator:         "cosmos1testaddress...",
+		Creator:         creator,
 		CosmosPublicKey: cosmosPubHex,
 		MinaPublicKey:   minaPubHex,
 		CosmosSignature: cosmosSig,
@@ -95,82 +101,82 @@ func TestCreateKeyStore_DuplicateIndex(t *testing.T) {
 	// second insertion with same index should error
 	_, err = srv.CreateKeyStore(ctx, msg)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "index already set")
+	require.Contains(t, err.Error(), "cosmosPublicKey already registered")
 }
 
+// TestCreateKeyStore_InvalidCosmosSignature tests rejection on bad cosmos signature.
 func TestCreateKeyStore_InvalidCosmosSignature(t *testing.T) {
-	// fresh keeper+context
 	k, ctx := keepertest.MinakeysKeeper(t)
 	srv := keeper.NewMsgServerImpl(k)
 
-	// inline valid message generation...
 	cosmosPriv := ckeys.GenPrivKey()
 	cosmosPubHex := hex.EncodeToString(cosmosPriv.PubKey().Bytes())
+	creator := sdk.AccAddress(cosmosPriv.PubKey().Address()).String()
+
 	minaPub, minaPriv, err := mina.NewKeys()
 	require.NoError(t, err)
-	minaPubHex := func() string {
-		b, _ := minaPub.MarshalBinary()
-		return hex.EncodeToString(b)
-	}()
+	minaPubBytes, err := minaPub.MarshalBinary()
+	require.NoError(t, err)
+	minaPubHex := hex.EncodeToString(minaPubBytes)
+
+	// valid mina signature (on cosmosPubHex)
 	minaSig, err := minaPriv.SignMessage(cosmosPubHex)
 	require.NoError(t, err)
 	minaSigBytes, err := minaSig.MarshalBinary()
 	require.NoError(t, err)
+
+	// invalid cosmos signature (on minaPubHex)
 	cosmosSig, err := cosmosPriv.Sign([]byte(minaPubHex))
 	require.NoError(t, err)
-
-	// corrupt the cosmos signature
 	cosmosSig[0] ^= 0xFF
 
 	msg := &types.MsgCreateKeyStore{
-		Creator:         "cosmos1testaddress...",
+		Creator:         creator,
 		CosmosPublicKey: cosmosPubHex,
 		MinaPublicKey:   minaPubHex,
 		CosmosSignature: cosmosSig,
 		MinaSignature:   minaSigBytes,
 	}
 
-	// expect invalid cosmos signature error
 	_, err = srv.CreateKeyStore(ctx, msg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid cosmos signature")
 }
 
+// TestCreateKeyStore_InvalidMinaSignature tests rejection on bad mina signature.
 func TestCreateKeyStore_InvalidMinaSignature(t *testing.T) {
-	// fresh keeper+context
 	k, ctx := keepertest.MinakeysKeeper(t)
 	srv := keeper.NewMsgServerImpl(k)
 
-	// inline valid message generation...
 	cosmosPriv := ckeys.GenPrivKey()
 	cosmosPubHex := hex.EncodeToString(cosmosPriv.PubKey().Bytes())
+	creator := sdk.AccAddress(cosmosPriv.PubKey().Address()).String()
+
 	minaPub, minaPriv, err := mina.NewKeys()
 	require.NoError(t, err)
-	minaPubHex := func() string {
-		b, _ := minaPub.MarshalBinary()
-		return hex.EncodeToString(b)
-	}()
+	minaPubBytes, err := minaPub.MarshalBinary()
+	require.NoError(t, err)
+	minaPubHex := hex.EncodeToString(minaPubBytes)
+
+	// valid cosmos signature
+	cosmosSig, err := cosmosPriv.Sign([]byte(minaPubHex))
+	require.NoError(t, err)
+
+	// invalid mina signature
 	minaSig, err := minaPriv.SignMessage(cosmosPubHex)
 	require.NoError(t, err)
 	minaSigBytes, err := minaSig.MarshalBinary()
 	require.NoError(t, err)
-	cosmosSig, err := cosmosPriv.Sign([]byte(minaPubHex))
-	require.NoError(t, err)
-
-	// corrupt the mina signature
-	badMinaSig := make([]byte, len(minaSigBytes))
-	copy(badMinaSig, minaSigBytes)
-	badMinaSig[0] ^= 0xFF
+	minaSigBytes[0] ^= 0xFF
 
 	msg := &types.MsgCreateKeyStore{
-		Creator:         "cosmos1testaddress...",
+		Creator:         creator,
 		CosmosPublicKey: cosmosPubHex,
 		MinaPublicKey:   minaPubHex,
 		CosmosSignature: cosmosSig,
-		MinaSignature:   badMinaSig,
+		MinaSignature:   minaSigBytes,
 	}
 
-	// expect invalid mina signature error
 	_, err = srv.CreateKeyStore(ctx, msg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid mina signature")

@@ -18,13 +18,20 @@ func (k msgServer) CreateKeyStore(goCtx context.Context, msg *types.MsgCreateKey
 
 	index := msg.CosmosPublicKey
 
+	// Derive the expected creator address from the Cosmos public key
+	pubKeyBytes, err := hex.DecodeString(msg.CosmosPublicKey)
+	if err != nil {
+		return nil, errorsmod.Wrap(sdkerrors.ErrInvalidAddress, "invalid cosmos public key hex")
+	}
+	pubKey := secp256k1.PubKey{Key: pubKeyBytes}
+	derivedAddr := sdk.AccAddress(pubKey.Address()).String()
+	if derivedAddr != msg.Creator {
+		return nil, errorsmod.Wrap(sdkerrors.ErrUnauthorized, "creator does not match derived address from Cosmos public key")
+	}
+
 	// Check if the value already exists
-	_, isFound := k.GetKeyStore(
-		ctx,
-		index,
-	)
-	if isFound {
-		return nil, errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "index already set")
+	if _, found := k.GetKeyStore(ctx, index); found {
+		return nil, errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "cosmosPublicKey already registered")
 	}
 
 	// Verify that the creator signed the MinaPublicKey correctly
