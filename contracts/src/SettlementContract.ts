@@ -19,7 +19,7 @@ import {
   WITHDRAW_DOWN_PAYMENT,
 } from './utils/constants';
 import { ReduceVerifierProof } from './ReducerVerifierProof';
-import { ActionType } from './types/action';
+import { PulsarAction } from './types/PulsarAction';
 import { ReduceMask } from './types/common';
 
 const { BatchReducer } = Experimental;
@@ -27,7 +27,7 @@ const { BatchReducer } = Experimental;
 export { BatchReducerInstance, Batch, BatchProof, SettlementContract };
 
 let batchReducer = new BatchReducer({
-  actionType: ActionType,
+  actionType: PulsarAction,
   batchSize: BATCH_SIZE,
   maxUpdatesFinalProof: 100,
   maxUpdatesPerProof: 300,
@@ -98,7 +98,7 @@ class SettlementContract extends SmartContract {
     );
 
     batchReducer.dispatch(
-      ActionType.settlement(
+      PulsarAction.settlement(
         InitialStateRoot,
         NewStateRoot,
         InitialMerkleListRoot,
@@ -120,7 +120,7 @@ class SettlementContract extends SmartContract {
     const depositAccountUpdate = AccountUpdate.createSigned(sender);
     depositAccountUpdate.send({ to: this.address, amount });
 
-    batchReducer.dispatch(ActionType.deposit(sender, amount.value));
+    batchReducer.dispatch(PulsarAction.deposit(sender, amount.value));
   }
 
   @method
@@ -133,7 +133,7 @@ class SettlementContract extends SmartContract {
       amount: amount.add(UInt64.from(WITHDRAW_DOWN_PAYMENT)),
     });
 
-    batchReducer.dispatch(ActionType.withdrawal(account, amount.value));
+    batchReducer.dispatch(PulsarAction.withdrawal(account, amount.value));
   }
 
   @method
@@ -152,18 +152,18 @@ class SettlementContract extends SmartContract {
     let rewardListHash = this.rewardListHash.getAndRequireEquals();
 
     batchReducer.processBatch({ batch, proof }, (action, isDummy, i) => {
-      const shouldSettle = ActionType.isSettlement(action)
+      const shouldSettle = PulsarAction.isSettlement(action)
         .and(action.initialState.equals(stateRoot))
         .and(action.initialMerkleListRoot.equals(merkleListRoot))
         .and(action.initialBlockHeight.equals(blockHeight))
         .and(isDummy.not())
         .and(mask.list[i]);
 
-      const shouldDeposit = ActionType.isDeposit(action)
+      const shouldDeposit = PulsarAction.isDeposit(action)
         .and(isDummy.not())
         .and(mask.list[i]);
 
-      const shouldWithdraw = ActionType.isWithdrawal(action)
+      const shouldWithdraw = PulsarAction.isWithdrawal(action)
         .and(isDummy.not())
         .and(mask.list[i]);
 

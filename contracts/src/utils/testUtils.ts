@@ -1,5 +1,4 @@
 import {
-  Bool,
   fetchAccount,
   Field,
   Mina,
@@ -17,13 +16,13 @@ import {
   GenerateReducerVerifierProof,
   GenerateSettlementPublicInput,
   MergeSettlementProofs,
-  PrepareReduce,
 } from './generateFunctions';
 import { SettlementContract } from '../SettlementContract';
 import { ReducePublicInputs } from '../ReducerVerifierProof';
 import { SignaturePublicKeyList } from '../types/signaturePubKeyList';
 import { List } from '../types/common';
-import { ActionType } from '../types/action';
+import { PulsarAction } from '../types/PulsarAction';
+import { PrepareReduce } from './witness';
 
 export {
   GenerateSignaturePubKeyList,
@@ -224,68 +223,10 @@ async function MimicReduce(zkapp: SettlementContract, fetch: boolean = false) {
 
 async function MockReducerVerifierProof(
   contractInstance: SettlementContract,
+  pendingActions: Array<PulsarAction>,
   includedActions: Field[],
   validatorSet: Array<[PrivateKey, PublicKey]>
 ) {
-  let actions: string[][] = [];
-
-  // maybe add fetchAccount here
-
-  try {
-    const result = await Mina.fetchActions(contractInstance.address, {
-      fromActionState: contractInstance.actionState.get(),
-      endActionState: undefined,
-    });
-
-    if (Array.isArray(result)) {
-      actions = result.flatMap((entry) => entry.actions);
-    } else {
-      console.error('Error fetching actions:', result.error);
-    }
-  } catch (error) {
-    console.error('Unexpected error:', error);
-  }
-
-  log('pre Actions:', actions);
-
-  let actionArray: Array<ActionType> = [];
-
-  for (let i = 0; i < actions.length; i++) {
-    const [
-      type,
-      x,
-      isOdd,
-      amount,
-      initialState,
-      newState,
-      initialMerkleListRoot,
-      newMerkleListRoot,
-      initialBlockHeight,
-      newBlockHeight,
-      rewardListUpdateHash,
-    ] = actions[i].map((x) => Field.from(x));
-
-    actionArray.push(
-      new ActionType({
-        type,
-        account: PublicKey.fromValue({ x, isOdd: Bool.fromFields([isOdd]) }),
-        amount,
-        initialState,
-        newState,
-        initialMerkleListRoot,
-        newMerkleListRoot,
-        initialBlockHeight,
-        newBlockHeight,
-        rewardListUpdateHash,
-      })
-    );
-  }
-
-  log(
-    'Action Array:',
-    actionArray.map((action) => action.toJSON())
-  );
-
   const actionStack = new Map<string, number>();
 
   for (const field of includedActions.map((x) => x.toString())) {
@@ -300,7 +241,7 @@ async function MockReducerVerifierProof(
   const { publicInput, mask } = await PrepareReduce(
     contractInstance,
     actionStack,
-    actionArray
+    pendingActions
   );
 
   const signatureList = GenerateReducerSignatureList(publicInput, validatorSet);

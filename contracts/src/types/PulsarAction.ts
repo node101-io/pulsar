@@ -1,7 +1,7 @@
 import { Bool, Field, Poseidon, PublicKey, Struct } from 'o1js';
-import { ProofGenerators } from '../types/proofGenerators';
+import { ProofGenerators } from './proofGenerators';
 
-export class ActionType extends Struct({
+export class PulsarAction extends Struct({
   type: Field, // settlement (1), deposit (2), or withdrawal (3)
   account: PublicKey, // only defined for types of deposit and withdrawal
   amount: Field, //only defined for types of deposit and withdrawal
@@ -66,20 +66,20 @@ export class ActionType extends Struct({
     });
   }
 
-  static isSettlement(action: ActionType): Bool {
+  static isSettlement(action: PulsarAction): Bool {
     return action.type.equals(Field(1));
   }
 
-  static isDeposit(action: ActionType): Bool {
+  static isDeposit(action: PulsarAction): Bool {
     return action.type.equals(Field(2));
   }
 
-  static isWithdrawal(action: ActionType): Bool {
+  static isWithdrawal(action: PulsarAction): Bool {
     return action.type.equals(Field(3));
   }
 
   unconstrainedHash() {
-    if (ActionType.isSettlement(this).toBoolean()) {
+    if (PulsarAction.isSettlement(this).toBoolean()) {
       return Poseidon.hash([
         this.type,
         this.initialState,
@@ -90,13 +90,13 @@ export class ActionType extends Struct({
         this.newBlockHeight,
         this.rewardListUpdateHash,
       ]);
-    } else if (ActionType.isDeposit(this).toBoolean()) {
+    } else if (PulsarAction.isDeposit(this).toBoolean()) {
       return Poseidon.hash([
         this.type,
         ...this.account.toFields(),
         this.amount,
       ]);
-    } else if (ActionType.isWithdrawal(this).toBoolean()) {
+    } else if (PulsarAction.isWithdrawal(this).toBoolean()) {
       return Poseidon.hash([
         this.type,
         ...this.account.toFields(),
@@ -107,6 +107,34 @@ export class ActionType extends Struct({
     }
   }
 
+  static fromRawAction(rawAction: string[]) {
+    const [
+      type,
+      x,
+      isOdd,
+      amount,
+      initialState,
+      newState,
+      initialMerkleListRoot,
+      newMerkleListRoot,
+      initialBlockHeight,
+      newBlockHeight,
+      rewardListUpdateHash,
+    ] = rawAction.map(Field);
+
+    return new PulsarAction({
+      type,
+      account: PublicKey.fromValue({ x, isOdd: Bool.fromFields([isOdd]) }),
+      amount,
+      initialState,
+      newState,
+      initialMerkleListRoot,
+      newMerkleListRoot,
+      initialBlockHeight,
+      newBlockHeight,
+      rewardListUpdateHash,
+    });
+  }
   toJSON() {
     return {
       type: this.type.toString(),

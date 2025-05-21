@@ -14,10 +14,10 @@ import {
 import { ProofGenerators } from './types/proofGenerators';
 import { List } from './types/common';
 import { SignaturePublicKeyList } from './types/signaturePubKeyList';
-import { ActionType } from './types/action';
+import { PulsarAction } from './types/PulsarAction';
 
 export {
-  ActionType,
+  PulsarAction,
   VALIDATOR_NUMBER,
   AGGREGATE_THRESHOLD,
   TOTAL_GENERATORS,
