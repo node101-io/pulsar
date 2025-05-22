@@ -71,6 +71,9 @@ import (
 	minakeysmodulekeeper "github.com/node101-io/pulsar/cosmos/x/minakeys/keeper"
 	// this line is used by starport scaffolding # stargate/app/moduleImport
 
+	minakeystypes "github.com/node101-io/pulsar/cosmos/x/minakeys/types"
+	minakeysutils "github.com/node101-io/pulsar/cosmos/x/minakeys/utils"
+
 	"github.com/node101-io/pulsar/cosmos/docs"
 )
 
@@ -420,4 +423,28 @@ func BlockedAddresses() map[string]bool {
 	// the provider chain
 	delete(result, authtypes.NewModuleAddress(ibcconsumertypes.ConsumerToSendToProviderName).String())
 	return result
+}
+
+// ProvideSecondaryKey reads the hex‐string from app.toml, decodes it
+// and returns a fully‐initialized SecondaryKey.
+func ProvideSecondaryKey(opts servertypes.AppOptions) (*minakeystypes.SecondaryKey, error) {
+
+	// read the hex-string from app.toml
+	raw := opts.Get("minakeys.secondary_key_hex")
+
+	// convert to string
+	hexStr, ok := raw.(string)
+	if !ok {
+		return nil, fmt.Errorf(
+			"expected minakeys.secondary_key_hex to be string, got %T", raw,
+		)
+	}
+
+	// if empty, throw an error
+	if hexStr == "" {
+		return nil, fmt.Errorf("minakeys.secondary_key_hex must be set in app.toml")
+	}
+
+	// decode and unmarshal the hex-string into a SecondaryKey
+	return minakeysutils.LoadSecondaryKeyFromHex(hexStr)
 }
