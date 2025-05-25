@@ -3,6 +3,9 @@ package app
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 
 	_ "cosmossdk.io/api/cosmos/tx/config/v1" // import for side-effects
 	clienthelpers "cosmossdk.io/client/v2/helpers"
@@ -429,22 +432,22 @@ func BlockedAddresses() map[string]bool {
 // and returns a fully‐initialized SecondaryKey.
 func ProvideSecondaryKey(opts servertypes.AppOptions) (*minakeystypes.SecondaryKey, error) {
 
-	// read the hex-string from app.toml
-	raw := opts.Get("minakeys.secondary_key_hex")
-
-	// convert to string
-	hexStr, ok := raw.(string)
-	if !ok {
-		return nil, fmt.Errorf(
-			"expected minakeys.secondary_key_hex to be string, got %T", raw,
-		)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("cannot resolve home directory: %w", err)
 	}
 
-	// if empty, throw an error
+	path := filepath.Join(home, ".secondary_key.toml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s: %w", path, err)
+	}
+
+	// file is just the raw hex string (whitespace‐trimmed)
+	hexStr := strings.TrimSpace(string(data))
 	if hexStr == "" {
-		return nil, fmt.Errorf("minakeys.secondary_key_hex must be set in app.toml")
+		return nil, fmt.Errorf("%s is empty; please put your secondary-key hex there", path)
 	}
-
 	// decode and unmarshal the hex-string into a SecondaryKey
 	return minakeysutils.LoadSecondaryKeyFromHex(hexStr)
 }
