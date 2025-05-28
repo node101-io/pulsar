@@ -1,5 +1,6 @@
-import { Bool, Field, Poseidon, PublicKey, Struct } from 'o1js';
-import { ProofGenerators } from './proofGenerators';
+import { Bool, Field, Poseidon, Provable, PublicKey, Struct } from 'o1js';
+import { ProofGenerators } from './proofGenerators.js';
+import { BATCH_SIZE } from '../utils/constants.js';
 
 export class PulsarAction extends Struct({
   type: Field, // settlement (1), deposit (2), or withdrawal (3)
@@ -64,6 +65,10 @@ export class PulsarAction extends Struct({
       newBlockHeight: Field(0),
       rewardListUpdateHash: Field(0),
     });
+  }
+
+  static isDummy(action: PulsarAction): Bool {
+    return action.type.equals(Field(0));
   }
 
   static isSettlement(action: PulsarAction): Bool {
@@ -148,5 +153,24 @@ export class PulsarAction extends Struct({
       newBlockHeight: this.newBlockHeight.toString(),
       rewardListUpdateHash: this.rewardListUpdateHash.toString(),
     };
+  }
+}
+
+export class Batch extends Struct({
+  actions: Provable.Array(PulsarAction, BATCH_SIZE),
+}) {
+  static empty() {
+    return new this({ actions: Array(BATCH_SIZE).fill(PulsarAction.empty()) });
+  }
+
+  static fromArray(actions: PulsarAction[]) {
+    if (actions.length > BATCH_SIZE) {
+      throw new Error(`Batch can only contain up to ${BATCH_SIZE} actions`);
+    }
+
+    const paddedActions = actions.concat(
+      Array(BATCH_SIZE - actions.length).fill(PulsarAction.empty())
+    );
+    return new this({ actions: paddedActions });
   }
 }
