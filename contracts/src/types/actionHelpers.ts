@@ -1,0 +1,69 @@
+import { Field, MerkleList, Poseidon, PublicKey } from 'o1js';
+import { PulsarAction } from './PulsarAction.js';
+
+const encoder = new TextEncoder();
+
+function bytes(s: string) {
+  return [...encoder.encode(s)];
+}
+
+function prefixToField(prefix: string) {
+  const size = (Field as any).sizeInBytes ?? 32;
+  if (prefix.length >= size) throw Error('prefix too long');
+  return (Field as any).fromBytes(
+    bytes(prefix).concat(Array(size - prefix.length).fill(0))
+  );
+}
+
+function initState(): [Field, Field, Field] {
+  return [Field(0), Field(0), Field(0)];
+}
+
+function salt(prefix: string) {
+  return Poseidon.update(initState(), [prefixToField(prefix)]);
+}
+
+function emptyHashWithPrefix(prefix: string) {
+  return salt(prefix)[0];
+}
+
+export const merkleActionsAdd = (hash: Field, actionsHash: Field): Field => {
+  return Poseidon.hashWithPrefix('MinaZkappSeqEvents**', [hash, actionsHash]);
+};
+
+export const emptyActionListHash = emptyHashWithPrefix('MinaZkappActionsEmpty');
+
+type PulsarActionData = {
+  type: Field;
+  account: PublicKey;
+  amount: Field;
+  initialState: Field;
+  newState: Field;
+  initialMerkleListRoot: Field;
+  newMerkleListRoot: Field;
+  initialBlockHeight: Field;
+  newBlockHeight: Field;
+  rewardListUpdateHash: Field;
+};
+
+export const actionListAdd = (hash: Field, action: PulsarActionData): Field => {
+  return Poseidon.hashWithPrefix('MinaZkappSeqEvents**', [
+    hash,
+    Poseidon.hashWithPrefix(
+      'MinaZkappEvent******',
+      PulsarAction.toFields(action)
+    ),
+  ]);
+};
+
+export class ActionList extends MerkleList.create(
+  PulsarAction,
+  actionListAdd,
+  emptyHashWithPrefix('MinaZkappActionsEmpty')
+) {}
+
+export class MerkleActions extends MerkleList.create(
+  ActionList.provable,
+  (hash, x) => merkleActionsAdd(hash, x.hash),
+  emptyHashWithPrefix('MinaZkappActionStateEmptyElt')
+) {}
