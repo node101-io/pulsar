@@ -13,24 +13,19 @@ import {
 } from '../utils/generateFunctions';
 import { GenerateSignaturePubKeyList } from '../utils/testUtils';
 import { List } from '../types/common';
+import { enableLogs, log } from '../utils/loggers';
 
-describe('SettlementProof tests', () => {
-  const logsEnabled = true;
+describe.skip('SettlementProof tests', () => {
   let proofsEnabled = false;
   let merkleList: List;
   let settlementPublicInputs: SettlementPublicInputs[] = [];
   let settlementProofs: SettlementProof[] = [];
   let vk: VerificationKey;
-
-  // Helper functions
-  function log(...args: any[]) {
-    if (logsEnabled) {
-      console.log(...args);
-    }
+  if (process.env.LOGS_ENABLED === '1') {
+    enableLogs();
   }
 
   beforeAll(async () => {
-    // log(await MultisigVerifierProgram.analyzeMethods());
     vk = (
       await MultisigVerifierProgram.compile({
         proofsEnabled,

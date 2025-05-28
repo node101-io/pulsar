@@ -13,16 +13,17 @@ import {
   SettlementPublicInputs,
 } from '../SettlementProof';
 import {
-  GenerateReducerVerifierProof,
+  GenerateValidateReduceProof,
   GenerateSettlementPublicInput,
   MergeSettlementProofs,
 } from './generateFunctions';
 import { SettlementContract } from '../SettlementContract';
-import { ReducePublicInputs } from '../ReducerVerifierProof';
+import { ValidateReducePublicInput } from '../ValidateReduce';
 import { SignaturePublicKeyList } from '../types/signaturePubKeyList';
 import { List } from '../types/common';
 import { PulsarAction } from '../types/PulsarAction';
-import { PrepareReduce } from './witness';
+import { CalculateMask } from './reduceWitness';
+import { log } from './loggers.js';
 
 export {
   GenerateSignaturePubKeyList,
@@ -30,23 +31,7 @@ export {
   GenerateTestSettlementProof,
   MockReducerVerifierProof,
   MimicReduce,
-  log,
-  table,
 };
-
-let logsEnabled = false;
-
-function log(...args: any[]) {
-  if (logsEnabled) {
-    log(...args);
-  }
-}
-
-function table(...args: any[]) {
-  if (logsEnabled) {
-    console.table(...args);
-  }
-}
 
 function GenerateSignaturePubKeyList(
   signatureMessage: Field[],
@@ -64,7 +49,7 @@ function GenerateSignaturePubKeyList(
 }
 
 function GenerateReducerSignatureList(
-  publicInput: ReducePublicInputs,
+  publicInput: ValidateReducePublicInput,
   proofGeneratorsList: Array<[PrivateKey, PublicKey]>
 ) {
   const signatures = [];
@@ -103,6 +88,7 @@ async function GenerateTestSettlementProof(
 
   const merkleList = CreateValidatorMerkleList(validatorSet);
 
+  console.log(validatorSet[0][1].toBase58());
   for (let i = initialBlockHeight; i < newBlockHeight; i++) {
     const publicInput = GenerateSettlementPublicInput(
       merkleList.hash,
@@ -207,7 +193,7 @@ async function MimicReduce(zkapp: SettlementContract, fetch: boolean = false) {
     }
   }
 
-  const publicInput = new ReducePublicInputs({
+  const publicInput = new ValidateReducePublicInput({
     stateRoot,
     merkleListRoot,
     blockHeight,
@@ -223,31 +209,34 @@ async function MimicReduce(zkapp: SettlementContract, fetch: boolean = false) {
 
 async function MockReducerVerifierProof(
   contractInstance: SettlementContract,
-  pendingActions: Array<PulsarAction>,
-  includedActions: Field[],
+  batchActions: Array<PulsarAction>,
+  includedActionsArray: Field[],
   validatorSet: Array<[PrivateKey, PublicKey]>
 ) {
-  const actionStack = new Map<string, number>();
+  const includedActionsMap = new Map<string, number>();
 
-  for (const field of includedActions.map((x) => x.toString())) {
+  for (const field of includedActionsArray.map((x) => x.toString())) {
     log('field:', field.toString());
-    const count = actionStack.get(field) || 0;
-    actionStack.set(field, count + 1);
+    const count = includedActionsMap.get(field) || 0;
+    includedActionsMap.set(field, count + 1);
 
-    log('actionStack:', actionStack);
-    log('actionStack.get(field):', actionStack.get(field));
+    log('includedActionsMap:', includedActionsMap);
+    log('includedActionsMap.get(field):', includedActionsMap.get(field));
   }
 
-  const { publicInput, mask } = await PrepareReduce(
+  const { publicInput, mask } = await CalculateMask(
     contractInstance,
-    actionStack,
-    pendingActions
+    includedActionsMap,
+    batchActions
   );
 
   const signatureList = GenerateReducerSignatureList(publicInput, validatorSet);
 
   return {
-    proof: await GenerateReducerVerifierProof(publicInput, signatureList),
+    validateReduceProof: await GenerateValidateReduceProof(
+      publicInput,
+      signatureList
+    ),
     mask,
   };
 }
