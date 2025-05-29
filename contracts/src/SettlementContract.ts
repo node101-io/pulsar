@@ -88,6 +88,8 @@ class SettlementContract extends SmartContract {
       this.stateRoot.getAndRequireEquals(),
       'Initial Pulsar state root mismatch with on-chain state'
     );
+
+    // Maybe redundant
     NewBlockHeight.assertGreaterThan(
       this.blockHeight.getAndRequireEquals(),
       'New block height must be greater than on-chain state'
@@ -241,18 +243,6 @@ class SettlementContract extends SmartContract {
     );
     rewardListHash.assertEquals(validateReduceProof.publicInput.rewardListHash);
 
-    Provable.asProver(() => {
-      console.log(
-        'useActionStack:',
-        useActionStack.toBoolean(),
-        'actionStackProof publicInput:',
-        actionStackProof.publicInput.toJSON(),
-        'actionState:',
-        actionState.toString(),
-        'account actionState:',
-        this.account.actionState.get().toString()
-      );
-    });
     actionStackProof.verifyIf(useActionStack);
     Provable.assertEqualIf(
       useActionStack,
