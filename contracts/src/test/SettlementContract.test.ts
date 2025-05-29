@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 import {
   Field,
   Mina,
@@ -8,11 +7,10 @@ import {
   Poseidon,
   fetchAccount,
   Lightnet,
-  VerificationKey,
   UInt64,
 } from 'o1js';
 import { MultisigVerifierProgram, SettlementProof } from '../SettlementProof';
-import { VALIDATOR_NUMBER } from '../utils/constants';
+import { MINIMUM_DEPOSIT_AMOUNT, VALIDATOR_NUMBER } from '../utils/constants';
 import { SettlementContract } from '../SettlementContract';
 import { devnetTestAccounts, validatorSet, testAccounts } from './mock';
 import {
@@ -69,10 +67,6 @@ describe('SettlementProof tests', () => {
 
   // action stack
   let actionStack: Array<Field> = [];
-
-  // artifacts
-  let MultisigVerifierProgramVK: VerificationKey;
-  let ReducerVerifierProgramVK: VerificationKey;
 
   // ZkApp
   let zkappAddress: PublicKey;
@@ -181,7 +175,7 @@ describe('SettlementProof tests', () => {
     zkapp: SettlementContract,
     deployerKey: PrivateKey,
     merkleListRoot: Field,
-    expectedMsg?: string
+    expectedMsg: string = 'Transaction failed'
   ) {
     const deployerAccount = deployerKey.toPublicKey();
 
@@ -268,7 +262,7 @@ describe('SettlementProof tests', () => {
   async function expectSettleToFail(
     senderKey: PrivateKey,
     settlementProof: SettlementProof,
-    expectedMsg?: string
+    expectedMsg: string = 'Transaction failed'
   ) {
     try {
       const tx = await Mina.transaction(
@@ -291,6 +285,11 @@ describe('SettlementProof tests', () => {
     amount: UInt64,
     pushToStack: boolean = true
   ) {
+    await fetchAccounts([senderKey.toPublicKey()]);
+    const balanceBefore = Mina.getBalance(senderKey.toPublicKey());
+    log(
+      `Balance before deposit: ${balanceBefore.toBigInt() / BigInt(1e9)} MINA`
+    );
     const tx = await Mina.transaction(
       { sender: senderKey.toPublicKey(), fee },
       async () => {
@@ -309,12 +308,15 @@ describe('SettlementProof tests', () => {
     }
 
     await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+
+    const balanceAfter = Mina.getBalance(senderKey.toPublicKey());
+    log(`Balance after deposit: ${balanceAfter.toBigInt() / BigInt(1e9)} MINA`);
   }
 
   async function expectDepositToFail(
     senderKey: PrivateKey,
     amount: UInt64,
-    expectedMsg?: string
+    expectedMsg: string = 'Transaction failed'
   ) {
     try {
       const tx = await Mina.transaction(
@@ -337,6 +339,11 @@ describe('SettlementProof tests', () => {
     amount: UInt64,
     pushToStack: boolean = true
   ) {
+    await fetchAccounts([senderKey.toPublicKey()]);
+    const balanceBefore = Mina.getBalance(senderKey.toPublicKey());
+    log(
+      `Balance before withdraw: ${balanceBefore.toBigInt() / BigInt(1e9)} MINA`
+    );
     const tx = await Mina.transaction(
       { sender: senderKey.toPublicKey(), fee },
       async () => {
@@ -355,12 +362,17 @@ describe('SettlementProof tests', () => {
     }
 
     await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+    const balanceAfter = Mina.getBalance(senderKey.toPublicKey());
+    log(
+      `Balance after withdraw: ${balanceAfter.toBigInt() / BigInt(1e9)} MINA`
+    );
   }
 
+  // eslint-disable-next-line no-unused-vars
   async function expectWithdrawToFail(
     senderKey: PrivateKey,
     amount: UInt64,
-    expectedMsg?: string
+    expectedMsg: string = 'Transaction failed'
   ) {
     try {
       const tx = await Mina.transaction(
@@ -405,9 +417,10 @@ describe('SettlementProof tests', () => {
     await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
   }
 
+  // eslint-disable-next-line no-unused-vars
   async function expectReduceToFail(
     senderKey: PrivateKey,
-    expectedMsg?: string
+    expectedMsg: string = 'Transaction failed'
   ) {
     try {
       const { batchActions, batch, useActionStack, actionStackProof } =
@@ -443,19 +456,19 @@ describe('SettlementProof tests', () => {
   }
 
   async function settleDepositWithdraw(
-    settlement: boolean,
+    settlementRound: number,
     depositRound: number,
     withdrawRound: number
   ) {
-    if (settlement) {
+    for (let i = 0; i < settlementRound; i++) {
       settlementProof = await GenerateTestSettlementProof(activeSet, 0, 16);
       await settle(feePayerKey, settlementProof);
     }
     for (let i = 0; i < depositRound; i++) {
-      await deposit(usersKeys[i % 5], UInt64.from((i + 1) * 1e10));
+      await deposit(usersKeys[i % 5], UInt64.from(1e9 + i));
     }
     for (let i = 0; i < withdrawRound; i++) {
-      await withdraw(usersKeys[i % 5], UInt64.from((i + 1) * 1e9));
+      await withdraw(usersKeys[i % 5], UInt64.from(1e9 - i));
     }
     logZkappState('before', zkapp);
     await reduce(feePayerKey);
@@ -565,22 +578,26 @@ describe('SettlementProof tests', () => {
       enableLogs();
     }
 
-    await analyzeMethods(ValidateReduceProgram.analyzeMethods());
-    await analyzeMethods(ActionStackProgram.analyzeMethods());
-    await analyzeMethods(MultisigVerifierProgram.analyzeMethods());
-    await analyzeMethods(SettlementContract.analyzeMethods());
+    const validateReduceAnalyze = await ValidateReduceProgram.analyzeMethods();
+    analyzeMethods(validateReduceAnalyze);
 
-    MultisigVerifierProgramVK = (
-      await MultisigVerifierProgram.compile({
-        proofsEnabled,
-      })
-    ).verificationKey;
+    const actionStackAnalyze = await ActionStackProgram.analyzeMethods();
+    analyzeMethods(actionStackAnalyze);
 
-    ReducerVerifierProgramVK = (
-      await ValidateReduceProgram.compile({
-        proofsEnabled,
-      })
-    ).verificationKey;
+    const multisigVerifierAnalyze =
+      await MultisigVerifierProgram.analyzeMethods();
+    analyzeMethods(multisigVerifierAnalyze);
+
+    const settlementContractAnalyze = await SettlementContract.analyzeMethods();
+    analyzeMethods(settlementContractAnalyze);
+
+    await MultisigVerifierProgram.compile({
+      proofsEnabled,
+    });
+
+    await ValidateReduceProgram.compile({
+      proofsEnabled,
+    });
 
     await ActionStackProgram.compile({
       proofsEnabled,
@@ -610,14 +627,45 @@ describe('SettlementProof tests', () => {
       expect(zkapp.withdrawalListHash.get()).toEqual(Field(0));
       expect(zkapp.rewardListHash.get()).toEqual(Field(0));
     });
+
+    it('Reject contract initialization again', async () => {
+      await expectInitializeContractToFail(zkapp, feePayerKey, merkleList.hash);
+    });
   });
 
   describe.skip('Settlement flow', () => {
-    it('Generate a settlement proof', async () => {
-      settlementProof = await GenerateTestSettlementProof(activeSet, 0, 16);
+    beforeEach(() => {
+      log(expect.getState().currentTestName);
     });
 
-    it('Settle method', async () => {
+    it('Invalid merkle list settlement proof & reject settle', async () => {
+      const invalidSettlementProof = await GenerateTestSettlementProof(
+        testAccounts.slice(0, VALIDATOR_NUMBER),
+        0,
+        16
+      );
+      await expectSettleToFail(
+        feePayerKey,
+        invalidSettlementProof,
+        'Initial MerkleList root mismatch with on-chain state'
+      );
+    });
+
+    it('Invalid block height settlement proof & reject settle', async () => {
+      const invalidSettlementProof = await GenerateTestSettlementProof(
+        activeSet,
+        1,
+        16
+      );
+      await expectSettleToFail(
+        feePayerKey,
+        invalidSettlementProof,
+        'Initial block height mismatch with on-chain state'
+      );
+    });
+
+    it('Generate a valid settlement proof & Settle method', async () => {
+      settlementProof = await GenerateTestSettlementProof(activeSet, 0, 16);
       await settle(feePayerKey, settlementProof);
     });
 
@@ -634,12 +682,54 @@ describe('SettlementProof tests', () => {
         settlementProof.publicInput.NewMerkleListRoot
       );
     });
+
+    it('Reject settlement with invalid proof: wrong state root', async () => {
+      const invalidSettlementProof = await GenerateTestSettlementProof(
+        activeSet,
+        16,
+        32,
+        40,
+        50
+      );
+      await expectSettleToFail(
+        feePayerKey,
+        invalidSettlementProof,
+        'Initial Pulsar state root mismatch with on-chain state'
+      );
+    });
+
+    it('Reject settlement with invalid proof: previous block height', async () => {
+      const invalidSettlementProof = await GenerateTestSettlementProof(
+        activeSet,
+        2,
+        18
+      );
+
+      await expectSettleToFail(
+        feePayerKey,
+        invalidSettlementProof,
+        'Initial block height mismatch with on-chain state'
+      );
+    });
   });
 
   describe.skip('Deposit flow', () => {
+    beforeEach(() => {
+      log(expect.getState().currentTestName);
+    });
+
     it('Deposit method', async () => {
       await deposit(feePayerKey, UInt64.from(1e10));
     });
+
+    it('Reject deposit with less than minimum amount', async () => {
+      await expectDepositToFail(
+        feePayerKey,
+        UInt64.from(MINIMUM_DEPOSIT_AMOUNT - 123),
+        `At least ${Number(MINIMUM_DEPOSIT_AMOUNT / 1e9)} MINA is required`
+      );
+    });
+
     it('Reduce actions', async () => {
       const depositListHash = zkapp.depositListHash.get();
       await reduce(feePayerKey);
@@ -655,6 +745,10 @@ describe('SettlementProof tests', () => {
   });
 
   describe.skip('Withdraw flow', () => {
+    beforeEach(() => {
+      log(expect.getState().currentTestName);
+    });
+
     it('Withdraw method', async () => {
       await withdraw(feePayerKey, UInt64.from(1e9));
     });
@@ -673,6 +767,10 @@ describe('SettlementProof tests', () => {
   });
 
   describe.skip('Combined flow', () => {
+    beforeEach(() => {
+      log(expect.getState().currentTestName);
+    });
+
     it('Generate a settlement proof', async () => {
       settlementProof = await GenerateTestSettlementProof(activeSet, 16, 32);
     });
@@ -720,101 +818,31 @@ describe('SettlementProof tests', () => {
   describe('More transactions to reduce', () => {
     beforeEach(async () => {
       await prepareNewContract();
-    });
-    it.skip('1 settlement', async () => {
-      await settleDepositWithdraw(true, 0, 0);
+      log(expect.getState().currentTestName);
     });
 
-    it.skip('1 settlement + 1 deposit', async () => {
-      await settleDepositWithdraw(true, 1, 0);
+    it('1 settlement + 1 deposit + 1 withdraw', async () => {
+      await settleDepositWithdraw(1, 1, 1);
     });
 
-    it.skip('1 settlement + 2 deposits', async () => {
-      await settleDepositWithdraw(true, 2, 0);
+    it('1 settlement + 5 deposits + 5 withdraws', async () => {
+      await settleDepositWithdraw(1, 5, 5);
     });
 
-    it.skip('1 settlement + 3 deposits', async () => {
-      await settleDepositWithdraw(true, 3, 0);
+    it('1 settlement + 10 deposits + 10 withdraws', async () => {
+      await settleDepositWithdraw(1, 10, 10);
     });
 
-    it.skip('1 settlement + 1 withdraw', async () => {
-      await settleDepositWithdraw(true, 0, 1);
+    it('1 settlement + 20 deposits + 20 withdraws', async () => {
+      await settleDepositWithdraw(1, 20, 20);
     });
 
-    it.skip('1 settlement + 2 withdraws', async () => {
-      await settleDepositWithdraw(true, 0, 2);
+    it('1 settlement + 50 deposits + 50 withdraws', async () => {
+      await settleDepositWithdraw(1, 50, 50);
     });
 
-    it.skip('1 settlement + 3 withdraws', async () => {
-      await settleDepositWithdraw(true, 0, 3);
-    });
-
-    it.skip('1 deposit + 1 withdraw', async () => {
-      await settleDepositWithdraw(false, 1, 1);
-    });
-
-    it.skip('1 deposit + 2 withdraws', async () => {
-      await settleDepositWithdraw(false, 1, 2);
-    });
-
-    it.skip('2 deposits + 1 withdraw', async () => {
-      await settleDepositWithdraw(false, 2, 1);
-    });
-    it.skip('2 deposits + 2 withdraws', async () => {
-      await settleDepositWithdraw(false, 2, 2);
-    });
-
-    it.skip('1 settlement + 1 deposit + 1 withdraw', async () => {
-      await settleDepositWithdraw(true, 1, 1);
-    });
-    it.skip('1 settlement + 1 deposit + 2 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 2);
-    });
-    it.skip('1 settlement + 1 deposit + 3 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 3);
-    });
-
-    it.skip('1 settlement + 1 deposit + 4 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 4);
-    });
-
-    it.skip('1 settlement + 1 deposit + 5 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 5);
-    });
-
-    it.skip('1 settlement + 1 deposit + 6 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 6);
-    });
-
-    it.skip('1 settlement + 1 deposit + 7 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 7);
-    });
-
-    it.skip('1 settlement + 1 deposit + 8 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 8);
-    });
-
-    it('1 settlement + 1 deposit + 9 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 9);
-    });
-
-    it.skip('1 settlement + 1 deposit + 10 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 10);
-    });
-
-    it.skip('1 settlement + 1 deposit + 11 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 11);
-    });
-
-    it.skip('1 settlement + 1 deposit + 12 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 12);
-    });
-    it.skip('1 settlement + 1 deposit + 13 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 13);
-    });
-
-    it.skip('1 settlement + 1 deposit + 14 withdraws', async () => {
-      await settleDepositWithdraw(true, 1, 14);
+    it('1 settlement + 80 deposits + 80 withdraws', async () => {
+      await settleDepositWithdraw(1, 80, 80);
     });
   });
 });

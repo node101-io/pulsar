@@ -81,21 +81,27 @@ function CreateValidatorMerkleList(
 async function GenerateTestSettlementProof(
   validatorSet: Array<[PrivateKey, PublicKey]>,
   initialBlockHeight: number,
-  newBlockHeight: number
+  newBlockHeight: number,
+  initialStateRoot: number = initialBlockHeight,
+  newStateRoot: number = newBlockHeight
 ) {
   const settlementPublicInputs: SettlementPublicInputs[] = [];
   const settlementProofs: SettlementProof[] = [];
 
   const merkleList = CreateValidatorMerkleList(validatorSet);
 
-  console.log(validatorSet[0][1].toBase58());
+  log(validatorSet[0][1].toBase58());
   for (let i = initialBlockHeight; i < newBlockHeight; i++) {
     const publicInput = GenerateSettlementPublicInput(
       merkleList.hash,
-      Field.from(i),
+      Field.from(
+        i == initialBlockHeight
+          ? initialStateRoot
+          : settlementPublicInputs[i - initialBlockHeight - 1].NewStateRoot
+      ),
       Field.from(i),
       merkleList.hash,
-      Field.from(i + 1),
+      Field.from(i == newBlockHeight - 1 ? newStateRoot : Field.random()),
       Field.from(i + 1),
       [validatorSet[0][1]]
     );
@@ -116,6 +122,11 @@ async function GenerateTestSettlementProof(
 
     settlementProofs.push(proof);
   }
+
+  log(
+    'Settlement Public Inputs:',
+    settlementPublicInputs.map((input) => input.toJSON())
+  );
 
   let mergedProof = await MergeSettlementProofs(settlementProofs);
 

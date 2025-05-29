@@ -43,9 +43,9 @@ function logZkappState(label: string, zkapp: SettlementContract) {
   });
 }
 
-async function analyzeMethods(promise: any) {
+function analyzeMethods(promise: any) {
   if (!logsEnabled) return;
-  const data = await promise;
+  const data = promise;
   const tableData = Object.entries(data).map(([methodName, details]) => ({
     method: methodName,
     rows: (details as any).rows,
