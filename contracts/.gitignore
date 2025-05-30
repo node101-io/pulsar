@@ -13,3 +13,6 @@ coverage
 keys
 
 /benchmarks
+
+*.txt
+/logs
