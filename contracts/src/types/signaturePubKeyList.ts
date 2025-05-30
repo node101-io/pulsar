@@ -1,15 +1,7 @@
-import {
-  Field,
-  MerkleList,
-  Poseidon,
-  Provable,
-  PublicKey,
-  Signature,
-  Struct,
-} from 'o1js';
-import { VALIDATOR_NUMBER } from './constants';
+import { Provable, PublicKey, Signature, Struct } from 'o1js';
+import { VALIDATOR_NUMBER } from '../utils/constants';
 
-export { SignaturePublicKey, SignaturePublicKeyList, List, emptyHash };
+export { SignaturePublicKey, SignaturePublicKeyList };
 
 class SignaturePublicKey extends Struct({
   signature: Signature,
@@ -27,8 +19,11 @@ class SignaturePublicKeyList extends Struct({
       ),
     });
   }
-}
 
-const emptyHash = Poseidon.hash([Field(0)]);
-const nextHash = (hash: Field, value: Field) => Poseidon.hash([hash, value]);
-class List extends MerkleList.create(Field, nextHash, emptyHash) {}
+  toJSON() {
+    return this.list.map((item) => ({
+      signature: item.signature.toString(),
+      publicKey: item.publicKey.toString(),
+    }));
+  }
+}

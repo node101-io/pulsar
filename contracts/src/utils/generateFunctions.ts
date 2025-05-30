@@ -1,22 +1,31 @@
-import { Field, PublicKey } from 'o1js';
+import { Bool, Field, PublicKey } from 'o1js';
 import {
   MultisigVerifierProgram,
   SettlementProof,
   SettlementPublicInputs,
 } from '../SettlementProof';
-import { ProofGenerators } from './proofGenerators';
+import { ProofGenerators } from '../types/proofGenerators';
 import {
-  ReducePublicInputs,
-  ReduceVerifierProgram,
-  ReduceVerifierProof,
-} from '../ReducerVerifierProof';
-import { SignaturePublicKeyList } from './types';
+  ValidateReducePublicInput,
+  ValidateReduceProgram,
+  ValidateReduceProof,
+} from '../ValidateReduce';
+import { SignaturePublicKeyList } from '../types/signaturePubKeyList';
+import { log, table } from './loggers.js';
+import { PulsarAction } from '../types/PulsarAction';
+import { ACTION_QUEUE_SIZE } from './constants';
+import {
+  ActionStackProgram,
+  ActionStackProof,
+  ActionStackQueue,
+} from '../ActionStack';
 
 export {
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
-  GenerateReducerVerifierProof,
+  GenerateValidateReduceProof,
+  GenerateActionStackProof,
 };
 
 async function GenerateSettlementProof(
@@ -45,12 +54,11 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     throw new Error('At least two proofs are required to merge');
   }
 
-  console.log(
+  log(
     'Unsorted proofs:',
     proofs.map((proof) => proof.publicInput.NewBlockHeight.toString())
   );
 
-  //sort the proofs by block height
   proofs.sort((a, b) => {
     return Number(
       a.publicInput.NewBlockHeight.toBigInt() <
@@ -58,7 +66,7 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     );
   });
 
-  console.table(
+  table(
     proofs.map((proof) => ({
       InitialBlockHeight: proof.publicInput.InitialBlockHeight.toString().slice(
         0,
@@ -138,14 +146,14 @@ function GenerateSettlementPublicInput(
   });
 }
 
-async function GenerateReducerVerifierProof(
-  publicInputs: ReducePublicInputs,
+async function GenerateValidateReduceProof(
+  publicInputs: ValidateReducePublicInput,
   signaturePublicKeyList: SignaturePublicKeyList
 ) {
-  let proof: ReduceVerifierProof;
+  let proof: ValidateReduceProof;
   try {
     proof = (
-      await ReduceVerifierProgram.verifySignatures(
+      await ValidateReduceProgram.verifySignatures(
         publicInputs,
         signaturePublicKeyList
       )
@@ -155,4 +163,41 @@ async function GenerateReducerVerifierProof(
     throw error;
   }
   return proof;
+}
+
+async function GenerateActionStackProof(
+  endActionState: Field,
+  actions: PulsarAction[]
+) {
+  let proof = await ActionStackProof.dummy(Field(0), endActionState, 1, 14);
+
+  if (actions.length === 0) {
+    return {
+      useActionStack: Bool(false),
+      actionStackProof: proof,
+    };
+  }
+
+  try {
+    for (let i = 0; i < Math.ceil(actions.length / ACTION_QUEUE_SIZE); i++) {
+      proof = (
+        await ActionStackProgram.proveIntegrity(
+          proof.publicOutput,
+          proof,
+          Bool(i === 0),
+          ActionStackQueue.fromArray(
+            actions.slice(i * ACTION_QUEUE_SIZE, (i + 1) * ACTION_QUEUE_SIZE)
+          )
+        )
+      ).proof;
+    }
+
+    return {
+      useActionStack: Bool(true),
+      actionStackProof: proof,
+    };
+  } catch (error) {
+    console.error('Error generating action stack proof:', error);
+    throw error;
+  }
 }

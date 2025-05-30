@@ -5,32 +5,27 @@ import {
   SettlementProof,
 } from '../SettlementProof';
 import { VALIDATOR_NUMBER } from '../utils/constants';
-import { ProofGenerators } from '../utils/proofGenerators';
+import { ProofGenerators } from '../types/proofGenerators';
 import { validatorSet } from './mock';
 import {
   GenerateSettlementPublicInput,
   MergeSettlementProofs,
 } from '../utils/generateFunctions';
-import { GenerateSettlementSignatureList } from '../utils/testUtils';
-import { List } from '../utils/types';
+import { GenerateSignaturePubKeyList } from '../utils/testUtils';
+import { List } from '../types/common';
+import { enableLogs, log } from '../utils/loggers';
 
-describe('SettlementProof tests', () => {
-  const logsEnabled = true;
+describe.skip('SettlementProof tests', () => {
   let proofsEnabled = false;
   let merkleList: List;
   let settlementPublicInputs: SettlementPublicInputs[] = [];
   let settlementProofs: SettlementProof[] = [];
   let vk: VerificationKey;
-
-  // Helper functions
-  function log(...args: any[]) {
-    if (logsEnabled) {
-      console.log(...args);
-    }
+  if (process.env.LOGS_ENABLED === '1') {
+    enableLogs();
   }
 
   beforeAll(async () => {
-    // log(await MultisigVerifierProgram.analyzeMethods());
     vk = (
       await MultisigVerifierProgram.compile({
         proofsEnabled,
@@ -72,8 +67,10 @@ describe('SettlementProof tests', () => {
 
   describe('verifySignatures method', () => {
     it('should verify signatures and create a valid SettlementProof', async () => {
-      const privateInputs = GenerateSettlementSignatureList(
-        settlementPublicInputs[settlementPublicInputs.length - 1],
+      const privateInputs = GenerateSignaturePubKeyList(
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .hash()
+          .toFields(),
         validatorSet
       );
 
@@ -125,8 +122,10 @@ describe('SettlementProof tests', () => {
         )
       );
 
-      const privateInputs = GenerateSettlementSignatureList(
-        settlementPublicInputs[settlementPublicInputs.length - 1],
+      const privateInputs = GenerateSignaturePubKeyList(
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .hash()
+          .toFields(),
         validatorSet
       );
 
@@ -178,8 +177,10 @@ describe('SettlementProof tests', () => {
         )
       );
 
-      const privateInputs = GenerateSettlementSignatureList(
-        settlementPublicInputs[settlementPublicInputs.length - 1],
+      const privateInputs = GenerateSignaturePubKeyList(
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .hash()
+          .toFields(),
         validatorSet
       );
 

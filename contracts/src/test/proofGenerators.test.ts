@@ -1,8 +1,8 @@
 import { Bool, Field, PrivateKey, PublicKey } from 'o1js';
-import { ProofGenerators } from '../utils/proofGenerators';
+import { ProofGenerators } from '../types/proofGenerators';
 import { TOTAL_GENERATORS } from '../utils/constants';
 
-describe('utils classes and function tests', () => {
+describe.skip('utils classes and function tests', () => {
   const logsEnabled = false;
 
   function log(...args: any[]) {

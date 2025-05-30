@@ -7,9 +7,10 @@ import {
   Struct,
   ZkProgram,
 } from 'o1js';
-import { ProofGenerators } from './utils/proofGenerators';
+import { ProofGenerators } from './types/proofGenerators';
 import { AGGREGATE_THRESHOLD, VALIDATOR_NUMBER } from './utils/constants';
-import { List, SignaturePublicKeyList } from './utils/types';
+import { SignaturePublicKeyList } from './types/signaturePubKeyList';
+import { List } from './types/common';
 
 export {
   SettlementProof,
@@ -64,6 +65,31 @@ class SettlementPublicInputs extends Struct({
       this.NewStateRoot,
       this.NewBlockHeight,
     ]);
+  }
+
+  actionHash() {
+    return Poseidon.hash([
+      Field(1),
+      this.InitialStateRoot,
+      this.NewStateRoot,
+      this.InitialMerkleListRoot,
+      this.NewMerkleListRoot,
+      this.InitialBlockHeight,
+      this.NewBlockHeight,
+      Poseidon.hash(this.ProofGeneratorsList.toFields()),
+    ]);
+  }
+
+  toJSON() {
+    return {
+      InitialMerkleListRoot: this.InitialMerkleListRoot.toString(),
+      InitialStateRoot: this.InitialStateRoot.toString(),
+      InitialBlockHeight: this.InitialBlockHeight.toString(),
+      NewMerkleListRoot: this.NewMerkleListRoot.toString(),
+      NewStateRoot: this.NewStateRoot.toString(),
+      NewBlockHeight: this.NewBlockHeight.toString(),
+      ProofGeneratorsList: this.ProofGeneratorsList.toJSON(),
+    };
   }
 }
 

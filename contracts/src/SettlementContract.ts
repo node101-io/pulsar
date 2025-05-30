@@ -5,35 +5,34 @@ import {
   State,
   Field,
   method,
-  Experimental,
   UInt64,
   AccountUpdate,
   Provable,
   Poseidon,
+  PublicKey,
+  Reducer,
+  Bool,
 } from 'o1js';
-import { ActionType } from './utils/action';
 import { SettlementProof } from './SettlementProof';
-import { MINIMUM_DEPOSIT_AMOUNT } from './utils/constants';
-import { ReduceVerifierProof } from './ReducerVerifierProof';
-import { WithdrawalProof } from './Withdraw';
-const { BatchReducer } = Experimental;
+import {
+  BATCH_SIZE,
+  MINIMUM_DEPOSIT_AMOUNT,
+  WITHDRAW_DOWN_PAYMENT,
+} from './utils/constants';
+import { ValidateReduceProof } from './ValidateReduce';
+import { Batch, PulsarAction } from './types/PulsarAction';
+import { ReduceMask } from './types/common';
+import { ActionStackProof } from './ActionStack';
+import {
+  actionListAdd,
+  emptyActionListHash,
+  merkleActionsAdd,
+} from './types/actionHelpers';
 
-export { BatchReducerInstance, Batch, BatchProof, SettlementContract };
-
-let batchReducer = new BatchReducer({
-  actionType: ActionType,
-  batchSize: 10,
-  maxUpdatesFinalProof: 100,
-  maxUpdatesPerProof: 300,
-});
-
-const BatchReducerInstance = batchReducer;
-class Batch extends batchReducer.Batch {}
-class BatchProof extends batchReducer.BatchProof {}
+export { SettlementContract };
 
 class SettlementContract extends SmartContract {
-  @state(Field) actionState = State(BatchReducer.initialActionState);
-  @state(Field) actionStack = State(BatchReducer.initialActionStack);
+  @state(Field) actionState = State<Field>();
 
   @state(Field) merkleListRoot = State<Field>();
   @state(Field) stateRoot = State<Field>();
@@ -42,6 +41,8 @@ class SettlementContract extends SmartContract {
   @state(Field) depositListHash = State<Field>();
   @state(Field) withdrawalListHash = State<Field>();
   @state(Field) rewardListHash = State<Field>();
+
+  reducer = Reducer({ actionType: PulsarAction });
 
   async deploy() {
     await super.deploy();
@@ -58,6 +59,7 @@ class SettlementContract extends SmartContract {
   async initialize(merkleListRoot: Field) {
     super.init();
     this.merkleListRoot.set(merkleListRoot);
+    this.actionState.set(Reducer.initialActionState);
   }
 
   @method
@@ -86,13 +88,15 @@ class SettlementContract extends SmartContract {
       this.stateRoot.getAndRequireEquals(),
       'Initial Pulsar state root mismatch with on-chain state'
     );
+
+    // Maybe redundant
     NewBlockHeight.assertGreaterThan(
       this.blockHeight.getAndRequireEquals(),
       'New block height must be greater than on-chain state'
     );
 
-    batchReducer.dispatch(
-      ActionType.settlement(
+    this.reducer.dispatch(
+      PulsarAction.settlement(
         InitialStateRoot,
         NewStateRoot,
         InitialMerkleListRoot,
@@ -114,33 +118,29 @@ class SettlementContract extends SmartContract {
     const depositAccountUpdate = AccountUpdate.createSigned(sender);
     depositAccountUpdate.send({ to: this.address, amount });
 
-    batchReducer.dispatch(ActionType.deposit(sender, amount.value));
+    this.reducer.dispatch(PulsarAction.deposit(sender, amount.value));
   }
 
   @method
-  async withdraw(withdrawalProof: WithdrawalProof) {
-    this.sender.getAndRequireSignature();
+  async withdraw(amount: UInt64) {
+    const account = this.sender.getUnconstrained();
+    const withdrawalUpdate = AccountUpdate.createSigned(account);
 
-    withdrawalProof.verify();
+    withdrawalUpdate.send({
+      to: this.address,
+      amount: amount.add(UInt64.from(WITHDRAW_DOWN_PAYMENT)),
+    });
 
-    const { InitialMerkleListRoot, NewMerkleListRoot, account, amount } =
-      withdrawalProof.publicInput;
-
-    batchReducer.dispatch(
-      ActionType.withdrawal(
-        InitialMerkleListRoot,
-        NewMerkleListRoot,
-        account,
-        amount
-      )
-    );
+    this.reducer.dispatch(PulsarAction.withdrawal(account, amount.value));
   }
 
   @method
   async reduce(
     batch: Batch,
-    proof: BatchProof,
-    reduceProof: ReduceVerifierProof
+    useActionStack: Bool,
+    actionStackProof: ActionStackProof,
+    mask: ReduceMask,
+    validateReduceProof: ValidateReduceProof
   ) {
     let stateRoot = this.stateRoot.getAndRequireEquals();
     let merkleListRoot = this.merkleListRoot.getAndRequireEquals();
@@ -150,16 +150,35 @@ class SettlementContract extends SmartContract {
     let withdrawalListHash = this.withdrawalListHash.getAndRequireEquals();
     let rewardListHash = this.rewardListHash.getAndRequireEquals();
 
-    batchReducer.processBatch({ batch, proof }, (action, isDummy) => {
-      const shouldSettle = ActionType.isSettlement(action)
+    let actionState = this.actionState.getAndRequireEquals();
+
+    for (let i = 0; i < BATCH_SIZE; i++) {
+      const action = batch.actions[i];
+      const isDummy = PulsarAction.isDummy(action);
+
+      actionState = Provable.if(
+        isDummy,
+        actionState,
+        merkleActionsAdd(
+          actionState,
+          actionListAdd(emptyActionListHash, action)
+        )
+      );
+
+      const shouldSettle = PulsarAction.isSettlement(action)
         .and(action.initialState.equals(stateRoot))
         .and(action.initialMerkleListRoot.equals(merkleListRoot))
         .and(action.initialBlockHeight.equals(blockHeight))
-        .and(isDummy.not());
+        .and(isDummy.not())
+        .and(mask.list[i]);
 
-      const shouldDeposit = ActionType.isDeposit(action).and(isDummy.not());
+      const shouldDeposit = PulsarAction.isDeposit(action)
+        .and(isDummy.not())
+        .and(mask.list[i]);
 
-      const shouldWithdraw = ActionType.isWithdrawal(action).and(isDummy.not());
+      const shouldWithdraw = PulsarAction.isWithdrawal(action)
+        .and(isDummy.not())
+        .and(mask.list[i]);
 
       stateRoot = Provable.if(shouldSettle, action.newState, stateRoot);
 
@@ -195,23 +214,48 @@ class SettlementContract extends SmartContract {
         withdrawalListHash
       );
 
+      this.send({
+        to: Provable.if(shouldWithdraw, action.account, PublicKey.empty()),
+        amount: Provable.if(
+          shouldWithdraw,
+          UInt64.Unsafe.fromField(action.amount).add(WITHDRAW_DOWN_PAYMENT),
+          UInt64.from(0)
+        ),
+      });
+
       rewardListHash = Provable.if(
-        shouldSettle.or(shouldWithdraw),
-        // Poseidon.hash([rewardListHash, ...action.rewardListUpdate.toFields()]),
+        shouldSettle,
         Poseidon.hash([rewardListHash, action.rewardListUpdateHash]),
         rewardListHash
       );
-    });
+    }
 
-    reduceProof.verify();
+    validateReduceProof.verify();
 
-    stateRoot.assertEquals(reduceProof.publicInput.stateRoot);
-    merkleListRoot.assertEquals(reduceProof.publicInput.merkleListRoot);
-    blockHeight.assertEquals(reduceProof.publicInput.blockHeight);
-    depositListHash.assertEquals(reduceProof.publicInput.depositListHash);
-    withdrawalListHash.assertEquals(reduceProof.publicInput.withdrawalListHash);
-    rewardListHash.assertEquals(reduceProof.publicInput.rewardListHash);
+    stateRoot.assertEquals(validateReduceProof.publicInput.stateRoot);
+    merkleListRoot.assertEquals(validateReduceProof.publicInput.merkleListRoot);
+    blockHeight.assertEquals(validateReduceProof.publicInput.blockHeight);
+    depositListHash.assertEquals(
+      validateReduceProof.publicInput.depositListHash
+    );
+    withdrawalListHash.assertEquals(
+      validateReduceProof.publicInput.withdrawalListHash
+    );
+    rewardListHash.assertEquals(validateReduceProof.publicInput.rewardListHash);
 
+    actionStackProof.verifyIf(useActionStack);
+    Provable.assertEqualIf(
+      useActionStack,
+      Field,
+      actionStackProof.publicInput,
+      actionState
+    );
+
+    this.account.actionState.requireEquals(
+      Provable.if(useActionStack, actionStackProof.publicOutput, actionState)
+    );
+
+    this.actionState.set(actionState);
     this.stateRoot.set(stateRoot);
     this.merkleListRoot.set(merkleListRoot);
     this.blockHeight.set(blockHeight);
