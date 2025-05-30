@@ -2,7 +2,9 @@ import { Bool, Field, Poseidon, Provable, PublicKey, Struct } from 'o1js';
 import { ProofGenerators } from './proofGenerators.js';
 import { BATCH_SIZE } from '../utils/constants.js';
 
-export class PulsarAction extends Struct({
+export { PulsarAction, Batch };
+
+class PulsarAction extends Struct({
   type: Field, // settlement (1), deposit (2), or withdrawal (3)
   account: PublicKey, // only defined for types of deposit and withdrawal
   amount: Field, //only defined for types of deposit and withdrawal
@@ -156,7 +158,7 @@ export class PulsarAction extends Struct({
   }
 }
 
-export class Batch extends Struct({
+class Batch extends Struct({
   actions: Provable.Array(PulsarAction, BATCH_SIZE),
 }) {
   static empty() {

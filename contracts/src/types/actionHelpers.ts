@@ -1,6 +1,14 @@
 import { Field, MerkleList, Poseidon, PublicKey } from 'o1js';
 import { PulsarAction } from './PulsarAction.js';
 
+export {
+  merkleActionsAdd,
+  emptyActionListHash,
+  actionListAdd,
+  ActionList,
+  MerkleActions,
+};
+
 const encoder = new TextEncoder();
 
 function bytes(s: string) {
@@ -27,11 +35,11 @@ function emptyHashWithPrefix(prefix: string) {
   return salt(prefix)[0];
 }
 
-export const merkleActionsAdd = (hash: Field, actionsHash: Field): Field => {
+const merkleActionsAdd = (hash: Field, actionsHash: Field): Field => {
   return Poseidon.hashWithPrefix('MinaZkappSeqEvents**', [hash, actionsHash]);
 };
 
-export const emptyActionListHash = emptyHashWithPrefix('MinaZkappActionsEmpty');
+const emptyActionListHash = emptyHashWithPrefix('MinaZkappActionsEmpty');
 
 type PulsarActionData = {
   type: Field;
@@ -46,7 +54,7 @@ type PulsarActionData = {
   rewardListUpdateHash: Field;
 };
 
-export const actionListAdd = (hash: Field, action: PulsarActionData): Field => {
+const actionListAdd = (hash: Field, action: PulsarActionData): Field => {
   return Poseidon.hashWithPrefix('MinaZkappSeqEvents**', [
     hash,
     Poseidon.hashWithPrefix(
@@ -56,13 +64,13 @@ export const actionListAdd = (hash: Field, action: PulsarActionData): Field => {
   ]);
 };
 
-export class ActionList extends MerkleList.create(
+class ActionList extends MerkleList.create(
   PulsarAction,
   actionListAdd,
   emptyHashWithPrefix('MinaZkappActionsEmpty')
 ) {}
 
-export class MerkleActions extends MerkleList.create(
+class MerkleActions extends MerkleList.create(
   ActionList.provable,
   (hash, x) => merkleActionsAdd(hash, x.hash),
   emptyHashWithPrefix('MinaZkappActionStateEmptyElt')
