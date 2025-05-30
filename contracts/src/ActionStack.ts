@@ -38,6 +38,12 @@ class ActionStackQueue extends Struct({
     }
     return new this({ stack });
   }
+  toJSON() {
+    return this.stack.map((item) => ({
+      isDummy: item.isDummy.toBoolean(),
+      actionListHash: item.actionListHash.toString(),
+    }));
+  }
 }
 
 const ActionStackProgram = ZkProgram({

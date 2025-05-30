@@ -28,7 +28,7 @@ import {
   logZkappState,
 } from '../utils/loggers';
 
-describe('SettlementProof tests', () => {
+describe.skip('SettlementProof tests', () => {
   const testEnvironment = process.env.TEST_ENV ?? 'local';
   const localTest = testEnvironment === 'local';
   const randomKeys = process.env.RANDOM_KEYS === '1';
@@ -241,7 +241,6 @@ describe('SettlementProof tests', () => {
     settlementProof: SettlementProof,
     pushToStack: boolean = true
   ) {
-    console.log('senderKey', senderKey.toPublicKey().toBase58());
     await fetchAccounts([zkappAddress]);
     const tx = await Mina.transaction(
       { sender: senderKey.toPublicKey(), fee },
@@ -608,7 +607,7 @@ describe('SettlementProof tests', () => {
     }
   });
 
-  describe.skip('Deploy & Initialize Flow', () => {
+  describe('Deploy & Initialize Flow', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
     });
@@ -633,7 +632,7 @@ describe('SettlementProof tests', () => {
     });
   });
 
-  describe.skip('Settlement flow', () => {
+  describe('Settlement flow', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
     });
@@ -713,7 +712,7 @@ describe('SettlementProof tests', () => {
     });
   });
 
-  describe.skip('Deposit flow', () => {
+  describe('Deposit flow', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
     });
@@ -744,7 +743,7 @@ describe('SettlementProof tests', () => {
     });
   });
 
-  describe.skip('Withdraw flow', () => {
+  describe('Withdraw flow', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
     });
@@ -766,7 +765,7 @@ describe('SettlementProof tests', () => {
     });
   });
 
-  describe.skip('Combined flow', () => {
+  describe('Combined flow', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
     });

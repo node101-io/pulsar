@@ -4,6 +4,7 @@ import {
   PrivateKey,
   PublicKey,
   Signature,
+  UInt64,
 } from 'o1js';
 import {
   MultisigVerifierProgram,
@@ -22,12 +23,20 @@ import { List } from '../types/common';
 import { PulsarAction } from '../types/PulsarAction';
 import { CalculateMask } from './reduceWitness';
 import { log } from './loggers.js';
+import { ProofGenerators } from '../types/proofGenerators';
+import {
+  actionListAdd,
+  emptyActionListHash,
+  merkleActionsAdd,
+} from '../types/actionHelpers';
 
 export {
   GenerateSignaturePubKeyList,
   GenerateReducerSignatureList,
   GenerateTestSettlementProof,
   MockReducerVerifierProof,
+  GenerateTestActions,
+  CalculateActionRoot,
 };
 
 function GenerateSignaturePubKeyList(
@@ -162,4 +171,58 @@ async function MockReducerVerifierProof(
     ),
     mask,
   };
+}
+
+function GenerateTestActions(
+  numActions: number,
+  merkleListRoot: Field,
+  initialStateRoot: Field = Field(0)
+): PulsarAction[] {
+  const actions: PulsarAction[] = [];
+  let blockHeight = 1;
+  for (let i = 0; i < numActions; i++) {
+    const randomType = Math.ceil(Math.random() * 3);
+    if (randomType === 1) {
+      actions.push(
+        PulsarAction.settlement(
+          i == 0 ? initialStateRoot : Field.random(),
+          Field.random(),
+          merkleListRoot,
+          merkleListRoot,
+          Field.from(blockHeight++),
+          Field.from(blockHeight++),
+          ProofGenerators.empty().insertAt(
+            Field.from(0),
+            PrivateKey.random().toPublicKey()
+          )
+        )
+      );
+    } else if (randomType === 2) {
+      actions.push(
+        PulsarAction.deposit(
+          PrivateKey.random().toPublicKey(),
+          UInt64.from(Math.floor(Math.random() * 2 ** 32)).value
+        )
+      );
+    } else if (randomType === 3) {
+      actions.push(
+        PulsarAction.withdrawal(
+          PrivateKey.random().toPublicKey(),
+          UInt64.from(Math.floor(Math.random() * 2 ** 32)).value
+        )
+      );
+    }
+  }
+  return actions;
+}
+
+function CalculateActionRoot(initialRoot: Field, actions: PulsarAction[]) {
+  let actionRoot = initialRoot;
+  for (const action of actions) {
+    actionRoot = merkleActionsAdd(
+      actionRoot,
+      actionListAdd(emptyActionListHash, action)
+    );
+  }
+  return actionRoot;
 }

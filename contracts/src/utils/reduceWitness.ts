@@ -1,4 +1,4 @@
-import { Field, Mina, Poseidon } from 'o1js';
+import { Bool, Field, Poseidon } from 'o1js';
 import { ValidateReducePublicInput } from '../ValidateReduce';
 import { log } from './loggers.js';
 import {
@@ -11,9 +11,16 @@ import { Batch, PulsarAction } from '../types/PulsarAction';
 import { SettlementContract } from '../SettlementContract';
 import { ReduceMask } from '../types/common';
 import { GenerateActionStackProof } from './generateFunctions';
+import { fetchActions } from './fetch';
+import {
+  actionListAdd,
+  emptyActionListHash,
+  merkleActionsAdd,
+} from '../types/actionHelpers';
 
-export { CalculateMask, PrepareBatch };
+export { CalculateMask, PrepareBatch, CalculateMaksimumFromActions };
 
+// Todo: Maybe always include deposit actions?
 async function CalculateMask(
   contractInstance: SettlementContract,
   includedActions: Map<string, number>,
@@ -28,13 +35,6 @@ async function CalculateMask(
     withdrawalListHash: contractInstance.withdrawalListHash.get(),
     rewardListHash: contractInstance.rewardListHash.get(),
   });
-
-  log('publicInput:', publicInput.toJSON());
-
-  log(
-    'batchActions:',
-    batchActions.map((action) => action.toJSON())
-  );
 
   for (let i = 0; i < batchActions.length; i++) {
     const action = batchActions[i];
@@ -94,45 +94,62 @@ async function CalculateMask(
   };
 }
 
-async function PrepareBatch(contractInstance: SettlementContract) {
-  let rawActions: {
-    actions: string[][];
-    hash: string;
-  }[] = [];
-  let endActionState = 0n;
+function CalculateMaksimumFromPackedActions(
+  packedActions: Array<{ action: PulsarAction; hash: bigint }>
+) {
   let totalWithdrawals = 0;
   let totalDeposits = 0;
   let totalSettlements = 0;
-  let batchActions: Array<PulsarAction> = [];
+  const batchActions: Array<PulsarAction> = [];
+  let endActionState = 0n;
 
-  try {
-    const result = await Mina.fetchActions(contractInstance.address, {
-      fromActionState: contractInstance.actionState.get(),
-      endActionState: undefined,
-    });
-
-    log('Fetched actions:', JSON.stringify(result), null, 2);
-
-    if (Array.isArray(result)) {
-      rawActions = result;
-    } else {
-      console.error('Error fetching actions:', result.error);
+  for (const pack of packedActions) {
+    if (PulsarAction.isSettlement(pack.action).toBoolean()) {
+      if (totalSettlements === MAX_SETTLEMENT_PER_BATCH) {
+        log('Max settlements reached for batch');
+        break;
+      }
+      totalSettlements++;
+    } else if (PulsarAction.isDeposit(pack.action).toBoolean()) {
+      if (totalDeposits === MAX_DEPOSIT_PER_BATCH) {
+        log('Max deposits reached for batch');
+        break;
+      }
+      totalDeposits++;
+    } else if (PulsarAction.isWithdrawal(pack.action).toBoolean()) {
+      if (totalWithdrawals === MAX_WITHDRAWAL_PER_BATCH) {
+        log('Max withdrawals reached for batch');
+        break;
+      }
+      totalWithdrawals++;
     }
-  } catch (error) {
-    console.error('Unexpected error:', error);
+
+    batchActions.push(pack.action);
+    endActionState = BigInt(pack.hash);
+
+    if (batchActions.length === BATCH_SIZE) {
+      log('Batch size reached:', batchActions.length);
+      break;
+    }
   }
 
-  if (rawActions.length === 0) {
-    console.error('No actions found for the contract.');
-    return {
-      endActionState: 0n,
-      batchActions,
-    };
-  }
+  return {
+    endActionState,
+    batchActions,
+  };
+}
 
-  for (const rawAction of rawActions) {
-    const action = PulsarAction.fromRawAction(rawAction.actions[0]);
+function CalculateMaksimumFromActions(
+  initialState: Field,
+  actions: Array<PulsarAction>
+) {
+  let totalWithdrawals = 0;
+  let totalDeposits = 0;
+  let totalSettlements = 0;
+  const batchActions: Array<PulsarAction> = [];
+  let endActionState = initialState;
 
+  for (const action of actions) {
     if (PulsarAction.isSettlement(action).toBoolean()) {
       if (totalSettlements === MAX_SETTLEMENT_PER_BATCH) {
         log('Max settlements reached for batch');
@@ -154,7 +171,10 @@ async function PrepareBatch(contractInstance: SettlementContract) {
     }
 
     batchActions.push(action);
-    endActionState = BigInt(rawAction.hash);
+    endActionState = merkleActionsAdd(
+      endActionState,
+      actionListAdd(emptyActionListHash, action)
+    );
 
     if (batchActions.length === BATCH_SIZE) {
       log('Batch size reached:', batchActions.length);
@@ -162,16 +182,40 @@ async function PrepareBatch(contractInstance: SettlementContract) {
     }
   }
 
-  let actionStack = rawActions
+  return {
+    endActionState,
+    batchActions,
+  };
+}
+
+async function PrepareBatch(contractInstance: SettlementContract) {
+  const packedActions = await fetchActions(
+    contractInstance.address,
+    contractInstance.actionState.get()
+  );
+
+  if (packedActions.length === 0) {
+    log('No actions found for the contract.');
+    return {
+      endActionState: 0n,
+      batchActions: [],
+      batch: Batch.empty(),
+      useActionStack: Bool(false),
+      actionStackProof: undefined,
+    };
+  }
+
+  const { endActionState, batchActions } =
+    CalculateMaksimumFromPackedActions(packedActions);
+
+  let actionStack = packedActions
     .slice(batchActions.length)
-    .map((rawAction) => PulsarAction.fromRawAction(rawAction.actions[0]));
+    .map((pack) => pack.action);
 
   log(
     'Batch actions:',
-    batchActions.map((action) => action.toJSON())
-  );
-
-  log(
+    batchActions.map((action) => action.toJSON()),
+    '\n',
     'Action stack:',
     actionStack.map((action) => action.toJSON())
   );
@@ -183,8 +227,10 @@ async function PrepareBatch(contractInstance: SettlementContract) {
     actionStack
   );
 
-  log('useActionStack:', useActionStack.toBoolean());
   log(
+    'useActionStack:',
+    useActionStack.toBoolean(),
+    '\n',
     'actionStackProof Input:',
     actionStackProof.publicInput.toJSON(),
     'output:',
