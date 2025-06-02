@@ -19,4 +19,8 @@ class ReduceMask extends Struct({
   toJSON() {
     return this.list.map((item) => item.toBoolean());
   }
+
+  toField(): Field {
+    return Field.fromBits(this.list);
+  }
 }

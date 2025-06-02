@@ -12,6 +12,7 @@ import {
   PublicKey,
   Reducer,
   Bool,
+  Struct,
 } from 'o1js';
 import { SettlementProof } from './SettlementProof';
 import {
@@ -29,7 +30,13 @@ import {
   merkleActionsAdd,
 } from './types/actionHelpers';
 
-export { SettlementContract };
+export { SettlementContract, SettlementEvent };
+
+class SettlementEvent extends Struct({
+  fromActionState: Field,
+  endActionState: Field,
+  mask: Field,
+}) {}
 
 class SettlementContract extends SmartContract {
   @state(Field) actionState = State<Field>();
@@ -43,6 +50,10 @@ class SettlementContract extends SmartContract {
   @state(Field) rewardListHash = State<Field>();
 
   reducer = Reducer({ actionType: PulsarAction });
+
+  readonly events = {
+    Settlement: SettlementEvent,
+  };
 
   async deploy() {
     await super.deploy();
@@ -150,7 +161,8 @@ class SettlementContract extends SmartContract {
     let withdrawalListHash = this.withdrawalListHash.getAndRequireEquals();
     let rewardListHash = this.rewardListHash.getAndRequireEquals();
 
-    let actionState = this.actionState.getAndRequireEquals();
+    let initialActionState = this.actionState.getAndRequireEquals();
+    let actionState = initialActionState;
 
     for (let i = 0; i < BATCH_SIZE; i++) {
       const action = batch.actions[i];
@@ -253,6 +265,15 @@ class SettlementContract extends SmartContract {
 
     this.account.actionState.requireEquals(
       Provable.if(useActionStack, actionStackProof.publicOutput, actionState)
+    );
+
+    this.emitEvent(
+      'Settlement',
+      new SettlementEvent({
+        fromActionState: initialActionState,
+        endActionState: actionState,
+        mask: mask.toField(),
+      })
     );
 
     this.actionState.set(actionState);

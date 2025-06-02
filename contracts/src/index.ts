@@ -36,7 +36,14 @@ import {
   MAX_DEPOSIT_PER_BATCH,
   MAX_WITHDRAWAL_PER_BATCH,
   ACTION_QUEUE_SIZE,
+  ENDPOINTS,
 } from './utils/constants.js';
+import {
+  fetchActions,
+  fetchRawActions,
+  fetchBlockHeight,
+  fetchEvents,
+} from './utils/fetch.js';
 import {
   GenerateSettlementProof,
   MergeSettlementProofs,
@@ -74,6 +81,11 @@ export {
   MAX_DEPOSIT_PER_BATCH,
   MAX_WITHDRAWAL_PER_BATCH,
   ACTION_QUEUE_SIZE,
+  ENDPOINTS,
+  fetchActions,
+  fetchRawActions,
+  fetchBlockHeight,
+  fetchEvents,
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,

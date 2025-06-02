@@ -1,8 +1,10 @@
-import { Field, Mina, PublicKey } from 'o1js';
+import { fetchLastBlock, Field, Mina, PublicKey, UInt32 } from 'o1js';
 import { log } from './loggers';
 import { PulsarAction } from '../types/PulsarAction';
+import { ENDPOINTS } from './constants';
+import { SettlementContract, SettlementEvent } from '../SettlementContract';
 
-export { fetchActions, fetchRawActions };
+export { fetchActions, fetchRawActions, fetchBlockHeight, fetchEvents };
 
 async function fetchRawActions(
   address: PublicKey,
@@ -49,4 +51,42 @@ async function fetchActions(
       hash: BigInt(action.hash),
     };
   });
+}
+
+async function fetchBlockHeight(network: 'devnet' | 'mainnet' = 'devnet') {
+  try {
+    const lastBlock = await fetchLastBlock(
+      network === 'devnet' ? ENDPOINTS.NODE.devnet : ENDPOINTS.NODE.mainnet
+    );
+
+    return Number(lastBlock.blockchainLength.toBigint());
+  } catch (error) {
+    console.error('Error fetching block height:', error);
+    throw error;
+  }
+}
+
+async function fetchEvents(
+  contractInstance: SettlementContract,
+  from: UInt32 = UInt32.from(0),
+  to?: UInt32
+) {
+  try {
+    const result = await contractInstance.fetchEvents(from, to);
+    const events = result
+      .map((item) => item.event.data as any)
+      .map(
+        (data) =>
+          new SettlementEvent({
+            fromActionState: data.fromActionState,
+            endActionState: data.endActionState,
+            mask: data.mask,
+          })
+      );
+
+    return events;
+  } catch (error) {
+    console.error('Error fetching events:', error);
+    throw error;
+  }
 }
