@@ -1,0 +1,20 @@
+{
+    "name": "pulsar-prover",
+    "version": "1.0.0",
+    "main": "index.js",
+    "scripts": {
+        "test": "npm run test"
+    },
+    "keywords": [
+        "pulsar"
+    ],
+    "author": "",
+    "license": "MIT",
+    "description": "",
+    "dependencies": {
+        "axios": "^1.9.0",
+        "express": "^5.1.0",
+        "o1js": "^2.4.0",
+        "pulsar-contracts": "file:../contracts"
+    }
+}
