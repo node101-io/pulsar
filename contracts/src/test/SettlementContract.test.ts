@@ -10,7 +10,11 @@ import {
   UInt64,
 } from 'o1js';
 import { MultisigVerifierProgram, SettlementProof } from '../SettlementProof';
-import { MINIMUM_DEPOSIT_AMOUNT, VALIDATOR_NUMBER } from '../utils/constants';
+import {
+  ENDPOINTS,
+  MINIMUM_DEPOSIT_AMOUNT,
+  VALIDATOR_NUMBER,
+} from '../utils/constants';
 import { SettlementContract } from '../SettlementContract';
 import { devnetTestAccounts, validatorSet, testAccounts } from './mock';
 import {
@@ -28,7 +32,7 @@ import {
   logZkappState,
 } from '../utils/loggers';
 
-describe.skip('SettlementProof tests', () => {
+describe('SettlementProof tests', () => {
   const testEnvironment = process.env.TEST_ENV ?? 'local';
   const localTest = testEnvironment === 'local';
   const randomKeys = process.env.RANDOM_KEYS === '1';
@@ -40,14 +44,13 @@ describe.skip('SettlementProof tests', () => {
   let testAccountIndex = 10;
 
   if (testEnvironment === 'devnet') {
-    MINA_NODE_ENDPOINT = 'https://api.minascan.io/node/devnet/v1/graphql';
-    MINA_ARCHIVE_ENDPOINT = 'https://api.minascan.io/archive/devnet/v1/graphql';
-    MINA_EXPLORER = 'https://minascan.io/devnet/tx/';
+    MINA_NODE_ENDPOINT = ENDPOINTS.NODE.devnet;
+    MINA_ARCHIVE_ENDPOINT = ENDPOINTS.ARCHIVE.devnet;
+    MINA_EXPLORER = ENDPOINTS.EXPLORER.devnet;
   } else if (testEnvironment === 'lightnet') {
-    MINA_NODE_ENDPOINT = 'http://127.0.0.1:8080/graphql';
-    MINA_ARCHIVE_ENDPOINT = 'http://127.0.0.1:8282';
-    MINA_EXPLORER =
-      'file:///Users/kadircan/.cache/zkapp-cli/lightnet/explorer/v0.2.2/index.html?target=block&numberOrHash=';
+    MINA_NODE_ENDPOINT = ENDPOINTS.NODE.lightnet;
+    MINA_ARCHIVE_ENDPOINT = ENDPOINTS.ARCHIVE.lightnet;
+    MINA_EXPLORER = ENDPOINTS.EXPLORER.lightnet;
   }
 
   //keys
