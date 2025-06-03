@@ -1,4 +1,4 @@
-import { Field, Mina, PrivateKey, PublicKey, UInt64 } from "o1js";
+import { Field, Mina, PrivateKey, PublicKey, Signature, UInt64 } from "o1js";
 import {
     MultisigVerifierProgram,
     ValidateReduceProgram,
@@ -11,9 +11,10 @@ import {
     GenerateValidateReduceProof,
     MapFromArray,
     PrepareBatch,
+    CalculateMax,
+    fetchActions,
 } from "pulsar-contracts";
-import axios from "axios";
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -173,7 +174,7 @@ app.post("/reduce", async (req, res) => {
     }
 });
 
-app.post("/validate-reduce-proof", async (req, res) => {
+app.post("/create-validate-reduce-proof", async (req, res) => {
     if (!isCompiled) {
         res.status(500).json({ error: "Contracts not compiled yet" });
     }
@@ -193,6 +194,45 @@ app.post("/validate-reduce-proof", async (req, res) => {
     }
 });
 
-app.listen(3131, () => {
-    console.log("Server started on port 3131");
+app.post("/sign-action-queue", async (req, res) => {
+    if (!isCompiled) {
+        res.status(500).json({ error: "Contracts not compiled yet" });
+    }
+
+    const { includedActions } = req.body;
+
+    try {
+        const actions = await fetchActions(
+            contractInstance.address,
+            contractInstance.actionState.get()
+        );
+
+        const map = MapFromArray(includedActions);
+
+        const { publicInput } = CalculateMax(map, contractInstance, actions);
+
+        const signature = Signature.create(senderKey, publicInput.hash().toFields());
+
+        res.json({
+            publicInput: publicInput.toJSON(),
+            signature: signature.toJSON(),
+            publicKey: senderKey.toPublicKey().toBase58(),
+        });
+    } catch (error) {
+        console.error("Error signing action queue:", error);
+        res.status(500).json({ error: "Failed to sign action queue" });
+    }
 });
+
+try {
+    setMinaNetwork(process.env.MINA_NETWORK as "devnet" | "mainnet");
+    setInstance(PublicKey.fromBase58(process.env.CONTRACT_ADDRESS!));
+    await compile();
+
+    app.listen(3131, () => {
+        console.log("Server started on port 3131");
+    });
+} catch (error) {
+    console.error("Error initializing server:", error);
+    process.exit(1);
+}
