@@ -10,6 +10,12 @@ class List extends MerkleList.create(Field, nextHash, emptyHash) {}
 class ReduceMask extends Struct({
   list: Provable.Array(Bool, BATCH_SIZE),
 }) {
+  static empty(): ReduceMask {
+    return new ReduceMask({
+      list: new Array(BATCH_SIZE).fill(Bool(false)),
+    });
+  }
+
   static fromArray(arr: Array<boolean>): ReduceMask {
     return new ReduceMask({
       list: arr.map((item) => Bool(item)),

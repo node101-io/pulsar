@@ -51,7 +51,11 @@ import {
   GenerateValidateReduceProof,
   GenerateActionStackProof,
 } from './utils/generateFunctions.js';
-import { CalculateMask, PrepareBatch } from './utils/reduceWitness.js';
+import {
+  MapFromArray,
+  PackActions,
+  PrepareBatch,
+} from './utils/reduceWitness.js';
 import {
   ValidateReduceProof,
   ValidateReduceProgram,
@@ -91,7 +95,8 @@ export {
   GenerateSettlementPublicInput,
   GenerateValidateReduceProof,
   GenerateActionStackProof,
-  CalculateMask,
+  MapFromArray,
+  PackActions,
   PrepareBatch,
   ActionStackProof,
   ActionStackQueue,

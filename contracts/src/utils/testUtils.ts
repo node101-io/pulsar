@@ -16,12 +16,10 @@ import {
   GenerateSettlementPublicInput,
   MergeSettlementProofs,
 } from './generateFunctions';
-import { SettlementContract } from '../SettlementContract';
 import { ValidateReducePublicInput } from '../ValidateReduce';
 import { SignaturePublicKeyList } from '../types/signaturePubKeyList';
 import { List } from '../types/common';
 import { PulsarAction } from '../types/PulsarAction';
-import { CalculateMask } from './reduceWitness';
 import { log } from './loggers.js';
 import { ProofGenerators } from '../types/proofGenerators';
 import {
@@ -140,28 +138,9 @@ async function GenerateTestSettlementProof(
 }
 
 async function MockReducerVerifierProof(
-  contractInstance: SettlementContract,
-  batchActions: Array<PulsarAction>,
-  includedActionsArray: Field[],
+  publicInput: ValidateReducePublicInput,
   validatorSet: Array<[PrivateKey, PublicKey]>
 ) {
-  const includedActionsMap = new Map<string, number>();
-
-  for (const field of includedActionsArray.map((x) => x.toString())) {
-    log('field:', field.toString());
-    const count = includedActionsMap.get(field) || 0;
-    includedActionsMap.set(field, count + 1);
-
-    log('includedActionsMap:', includedActionsMap);
-    log('includedActionsMap.get(field):', includedActionsMap.get(field));
-  }
-
-  const { publicInput, mask } = await CalculateMask(
-    contractInstance,
-    includedActionsMap,
-    batchActions
-  );
-
   const signatureList = GenerateReducerSignatureList(publicInput, validatorSet);
 
   return {
@@ -169,7 +148,6 @@ async function MockReducerVerifierProof(
       publicInput,
       signatureList
     ),
-    mask,
   };
 }
 
