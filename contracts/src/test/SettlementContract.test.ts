@@ -24,7 +24,7 @@ import {
 import { ValidateReduceProgram } from '../ValidateReduce';
 import { List } from '../types/common';
 import { ActionStackProgram } from '../ActionStack';
-import { PrepareBatch } from '../utils/reduceWitness';
+import { MapFromArray, PrepareBatch } from '../utils/reduceWitness';
 import {
   analyzeMethods,
   enableLogs,
@@ -393,13 +393,13 @@ describe('SettlementProof tests', () => {
   }
 
   async function reduce(senderKey: PrivateKey) {
-    const { batchActions, batch, useActionStack, actionStackProof } =
-      await PrepareBatch(zkapp);
+    let map = MapFromArray(actionStack);
 
-    const { validateReduceProof, mask } = await MockReducerVerifierProof(
-      zkapp,
-      batchActions,
-      actionStack,
+    const { batch, useActionStack, actionStackProof, publicInput, mask } =
+      await PrepareBatch(map, zkapp);
+
+    const { validateReduceProof } = await MockReducerVerifierProof(
+      publicInput,
       activeSet
     );
     log('mask', mask.toJSON());
@@ -425,13 +425,13 @@ describe('SettlementProof tests', () => {
     expectedMsg: string = 'Transaction failed'
   ) {
     try {
-      const { batchActions, batch, useActionStack, actionStackProof } =
-        await PrepareBatch(zkapp);
+      let map = MapFromArray(actionStack);
 
-      const { validateReduceProof, mask } = await MockReducerVerifierProof(
-        zkapp,
-        batchActions,
-        actionStack,
+      const { batch, useActionStack, actionStackProof, publicInput, mask } =
+        await PrepareBatch(map, zkapp);
+
+      const { validateReduceProof } = await MockReducerVerifierProof(
+        publicInput,
         activeSet
       );
       log('mask', mask.toJSON());
