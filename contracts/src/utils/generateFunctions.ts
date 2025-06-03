@@ -3,22 +3,22 @@ import {
   MultisigVerifierProgram,
   SettlementProof,
   SettlementPublicInputs,
-} from '../SettlementProof';
-import { ProofGenerators } from '../types/proofGenerators';
+} from '../SettlementProof.js';
+import { ProofGenerators } from '../types/proofGenerators.js';
 import {
   ValidateReducePublicInput,
   ValidateReduceProgram,
   ValidateReduceProof,
-} from '../ValidateReduce';
-import { SignaturePublicKeyList } from '../types/signaturePubKeyList';
+} from '../ValidateReduce.js';
+import { SignaturePublicKeyList } from '../types/signaturePubKeyList.js';
 import { log, table } from './loggers.js';
-import { PulsarAction } from '../types/PulsarAction';
-import { ACTION_QUEUE_SIZE } from './constants';
+import { PulsarAction } from '../types/PulsarAction.js';
+import { ACTION_QUEUE_SIZE } from './constants.js';
 import {
   ActionStackProgram,
   ActionStackProof,
   ActionStackQueue,
-} from '../ActionStack';
+} from '../ActionStack.js';
 
 export {
   GenerateSettlementProof,

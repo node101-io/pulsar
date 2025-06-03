@@ -10,23 +10,23 @@ import {
   MultisigVerifierProgram,
   SettlementProof,
   SettlementPublicInputs,
-} from '../SettlementProof';
+} from '../SettlementProof.js';
 import {
   GenerateValidateReduceProof,
   GenerateSettlementPublicInput,
   MergeSettlementProofs,
-} from './generateFunctions';
-import { ValidateReducePublicInput } from '../ValidateReduce';
-import { SignaturePublicKeyList } from '../types/signaturePubKeyList';
-import { List } from '../types/common';
-import { PulsarAction } from '../types/PulsarAction';
+} from './generateFunctions.js';
+import { ValidateReducePublicInput } from '../ValidateReduce.js';
+import { SignaturePublicKeyList } from '../types/signaturePubKeyList.js';
+import { List } from '../types/common.js';
+import { PulsarAction } from '../types/PulsarAction.js';
 import { log } from './loggers.js';
-import { ProofGenerators } from '../types/proofGenerators';
+import { ProofGenerators } from '../types/proofGenerators.js';
 import {
   actionListAdd,
   emptyActionListHash,
   merkleActionsAdd,
-} from '../types/actionHelpers';
+} from '../types/actionHelpers.js';
 
 export {
   GenerateSignaturePubKeyList,

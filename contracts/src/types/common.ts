@@ -1,5 +1,5 @@
 import { Bool, Field, MerkleList, Poseidon, Provable, Struct } from 'o1js';
-import { BATCH_SIZE } from '../utils/constants';
+import { BATCH_SIZE } from '../utils/constants.js';
 
 export { List, emptyHash, ReduceMask };
 

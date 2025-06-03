@@ -53,6 +53,7 @@ import {
 } from './utils/generateFunctions.js';
 import {
   MapFromArray,
+  CalculateMax,
   PackActions,
   PrepareBatch,
 } from './utils/reduceWitness.js';
@@ -96,6 +97,7 @@ export {
   GenerateValidateReduceProof,
   GenerateActionStackProof,
   MapFromArray,
+  CalculateMax,
   PackActions,
   PrepareBatch,
   ActionStackProof,

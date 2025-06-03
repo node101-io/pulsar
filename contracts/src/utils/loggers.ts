@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { SettlementContract } from '../SettlementContract';
+import { SettlementContract } from '../SettlementContract.js';
 
 export { writeJsonLog, log, table, logZkappState, enableLogs, analyzeMethods };
 

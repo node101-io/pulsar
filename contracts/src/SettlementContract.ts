@@ -14,21 +14,21 @@ import {
   Bool,
   Struct,
 } from 'o1js';
-import { SettlementProof } from './SettlementProof';
+import { SettlementProof } from './SettlementProof.js';
 import {
   BATCH_SIZE,
   MINIMUM_DEPOSIT_AMOUNT,
   WITHDRAW_DOWN_PAYMENT,
-} from './utils/constants';
-import { ValidateReduceProof } from './ValidateReduce';
-import { Batch, PulsarAction } from './types/PulsarAction';
-import { ReduceMask } from './types/common';
-import { ActionStackProof } from './ActionStack';
+} from './utils/constants.js';
+import { ValidateReduceProof } from './ValidateReduce.js';
+import { Batch, PulsarAction } from './types/PulsarAction.js';
+import { ReduceMask } from './types/common.js';
+import { ActionStackProof } from './ActionStack.js';
 import {
   actionListAdd,
   emptyActionListHash,
   merkleActionsAdd,
-} from './types/actionHelpers';
+} from './types/actionHelpers.js';
 
 export { SettlementContract, SettlementEvent };
 

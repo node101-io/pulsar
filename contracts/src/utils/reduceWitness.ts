@@ -1,24 +1,24 @@
 import { Bool, Field, Poseidon } from 'o1js';
-import { ValidateReducePublicInput } from '../ValidateReduce';
+import { ValidateReducePublicInput } from '../ValidateReduce.js';
 import { log } from './loggers.js';
 import {
   BATCH_SIZE,
   MAX_DEPOSIT_PER_BATCH,
   MAX_SETTLEMENT_PER_BATCH,
   MAX_WITHDRAWAL_PER_BATCH,
-} from './constants';
-import { Batch, PulsarAction } from '../types/PulsarAction';
-import { SettlementContract } from '../SettlementContract';
-import { ReduceMask } from '../types/common';
-import { GenerateActionStackProof } from './generateFunctions';
-import { fetchActions } from './fetch';
+} from './constants.js';
+import { Batch, PulsarAction } from '../types/PulsarAction.js';
+import { SettlementContract } from '../SettlementContract.js';
+import { ReduceMask } from '../types/common.js';
+import { GenerateActionStackProof } from './generateFunctions.js';
+import { fetchActions } from './fetch.js';
 import {
   actionListAdd,
   emptyActionListHash,
   merkleActionsAdd,
-} from '../types/actionHelpers';
+} from '../types/actionHelpers.js';
 
-export { MapFromArray, PrepareBatch, PackActions };
+export { MapFromArray, CalculateMax, PrepareBatch, PackActions };
 
 function MapFromArray(array: Field[]) {
   const map = new Map<string, number>();
@@ -34,7 +34,7 @@ function MapFromArray(array: Field[]) {
 }
 
 function CalculateMax(
-  includedActions: Map<string, number>,
+  includedActionsMap: Map<string, number>,
   contractInstance: SettlementContract,
   packedActions: Array<{ action: PulsarAction; hash: bigint }>
 ) {
@@ -62,7 +62,7 @@ function CalculateMax(
     }
 
     const hash = pack.action.unconstrainedHash().toString();
-    const count = includedActions.get(hash) || 0;
+    const count = includedActionsMap.get(hash) || 0;
 
     if (PulsarAction.isSettlement(pack.action).toBoolean()) {
       if (count <= 0) {

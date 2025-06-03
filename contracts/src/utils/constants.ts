@@ -19,11 +19,11 @@ const LIST_LENGTH = AGGREGATE_THRESHOLD;
 const TOTAL_GENERATORS = LIST_LENGTH - 1;
 const MINIMUM_DEPOSIT_AMOUNT = 1e9;
 const WITHDRAW_DOWN_PAYMENT = 1e9;
-const BATCH_SIZE = 80;
+const BATCH_SIZE = 20;
 const MAX_SETTLEMENT_PER_BATCH = 1;
 const MAX_DEPOSIT_PER_BATCH = BATCH_SIZE;
 const MAX_WITHDRAWAL_PER_BATCH = 9;
-const ACTION_QUEUE_SIZE = 4000;
+const ACTION_QUEUE_SIZE = 200;
 const ENDPOINTS = {
   NODE: {
     devnet: 'https://api.minascan.io/node/devnet/v1/graphql',

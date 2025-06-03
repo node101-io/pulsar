@@ -1,8 +1,8 @@
 import { fetchLastBlock, Field, Mina, PublicKey, UInt32 } from 'o1js';
-import { log } from './loggers';
-import { PulsarAction } from '../types/PulsarAction';
-import { ENDPOINTS } from './constants';
-import { SettlementContract, SettlementEvent } from '../SettlementContract';
+import { log } from './loggers.js';
+import { PulsarAction } from '../types/PulsarAction.js';
+import { ENDPOINTS } from './constants.js';
+import { SettlementContract, SettlementEvent } from '../SettlementContract.js';
 
 export { fetchActions, fetchRawActions, fetchBlockHeight, fetchEvents };
 
