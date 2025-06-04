@@ -9,7 +9,7 @@ import {
   UInt64,
   Lightnet,
 } from 'o1js';
-import { analyzeMethods, enableLogs, log } from '../../utils/loggers.js';
+import { analyzeMethods, enableLogs, log } from '../utils/loggers.js';
 import {
   ActionStackProgram,
   ENDPOINTS,
@@ -23,13 +23,13 @@ import {
   ValidateReduceProgram,
   ValidateReducePublicInput,
   VALIDATOR_NUMBER,
-} from '../../index.js';
+} from '../index.js';
 import {
   devnetTestAccounts,
   testAccounts,
   validatorSet,
-} from '../../test/mock.js';
-import { GenerateSignaturePubKeyList } from '../../utils/testUtils.js';
+} from '../test/mock.js';
+import { GenerateSignaturePubKeyList } from '../utils/testUtils.js';
 import { performance } from 'node:perf_hooks';
 
 interface Sample {
