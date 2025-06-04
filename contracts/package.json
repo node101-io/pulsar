@@ -22,7 +22,7 @@
     "testw": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "lint": "npx eslint src/* --fix",
     "format:check": "prettier --check .",
-    "benchmark": "tsc && node --experimental-vm-modules build/src/benchmark/node/benchmark.js",
+    "benchmark": "tsc && node --experimental-vm-modules build/src/benchmark/benchmark.js",
     "clean": "rimraf build coverage node_modules src/benchmark/browser/.next src/benchmark/browser/.next-cache src/benchmark/browser/node_modules"
   },
   "devDependencies": {

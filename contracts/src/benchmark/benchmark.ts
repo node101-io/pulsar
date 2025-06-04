@@ -578,5 +578,5 @@ async function settleDepositWithdraw(
 
 await main();
 printTable();
-await exportJSON('bench.json');
+await exportJSON();
 process.exit(0);
