@@ -14,12 +14,14 @@ import {
   ActionStackProgram,
   ENDPOINTS,
   GenerateSettlementPublicInput,
+  GenerateValidateReduceProof,
   List,
+  MapFromArray,
   MultisigVerifierProgram,
+  PrepareBatch,
   SettlementContract,
   SettlementProof,
   SettlementPublicInputs,
-  SignaturePublicKeyList,
   ValidateReduceProgram,
   ValidateReducePublicInput,
   VALIDATOR_NUMBER,
@@ -29,7 +31,10 @@ import {
   testAccounts,
   validatorSet,
 } from '../test/mock.js';
-import { GenerateSignaturePubKeyList } from '../utils/testUtils.js';
+import {
+  GenerateReducerSignatureList,
+  GenerateSignaturePubKeyList,
+} from '../utils/testUtils.js';
 import { performance } from 'node:perf_hooks';
 
 interface Sample {
@@ -95,7 +100,7 @@ function printTable() {
   );
 }
 
-async function exportJSON(path = 'bench.json') {
+async function exportJSON(path = 'logs/bench.json') {
   const fs = await import('node:fs/promises');
   await fs.writeFile(
     path,
@@ -117,9 +122,22 @@ async function exportJSON(path = 'bench.json') {
 const logsEnabled = process.env.LOGS_ENABLED === '1';
 const testEnvironment = process.env.TEST_ENV ?? 'local';
 const localTest = testEnvironment === 'local';
+const proofsEnabled = process.env.PROOFS_ENABLED === '1';
 let fee = localTest ? 0 : 1e9;
 let merkleList: List;
 let activeSet: Array<[PrivateKey, PublicKey]> = [];
+let zkappAddress: PublicKey;
+let zkappPrivateKey: PrivateKey;
+let zkapp: SettlementContract;
+let Local: Awaited<ReturnType<typeof Mina.LocalBlockchain>>;
+let feePayerKey: PrivateKey;
+let usersKeys: PrivateKey[] = [];
+let testAccountIndex = 10;
+let usersAccounts: PublicKey[] = [];
+let MINA_NODE_ENDPOINT: string;
+let MINA_ARCHIVE_ENDPOINT: string;
+let MINA_EXPLORER: string;
+let actionStack: Array<Field> = [];
 
 async function waitTransactionAndFetchAccount(
   tx: Awaited<ReturnType<typeof Mina.transaction>>,
@@ -159,25 +177,24 @@ async function fetchAccounts(accounts: PublicKey[]) {
   }
 }
 
-async function deployAndInitializeContract(
-  zkapp: SettlementContract,
-  deployerKey: PrivateKey,
-  zkappPrivateKey: PrivateKey,
-  merkleListRoot: Field
-) {
-  const deployerAccount = deployerKey.toPublicKey();
+async function deployAndInitializeContract() {
+  zkappPrivateKey = PrivateKey.random();
+  zkappAddress = zkappPrivateKey.toPublicKey();
+  zkapp = new SettlementContract(zkappAddress);
+
+  const deployerAccount = feePayerKey.toPublicKey();
 
   const tx = await bench('Deploy and initialize contract', () =>
     Mina.transaction({ sender: deployerAccount, fee }, async () => {
       AccountUpdate.fundNewAccount(deployerAccount);
       await zkapp.deploy();
-      await zkapp.initialize(merkleListRoot);
+      await zkapp.initialize(merkleList.hash);
     })
   );
 
   await waitTransactionAndFetchAccount(
     tx,
-    [deployerKey, zkappPrivateKey],
+    [feePayerKey, zkappPrivateKey],
     [zkapp.address, deployerAccount]
   );
 }
@@ -209,30 +226,28 @@ async function main() {
   analyzeMethods(settlementContractAnalyze);
 
   await bench('ValidateReduce compile', () =>
-    ValidateReduceProgram.compile({ forceRecompile: true })
+    ValidateReduceProgram.compile({
+      forceRecompile: proofsEnabled && true,
+      proofsEnabled,
+    })
   );
   await bench('ActionStack compile', () =>
-    ActionStackProgram.compile({ forceRecompile: true })
+    ActionStackProgram.compile({
+      forceRecompile: proofsEnabled && true,
+      proofsEnabled,
+    })
   );
   await bench('MultisigVerifier compile', () =>
-    MultisigVerifierProgram.compile({ forceRecompile: true })
+    MultisigVerifierProgram.compile({
+      forceRecompile: proofsEnabled && true,
+      proofsEnabled,
+    })
   );
-  await bench('SettlementContract compile', () =>
-    SettlementContract.compile({ forceRecompile: true })
-  );
-
-  let zkappPrivateKey = PrivateKey.random();
-  let zkappAddress = zkappPrivateKey.toPublicKey();
-  let zkapp = new SettlementContract(zkappAddress);
-  let Local: Awaited<ReturnType<typeof Mina.LocalBlockchain>>;
-  let feePayerKey: PrivateKey;
-  let feePayerAccount: PublicKey;
-  let usersKeys: PrivateKey[] = [];
-  let testAccountIndex = 10;
-  let usersAccounts: PublicKey[] = [];
-  let MINA_NODE_ENDPOINT: string;
-  let MINA_ARCHIVE_ENDPOINT: string;
-  let MINA_EXPLORER: string;
+  if (proofsEnabled) {
+    await bench('SettlementContract compile', () =>
+      SettlementContract.compile({ forceRecompile: proofsEnabled && true })
+    );
+  }
 
   if (testEnvironment === 'devnet') {
     MINA_NODE_ENDPOINT = ENDPOINTS.NODE.devnet;
@@ -257,11 +272,10 @@ async function main() {
   }
 
   if (testEnvironment === 'local') {
-    Local = await Mina.LocalBlockchain();
+    Local = await Mina.LocalBlockchain({ proofsEnabled });
     Mina.setActiveInstance(Local);
 
     feePayerKey = Local.testAccounts[0].key;
-    feePayerAccount = feePayerKey.toPublicKey();
 
     for (let i = 0; i < 5; i++) {
       let { key } = Local.testAccounts[i + 1];
@@ -284,7 +298,6 @@ async function main() {
     Mina.setActiveInstance(Network);
 
     feePayerKey = devnetTestAccounts[0][0];
-    feePayerAccount = devnetTestAccounts[0][1];
 
     for (let i = 1; i < 5; i++) {
       let [key] = devnetTestAccounts[i];
@@ -306,7 +319,6 @@ async function main() {
 
     Mina.setActiveInstance(Network);
     feePayerKey = (await Lightnet.acquireKeyPair()).privateKey;
-    feePayerAccount = feePayerKey.toPublicKey();
 
     for (let i = 0; i < 5; i++) {
       let { privateKey: key } = await Lightnet.acquireKeyPair();
@@ -322,18 +334,11 @@ async function main() {
   }
 
   await bench('Deploy and initialize contract', () =>
-    deployAndInitializeContract(
-      zkapp,
-      feePayerKey,
-      zkappPrivateKey,
-      merkleList.hash
-    )
+    deployAndInitializeContract()
   );
 
-  const mergedProof = await bench(
-    'Generate and merge 16 Settlement Proofs',
-    () => settlementProofBenchmark(0, 16, 0, 16)
-  );
+  await settleDepositWithdraw(1, 1, 1);
+  await settleDepositWithdraw(1, 5, 5);
 }
 
 async function sendMina(
@@ -428,6 +433,147 @@ async function settlementProofBenchmark(
   }
 
   return mergedProof;
+}
+
+async function settle(
+  senderKey: PrivateKey,
+  settlementProof: SettlementProof,
+  pushToStack: boolean = true
+) {
+  await fetchAccounts([zkappAddress]);
+  const tx = await bench('Settle transaction', () =>
+    Mina.transaction({ sender: senderKey.toPublicKey(), fee }, async () => {
+      await zkapp.settle(settlementProof);
+    })
+  );
+
+  if (pushToStack) {
+    actionStack.push(settlementProof.publicInput.actionHash());
+  }
+
+  await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+}
+
+async function deposit(
+  senderKey: PrivateKey,
+  amount: UInt64,
+  pushToStack: boolean = true
+) {
+  await fetchAccounts([senderKey.toPublicKey()]);
+  const tx = await bench('Deposit transaction', () =>
+    Mina.transaction({ sender: senderKey.toPublicKey(), fee }, async () => {
+      await zkapp.deposit(amount);
+    })
+  );
+
+  if (pushToStack) {
+    actionStack.push(
+      Poseidon.hash([
+        Field(2),
+        ...senderKey.toPublicKey().toFields(),
+        amount.value,
+      ])
+    );
+  }
+
+  await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+}
+
+async function withdraw(
+  senderKey: PrivateKey,
+  amount: UInt64,
+  pushToStack: boolean = true
+) {
+  await fetchAccounts([senderKey.toPublicKey()]);
+
+  const tx = await bench('Withdraw transaction', () =>
+    Mina.transaction({ sender: senderKey.toPublicKey(), fee }, async () => {
+      await zkapp.withdraw(amount);
+    })
+  );
+
+  if (pushToStack) {
+    actionStack.push(
+      Poseidon.hash([
+        Field(3),
+        ...senderKey.toPublicKey().toFields(),
+        amount.value,
+      ])
+    );
+  }
+
+  await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+}
+
+async function MockReducerVerifierProof(
+  publicInput: ValidateReducePublicInput,
+  validatorSet: Array<[PrivateKey, PublicKey]>
+) {
+  const signatureList = GenerateReducerSignatureList(publicInput, validatorSet);
+
+  const proof = await bench('Generate ValidateReduce proof', () =>
+    GenerateValidateReduceProof(publicInput, signatureList)
+  );
+
+  return {
+    validateReduceProof: proof,
+  };
+}
+
+async function reduce(senderKey: PrivateKey) {
+  let map = MapFromArray(actionStack);
+
+  const { batch, useActionStack, actionStackProof, publicInput, mask } =
+    await bench('Prepare batch and action stack proof', () =>
+      PrepareBatch(map, zkapp)
+    );
+
+  const { validateReduceProof } = await MockReducerVerifierProof(
+    publicInput,
+    activeSet
+  );
+  log('mask', mask.toJSON());
+  const tx = await Mina.transaction(
+    { sender: senderKey.toPublicKey(), fee },
+    async () => {
+      await zkapp.reduce(
+        batch!,
+        useActionStack!,
+        actionStackProof!,
+        mask,
+        validateReduceProof
+      );
+    }
+  );
+
+  await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+}
+
+async function settleDepositWithdraw(
+  settlementRound: number,
+  depositRound: number,
+  withdrawRound: number
+) {
+  for (let i = 0; i < settlementRound; i++) {
+    const settlementProof = await bench(
+      'Generate and merge 16 Settlement Proofs',
+      () =>
+        settlementProofBenchmark(
+          Number(zkapp.blockHeight.get().toString()),
+          Number(zkapp.blockHeight.get().toString()) + 16,
+          Number(zkapp.stateRoot.get().toString()),
+          Number(zkapp.stateRoot.get().toString()) + 16
+        )
+    );
+    await settle(feePayerKey, settlementProof);
+  }
+  for (let i = 0; i < depositRound; i++) {
+    await deposit(usersKeys[i % 5], UInt64.from(1e9 + i));
+  }
+  for (let i = 0; i < withdrawRound; i++) {
+    await withdraw(usersKeys[i % 5], UInt64.from(1e9 - i));
+  }
+  await reduce(feePayerKey);
 }
 
 await main();
