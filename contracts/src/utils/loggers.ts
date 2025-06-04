@@ -44,9 +44,8 @@ function logZkappState(label: string, zkapp: SettlementContract) {
   });
 }
 
-function analyzeMethods(promise: any) {
+function analyzeMethods(data: any) {
   if (!logsEnabled) return;
-  const data = promise;
   const tableData = Object.entries(data).map(([methodName, details]) => ({
     method: methodName,
     rows: (details as any).rows,

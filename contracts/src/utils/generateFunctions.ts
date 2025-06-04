@@ -59,12 +59,12 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     proofs.map((proof) => proof.publicInput.NewBlockHeight.toString())
   );
 
-  proofs.sort((a, b) => {
-    return Number(
-      a.publicInput.NewBlockHeight.toBigInt() <
+  proofs.sort((a, b) =>
+    Number(
+      a.publicInput.NewBlockHeight.toBigInt() -
         b.publicInput.NewBlockHeight.toBigInt()
-    );
-  });
+    )
+  );
 
   table(
     proofs.map((proof) => ({
