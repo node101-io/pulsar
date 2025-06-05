@@ -8,17 +8,24 @@ import {
   Poseidon,
   UInt64,
   Lightnet,
+  Bool,
 } from 'o1js';
 import { analyzeMethods, enableLogs, log } from '../utils/loggers.js';
 import {
+  ACTION_QUEUE_SIZE,
   ActionStackProgram,
+  Batch,
+  BATCH_SIZE,
+  CalculateMax,
   ENDPOINTS,
+  fetchActions,
+  GenerateActionStackProof,
   GenerateSettlementPublicInput,
   GenerateValidateReduceProof,
   List,
   MapFromArray,
   MultisigVerifierProgram,
-  PrepareBatch,
+  ReduceMask,
   SettlementContract,
   SettlementProof,
   SettlementPublicInputs,
@@ -34,6 +41,7 @@ import {
 import {
   GenerateReducerSignatureList,
   GenerateSignaturePubKeyList,
+  GenerateTestActions,
 } from '../utils/testUtils.js';
 import { performance } from 'node:perf_hooks';
 
@@ -86,6 +94,11 @@ async function bench<T>(
   const t0 = performance.now();
   const out = await fn();
   bucket.values.push(performance.now() - t0);
+  log(
+    `bench: ${label} took ${bucket.values[bucket.values.length - 1].toFixed(
+      2
+    )} ms`
+  );
   return out;
 }
 
@@ -136,7 +149,6 @@ let testAccountIndex = 10;
 let usersAccounts: PublicKey[] = [];
 let MINA_NODE_ENDPOINT: string;
 let MINA_ARCHIVE_ENDPOINT: string;
-let MINA_EXPLORER: string;
 let actionStack: Array<Field> = [];
 
 async function waitTransactionAndFetchAccount(
@@ -237,6 +249,7 @@ async function main() {
       proofsEnabled,
     })
   );
+
   await bench('MultisigVerifier compile', () =>
     MultisigVerifierProgram.compile({
       forceRecompile: proofsEnabled && true,
@@ -252,15 +265,12 @@ async function main() {
   if (testEnvironment === 'devnet') {
     MINA_NODE_ENDPOINT = ENDPOINTS.NODE.devnet;
     MINA_ARCHIVE_ENDPOINT = ENDPOINTS.ARCHIVE.devnet;
-    MINA_EXPLORER = ENDPOINTS.EXPLORER.devnet;
   } else if (testEnvironment === 'lightnet') {
     MINA_NODE_ENDPOINT = ENDPOINTS.NODE.lightnet;
     MINA_ARCHIVE_ENDPOINT = ENDPOINTS.ARCHIVE.lightnet;
-    MINA_EXPLORER = ENDPOINTS.EXPLORER.lightnet;
   } else {
     MINA_NODE_ENDPOINT = ENDPOINTS.NODE.mainnet;
     MINA_ARCHIVE_ENDPOINT = ENDPOINTS.ARCHIVE.mainnet;
-    MINA_EXPLORER = ENDPOINTS.EXPLORER.mainnet;
   }
 
   merkleList = List.empty();
@@ -339,6 +349,12 @@ async function main() {
 
   await settleDepositWithdraw(1, 1, 1);
   await settleDepositWithdraw(1, 5, 5);
+  await settleDepositWithdraw(1, BATCH_SIZE, BATCH_SIZE);
+  await settleDepositWithdraw(1, BATCH_SIZE * 2, BATCH_SIZE * 2);
+
+  await BenchActionStackProgram(ACTION_QUEUE_SIZE);
+  await BenchActionStackProgram(ACTION_QUEUE_SIZE * 2);
+  await BenchActionStackProgram(ACTION_QUEUE_SIZE * 4);
 }
 
 async function sendMina(
@@ -520,6 +536,54 @@ async function MockReducerVerifierProof(
   };
 }
 
+async function PrepareBatch(
+  includedActions: Map<string, number>,
+  contractInstance: SettlementContract
+) {
+  const packedActions = await fetchActions(
+    contractInstance.address,
+    contractInstance.actionState.get()
+  );
+
+  if (packedActions.length === 0) {
+    return {
+      endActionState: 0n,
+      batchActions: [],
+      batch: Batch.empty(),
+      useActionStack: Bool(false),
+      actionStackProof: undefined,
+      publicInput: ValidateReducePublicInput.default,
+      mask: ReduceMask.empty(),
+    };
+  }
+
+  const { endActionState, batchActions, publicInput, mask } = CalculateMax(
+    includedActions,
+    contractInstance,
+    packedActions
+  );
+
+  let actionStack = packedActions
+    .slice(batchActions.length)
+    .map((pack) => pack.action);
+
+  const batch = Batch.fromArray(batchActions);
+
+  const { useActionStack, actionStackProof } = await bench(
+    'Generate Action Stack Proof',
+    () => GenerateActionStackProof(Field.from(endActionState), actionStack)
+  );
+
+  return {
+    batchActions,
+    batch,
+    useActionStack,
+    actionStackProof,
+    publicInput,
+    mask,
+  };
+}
+
 async function reduce(senderKey: PrivateKey) {
   let map = MapFromArray(actionStack);
 
@@ -532,7 +596,7 @@ async function reduce(senderKey: PrivateKey) {
     publicInput,
     activeSet
   );
-  log('mask', mask.toJSON());
+
   const tx = await Mina.transaction(
     { sender: senderKey.toPublicKey(), fee },
     async () => {
@@ -574,6 +638,13 @@ async function settleDepositWithdraw(
     await withdraw(usersKeys[i % 5], UInt64.from(1e9 - i));
   }
   await reduce(feePayerKey);
+}
+
+async function BenchActionStackProgram(numActions: number) {
+  const actions = GenerateTestActions(numActions, merkleList.hash);
+  await bench('Generate Action Stack Proof', () =>
+    GenerateActionStackProof(Field.from(0), actions)
+  );
 }
 
 await main();
