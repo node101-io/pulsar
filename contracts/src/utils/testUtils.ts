@@ -4,30 +4,37 @@ import {
   PrivateKey,
   PublicKey,
   Signature,
+  UInt64,
 } from 'o1js';
 import {
   MultisigVerifierProgram,
   SettlementProof,
   SettlementPublicInputs,
-} from '../SettlementProof';
+} from '../SettlementProof.js';
 import {
   GenerateValidateReduceProof,
   GenerateSettlementPublicInput,
   MergeSettlementProofs,
-} from './generateFunctions';
-import { SettlementContract } from '../SettlementContract';
-import { ValidateReducePublicInput } from '../ValidateReduce';
-import { SignaturePublicKeyList } from '../types/signaturePubKeyList';
-import { List } from '../types/common';
-import { PulsarAction } from '../types/PulsarAction';
-import { CalculateMask } from './reduceWitness';
+} from './generateFunctions.js';
+import { ValidateReducePublicInput } from '../ValidateReduce.js';
+import { SignaturePublicKeyList } from '../types/signaturePubKeyList.js';
+import { List } from '../types/common.js';
+import { PulsarAction } from '../types/PulsarAction.js';
 import { log } from './loggers.js';
+import { ProofGenerators } from '../types/proofGenerators.js';
+import {
+  actionListAdd,
+  emptyActionListHash,
+  merkleActionsAdd,
+} from '../types/actionHelpers.js';
 
 export {
   GenerateSignaturePubKeyList,
   GenerateReducerSignatureList,
   GenerateTestSettlementProof,
   MockReducerVerifierProof,
+  GenerateTestActions,
+  CalculateActionRoot,
 };
 
 function GenerateSignaturePubKeyList(
@@ -131,28 +138,9 @@ async function GenerateTestSettlementProof(
 }
 
 async function MockReducerVerifierProof(
-  contractInstance: SettlementContract,
-  batchActions: Array<PulsarAction>,
-  includedActionsArray: Field[],
+  publicInput: ValidateReducePublicInput,
   validatorSet: Array<[PrivateKey, PublicKey]>
 ) {
-  const includedActionsMap = new Map<string, number>();
-
-  for (const field of includedActionsArray.map((x) => x.toString())) {
-    log('field:', field.toString());
-    const count = includedActionsMap.get(field) || 0;
-    includedActionsMap.set(field, count + 1);
-
-    log('includedActionsMap:', includedActionsMap);
-    log('includedActionsMap.get(field):', includedActionsMap.get(field));
-  }
-
-  const { publicInput, mask } = await CalculateMask(
-    contractInstance,
-    includedActionsMap,
-    batchActions
-  );
-
   const signatureList = GenerateReducerSignatureList(publicInput, validatorSet);
 
   return {
@@ -160,6 +148,59 @@ async function MockReducerVerifierProof(
       publicInput,
       signatureList
     ),
-    mask,
   };
+}
+
+function GenerateTestActions(
+  numActions: number,
+  merkleListRoot: Field,
+  initialStateRoot: Field = Field(0)
+): PulsarAction[] {
+  const actions: PulsarAction[] = [];
+  let blockHeight = 1;
+  for (let i = 0; i < numActions; i++) {
+    const randomType = Math.ceil(Math.random() * 3);
+    if (randomType === 1) {
+      actions.push(
+        PulsarAction.settlement(
+          i == 0 ? initialStateRoot : Field.random(),
+          Field.random(),
+          merkleListRoot,
+          merkleListRoot,
+          Field.from(blockHeight++),
+          Field.from(blockHeight++),
+          ProofGenerators.empty().insertAt(
+            Field.from(0),
+            PrivateKey.random().toPublicKey()
+          )
+        )
+      );
+    } else if (randomType === 2) {
+      actions.push(
+        PulsarAction.deposit(
+          PrivateKey.random().toPublicKey(),
+          UInt64.from(Math.floor(Math.random() * 2 ** 32)).value
+        )
+      );
+    } else if (randomType === 3) {
+      actions.push(
+        PulsarAction.withdrawal(
+          PrivateKey.random().toPublicKey(),
+          UInt64.from(Math.floor(Math.random() * 2 ** 32)).value
+        )
+      );
+    }
+  }
+  return actions;
+}
+
+function CalculateActionRoot(initialRoot: Field, actions: PulsarAction[]) {
+  let actionRoot = initialRoot;
+  for (const action of actions) {
+    actionRoot = merkleActionsAdd(
+      actionRoot,
+      actionListAdd(emptyActionListHash, action)
+    );
+  }
+  return actionRoot;
 }

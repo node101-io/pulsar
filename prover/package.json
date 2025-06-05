@@ -1,0 +1,26 @@
+{
+    "name": "pulsar-prover",
+    "version": "1.0.0",
+    "main": "index.js",
+    "type": "module",
+    "scripts": {
+        "test": "npm run test",
+        "build": "tsc",
+        "start": "node build/index.js"
+    },
+    "keywords": [
+        "pulsar"
+    ],
+    "author": "",
+    "license": "MIT",
+    "description": "",
+    "dependencies": {
+        "dotenv": "^16.5.0",
+        "express": "^5.1.0",
+        "o1js": "^2.6.0",
+        "pulsar-contracts": "file:../contracts"
+    },
+    "devDependencies": {
+        "@types/express": "^5.0.2"
+    }
+}

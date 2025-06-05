@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { SettlementContract } from '../SettlementContract';
+import { SettlementContract } from '../SettlementContract.js';
 
 export { writeJsonLog, log, table, logZkappState, enableLogs, analyzeMethods };
 
@@ -30,6 +30,7 @@ function enableLogs() {
 }
 
 function logZkappState(label: string, zkapp: SettlementContract) {
+  if (!logsEnabled) return;
   console.log(`${label.toUpperCase()}:`);
   console.table({
     actionState: zkapp.actionState.get().toString(),
@@ -43,9 +44,8 @@ function logZkappState(label: string, zkapp: SettlementContract) {
   });
 }
 
-function analyzeMethods(promise: any) {
+function analyzeMethods(data: any) {
   if (!logsEnabled) return;
-  const data = promise;
   const tableData = Object.entries(data).map(([methodName, details]) => ({
     method: methodName,
     rows: (details as any).rows,

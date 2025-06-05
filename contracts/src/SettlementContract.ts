@@ -12,24 +12,31 @@ import {
   PublicKey,
   Reducer,
   Bool,
+  Struct,
 } from 'o1js';
-import { SettlementProof } from './SettlementProof';
+import { SettlementProof } from './SettlementProof.js';
 import {
   BATCH_SIZE,
   MINIMUM_DEPOSIT_AMOUNT,
   WITHDRAW_DOWN_PAYMENT,
-} from './utils/constants';
-import { ValidateReduceProof } from './ValidateReduce';
-import { Batch, PulsarAction } from './types/PulsarAction';
-import { ReduceMask } from './types/common';
-import { ActionStackProof } from './ActionStack';
+} from './utils/constants.js';
+import { ValidateReduceProof } from './ValidateReduce.js';
+import { Batch, PulsarAction } from './types/PulsarAction.js';
+import { ReduceMask } from './types/common.js';
+import { ActionStackProof } from './ActionStack.js';
 import {
   actionListAdd,
   emptyActionListHash,
   merkleActionsAdd,
-} from './types/actionHelpers';
+} from './types/actionHelpers.js';
 
-export { SettlementContract };
+export { SettlementContract, SettlementEvent };
+
+class SettlementEvent extends Struct({
+  fromActionState: Field,
+  endActionState: Field,
+  mask: Field,
+}) {}
 
 class SettlementContract extends SmartContract {
   @state(Field) actionState = State<Field>();
@@ -43,6 +50,10 @@ class SettlementContract extends SmartContract {
   @state(Field) rewardListHash = State<Field>();
 
   reducer = Reducer({ actionType: PulsarAction });
+
+  readonly events = {
+    Settlement: SettlementEvent,
+  };
 
   async deploy() {
     await super.deploy();
@@ -150,7 +161,8 @@ class SettlementContract extends SmartContract {
     let withdrawalListHash = this.withdrawalListHash.getAndRequireEquals();
     let rewardListHash = this.rewardListHash.getAndRequireEquals();
 
-    let actionState = this.actionState.getAndRequireEquals();
+    let initialActionState = this.actionState.getAndRequireEquals();
+    let actionState = initialActionState;
 
     for (let i = 0; i < BATCH_SIZE; i++) {
       const action = batch.actions[i];
@@ -253,6 +265,15 @@ class SettlementContract extends SmartContract {
 
     this.account.actionState.requireEquals(
       Provable.if(useActionStack, actionStackProof.publicOutput, actionState)
+    );
+
+    this.emitEvent(
+      'Settlement',
+      new SettlementEvent({
+        fromActionState: initialActionState,
+        endActionState: actionState,
+        mask: mask.toField(),
+      })
     );
 
     this.actionState.set(actionState);

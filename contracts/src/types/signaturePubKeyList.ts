@@ -1,5 +1,5 @@
 import { Provable, PublicKey, Signature, Struct } from 'o1js';
-import { VALIDATOR_NUMBER } from '../utils/constants';
+import { VALIDATOR_NUMBER } from '../utils/constants.js';
 
 export { SignaturePublicKey, SignaturePublicKeyList };
 
