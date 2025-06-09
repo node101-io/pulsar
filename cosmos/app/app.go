@@ -3,9 +3,6 @@ package app
 import (
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"strings"
 
 	_ "cosmossdk.io/api/cosmos/tx/config/v1" // import for side-effects
 	clienthelpers "cosmossdk.io/client/v2/helpers"
@@ -73,9 +70,6 @@ import (
 
 	minakeysmodulekeeper "github.com/node101-io/pulsar/cosmos/x/minakeys/keeper"
 	// this line is used by starport scaffolding # stargate/app/moduleImport
-
-	minakeystypes "github.com/node101-io/pulsar/cosmos/x/minakeys/types"
-	minakeysutils "github.com/node101-io/pulsar/cosmos/x/minakeys/utils"
 
 	"github.com/node101-io/pulsar/cosmos/docs"
 )
@@ -426,28 +420,4 @@ func BlockedAddresses() map[string]bool {
 	// the provider chain
 	delete(result, authtypes.NewModuleAddress(ibcconsumertypes.ConsumerToSendToProviderName).String())
 	return result
-}
-
-// ProvideSecondaryKey reads the hex‐string from app.toml, decodes it
-// and returns a fully‐initialized SecondaryKey.
-func ProvideSecondaryKey(opts servertypes.AppOptions) (*minakeystypes.SecondaryKey, error) {
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("cannot resolve home directory: %w", err)
-	}
-
-	path := filepath.Join(home, ".secondary_key.toml")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read %s: %w", path, err)
-	}
-
-	// file is just the raw hex string (whitespace‐trimmed)
-	hexStr := strings.TrimSpace(string(data))
-	if hexStr == "" {
-		return nil, fmt.Errorf("%s is empty; please put your secondary-key hex there", path)
-	}
-	// decode and unmarshal the hex-string into a SecondaryKey
-	return minakeysutils.LoadSecondaryKeyFromHex(hexStr)
 }

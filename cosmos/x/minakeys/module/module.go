@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"cosmossdk.io/core/appmodule"
 	"cosmossdk.io/core/store"
@@ -23,6 +26,7 @@ import (
 	modulev1 "github.com/node101-io/pulsar/cosmos/api/cosmos/minakeys/module"
 	"github.com/node101-io/pulsar/cosmos/x/minakeys/keeper"
 	"github.com/node101-io/pulsar/cosmos/x/minakeys/types"
+	"github.com/node101-io/pulsar/cosmos/x/minakeys/utils"
 )
 
 var (
@@ -168,8 +172,50 @@ func (am AppModule) IsAppModule() {}
 func init() {
 	appmodule.Register(
 		&modulev1.Module{},
-		appmodule.Provide(ProvideModule),
+		appmodule.Provide(
+			ProvideModule,
+			ProvideSecondaryKey,
+		),
 	)
+}
+
+type SecondaryKeyInputs struct {
+	depinject.In
+
+	Config *modulev1.Module
+	Logger log.Logger
+}
+
+type SecondaryKeyOutputs struct {
+	depinject.Out
+
+	SecondaryKey *types.SecondaryKey
+}
+
+func ProvideSecondaryKey(in SecondaryKeyInputs) (SecondaryKeyOutputs, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return SecondaryKeyOutputs{}, fmt.Errorf("cannot resolve home directory: %w", err)
+	}
+
+	path := filepath.Join(home, ".secondary_key.toml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return SecondaryKeyOutputs{}, fmt.Errorf("failed to read %s: %w", path, err)
+	}
+
+	// file is just the raw hex string (whitespace‐trimmed)
+	hexStr := strings.TrimSpace(string(data))
+	if hexStr == "" {
+		return SecondaryKeyOutputs{}, fmt.Errorf("%s is empty; please put your secondary-key hex there", path)
+	}
+	// decode and unmarshal the hex-string into a SecondaryKey
+	secondaryKey, err := utils.LoadSecondaryKeyFromHex(hexStr)
+	if err != nil {
+		return SecondaryKeyOutputs{}, err
+	}
+
+	return SecondaryKeyOutputs{SecondaryKey: secondaryKey}, nil
 }
 
 type ModuleInputs struct {
