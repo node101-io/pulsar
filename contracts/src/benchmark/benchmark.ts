@@ -10,7 +10,12 @@ import {
   Lightnet,
   Bool,
 } from 'o1js';
-import { analyzeMethods, enableLogs, log } from '../utils/loggers.js';
+import {
+  analyzeMethods,
+  enableLogs,
+  log,
+  logParams,
+} from '../utils/loggers.js';
 import {
   ACTION_QUEUE_SIZE,
   ActionStackProgram,
@@ -44,6 +49,18 @@ import {
   GenerateTestActions,
 } from '../utils/testUtils.js';
 import { performance } from 'node:perf_hooks';
+import { memoryUsage } from 'node:process';
+import why from 'why-is-node-running';
+
+function logMem(label = '') {
+  if (!logsEnabled) return;
+  const { rss, heapUsed, external } = memoryUsage();
+  console.log(label, {
+    rss: (rss / 1e6).toFixed(0) + ' MB',
+    heap: (heapUsed / 1e6).toFixed(0) + ' MB',
+    ext: (external / 1e6).toFixed(0) + ' MB',
+  });
+}
 
 interface Sample {
   label: string;
@@ -90,15 +107,30 @@ async function bench<T>(
 ): Promise<T> {
   const group = opts.group ?? label.split(' ')[0];
   const bucket = getBucket(label, group);
+  logMem(`Memo: ${label}`);
   log('benching: ', label);
+
+  let whyTimer: NodeJS.Timeout | undefined = undefined;
+
+  whyTimer = setTimeout(() => {
+    why();
+  }, 30_000);
+
   const t0 = performance.now();
-  const out = await fn();
+  let out;
+  try {
+    out = await fn();
+  } finally {
+    if (whyTimer) clearTimeout(whyTimer);
+  }
   bucket.values.push(performance.now() - t0);
+
   log(
     `bench: ${label} took ${bucket.values[bucket.values.length - 1].toFixed(
       2
     )} ms`
   );
+
   return out;
 }
 
@@ -223,6 +255,8 @@ async function main() {
     const [, publicKey] = activeSet[i];
     merkleList.push(Poseidon.hash(publicKey.toFields()));
   }
+
+  logParams();
 
   const validateReduceAnalyze = await ValidateReduceProgram.analyzeMethods();
   analyzeMethods(validateReduceAnalyze);
@@ -647,7 +681,16 @@ async function BenchActionStackProgram(numActions: number) {
   );
 }
 
+const watchdog = setTimeout(() => {
+  why();
+
+  setTimeout(() => process.exit(1), 5000);
+}, 1200000);
+
 await main();
+clearTimeout(watchdog);
+
 printTable();
 await exportJSON();
+
 process.exit(0);
