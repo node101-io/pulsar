@@ -16,10 +16,8 @@ import { validatorSet } from './mock';
 import { actionListAdd, emptyActionListHash } from '../types/actionHelpers';
 
 describe('Action Stack Proof tests', () => {
-  let proofsEnabled = false;
+  const proofsEnabled = process.env.PROOFS_ENABLED === '1';
   let vk: VerificationKey;
-
-  //validator variables
   let merkleList: List;
   let activeSet: Array<[PrivateKey, PublicKey]> = [];
 

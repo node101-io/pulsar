@@ -37,7 +37,7 @@ describe('SettlementProof tests', () => {
   const localTest = testEnvironment === 'local';
   const randomKeys = process.env.RANDOM_KEYS === '1';
   let fee = localTest ? 0 : 1e9;
-  let proofsEnabled = false;
+  const proofsEnabled = process.env.PROOFS_ENABLED === '1';
   let MINA_NODE_ENDPOINT: string;
   let MINA_ARCHIVE_ENDPOINT: string;
   let MINA_EXPLORER: string;
@@ -218,7 +218,7 @@ describe('SettlementProof tests', () => {
     await waitTransactionAndFetchAccount(
       tx,
       [deployerKey, zkappPrivateKey],
-      [zkappAddress, deployerAccount]
+      [zkapp.address, deployerAccount]
     );
   }
 
@@ -596,17 +596,21 @@ describe('SettlementProof tests', () => {
     await MultisigVerifierProgram.compile({
       proofsEnabled,
     });
+    log('MultisigVerifierProgram compiled');
 
     await ValidateReduceProgram.compile({
       proofsEnabled,
     });
+    log('ValidateReduceProgram compiled');
 
     await ActionStackProgram.compile({
       proofsEnabled,
     });
+    log('ActionStackProgram compiled');
 
     if (proofsEnabled) {
       await SettlementContract.compile();
+      log('SettlementContract compiled');
     }
   });
 
