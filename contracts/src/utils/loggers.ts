@@ -1,8 +1,22 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { SettlementContract } from '../SettlementContract.js';
+import {
+  ACTION_QUEUE_SIZE,
+  AGGREGATE_THRESHOLD,
+  BATCH_SIZE,
+  VALIDATOR_NUMBER,
+} from './constants.js';
 
-export { writeJsonLog, log, table, logZkappState, enableLogs, analyzeMethods };
+export {
+  writeJsonLog,
+  log,
+  table,
+  logZkappState,
+  enableLogs,
+  analyzeMethods,
+  logParams,
+};
 
 function writeJsonLog(fileName: string, data: any) {
   const dir = path.join(process.cwd(), 'logs');
@@ -51,4 +65,8 @@ function analyzeMethods(data: any) {
     rows: (details as any).rows,
   }));
   console.table(tableData);
+}
+
+function logParams() {
+  table([VALIDATOR_NUMBER, AGGREGATE_THRESHOLD, BATCH_SIZE, ACTION_QUEUE_SIZE]);
 }

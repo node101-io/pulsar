@@ -66,6 +66,23 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     )
   );
 
+  for (let i = 1; i < proofs.length; i++) {
+    if (
+      proofs[i].publicInput.InitialBlockHeight.toBigInt() !==
+        proofs[i - 1].publicInput.NewBlockHeight.toBigInt() ||
+      proofs[i].publicInput.InitialMerkleListRoot.toBigInt() !==
+        proofs[i - 1].publicInput.NewMerkleListRoot.toBigInt()
+    ) {
+      throw new Error(
+        `Proofs are not sequential: ${proofs[
+          i - 1
+        ].publicInput.NewBlockHeight.toString()} -> ${proofs[
+          i
+        ].publicInput.InitialBlockHeight.toString()}`
+      );
+    }
+  }
+
   table(
     proofs.map((proof) => ({
       InitialBlockHeight: proof.publicInput.InitialBlockHeight.toString().slice(
