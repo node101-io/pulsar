@@ -10,7 +10,11 @@ import {
   UInt64,
 } from 'o1js';
 import { MultisigVerifierProgram, SettlementProof } from '../SettlementProof';
-import { MINIMUM_DEPOSIT_AMOUNT, VALIDATOR_NUMBER } from '../utils/constants';
+import {
+  ENDPOINTS,
+  MINIMUM_DEPOSIT_AMOUNT,
+  VALIDATOR_NUMBER,
+} from '../utils/constants';
 import { SettlementContract } from '../SettlementContract';
 import { devnetTestAccounts, validatorSet, testAccounts } from './mock';
 import {
@@ -20,7 +24,7 @@ import {
 import { ValidateReduceProgram } from '../ValidateReduce';
 import { List } from '../types/common';
 import { ActionStackProgram } from '../ActionStack';
-import { PrepareBatch } from '../utils/reduceWitness';
+import { MapFromArray, PrepareBatch } from '../utils/reduceWitness';
 import {
   analyzeMethods,
   enableLogs,
@@ -33,21 +37,20 @@ describe('SettlementProof tests', () => {
   const localTest = testEnvironment === 'local';
   const randomKeys = process.env.RANDOM_KEYS === '1';
   let fee = localTest ? 0 : 1e9;
-  let proofsEnabled = false;
+  const proofsEnabled = process.env.PROOFS_ENABLED === '1';
   let MINA_NODE_ENDPOINT: string;
   let MINA_ARCHIVE_ENDPOINT: string;
   let MINA_EXPLORER: string;
   let testAccountIndex = 10;
 
   if (testEnvironment === 'devnet') {
-    MINA_NODE_ENDPOINT = 'https://api.minascan.io/node/devnet/v1/graphql';
-    MINA_ARCHIVE_ENDPOINT = 'https://api.minascan.io/archive/devnet/v1/graphql';
-    MINA_EXPLORER = 'https://minascan.io/devnet/tx/';
+    MINA_NODE_ENDPOINT = ENDPOINTS.NODE.devnet;
+    MINA_ARCHIVE_ENDPOINT = ENDPOINTS.ARCHIVE.devnet;
+    MINA_EXPLORER = ENDPOINTS.EXPLORER.devnet;
   } else if (testEnvironment === 'lightnet') {
-    MINA_NODE_ENDPOINT = 'http://127.0.0.1:8080/graphql';
-    MINA_ARCHIVE_ENDPOINT = 'http://127.0.0.1:8282';
-    MINA_EXPLORER =
-      'file:///Users/kadircan/.cache/zkapp-cli/lightnet/explorer/v0.2.2/index.html?target=block&numberOrHash=';
+    MINA_NODE_ENDPOINT = ENDPOINTS.NODE.lightnet;
+    MINA_ARCHIVE_ENDPOINT = ENDPOINTS.ARCHIVE.lightnet;
+    MINA_EXPLORER = ENDPOINTS.EXPLORER.lightnet;
   }
 
   //keys
@@ -215,7 +218,7 @@ describe('SettlementProof tests', () => {
     await waitTransactionAndFetchAccount(
       tx,
       [deployerKey, zkappPrivateKey],
-      [zkappAddress, deployerAccount]
+      [zkapp.address, deployerAccount]
     );
   }
 
@@ -241,7 +244,6 @@ describe('SettlementProof tests', () => {
     settlementProof: SettlementProof,
     pushToStack: boolean = true
   ) {
-    console.log('senderKey', senderKey.toPublicKey().toBase58());
     await fetchAccounts([zkappAddress]);
     const tx = await Mina.transaction(
       { sender: senderKey.toPublicKey(), fee },
@@ -391,13 +393,13 @@ describe('SettlementProof tests', () => {
   }
 
   async function reduce(senderKey: PrivateKey) {
-    const { batchActions, batch, useActionStack, actionStackProof } =
-      await PrepareBatch(zkapp);
+    let map = MapFromArray(actionStack);
 
-    const { validateReduceProof, mask } = await MockReducerVerifierProof(
-      zkapp,
-      batchActions,
-      actionStack,
+    const { batch, useActionStack, actionStackProof, publicInput, mask } =
+      await PrepareBatch(map, zkapp);
+
+    const { validateReduceProof } = await MockReducerVerifierProof(
+      publicInput,
       activeSet
     );
     log('mask', mask.toJSON());
@@ -423,13 +425,13 @@ describe('SettlementProof tests', () => {
     expectedMsg: string = 'Transaction failed'
   ) {
     try {
-      const { batchActions, batch, useActionStack, actionStackProof } =
-        await PrepareBatch(zkapp);
+      let map = MapFromArray(actionStack);
 
-      const { validateReduceProof, mask } = await MockReducerVerifierProof(
-        zkapp,
-        batchActions,
-        actionStack,
+      const { batch, useActionStack, actionStackProof, publicInput, mask } =
+        await PrepareBatch(map, zkapp);
+
+      const { validateReduceProof } = await MockReducerVerifierProof(
+        publicInput,
         activeSet
       );
       log('mask', mask.toJSON());
@@ -594,21 +596,25 @@ describe('SettlementProof tests', () => {
     await MultisigVerifierProgram.compile({
       proofsEnabled,
     });
+    log('MultisigVerifierProgram compiled');
 
     await ValidateReduceProgram.compile({
       proofsEnabled,
     });
+    log('ValidateReduceProgram compiled');
 
     await ActionStackProgram.compile({
       proofsEnabled,
     });
+    log('ActionStackProgram compiled');
 
     if (proofsEnabled) {
       await SettlementContract.compile();
+      log('SettlementContract compiled');
     }
   });
 
-  describe.skip('Deploy & Initialize Flow', () => {
+  describe('Deploy & Initialize Flow', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
     });
@@ -633,7 +639,7 @@ describe('SettlementProof tests', () => {
     });
   });
 
-  describe.skip('Settlement flow', () => {
+  describe('Settlement flow', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
     });
@@ -713,7 +719,7 @@ describe('SettlementProof tests', () => {
     });
   });
 
-  describe.skip('Deposit flow', () => {
+  describe('Deposit flow', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
     });
@@ -744,7 +750,7 @@ describe('SettlementProof tests', () => {
     });
   });
 
-  describe.skip('Withdraw flow', () => {
+  describe('Withdraw flow', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
     });
@@ -766,7 +772,7 @@ describe('SettlementProof tests', () => {
     });
   });
 
-  describe.skip('Combined flow', () => {
+  describe('Combined flow', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
     });

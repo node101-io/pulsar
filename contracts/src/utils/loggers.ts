@@ -1,8 +1,22 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { SettlementContract } from '../SettlementContract';
+import { SettlementContract } from '../SettlementContract.js';
+import {
+  ACTION_QUEUE_SIZE,
+  AGGREGATE_THRESHOLD,
+  BATCH_SIZE,
+  VALIDATOR_NUMBER,
+} from './constants.js';
 
-export { writeJsonLog, log, table, logZkappState, enableLogs, analyzeMethods };
+export {
+  writeJsonLog,
+  log,
+  table,
+  logZkappState,
+  enableLogs,
+  analyzeMethods,
+  logParams,
+};
 
 function writeJsonLog(fileName: string, data: any) {
   const dir = path.join(process.cwd(), 'logs');
@@ -30,6 +44,7 @@ function enableLogs() {
 }
 
 function logZkappState(label: string, zkapp: SettlementContract) {
+  if (!logsEnabled) return;
   console.log(`${label.toUpperCase()}:`);
   console.table({
     actionState: zkapp.actionState.get().toString(),
@@ -43,12 +58,15 @@ function logZkappState(label: string, zkapp: SettlementContract) {
   });
 }
 
-function analyzeMethods(promise: any) {
+function analyzeMethods(data: any) {
   if (!logsEnabled) return;
-  const data = promise;
   const tableData = Object.entries(data).map(([methodName, details]) => ({
     method: methodName,
     rows: (details as any).rows,
   }));
   console.table(tableData);
+}
+
+function logParams() {
+  table([VALIDATOR_NUMBER, AGGREGATE_THRESHOLD, BATCH_SIZE, ACTION_QUEUE_SIZE]);
 }

@@ -15,8 +15,8 @@ import { GenerateSignaturePubKeyList } from '../utils/testUtils';
 import { List } from '../types/common';
 import { enableLogs, log } from '../utils/loggers';
 
-describe.skip('SettlementProof tests', () => {
-  let proofsEnabled = false;
+describe('SettlementProof tests', () => {
+  const proofsEnabled = process.env.PROOFS_ENABLED === '1';
   let merkleList: List;
   let settlementPublicInputs: SettlementPublicInputs[] = [];
   let settlementProofs: SettlementProof[] = [];
