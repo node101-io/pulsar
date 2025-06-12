@@ -2,11 +2,13 @@ package signing
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 
 	cmtcrypto "github.com/cometbft/cometbft/crypto"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	"github.com/cosmos/gogoproto/jsonpb"
 	keys "github.com/node101-io/mina-signer-go/keys"
 	poseidonbigint "github.com/node101-io/mina-signer-go/poseidonbigint"
 	"github.com/node101-io/mina-signer-go/signature"
@@ -129,6 +131,23 @@ func (pk *minaPubKey) MarshalTo(dAtA []byte) (int, error) {
 
 	copy(dAtA, keyBytes)
 	return keys.PublicKeyTotalByteSize, nil
+}
+
+// MarshalJSON provides custom JSON serialization for minaPubKey.
+func (pk *minaPubKey) MarshalJSON() ([]byte, error) {
+	if pk == nil || pk.pk == nil {
+		return []byte(`""`), nil
+	}
+	bz, err := pk.pk.MarshalBytes()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(hex.EncodeToString(bz))
+}
+
+// Value receiver variants implementing jsonpb.JSONPBMarshaler
+func (pk minaPubKey) MarshalJSONPB(_ *jsonpb.Marshaler) ([]byte, error) {
+	return (&pk).MarshalJSON()
 }
 
 // Unmarshal decodes a minaPubKey from a byte slice.

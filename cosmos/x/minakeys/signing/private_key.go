@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	"github.com/cosmos/gogoproto/jsonpb"
 	keys "github.com/node101-io/mina-signer-go/keys"
 	poseidonbigint "github.com/node101-io/mina-signer-go/poseidonbigint"
 	signature "github.com/node101-io/mina-signer-go/signature"
@@ -130,6 +131,15 @@ func (privKey *minaPrivKey) MarshalTo(dAtA []byte) (int, error) {
 
 	copy(dAtA, keyBytes)
 	return keys.PrivateKeyByteSize, nil
+}
+
+// MarshalJSON omits private key bytes from JSON output.
+func (priv *minaPrivKey) MarshalJSON() ([]byte, error) {
+	return []byte(`""`), nil
+}
+
+func (priv minaPrivKey) MarshalJSONPB(_ *jsonpb.Marshaler) ([]byte, error) {
+	return (&priv).MarshalJSON()
 }
 
 func (privKey *minaPrivKey) Unmarshal(dAtA []byte) error {
