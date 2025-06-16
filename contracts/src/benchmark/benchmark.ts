@@ -114,7 +114,7 @@ async function bench<T>(
 
   whyTimer = setTimeout(() => {
     why();
-  }, 30_000);
+  }, 300_000);
 
   const t0 = performance.now();
   let out;

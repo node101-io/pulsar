@@ -10,3 +10,34 @@ This report summarizes the circuit analysis, compilation times, and per-step ben
 ---
 
 ## Circuit Analysis & Compilation Times
+
+### ValidateReduceProgram zkProgram Analysis
+
+| Method           | Rows  |
+| ---------------- | ----- |
+| verifySignatures | 20788 |
+
+### ActionStackProgram zkProgram Analysis
+
+| Method         | Rows  |
+| -------------- | ----- |
+| proveIntegrity | 45003 |
+
+### MultisigVerifierProgram zkProgram Analysis
+
+| Method           | Rows      |
+| ---------------- | --------- |
+| mergeProofs      | 5967      |
+| verifySignatures | 20853     |
+| **Total**        | **26820** |
+
+### SettlementContract Analysis
+
+| Method     | Rows      |
+| ---------- | --------- |
+| initialize | 326       |
+| settle     | 895       |
+| deposit    | 1074      |
+| withdraw   | 1075      |
+| reduce     | 36564     |
+| **Total**  | **40234** |
