@@ -44,6 +44,9 @@ import (
 	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
 	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
 	ibcconsumertypes "github.com/cosmos/interchain-security/v5/x/ccv/consumer/types"
+	minakeysmodulev1 "github.com/node101-io/pulsar/cosmos/api/cosmos/minakeys/module"
+	_ "github.com/node101-io/pulsar/cosmos/x/minakeys/module" // import for side-effects
+	minakeysmoduletypes "github.com/node101-io/pulsar/cosmos/x/minakeys/types"
 	"google.golang.org/protobuf/types/known/durationpb"
 	// this line is used by starport scaffolding # stargate/app/moduleImport
 )
@@ -79,6 +82,7 @@ var (
 		circuittypes.ModuleName,
 		ibcconsumertypes.ModuleName,
 		// chain modules
+		minakeysmoduletypes.ModuleName,
 		// this line is used by starport scaffolding # stargate/app/initGenesis
 	}
 
@@ -101,6 +105,7 @@ var (
 		icatypes.ModuleName,
 		ibcfeetypes.ModuleName,
 		// chain modules
+		minakeysmoduletypes.ModuleName,
 		// this line is used by starport scaffolding # stargate/app/beginBlockers
 	}
 
@@ -118,6 +123,7 @@ var (
 		icatypes.ModuleName,
 		ibcfeetypes.ModuleName,
 		// chain modules
+		minakeysmoduletypes.ModuleName,
 		// this line is used by starport scaffolding # stargate/app/endBlockers
 	}
 
@@ -244,6 +250,10 @@ var (
 			{
 				Name:   circuittypes.ModuleName,
 				Config: appconfig.WrapAny(&circuitmodulev1.Module{}),
+			},
+			{
+				Name:   minakeysmoduletypes.ModuleName,
+				Config: appconfig.WrapAny(&minakeysmodulev1.Module{}),
 			},
 			// this line is used by starport scaffolding # stargate/app/moduleConfig
 		},

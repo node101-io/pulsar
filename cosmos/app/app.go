@@ -68,9 +68,10 @@ import (
 	ibcconsumerkeeper "github.com/cosmos/interchain-security/v5/x/ccv/consumer/keeper"
 	ibcconsumertypes "github.com/cosmos/interchain-security/v5/x/ccv/consumer/types"
 
+	minakeysmodulekeeper "github.com/node101-io/pulsar/cosmos/x/minakeys/keeper"
 	// this line is used by starport scaffolding # stargate/app/moduleImport
 
-	"cosmos/docs"
+	"github.com/node101-io/pulsar/cosmos/docs"
 )
 
 const (
@@ -133,6 +134,7 @@ type App struct {
 	ScopedICAHostKeeper       capabilitykeeper.ScopedKeeper
 	ScopedKeepers             map[string]capabilitykeeper.ScopedKeeper
 
+	MinakeysKeeper minakeysmodulekeeper.Keeper
 	// this line is used by starport scaffolding # stargate/app/keeperDeclaration
 
 	// simulation manager
@@ -220,6 +222,7 @@ func New(
 		&app.NFTKeeper,
 		&app.GroupKeeper,
 		&app.CircuitBreakerKeeper,
+		&app.MinakeysKeeper,
 		// this line is used by starport scaffolding # stargate/app/keeperDefinition
 	); err != nil {
 		panic(err)

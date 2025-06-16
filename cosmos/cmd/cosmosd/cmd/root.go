@@ -12,16 +12,18 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/server"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtxconfig "github.com/cosmos/cosmos-sdk/x/auth/tx/config"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
+	"github.com/node101-io/pulsar/cosmos/x/minakeys/signing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"cosmos/app"
+	"github.com/node101-io/pulsar/cosmos/app"
 )
 
 // NewRootCmd creates a new root command for cosmosd. It is called once in the main function.
@@ -125,6 +127,11 @@ func ProvideClientContext(
 	txConfigOpts tx.ConfigOptions,
 	legacyAmino *codec.LegacyAmino,
 ) client.Context {
+	// Mina algoritmasını keyring'e register etmek için Option fonksiyonu yaratıyoruz
+	minaAlgoOption := func(options *keyring.Options) {
+		options.SupportedAlgos = append(options.SupportedAlgos, signing.Mina)
+	}
+
 	clientCtx := client.Context{}.
 		WithCodec(appCodec).
 		WithInterfaceRegistry(interfaceRegistry).
@@ -132,7 +139,8 @@ func ProvideClientContext(
 		WithInput(os.Stdin).
 		WithAccountRetriever(types.AccountRetriever{}).
 		WithHomeDir(app.DefaultNodeHome).
-		WithViper(app.Name) // env variable prefix
+		WithViper(app.Name). // env variable prefix
+		WithKeyringOptions(minaAlgoOption)
 
 	// Read the config again to overwrite the default values with the values from the config file
 	clientCtx, _ = config.ReadFromClientConfig(clientCtx)

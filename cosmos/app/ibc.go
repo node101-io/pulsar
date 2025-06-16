@@ -16,10 +16,12 @@ import (
 	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
 	icamodule "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts"
 	icacontroller "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller"
-	icacontrollerkeeper "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/keeper"
+
+	/* icacontrollerkeeper "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/keeper" */
 	icacontrollertypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/types"
 	icahost "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host"
-	icahostkeeper "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/keeper"
+
+	/* icahostkeeper "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/keeper" */
 	icahosttypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/types"
 	icatypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/types"
 	ibcfee "github.com/cosmos/ibc-go/v8/modules/apps/29-fee"
@@ -150,7 +152,7 @@ func (app *App) registerIBCModules(appOpts servertypes.AppOptions) error {
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
-	// Create interchain account keepers
+	/* // Create interchain account keepers
 	app.ICAHostKeeper = icahostkeeper.NewKeeper(
 		app.appCodec,
 		app.GetKey(icahosttypes.StoreKey),
@@ -173,7 +175,7 @@ func (app *App) registerIBCModules(appOpts servertypes.AppOptions) error {
 		scopedICAControllerKeeper,
 		app.MsgServiceRouter(),
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
-	)
+	) */
 
 	// Create IBC modules with ibcfee middleware
 	transferIBCModule := ibcfee.NewIBCMiddleware(ibctransfer.NewIBCModule(app.TransferKeeper), app.IBCFeeKeeper)
@@ -208,7 +210,7 @@ func (app *App) registerIBCModules(appOpts servertypes.AppOptions) error {
 		ibc.NewAppModule(app.IBCKeeper),
 		ibctransfer.NewAppModule(app.TransferKeeper),
 		ibcfee.NewAppModule(app.IBCFeeKeeper),
-		icamodule.NewAppModule(&app.ICAControllerKeeper, &app.ICAHostKeeper),
+		/* icamodule.NewAppModule(&app.ICAControllerKeeper, &app.ICAHostKeeper), */
 		capability.NewAppModule(app.appCodec, *app.CapabilityKeeper, false),
 		ibctm.NewAppModule(),
 		solomachine.NewAppModule(),
