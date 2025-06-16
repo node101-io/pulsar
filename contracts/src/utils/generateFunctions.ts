@@ -3,22 +3,22 @@ import {
   MultisigVerifierProgram,
   SettlementProof,
   SettlementPublicInputs,
-} from '../SettlementProof';
-import { ProofGenerators } from '../types/proofGenerators';
+} from '../SettlementProof.js';
+import { ProofGenerators } from '../types/proofGenerators.js';
 import {
   ValidateReducePublicInput,
   ValidateReduceProgram,
   ValidateReduceProof,
-} from '../ValidateReduce';
-import { SignaturePublicKeyList } from '../types/signaturePubKeyList';
+} from '../ValidateReduce.js';
+import { SignaturePublicKeyList } from '../types/signaturePubKeyList.js';
 import { log, table } from './loggers.js';
-import { PulsarAction } from '../types/PulsarAction';
-import { ACTION_QUEUE_SIZE } from './constants';
+import { PulsarAction } from '../types/PulsarAction.js';
+import { ACTION_QUEUE_SIZE } from './constants.js';
 import {
   ActionStackProgram,
   ActionStackProof,
   ActionStackQueue,
-} from '../ActionStack';
+} from '../ActionStack.js';
 
 export {
   GenerateSettlementProof,
@@ -59,12 +59,29 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
     proofs.map((proof) => proof.publicInput.NewBlockHeight.toString())
   );
 
-  proofs.sort((a, b) => {
-    return Number(
-      a.publicInput.NewBlockHeight.toBigInt() <
+  proofs.sort((a, b) =>
+    Number(
+      a.publicInput.NewBlockHeight.toBigInt() -
         b.publicInput.NewBlockHeight.toBigInt()
-    );
-  });
+    )
+  );
+
+  for (let i = 1; i < proofs.length; i++) {
+    if (
+      proofs[i].publicInput.InitialBlockHeight.toBigInt() !==
+        proofs[i - 1].publicInput.NewBlockHeight.toBigInt() ||
+      proofs[i].publicInput.InitialMerkleListRoot.toBigInt() !==
+        proofs[i - 1].publicInput.NewMerkleListRoot.toBigInt()
+    ) {
+      throw new Error(
+        `Proofs are not sequential: ${proofs[
+          i - 1
+        ].publicInput.NewBlockHeight.toString()} -> ${proofs[
+          i
+        ].publicInput.InitialBlockHeight.toString()}`
+      );
+    }
+  }
 
   table(
     proofs.map((proof) => ({

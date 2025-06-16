@@ -36,7 +36,14 @@ import {
   MAX_DEPOSIT_PER_BATCH,
   MAX_WITHDRAWAL_PER_BATCH,
   ACTION_QUEUE_SIZE,
+  ENDPOINTS,
 } from './utils/constants.js';
+import {
+  fetchActions,
+  fetchRawActions,
+  fetchBlockHeight,
+  fetchEvents,
+} from './utils/fetch.js';
 import {
   GenerateSettlementProof,
   MergeSettlementProofs,
@@ -44,7 +51,12 @@ import {
   GenerateValidateReduceProof,
   GenerateActionStackProof,
 } from './utils/generateFunctions.js';
-import { CalculateMask, PrepareBatch } from './utils/reduceWitness.js';
+import {
+  MapFromArray,
+  CalculateMax,
+  PackActions,
+  PrepareBatch,
+} from './utils/reduceWitness.js';
 import {
   ValidateReduceProof,
   ValidateReduceProgram,
@@ -74,12 +86,19 @@ export {
   MAX_DEPOSIT_PER_BATCH,
   MAX_WITHDRAWAL_PER_BATCH,
   ACTION_QUEUE_SIZE,
+  ENDPOINTS,
+  fetchActions,
+  fetchRawActions,
+  fetchBlockHeight,
+  fetchEvents,
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
   GenerateValidateReduceProof,
   GenerateActionStackProof,
-  CalculateMask,
+  MapFromArray,
+  CalculateMax,
+  PackActions,
   PrepareBatch,
   ActionStackProof,
   ActionStackQueue,

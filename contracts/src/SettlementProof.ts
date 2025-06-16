@@ -7,10 +7,10 @@ import {
   Struct,
   ZkProgram,
 } from 'o1js';
-import { ProofGenerators } from './types/proofGenerators';
-import { AGGREGATE_THRESHOLD, VALIDATOR_NUMBER } from './utils/constants';
-import { SignaturePublicKeyList } from './types/signaturePubKeyList';
-import { List } from './types/common';
+import { ProofGenerators } from './types/proofGenerators.js';
+import { AGGREGATE_THRESHOLD, VALIDATOR_NUMBER } from './utils/constants.js';
+import { SignaturePublicKeyList } from './types/signaturePubKeyList.js';
+import { List } from './types/common.js';
 
 export {
   SettlementProof,

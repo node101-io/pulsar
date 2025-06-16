@@ -1,5 +1,5 @@
 import { Bool, Field, Poseidon, Provable, PublicKey, Struct } from 'o1js';
-import { LIST_LENGTH, TOTAL_GENERATORS } from '../utils/constants';
+import { LIST_LENGTH, TOTAL_GENERATORS } from '../utils/constants.js';
 
 export { ProofGenerators };
 

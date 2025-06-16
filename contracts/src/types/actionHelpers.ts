@@ -35,8 +35,11 @@ function emptyHashWithPrefix(prefix: string) {
   return salt(prefix)[0];
 }
 
-const merkleActionsAdd = (hash: Field, actionsHash: Field): Field => {
-  return Poseidon.hashWithPrefix('MinaZkappSeqEvents**', [hash, actionsHash]);
+const merkleActionsAdd = (hash: Field, actionsListHash: Field): Field => {
+  return Poseidon.hashWithPrefix('MinaZkappSeqEvents**', [
+    hash,
+    actionsListHash,
+  ]);
 };
 
 const emptyActionListHash = emptyHashWithPrefix('MinaZkappActionsEmpty');
