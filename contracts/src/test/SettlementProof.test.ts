@@ -3,21 +3,27 @@ import {
   MultisigVerifierProgram,
   SettlementPublicInputs,
   SettlementProof,
+  Block,
+  BlockList,
 } from '../SettlementProof';
-import { VALIDATOR_NUMBER } from '../utils/constants';
+import { SETTLEMENT_MATRIX_SIZE, VALIDATOR_NUMBER } from '../utils/constants';
 import { ProofGenerators } from '../types/proofGenerators';
 import { validatorSet } from './mock';
 import {
   GenerateSettlementPublicInput,
   MergeSettlementProofs,
 } from '../utils/generateFunctions';
-import { GenerateSignaturePubKeyList } from '../utils/testUtils';
+import {
+  GenerateSignaturePubKeyMatrix,
+  GenerateTestBlocks,
+} from '../utils/testUtils';
 import { List } from '../types/common';
 import { enableLogs, log } from '../utils/loggers';
 
 describe('SettlementProof tests', () => {
   const proofsEnabled = process.env.PROOFS_ENABLED === '1';
   let merkleList: List;
+  let blocks: Block[] = [];
   let settlementPublicInputs: SettlementPublicInputs[] = [];
   let settlementProofs: SettlementProof[] = [];
   let vk: VerificationKey;
@@ -42,21 +48,28 @@ describe('SettlementProof tests', () => {
 
   describe('Peripherals', () => {
     it('should create a valid SettlementPublicInputs', () => {
+      blocks = GenerateTestBlocks(Field(1), merkleList.hash, Field(1));
+
       const publicInput = GenerateSettlementPublicInput(
-        merkleList.hash,
-        Field.from(0),
-        Field.from(0),
-        merkleList.hash,
-        Field.from(50),
-        Field.from(1),
+        blocks[0].InitialMerkleListRoot,
+        blocks[0].InitialStateRoot,
+        blocks[0].InitialBlockHeight,
+        blocks[blocks.length - 1].NewMerkleListRoot,
+        blocks[blocks.length - 1].NewStateRoot,
+        blocks[blocks.length - 1].NewBlockHeight,
         [validatorSet[0][1]]
       );
+
       expect(publicInput.InitialMerkleListRoot).toEqual(merkleList.hash);
-      expect(publicInput.InitialStateRoot).toEqual(Field.from(0));
-      expect(publicInput.InitialBlockHeight).toEqual(Field.from(0));
+      expect(publicInput.InitialStateRoot).toEqual(Field.from(1));
+      expect(publicInput.InitialBlockHeight).toEqual(Field.from(1));
       expect(publicInput.NewMerkleListRoot).toEqual(merkleList.hash);
-      expect(publicInput.NewStateRoot).toEqual(Field.from(50));
-      expect(publicInput.NewBlockHeight).toEqual(Field.from(1));
+      expect(publicInput.NewStateRoot).toEqual(
+        Field.from(SETTLEMENT_MATRIX_SIZE + 1)
+      );
+      expect(publicInput.NewBlockHeight).toEqual(
+        Field.from(SETTLEMENT_MATRIX_SIZE + 1)
+      );
       expect(publicInput.ProofGeneratorsList).toEqual(
         ProofGenerators.empty().insertAt(Field.from(0), validatorSet[0][1])
       );
@@ -67,25 +80,21 @@ describe('SettlementProof tests', () => {
 
   describe('verifySignatures method', () => {
     it('should verify signatures and create a valid SettlementProof', async () => {
-      const privateInputs = GenerateSignaturePubKeyList(
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .hash()
-          .toFields(),
-        validatorSet
+      const signerMatrix = GenerateSignaturePubKeyMatrix(
+        blocks,
+        Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
       );
 
-      const start = performance.now();
       settlementProofs.push(
         (
           await MultisigVerifierProgram.verifySignatures(
             settlementPublicInputs[0],
-            privateInputs,
-            validatorSet[0][1]
+            signerMatrix,
+            validatorSet[0][1],
+            BlockList.fromArray(blocks)
           )
         ).proof
       );
-      const end = performance.now();
-      log('Proof generation time:', (end - start) / 1000, 's');
     });
 
     it('should verify the generated proof', async () => {
@@ -93,54 +102,53 @@ describe('SettlementProof tests', () => {
         log('Skipping proof verification');
         return;
       }
-      const start = performance.now();
+
       const isValid = await verify(
         settlementProofs[settlementProofs.length],
         vk
       );
-      const end = performance.now();
-      log('Verification time:', (end - start) / 1000, 's');
+
       expect(isValid).toBe(true);
     });
 
     it('should create another valid SettlementProof', async () => {
-      settlementPublicInputs.push(
-        GenerateSettlementPublicInput(
-          settlementPublicInputs[settlementPublicInputs.length - 1]
-            .NewMerkleListRoot,
-          settlementPublicInputs[settlementPublicInputs.length - 1]
-            .NewStateRoot,
-          settlementPublicInputs[settlementPublicInputs.length - 1]
-            .NewBlockHeight,
-          settlementPublicInputs[settlementPublicInputs.length - 1]
-            .NewMerkleListRoot,
-          Field.from(100),
-          settlementPublicInputs[
-            settlementPublicInputs.length - 1
-          ].NewBlockHeight.add(1),
-          [validatorSet[1][1]]
-        )
-      );
-
-      const privateInputs = GenerateSignaturePubKeyList(
+      blocks = GenerateTestBlocks(
         settlementPublicInputs[settlementPublicInputs.length - 1]
-          .hash()
-          .toFields(),
-        validatorSet
+          .NewBlockHeight,
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .NewMerkleListRoot,
+        settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot
       );
 
-      const start = performance.now();
+      const publicInput = GenerateSettlementPublicInput(
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .NewMerkleListRoot,
+        settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot,
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .NewBlockHeight,
+        blocks[blocks.length - 1].NewMerkleListRoot,
+        blocks[blocks.length - 1].NewStateRoot,
+        blocks[blocks.length - 1].NewBlockHeight,
+        [validatorSet[1][1]]
+      );
+
+      settlementPublicInputs.push(publicInput);
+
+      const signerMatrix = GenerateSignaturePubKeyMatrix(
+        blocks,
+        Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
+      );
+
       settlementProofs.push(
         (
           await MultisigVerifierProgram.verifySignatures(
             settlementPublicInputs[settlementPublicInputs.length - 1],
-            privateInputs,
-            validatorSet[1][1]
+            signerMatrix,
+            validatorSet[1][1],
+            BlockList.fromArray(blocks)
           )
         ).proof
       );
-      const end = performance.now();
-      log('Proof generation time:', (end - start) / 1000, 's');
     });
 
     it('should verify the generated proof', async () => {
@@ -148,61 +156,111 @@ describe('SettlementProof tests', () => {
         log('Skipping proof verification');
         return;
       }
-      const start = performance.now();
+
       const isValid = await verify(
         settlementProofs[settlementProofs.length - 1],
         vk
       );
-      const end = performance.now();
-      log('Verification time:', (end - start) / 1000, 's');
+
       expect(isValid).toBe(true);
     });
 
     it('should create a third valid SettlementProof', async () => {
-      settlementPublicInputs.push(
-        GenerateSettlementPublicInput(
-          settlementPublicInputs[settlementPublicInputs.length - 1]
-            .NewMerkleListRoot,
-          settlementPublicInputs[settlementPublicInputs.length - 1]
-            .NewStateRoot,
-          settlementPublicInputs[settlementPublicInputs.length - 1]
-            .NewBlockHeight,
-          settlementPublicInputs[settlementPublicInputs.length - 1]
-            .NewMerkleListRoot,
-          Field.from(200),
-          settlementPublicInputs[
-            settlementPublicInputs.length - 1
-          ].NewBlockHeight.add(1),
-          [validatorSet[2][1]]
-        )
-      );
-
-      const privateInputs = GenerateSignaturePubKeyList(
+      blocks = GenerateTestBlocks(
         settlementPublicInputs[settlementPublicInputs.length - 1]
-          .hash()
-          .toFields(),
-        validatorSet
+          .NewBlockHeight,
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .NewMerkleListRoot,
+        settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot
       );
 
-      const start = performance.now();
+      const publicInput = GenerateSettlementPublicInput(
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .NewMerkleListRoot,
+        settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot,
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .NewBlockHeight,
+        blocks[blocks.length - 1].NewMerkleListRoot,
+        blocks[blocks.length - 1].NewStateRoot,
+        blocks[blocks.length - 1].NewBlockHeight,
+        [validatorSet[2][1]]
+      );
+
+      settlementPublicInputs.push(publicInput);
+
+      const signerMatrix = GenerateSignaturePubKeyMatrix(
+        blocks,
+        Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
+      );
+
       settlementProofs.push(
         (
           await MultisigVerifierProgram.verifySignatures(
             settlementPublicInputs[settlementPublicInputs.length - 1],
-            privateInputs,
-            validatorSet[2][1]
+            signerMatrix,
+            validatorSet[2][1],
+            BlockList.fromArray(blocks)
           )
         ).proof
       );
-      const end = performance.now();
-      log('Proof generation time:', (end - start) / 1000, 's');
+    });
+
+    it('should verify the generated proof', async () => {
+      if (!proofsEnabled) {
+        log('Skipping proof verification');
+        return;
+      }
+
+      const isValid = await verify(
+        settlementProofs[settlementProofs.length - 1],
+        vk
+      );
+
+      expect(isValid).toBe(true);
+    });
+
+    it('should create a fourth valid SettlementProof', async () => {
+      blocks = GenerateTestBlocks(
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .NewBlockHeight,
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .NewMerkleListRoot,
+        settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot
+      );
+
+      const publicInput = GenerateSettlementPublicInput(
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .NewMerkleListRoot,
+        settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot,
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .NewBlockHeight,
+        blocks[blocks.length - 1].NewMerkleListRoot,
+        blocks[blocks.length - 1].NewStateRoot,
+        blocks[blocks.length - 1].NewBlockHeight,
+        [validatorSet[3][1]]
+      );
+
+      settlementPublicInputs.push(publicInput);
+
+      const signerMatrix = GenerateSignaturePubKeyMatrix(
+        blocks,
+        Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
+      );
+
+      settlementProofs.push(
+        (
+          await MultisigVerifierProgram.verifySignatures(
+            settlementPublicInputs[settlementPublicInputs.length - 1],
+            signerMatrix,
+            validatorSet[3][1],
+            BlockList.fromArray(blocks)
+          )
+        ).proof
+      );
     });
 
     it('should merge the proofs', async () => {
-      const start = performance.now();
       const mergedProof = await MergeSettlementProofs(settlementProofs);
-      const end = performance.now();
-      log('Merge time:', (end - start) / 1000, 's');
 
       expect(mergedProof.publicInput.NewBlockHeight).toEqual(
         settlementPublicInputs[settlementPublicInputs.length - 1].NewBlockHeight
@@ -219,6 +277,7 @@ describe('SettlementProof tests', () => {
           .insertAt(Field.from(0), validatorSet[0][1])
           .insertAt(Field.from(1), validatorSet[1][1])
           .insertAt(Field.from(2), validatorSet[2][1])
+          .insertAt(Field.from(3), validatorSet[3][1])
       );
       expect(mergedProof.publicInput.InitialMerkleListRoot).toEqual(
         settlementPublicInputs[0].InitialMerkleListRoot
@@ -238,10 +297,9 @@ describe('SettlementProof tests', () => {
         log('Skipping proof verification');
         return;
       }
-      const start = performance.now();
+
       const isValid = await verify(settlementProofs[0], vk);
-      const end = performance.now();
-      log('Verification time:', (end - start) / 1000, 's');
+
       expect(isValid).toBe(true);
     });
   });

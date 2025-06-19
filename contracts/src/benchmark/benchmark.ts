@@ -29,10 +29,8 @@ import {
   GenerateValidateReduceProof,
   List,
   MapFromArray,
-  MultisigVerifierProgram,
   ReduceMask,
   SettlementContract,
-  SettlementProof,
   SettlementPublicInputs,
   ValidateReduceProgram,
   ValidateReducePublicInput,
@@ -45,12 +43,20 @@ import {
 } from '../test/mock.js';
 import {
   GenerateReducerSignatureList,
-  GenerateSignaturePubKeyList,
+  GenerateSignaturePubKeyMatrix,
   GenerateTestActions,
 } from '../utils/testUtils.js';
 import { performance } from 'node:perf_hooks';
 import { memoryUsage } from 'node:process';
 import why from 'why-is-node-running';
+import {
+  Block,
+  BlockList,
+  MultisigVerifierProgram,
+  SettlementProof,
+} from '../SettlementProof.js';
+import { GeneratePulsarBlock } from '../utils/generateFunctions.js';
+import { SETTLEMENT_MATRIX_SIZE } from '../utils/constants.js';
 
 function logMem(label = '') {
   if (!logsEnabled) return;
@@ -252,7 +258,7 @@ async function main() {
   activeSet = validatorSet.slice(0, VALIDATOR_NUMBER);
 
   for (let i = 0; i < VALIDATOR_NUMBER; i++) {
-    const [, publicKey] = activeSet[i];
+    const [, publicKey] = activeSet[i % 60];
     merkleList.push(Poseidon.hash(publicKey.toFields()));
   }
 
@@ -417,9 +423,10 @@ async function settlementProofBenchmark(
   const settlementPublicInputs: SettlementPublicInputs[] = [];
   let proofs: SettlementProof[] = [];
 
-  log(activeSet[0][1].toBase58());
+  let blocks: Block[] = [];
+  let index = 1;
   for (let i = initialBlockHeight; i < newBlockHeight; i++) {
-    const publicInput = GenerateSettlementPublicInput(
+    const block = GeneratePulsarBlock(
       merkleList.hash,
       Field.from(
         i == initialBlockHeight
@@ -429,27 +436,39 @@ async function settlementProofBenchmark(
       Field.from(i),
       merkleList.hash,
       Field.from(i == newBlockHeight - 1 ? newStateRoot : Field.random()),
-      Field.from(i + 1),
-      [validatorSet[0][1]]
+      Field.from(i + 1)
     );
-    settlementPublicInputs.push(publicInput);
+    blocks.push(block);
 
-    const privateInput = GenerateSignaturePubKeyList(
-      publicInput.hash().toFields(),
-      validatorSet
-    );
+    if (index % 4 === 0) {
+      const publicInput = GenerateSettlementPublicInput(
+        merkleList.hash,
+        blocks[0].InitialStateRoot,
+        blocks[0].InitialBlockHeight,
+        blocks[blocks.length - 1].NewMerkleListRoot,
+        blocks[blocks.length - 1].NewStateRoot,
+        blocks[blocks.length - 1].NewBlockHeight,
+        [validatorSet[0][1]]
+      );
 
-    const proof = (
-      await bench('MultisigVerifier verifySignatures', () =>
-        MultisigVerifierProgram.verifySignatures(
-          publicInput,
-          privateInput,
-          validatorSet[0][1]
+      const signatureMatrix = GenerateSignaturePubKeyMatrix(
+        blocks,
+        Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
+      );
+
+      const proof = (
+        await bench('MultisigVerifier verifySignatures', () =>
+          MultisigVerifierProgram.verifySignatures(
+            publicInput,
+            signatureMatrix,
+            validatorSet[0][1],
+            BlockList.fromArray(blocks)
+          )
         )
-      )
-    ).proof;
+      ).proof;
 
-    proofs.push(proof);
+      proofs.push(proof);
+    }
   }
 
   proofs.sort((a, b) =>
