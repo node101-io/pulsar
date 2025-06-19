@@ -7,6 +7,8 @@ import {
   UInt64,
 } from 'o1js';
 import {
+  Block,
+  BlockList,
   MultisigVerifierProgram,
   SettlementProof,
   SettlementPublicInputs,
@@ -15,9 +17,13 @@ import {
   GenerateValidateReduceProof,
   GenerateSettlementPublicInput,
   MergeSettlementProofs,
+  GeneratePulsarBlock,
 } from './generateFunctions.js';
 import { ValidateReducePublicInput } from '../ValidateReduce.js';
-import { SignaturePublicKeyList } from '../types/signaturePubKeyList.js';
+import {
+  SignaturePublicKeyList,
+  SignaturePublicKeyMatrix,
+} from '../types/signaturePubKeyList.js';
 import { List } from '../types/common.js';
 import { PulsarAction } from '../types/PulsarAction.js';
 import { log } from './loggers.js';
@@ -27,14 +33,17 @@ import {
   emptyActionListHash,
   merkleActionsAdd,
 } from '../types/actionHelpers.js';
+import { SETTLEMENT_MATRIX_SIZE } from './constants.js';
 
 export {
   GenerateSignaturePubKeyList,
+  GenerateSignaturePubKeyMatrix,
   GenerateReducerSignatureList,
   GenerateTestSettlementProof,
   MockReducerVerifierProof,
   GenerateTestActions,
   CalculateActionRoot,
+  GenerateTestBlocks,
 };
 
 function GenerateSignaturePubKeyList(
@@ -49,6 +58,24 @@ function GenerateSignaturePubKeyList(
 
   return SignaturePublicKeyList.fromArray(
     signatures.map((signature, i) => [signature, signerSet[i][1]])
+  );
+}
+
+function GenerateSignaturePubKeyMatrix(
+  blocks: Block[],
+  signerSet: Array<Array<[PrivateKey, PublicKey]>>
+) {
+  const signatureMatrix = [];
+
+  for (let i = 0; i < SETTLEMENT_MATRIX_SIZE; i++) {
+    signatureMatrix.push(
+      GenerateSignaturePubKeyList(blocks[i].hash().toFields(), signerSet[i])
+    );
+  }
+  return SignaturePublicKeyMatrix.fromArray(
+    signatureMatrix.map((list) =>
+      list.list.map((item) => [item.signature, item.publicKey])
+    )
   );
 }
 
@@ -89,42 +116,69 @@ async function GenerateTestSettlementProof(
   initialStateRoot: number = initialBlockHeight,
   newStateRoot: number = newBlockHeight
 ) {
+  if (
+    newBlockHeight - initialBlockHeight <= 0 ||
+    (newBlockHeight - initialBlockHeight) % SETTLEMENT_MATRIX_SIZE !== 0
+  ) {
+    throw new Error(
+      `newBlockHeight must be greater than initialBlockHeight and difference must be a multiple of ${SETTLEMENT_MATRIX_SIZE}`
+    );
+  }
+
   const settlementPublicInputs: SettlementPublicInputs[] = [];
   const settlementProofs: SettlementProof[] = [];
 
   const merkleList = CreateValidatorMerkleList(validatorSet);
 
-  log(validatorSet[0][1].toBase58());
-  for (let i = initialBlockHeight; i < newBlockHeight; i++) {
-    const publicInput = GenerateSettlementPublicInput(
+  let blocks: Block[] = [];
+  let index = 1;
+  for (let i = initialBlockHeight; i < newBlockHeight; i++, index++) {
+    const block = GeneratePulsarBlock(
       merkleList.hash,
       Field.from(
         i == initialBlockHeight
           ? initialStateRoot
-          : settlementPublicInputs[i - initialBlockHeight - 1].NewStateRoot
+          : blocks[i - initialBlockHeight - 1].NewStateRoot
       ),
       Field.from(i),
       merkleList.hash,
       Field.from(i == newBlockHeight - 1 ? newStateRoot : Field.random()),
-      Field.from(i + 1),
-      [validatorSet[0][1]]
+      Field.from(i + 1)
     );
-    settlementPublicInputs.push(publicInput);
+    blocks.push(block);
 
-    const privateInput = GenerateSignaturePubKeyList(
-      publicInput.hash().toFields(),
-      validatorSet
-    );
+    if (index % SETTLEMENT_MATRIX_SIZE === 0) {
+      const publicInput = GenerateSettlementPublicInput(
+        merkleList.hash,
+        blocks[blocks.length - SETTLEMENT_MATRIX_SIZE].InitialStateRoot,
+        blocks[blocks.length - SETTLEMENT_MATRIX_SIZE].InitialBlockHeight,
+        blocks[blocks.length - 1].NewMerkleListRoot,
+        blocks[blocks.length - 1].NewStateRoot,
+        blocks[blocks.length - 1].NewBlockHeight,
+        [validatorSet[0][1]]
+      );
 
-    const proof = (
-      await MultisigVerifierProgram.verifySignatures(
-        publicInput,
-        privateInput,
-        validatorSet[0][1]
-      )
-    ).proof;
+      const signatureMatrix = GenerateSignaturePubKeyMatrix(
+        blocks.slice(-SETTLEMENT_MATRIX_SIZE),
+        Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
+      );
 
-    settlementProofs.push(proof);
+      console.log(
+        publicInput.toJSON(),
+        BlockList.fromArray(blocks.slice(-SETTLEMENT_MATRIX_SIZE)).toJSON()
+      );
+
+      const proof = (
+        await MultisigVerifierProgram.verifySignatures(
+          publicInput,
+          signatureMatrix,
+          validatorSet[0][1],
+          BlockList.fromArray(blocks.slice(-SETTLEMENT_MATRIX_SIZE))
+        )
+      ).proof;
+
+      settlementProofs.push(proof);
+    }
   }
 
   log(
@@ -203,4 +257,27 @@ function CalculateActionRoot(initialRoot: Field, actions: PulsarAction[]) {
     );
   }
   return actionRoot;
+}
+
+function GenerateTestBlocks(
+  numBlocks: number,
+  initialBlockHeight: Field,
+  initialMerkleListRoot: Field,
+  initialStateRoot: Field = Field(0)
+): Block[] {
+  const blocks: Block[] = [];
+  for (let i = 0; i < numBlocks; i++) {
+    blocks.push(
+      GeneratePulsarBlock(
+        initialMerkleListRoot,
+        initialStateRoot,
+        initialBlockHeight,
+        initialMerkleListRoot,
+        initialStateRoot.add(Field(1)),
+        initialBlockHeight.add(Field(1))
+      )
+    );
+  }
+
+  return blocks;
 }
