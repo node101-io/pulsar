@@ -163,11 +163,6 @@ async function GenerateTestSettlementProof(
         Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
       );
 
-      console.log(
-        publicInput.toJSON(),
-        BlockList.fromArray(blocks.slice(-SETTLEMENT_MATRIX_SIZE)).toJSON()
-      );
-
       const proof = (
         await MultisigVerifierProgram.verifySignatures(
           publicInput,
@@ -260,13 +255,12 @@ function CalculateActionRoot(initialRoot: Field, actions: PulsarAction[]) {
 }
 
 function GenerateTestBlocks(
-  numBlocks: number,
   initialBlockHeight: Field,
   initialMerkleListRoot: Field,
   initialStateRoot: Field = Field(0)
 ): Block[] {
   const blocks: Block[] = [];
-  for (let i = 0; i < numBlocks; i++) {
+  for (let i = 0; i < SETTLEMENT_MATRIX_SIZE; i++) {
     blocks.push(
       GeneratePulsarBlock(
         initialMerkleListRoot,
@@ -277,6 +271,8 @@ function GenerateTestBlocks(
         initialBlockHeight.add(Field(1))
       )
     );
+    initialBlockHeight = initialBlockHeight.add(Field(1));
+    initialStateRoot = initialStateRoot.add(Field(1));
   }
 
   return blocks;
