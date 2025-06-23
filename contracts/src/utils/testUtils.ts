@@ -11,7 +11,6 @@ import {
   BlockList,
   MultisigVerifierProgram,
   SettlementProof,
-  SettlementPublicInputs,
 } from '../SettlementProof.js';
 import {
   GenerateValidateReduceProof,
@@ -26,7 +25,6 @@ import {
 } from '../types/signaturePubKeyList.js';
 import { List } from '../types/common.js';
 import { PulsarAction } from '../types/PulsarAction.js';
-import { log } from './loggers.js';
 import { ProofGenerators } from '../types/proofGenerators.js';
 import {
   actionListAdd,
@@ -125,7 +123,6 @@ async function GenerateTestSettlementProof(
     );
   }
 
-  const settlementPublicInputs: SettlementPublicInputs[] = [];
   const settlementProofs: SettlementProof[] = [];
 
   const merkleList = CreateValidatorMerkleList(validatorSet);
@@ -175,11 +172,6 @@ async function GenerateTestSettlementProof(
       settlementProofs.push(proof);
     }
   }
-
-  log(
-    'Settlement Public Inputs:',
-    settlementPublicInputs.map((input) => input.toJSON())
-  );
 
   let mergedProof = await MergeSettlementProofs(settlementProofs);
 
