@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/btcsuite/btcutil/base58"
 	cmtcrypto "github.com/cometbft/cometbft/crypto"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	"github.com/cosmos/gogoproto/jsonpb"
@@ -28,12 +29,19 @@ func (pk *PubKey) String() string {
 }
 
 func (pk PubKey) Address() cmtcrypto.Address {
-	bytes, err := pk.Key.pk.MarshalBytes()
+	if pk.Key.pk == nil {
+		return nil
+	}
+
+	// Marshal public key bytes
+	bz, err := pk.Key.pk.MarshalBytes()
 	if err != nil {
 		return nil
 	}
 
-	return bytes
+	// Encode with Base58 and return as bytes to satisfy Address ([]byte)
+	encoded := base58.Encode(bz)
+	return cmtcrypto.Address([]byte(encoded))
 }
 
 func (pk PubKey) Bytes() []byte {

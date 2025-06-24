@@ -11,6 +11,9 @@ import (
 	ibckeeper "github.com/cosmos/ibc-go/v8/modules/core/keeper"
 	consumerante "github.com/cosmos/interchain-security/v5/app/consumer/ante"
 	ibcconsumerkeeper "github.com/cosmos/interchain-security/v5/x/ccv/consumer/keeper"
+
+	minakeysante "github.com/node101-io/pulsar/cosmos/x/minakeys/ante"
+	minakeyskeeper "github.com/node101-io/pulsar/cosmos/x/minakeys/keeper"
 )
 
 // HandlerOptions extend the SDK's AnteHandler options by requiring the IBC channel keeper.
@@ -20,6 +23,7 @@ type HandlerOptions struct {
 	IBCKeeper      *ibckeeper.Keeper
 	ConsumerKeeper ibcconsumerkeeper.Keeper
 	CircuitKeeper  circuitante.CircuitBreaker
+	MinaKeeper     minakeyskeeper.Keeper
 }
 
 func NewAnteHandler(options HandlerOptions, logger log.Logger) (sdk.AnteHandler, error) {
@@ -55,6 +59,8 @@ func NewAnteHandler(options HandlerOptions, logger log.Logger) (sdk.AnteHandler,
 		ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
 		ibcante.NewRedundantRelayDecorator(options.IBCKeeper),
+		// MinaKeys kontrolü - signature verification'dan sonra ama transaction commit'ten önce
+		minakeysante.NewMinaRegistrationDecorator(options.MinaKeeper, options.AccountKeeper),
 	}
 
 	// This constant depends on build tag.

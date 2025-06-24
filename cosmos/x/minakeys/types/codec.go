@@ -4,7 +4,7 @@ import (
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
-	"github.com/node101-io/pulsar/cosmos/x/minakeys/signing"
+	//"github.com/node101-io/pulsar/cosmos/x/minakeys/signing"
 	// this line is used by starport scaffolding # 1
 )
 
@@ -21,5 +21,5 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 	msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
 
 	// Register crypto types
-	signing.RegisterInterfaces(registry)
+	//signing.RegisterInterfaces(registry)
 }

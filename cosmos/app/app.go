@@ -235,6 +235,17 @@ func New(
 	// build app
 	app.App = appBuilder.Build(db, traceStore, baseAppOptions...)
 
+	// ------------------------------------------------------------
+	// Register vote-extension handlers and PreBlocker
+	// ------------------------------------------------------------
+	{
+		voteExt := minakeysmodulekeeper.VoteExtHandler{Keeper: app.MinakeysKeeper}
+		app.SetExtendVoteHandler(voteExt.ExtendVoteHandler())
+		app.SetVerifyVoteExtensionHandler(voteExt.VerifyVoteExtensionHandler())
+		app.SetPrepareProposal(voteExt.PrepareProposalHandler())
+		app.SetProcessProposal(voteExt.ProcessProposalHandler())
+	}
+
 	// register legacy modules
 	if err := app.registerIBCModules(appOpts); err != nil {
 		return nil, err
@@ -270,6 +281,7 @@ func New(
 			IBCKeeper:      app.IBCKeeper,
 			ConsumerKeeper: app.ConsumerKeeper,
 			CircuitKeeper:  &app.CircuitBreakerKeeper,
+			MinaKeeper:     app.MinakeysKeeper,
 		},
 		logger,
 	)
