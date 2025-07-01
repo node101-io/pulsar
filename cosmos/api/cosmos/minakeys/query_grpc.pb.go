@@ -22,6 +22,8 @@ const (
 	Query_Params_FullMethodName      = "/cosmos.minakeys.Query/Params"
 	Query_KeyStore_FullMethodName    = "/cosmos.minakeys.Query/KeyStore"
 	Query_KeyStoreAll_FullMethodName = "/cosmos.minakeys.Query/KeyStoreAll"
+	Query_VoteExt_FullMethodName     = "/cosmos.minakeys.Query/VoteExt"
+	Query_VoteExtAll_FullMethodName  = "/cosmos.minakeys.Query/VoteExtAll"
 )
 
 // QueryClient is the client API for Query service.
@@ -33,6 +35,9 @@ type QueryClient interface {
 	// Queries a list of KeyStore items.
 	KeyStore(ctx context.Context, in *QueryGetKeyStoreRequest, opts ...grpc.CallOption) (*QueryGetKeyStoreResponse, error)
 	KeyStoreAll(ctx context.Context, in *QueryAllKeyStoreRequest, opts ...grpc.CallOption) (*QueryAllKeyStoreResponse, error)
+	// Queries a list of VoteExt items.
+	VoteExt(ctx context.Context, in *QueryGetVoteExtRequest, opts ...grpc.CallOption) (*QueryGetVoteExtResponse, error)
+	VoteExtAll(ctx context.Context, in *QueryAllVoteExtRequest, opts ...grpc.CallOption) (*QueryAllVoteExtResponse, error)
 }
 
 type queryClient struct {
@@ -70,6 +75,24 @@ func (c *queryClient) KeyStoreAll(ctx context.Context, in *QueryAllKeyStoreReque
 	return out, nil
 }
 
+func (c *queryClient) VoteExt(ctx context.Context, in *QueryGetVoteExtRequest, opts ...grpc.CallOption) (*QueryGetVoteExtResponse, error) {
+	out := new(QueryGetVoteExtResponse)
+	err := c.cc.Invoke(ctx, Query_VoteExt_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) VoteExtAll(ctx context.Context, in *QueryAllVoteExtRequest, opts ...grpc.CallOption) (*QueryAllVoteExtResponse, error) {
+	out := new(QueryAllVoteExtResponse)
+	err := c.cc.Invoke(ctx, Query_VoteExtAll_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QueryServer is the server API for Query service.
 // All implementations must embed UnimplementedQueryServer
 // for forward compatibility
@@ -79,6 +102,9 @@ type QueryServer interface {
 	// Queries a list of KeyStore items.
 	KeyStore(context.Context, *QueryGetKeyStoreRequest) (*QueryGetKeyStoreResponse, error)
 	KeyStoreAll(context.Context, *QueryAllKeyStoreRequest) (*QueryAllKeyStoreResponse, error)
+	// Queries a list of VoteExt items.
+	VoteExt(context.Context, *QueryGetVoteExtRequest) (*QueryGetVoteExtResponse, error)
+	VoteExtAll(context.Context, *QueryAllVoteExtRequest) (*QueryAllVoteExtResponse, error)
 	mustEmbedUnimplementedQueryServer()
 }
 
@@ -94,6 +120,12 @@ func (UnimplementedQueryServer) KeyStore(context.Context, *QueryGetKeyStoreReque
 }
 func (UnimplementedQueryServer) KeyStoreAll(context.Context, *QueryAllKeyStoreRequest) (*QueryAllKeyStoreResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method KeyStoreAll not implemented")
+}
+func (UnimplementedQueryServer) VoteExt(context.Context, *QueryGetVoteExtRequest) (*QueryGetVoteExtResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VoteExt not implemented")
+}
+func (UnimplementedQueryServer) VoteExtAll(context.Context, *QueryAllVoteExtRequest) (*QueryAllVoteExtResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VoteExtAll not implemented")
 }
 func (UnimplementedQueryServer) mustEmbedUnimplementedQueryServer() {}
 
@@ -162,6 +194,42 @@ func _Query_KeyStoreAll_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Query_VoteExt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryGetVoteExtRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).VoteExt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_VoteExt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).VoteExt(ctx, req.(*QueryGetVoteExtRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_VoteExtAll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAllVoteExtRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).VoteExtAll(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_VoteExtAll_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).VoteExtAll(ctx, req.(*QueryAllVoteExtRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Query_ServiceDesc is the grpc.ServiceDesc for Query service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -180,6 +248,14 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "KeyStoreAll",
 			Handler:    _Query_KeyStoreAll_Handler,
+		},
+		{
+			MethodName: "VoteExt",
+			Handler:    _Query_VoteExt_Handler,
+		},
+		{
+			MethodName: "VoteExtAll",
+			Handler:    _Query_VoteExtAll_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

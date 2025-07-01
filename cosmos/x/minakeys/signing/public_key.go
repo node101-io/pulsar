@@ -60,7 +60,7 @@ func (pk PubKey) Bytes() []byte {
 func (pk *PubKey) VerifySignature(msg []byte, sigBytes []byte) bool {
 	// Deserialize the signature
 	var sig signature.Signature
-	err := sig.UnmarshalBinary(sigBytes)
+	err := sig.UnmarshalBytes(sigBytes)
 	if err != nil {
 		// Optionally log the error: fmt.Printf("Failed to unmarshal signature: %v\n", err)
 		return false

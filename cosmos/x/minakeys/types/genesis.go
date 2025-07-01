@@ -11,6 +11,7 @@ const DefaultIndex uint64 = 1
 func DefaultGenesis() *GenesisState {
 	return &GenesisState{
 		KeyStoreList: []KeyStore{},
+		VoteExtList:  []VoteExt{},
 		// this line is used by starport scaffolding # genesis/types/default
 		Params: DefaultParams(),
 	}
@@ -28,6 +29,16 @@ func (gs GenesisState) Validate() error {
 			return fmt.Errorf("duplicated index for keyStore")
 		}
 		keyStoreIndexMap[index] = struct{}{}
+	}
+	// Check for duplicated index in voteExt
+	voteExtIndexMap := make(map[string]struct{})
+
+	for _, elem := range gs.VoteExtList {
+		index := string(VoteExtKey(elem.Index))
+		if _, ok := voteExtIndexMap[index]; ok {
+			return fmt.Errorf("duplicated index for voteExt")
+		}
+		voteExtIndexMap[index] = struct{}{}
 	}
 	// this line is used by starport scaffolding # genesis/types/validate
 

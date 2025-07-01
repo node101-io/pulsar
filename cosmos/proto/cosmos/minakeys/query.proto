@@ -8,6 +8,7 @@ import "google/api/annotations.proto";
 import "cosmos/base/query/v1beta1/pagination.proto";
 import "cosmos/minakeys/params.proto";
 import "cosmos/minakeys/key_store.proto";
+import "cosmos/minakeys/vote_ext.proto";
 
 option go_package = "github.com/node101-io/pulsar/cosmos/x/minakeys/types";
 
@@ -27,6 +28,16 @@ service Query {
   }
   rpc KeyStoreAll (QueryAllKeyStoreRequest) returns (QueryAllKeyStoreResponse) {
     option (google.api.http).get = "/pulsar/cosmos/minakeys/key_store";
+  
+  }
+  
+  // Queries a list of VoteExt items.
+  rpc VoteExt    (QueryGetVoteExtRequest) returns (QueryGetVoteExtResponse) {
+    option (google.api.http).get = "/pulsar/cosmos/minakeys/vote_ext/{index}";
+  
+  }
+  rpc VoteExtAll (QueryAllVoteExtRequest) returns (QueryAllVoteExtResponse) {
+    option (google.api.http).get = "/pulsar/cosmos/minakeys/vote_ext";
   
   }
 }
@@ -54,6 +65,23 @@ message QueryAllKeyStoreRequest {
 
 message QueryAllKeyStoreResponse {
   repeated KeyStore                               keyStore   = 1 [(gogoproto.nullable) = false];
+           cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+message QueryGetVoteExtRequest {
+  string index = 1;
+}
+
+message QueryGetVoteExtResponse {
+  VoteExt voteExt = 1 [(gogoproto.nullable) = false];
+}
+
+message QueryAllVoteExtRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+message QueryAllVoteExtResponse {
+  repeated VoteExt                                voteExt    = 1 [(gogoproto.nullable) = false];
            cosmos.base.query.v1beta1.PageResponse pagination = 2;
 }
 

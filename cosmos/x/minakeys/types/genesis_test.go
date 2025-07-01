@@ -30,6 +30,14 @@ func TestGenesisState_Validate(t *testing.T) {
 						CosmosPublicKey: "1",
 					},
 				},
+				VoteExtList: []types.VoteExt{
+					{
+						Index: "0",
+					},
+					{
+						Index: "1",
+					},
+				},
 				// this line is used by starport scaffolding # types/genesis/validField
 			},
 			valid: true,
@@ -43,6 +51,20 @@ func TestGenesisState_Validate(t *testing.T) {
 					},
 					{
 						CosmosPublicKey: "0",
+					},
+				},
+			},
+			valid: false,
+		},
+		{
+			desc: "duplicated voteExt",
+			genState: &types.GenesisState{
+				VoteExtList: []types.VoteExt{
+					{
+						Index: "0",
+					},
+					{
+						Index: "0",
 					},
 				},
 			},

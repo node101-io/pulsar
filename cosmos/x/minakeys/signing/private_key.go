@@ -69,7 +69,7 @@ func (privKey *PrivKey) Sign(msg []byte) ([]byte, error) {
 	}
 
 	// Convert the signature to a byte slice.
-	signedBytes, err := signatureObject.MarshalBinary()
+	signedBytes, err := signatureObject.MarshalBytes()
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize signature: %w", err)
 	}

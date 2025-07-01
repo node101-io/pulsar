@@ -209,11 +209,18 @@ func ProvideSecondaryKey(in SecondaryKeyInputs) (SecondaryKeyOutputs, error) {
 	if hexStr == "" {
 		return SecondaryKeyOutputs{}, fmt.Errorf("%s is empty; please put your secondary-key hex there", path)
 	}
+
+	// log the hexStr
+	in.Logger.Info("Hex string of secondary key", "hexStr", hexStr)
+
 	// decode and unmarshal the hex-string into a SecondaryKey
-	secondaryKey, err := utils.LoadSecondaryKeyFromHex(hexStr)
+	secondaryKey, err := utils.LoadSecondaryKeyFromHex(hexStr, in.Logger)
 	if err != nil {
+		in.Logger.Error("Failed to load secondary key", "error", err)
 		return SecondaryKeyOutputs{}, err
 	}
+
+	in.Logger.Info("Secondary key", "secondaryKey", secondaryKey)
 
 	return SecondaryKeyOutputs{SecondaryKey: secondaryKey}, nil
 }

@@ -1,0 +1,13 @@
+syntax = "proto3";
+package cosmos.minakeys;
+
+option go_package = "github.com/node101-io/pulsar/cosmos/x/minakeys/types";
+
+message VoteExt {
+  string index = 1; 
+  uint64 height = 2; 
+  string validatorAddr = 3; 
+  string signature = 4; 
+  
+}
+

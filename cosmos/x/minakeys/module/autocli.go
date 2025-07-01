@@ -28,6 +28,17 @@ func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 					Short:          "Shows a KeyStore",
 					PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "index"}},
 				},
+				{
+					RpcMethod: "VoteExtAll",
+					Use:       "list-vote-ext",
+					Short:     "List all voteExt",
+				},
+				{
+					RpcMethod:      "VoteExt",
+					Use:            "show-vote-ext [id]",
+					Short:          "Shows a voteExt",
+					PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "index"}},
+				},
 				// this line is used by ignite scaffolding # autocli/query
 			},
 		},

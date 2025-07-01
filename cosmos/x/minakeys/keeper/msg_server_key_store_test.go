@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"strconv"
 	"testing"
@@ -9,7 +10,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/coinbase/kryptology/pkg/signatures/schnorr/mina"
+	"github.com/node101-io/mina-signer-go/keys"
 	keepertest "github.com/node101-io/pulsar/cosmos/testutil/keeper"
 	"github.com/node101-io/pulsar/cosmos/x/minakeys/keeper"
 	"github.com/node101-io/pulsar/cosmos/x/minakeys/types"
@@ -32,18 +33,21 @@ func TestCreateKeyStore_Success(t *testing.T) {
 	// derive creator address from cosmosPub
 	creator := sdk.AccAddress(cosmosPriv.PubKey().Address()).String()
 
-	// --- generate Mina schnorr keypair ---
-	minaPub, minaPriv, err := mina.NewKeys()
-	require.NoError(t, err)
-	minaPubBytes, err := minaPub.MarshalBinary()
+	// Generate a private key from random bytes
+	var randomBytes [32]byte
+	rand.Read(randomBytes[:])
+	minaPriv := keys.NewPrivateKeyFromBytes(randomBytes)
+	minaPub := minaPriv.ToPublicKey()
+
+	minaPubBytes, err := minaPub.MarshalBytes()
 	require.NoError(t, err)
 	minaPubHex := hex.EncodeToString(minaPubBytes)
 
 	// --- signatures ---
 	// Mina signs the Cosmos public key hex
-	minaSig, err := minaPriv.SignMessage(cosmosPubHex)
+	minaSig, err := minaPriv.SignMessage(cosmosPubHex, types.DevnetNetworkID)
 	require.NoError(t, err)
-	minaSigBytes, err := minaSig.MarshalBinary()
+	minaSigBytes, err := minaSig.MarshalBytes()
 	require.NoError(t, err)
 
 	// Cosmos signs the Mina public key hex
@@ -73,17 +77,21 @@ func TestCreateKeyStore_DuplicateIndex(t *testing.T) {
 	cosmosPubHex := hex.EncodeToString(cosmosPriv.PubKey().Bytes())
 	creator := sdk.AccAddress(cosmosPriv.PubKey().Address()).String()
 
-	minaPub, minaPriv, err := mina.NewKeys()
-	require.NoError(t, err)
-	minaPubBytes, err := minaPub.MarshalBinary()
+	// Generate a private key from random bytes
+	var randomBytes [32]byte
+	rand.Read(randomBytes[:])
+	minaPriv := keys.NewPrivateKeyFromBytes(randomBytes)
+	minaPub := minaPriv.ToPublicKey()
+
+	minaPubBytes, err := minaPub.MarshalBytes()
 	require.NoError(t, err)
 	minaPubHex := hex.EncodeToString(minaPubBytes)
 
 	cosmosSig, err := cosmosPriv.Sign([]byte(minaPubHex))
 	require.NoError(t, err)
-	minaSig, err := minaPriv.SignMessage(cosmosPubHex)
+	minaSig, err := minaPriv.SignMessage(cosmosPubHex, types.DevnetNetworkID)
 	require.NoError(t, err)
-	minaSigBytes, err := minaSig.MarshalBinary()
+	minaSigBytes, err := minaSig.MarshalBytes()
 	require.NoError(t, err)
 
 	msg := &types.MsgCreateKeyStore{
@@ -113,16 +121,20 @@ func TestCreateKeyStore_InvalidCosmosSignature(t *testing.T) {
 	cosmosPubHex := hex.EncodeToString(cosmosPriv.PubKey().Bytes())
 	creator := sdk.AccAddress(cosmosPriv.PubKey().Address()).String()
 
-	minaPub, minaPriv, err := mina.NewKeys()
-	require.NoError(t, err)
-	minaPubBytes, err := minaPub.MarshalBinary()
+	// Generate a private key from random bytes
+	var randomBytes [32]byte
+	rand.Read(randomBytes[:])
+	minaPriv := keys.NewPrivateKeyFromBytes(randomBytes)
+	minaPub := minaPriv.ToPublicKey()
+
+	minaPubBytes, err := minaPub.MarshalBytes()
 	require.NoError(t, err)
 	minaPubHex := hex.EncodeToString(minaPubBytes)
 
 	// valid mina signature (on cosmosPubHex)
-	minaSig, err := minaPriv.SignMessage(cosmosPubHex)
+	minaSig, err := minaPriv.SignMessage(cosmosPubHex, types.DevnetNetworkID)
 	require.NoError(t, err)
-	minaSigBytes, err := minaSig.MarshalBinary()
+	minaSigBytes, err := minaSig.MarshalBytes()
 	require.NoError(t, err)
 
 	// invalid cosmos signature (on minaPubHex)
@@ -152,9 +164,13 @@ func TestCreateKeyStore_InvalidMinaSignature(t *testing.T) {
 	cosmosPubHex := hex.EncodeToString(cosmosPriv.PubKey().Bytes())
 	creator := sdk.AccAddress(cosmosPriv.PubKey().Address()).String()
 
-	minaPub, minaPriv, err := mina.NewKeys()
-	require.NoError(t, err)
-	minaPubBytes, err := minaPub.MarshalBinary()
+	// Generate a private key from random bytes
+	var randomBytes [32]byte
+	rand.Read(randomBytes[:])
+	minaPriv := keys.NewPrivateKeyFromBytes(randomBytes)
+	minaPub := minaPriv.ToPublicKey()
+
+	minaPubBytes, err := minaPub.MarshalBytes()
 	require.NoError(t, err)
 	minaPubHex := hex.EncodeToString(minaPubBytes)
 
@@ -163,9 +179,9 @@ func TestCreateKeyStore_InvalidMinaSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	// invalid mina signature
-	minaSig, err := minaPriv.SignMessage(cosmosPubHex)
+	minaSig, err := minaPriv.SignMessage(cosmosPubHex, types.DevnetNetworkID)
 	require.NoError(t, err)
-	minaSigBytes, err := minaSig.MarshalBinary()
+	minaSigBytes, err := minaSig.MarshalBytes()
 	require.NoError(t, err)
 	minaSigBytes[0] ^= 0xFF
 

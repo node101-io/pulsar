@@ -244,6 +244,7 @@ func New(
 		app.SetVerifyVoteExtensionHandler(voteExt.VerifyVoteExtensionHandler())
 		app.SetPrepareProposal(voteExt.PrepareProposalHandler())
 		app.SetProcessProposal(voteExt.ProcessProposalHandler())
+		app.SetPreBlocker(voteExt.PreBlocker())
 	}
 
 	// register legacy modules

@@ -65,10 +65,62 @@ func (x *_GenesisState_2_list) IsValid() bool {
 	return x.list != nil
 }
 
+var _ protoreflect.List = (*_GenesisState_3_list)(nil)
+
+type _GenesisState_3_list struct {
+	list *[]*VoteExt
+}
+
+func (x *_GenesisState_3_list) Len() int {
+	if x.list == nil {
+		return 0
+	}
+	return len(*x.list)
+}
+
+func (x *_GenesisState_3_list) Get(i int) protoreflect.Value {
+	return protoreflect.ValueOfMessage((*x.list)[i].ProtoReflect())
+}
+
+func (x *_GenesisState_3_list) Set(i int, value protoreflect.Value) {
+	valueUnwrapped := value.Message()
+	concreteValue := valueUnwrapped.Interface().(*VoteExt)
+	(*x.list)[i] = concreteValue
+}
+
+func (x *_GenesisState_3_list) Append(value protoreflect.Value) {
+	valueUnwrapped := value.Message()
+	concreteValue := valueUnwrapped.Interface().(*VoteExt)
+	*x.list = append(*x.list, concreteValue)
+}
+
+func (x *_GenesisState_3_list) AppendMutable() protoreflect.Value {
+	v := new(VoteExt)
+	*x.list = append(*x.list, v)
+	return protoreflect.ValueOfMessage(v.ProtoReflect())
+}
+
+func (x *_GenesisState_3_list) Truncate(n int) {
+	for i := n; i < len(*x.list); i++ {
+		(*x.list)[i] = nil
+	}
+	*x.list = (*x.list)[:n]
+}
+
+func (x *_GenesisState_3_list) NewElement() protoreflect.Value {
+	v := new(VoteExt)
+	return protoreflect.ValueOfMessage(v.ProtoReflect())
+}
+
+func (x *_GenesisState_3_list) IsValid() bool {
+	return x.list != nil
+}
+
 var (
 	md_GenesisState              protoreflect.MessageDescriptor
 	fd_GenesisState_params       protoreflect.FieldDescriptor
 	fd_GenesisState_keyStoreList protoreflect.FieldDescriptor
+	fd_GenesisState_voteExtList  protoreflect.FieldDescriptor
 )
 
 func init() {
@@ -76,6 +128,7 @@ func init() {
 	md_GenesisState = File_cosmos_minakeys_genesis_proto.Messages().ByName("GenesisState")
 	fd_GenesisState_params = md_GenesisState.Fields().ByName("params")
 	fd_GenesisState_keyStoreList = md_GenesisState.Fields().ByName("keyStoreList")
+	fd_GenesisState_voteExtList = md_GenesisState.Fields().ByName("voteExtList")
 }
 
 var _ protoreflect.Message = (*fastReflection_GenesisState)(nil)
@@ -155,6 +208,12 @@ func (x *fastReflection_GenesisState) Range(f func(protoreflect.FieldDescriptor,
 			return
 		}
 	}
+	if len(x.VoteExtList) != 0 {
+		value := protoreflect.ValueOfList(&_GenesisState_3_list{list: &x.VoteExtList})
+		if !f(fd_GenesisState_voteExtList, value) {
+			return
+		}
+	}
 }
 
 // Has reports whether a field is populated.
@@ -174,6 +233,8 @@ func (x *fastReflection_GenesisState) Has(fd protoreflect.FieldDescriptor) bool 
 		return x.Params != nil
 	case "cosmos.minakeys.GenesisState.keyStoreList":
 		return len(x.KeyStoreList) != 0
+	case "cosmos.minakeys.GenesisState.voteExtList":
+		return len(x.VoteExtList) != 0
 	default:
 		if fd.IsExtension() {
 			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.minakeys.GenesisState"))
@@ -194,6 +255,8 @@ func (x *fastReflection_GenesisState) Clear(fd protoreflect.FieldDescriptor) {
 		x.Params = nil
 	case "cosmos.minakeys.GenesisState.keyStoreList":
 		x.KeyStoreList = nil
+	case "cosmos.minakeys.GenesisState.voteExtList":
+		x.VoteExtList = nil
 	default:
 		if fd.IsExtension() {
 			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.minakeys.GenesisState"))
@@ -218,6 +281,12 @@ func (x *fastReflection_GenesisState) Get(descriptor protoreflect.FieldDescripto
 			return protoreflect.ValueOfList(&_GenesisState_2_list{})
 		}
 		listValue := &_GenesisState_2_list{list: &x.KeyStoreList}
+		return protoreflect.ValueOfList(listValue)
+	case "cosmos.minakeys.GenesisState.voteExtList":
+		if len(x.VoteExtList) == 0 {
+			return protoreflect.ValueOfList(&_GenesisState_3_list{})
+		}
+		listValue := &_GenesisState_3_list{list: &x.VoteExtList}
 		return protoreflect.ValueOfList(listValue)
 	default:
 		if descriptor.IsExtension() {
@@ -245,6 +314,10 @@ func (x *fastReflection_GenesisState) Set(fd protoreflect.FieldDescriptor, value
 		lv := value.List()
 		clv := lv.(*_GenesisState_2_list)
 		x.KeyStoreList = *clv.list
+	case "cosmos.minakeys.GenesisState.voteExtList":
+		lv := value.List()
+		clv := lv.(*_GenesisState_3_list)
+		x.VoteExtList = *clv.list
 	default:
 		if fd.IsExtension() {
 			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.minakeys.GenesisState"))
@@ -276,6 +349,12 @@ func (x *fastReflection_GenesisState) Mutable(fd protoreflect.FieldDescriptor) p
 		}
 		value := &_GenesisState_2_list{list: &x.KeyStoreList}
 		return protoreflect.ValueOfList(value)
+	case "cosmos.minakeys.GenesisState.voteExtList":
+		if x.VoteExtList == nil {
+			x.VoteExtList = []*VoteExt{}
+		}
+		value := &_GenesisState_3_list{list: &x.VoteExtList}
+		return protoreflect.ValueOfList(value)
 	default:
 		if fd.IsExtension() {
 			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.minakeys.GenesisState"))
@@ -295,6 +374,9 @@ func (x *fastReflection_GenesisState) NewField(fd protoreflect.FieldDescriptor) 
 	case "cosmos.minakeys.GenesisState.keyStoreList":
 		list := []*KeyStore{}
 		return protoreflect.ValueOfList(&_GenesisState_2_list{list: &list})
+	case "cosmos.minakeys.GenesisState.voteExtList":
+		list := []*VoteExt{}
+		return protoreflect.ValueOfList(&_GenesisState_3_list{list: &list})
 	default:
 		if fd.IsExtension() {
 			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.minakeys.GenesisState"))
@@ -374,6 +456,12 @@ func (x *fastReflection_GenesisState) ProtoMethods() *protoiface.Methods {
 				n += 1 + l + runtime.Sov(uint64(l))
 			}
 		}
+		if len(x.VoteExtList) > 0 {
+			for _, e := range x.VoteExtList {
+				l = options.Size(e)
+				n += 1 + l + runtime.Sov(uint64(l))
+			}
+		}
 		if x.unknownFields != nil {
 			n += len(x.unknownFields)
 		}
@@ -402,6 +490,22 @@ func (x *fastReflection_GenesisState) ProtoMethods() *protoiface.Methods {
 		if x.unknownFields != nil {
 			i -= len(x.unknownFields)
 			copy(dAtA[i:], x.unknownFields)
+		}
+		if len(x.VoteExtList) > 0 {
+			for iNdEx := len(x.VoteExtList) - 1; iNdEx >= 0; iNdEx-- {
+				encoded, err := options.Marshal(x.VoteExtList[iNdEx])
+				if err != nil {
+					return protoiface.MarshalOutput{
+						NoUnkeyedLiterals: input.NoUnkeyedLiterals,
+						Buf:               input.Buf,
+					}, err
+				}
+				i -= len(encoded)
+				copy(dAtA[i:], encoded)
+				i = runtime.EncodeVarint(dAtA, i, uint64(len(encoded)))
+				i--
+				dAtA[i] = 0x1a
+			}
 		}
 		if len(x.KeyStoreList) > 0 {
 			for iNdEx := len(x.KeyStoreList) - 1; iNdEx >= 0; iNdEx-- {
@@ -552,6 +656,40 @@ func (x *fastReflection_GenesisState) ProtoMethods() *protoiface.Methods {
 					return protoiface.UnmarshalOutput{NoUnkeyedLiterals: input.NoUnkeyedLiterals, Flags: input.Flags}, err
 				}
 				iNdEx = postIndex
+			case 3:
+				if wireType != 2 {
+					return protoiface.UnmarshalOutput{NoUnkeyedLiterals: input.NoUnkeyedLiterals, Flags: input.Flags}, fmt.Errorf("proto: wrong wireType = %d for field VoteExtList", wireType)
+				}
+				var msglen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return protoiface.UnmarshalOutput{NoUnkeyedLiterals: input.NoUnkeyedLiterals, Flags: input.Flags}, runtime.ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return protoiface.UnmarshalOutput{NoUnkeyedLiterals: input.NoUnkeyedLiterals, Flags: input.Flags}, io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					msglen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if msglen < 0 {
+					return protoiface.UnmarshalOutput{NoUnkeyedLiterals: input.NoUnkeyedLiterals, Flags: input.Flags}, runtime.ErrInvalidLength
+				}
+				postIndex := iNdEx + msglen
+				if postIndex < 0 {
+					return protoiface.UnmarshalOutput{NoUnkeyedLiterals: input.NoUnkeyedLiterals, Flags: input.Flags}, runtime.ErrInvalidLength
+				}
+				if postIndex > l {
+					return protoiface.UnmarshalOutput{NoUnkeyedLiterals: input.NoUnkeyedLiterals, Flags: input.Flags}, io.ErrUnexpectedEOF
+				}
+				x.VoteExtList = append(x.VoteExtList, &VoteExt{})
+				if err := options.Unmarshal(dAtA[iNdEx:postIndex], x.VoteExtList[len(x.VoteExtList)-1]); err != nil {
+					return protoiface.UnmarshalOutput{NoUnkeyedLiterals: input.NoUnkeyedLiterals, Flags: input.Flags}, err
+				}
+				iNdEx = postIndex
 			default:
 				iNdEx = preIndex
 				skippy, err := runtime.Skip(dAtA[iNdEx:])
@@ -609,6 +747,7 @@ type GenesisState struct {
 	// params defines all the parameters of the module.
 	Params       *Params     `protobuf:"bytes,1,opt,name=params,proto3" json:"params,omitempty"`
 	KeyStoreList []*KeyStore `protobuf:"bytes,2,rep,name=keyStoreList,proto3" json:"keyStoreList,omitempty"`
+	VoteExtList  []*VoteExt  `protobuf:"bytes,3,rep,name=voteExtList,proto3" json:"voteExtList,omitempty"`
 }
 
 func (x *GenesisState) Reset() {
@@ -645,6 +784,13 @@ func (x *GenesisState) GetKeyStoreList() []*KeyStore {
 	return nil
 }
 
+func (x *GenesisState) GetVoteExtList() []*VoteExt {
+	if x != nil {
+		return x.VoteExtList
+	}
+	return nil
+}
+
 var File_cosmos_minakeys_genesis_proto protoreflect.FileDescriptor
 
 var file_cosmos_minakeys_genesis_proto_rawDesc = []byte{
@@ -657,7 +803,9 @@ var file_cosmos_minakeys_genesis_proto_rawDesc = []byte{
 	0x73, 0x2f, 0x6d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0x2f, 0x70, 0x61, 0x72, 0x61, 0x6d,
 	0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x1a, 0x1f, 0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2f,
 	0x6d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0x2f, 0x6b, 0x65, 0x79, 0x5f, 0x73, 0x74, 0x6f,
-	0x72, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x8f, 0x01, 0x0a, 0x0c, 0x47, 0x65, 0x6e,
+	0x72, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x1a, 0x1e, 0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73,
+	0x2f, 0x6d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0x2f, 0x76, 0x6f, 0x74, 0x65, 0x5f, 0x65,
+	0x78, 0x74, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0xd1, 0x01, 0x0a, 0x0c, 0x47, 0x65, 0x6e,
 	0x65, 0x73, 0x69, 0x73, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x3a, 0x0a, 0x06, 0x70, 0x61, 0x72,
 	0x61, 0x6d, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x17, 0x2e, 0x63, 0x6f, 0x73, 0x6d,
 	0x6f, 0x73, 0x2e, 0x6d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0x2e, 0x50, 0x61, 0x72, 0x61,
@@ -666,18 +814,22 @@ var file_cosmos_minakeys_genesis_proto_rawDesc = []byte{
 	0x65, 0x4c, 0x69, 0x73, 0x74, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x63, 0x6f,
 	0x73, 0x6d, 0x6f, 0x73, 0x2e, 0x6d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0x2e, 0x4b, 0x65,
 	0x79, 0x53, 0x74, 0x6f, 0x72, 0x65, 0x42, 0x04, 0xc8, 0xde, 0x1f, 0x00, 0x52, 0x0c, 0x6b, 0x65,
-	0x79, 0x53, 0x74, 0x6f, 0x72, 0x65, 0x4c, 0x69, 0x73, 0x74, 0x42, 0x9c, 0x01, 0x0a, 0x13, 0x63,
-	0x6f, 0x6d, 0x2e, 0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2e, 0x6d, 0x69, 0x6e, 0x61, 0x6b, 0x65,
-	0x79, 0x73, 0x42, 0x0c, 0x47, 0x65, 0x6e, 0x65, 0x73, 0x69, 0x73, 0x50, 0x72, 0x6f, 0x74, 0x6f,
-	0x50, 0x01, 0x5a, 0x1a, 0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2f, 0x61, 0x70, 0x69, 0x2f, 0x63,
-	0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2f, 0x6d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0xa2, 0x02,
-	0x03, 0x43, 0x4d, 0x58, 0xaa, 0x02, 0x0f, 0x43, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2e, 0x4d, 0x69,
-	0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0xca, 0x02, 0x0f, 0x43, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x5c,
-	0x4d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0xe2, 0x02, 0x1b, 0x43, 0x6f, 0x73, 0x6d, 0x6f,
-	0x73, 0x5c, 0x4d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0x5c, 0x47, 0x50, 0x42, 0x4d, 0x65,
-	0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0xea, 0x02, 0x10, 0x43, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x3a,
-	0x3a, 0x4d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x33,
+	0x79, 0x53, 0x74, 0x6f, 0x72, 0x65, 0x4c, 0x69, 0x73, 0x74, 0x12, 0x40, 0x0a, 0x0b, 0x76, 0x6f,
+	0x74, 0x65, 0x45, 0x78, 0x74, 0x4c, 0x69, 0x73, 0x74, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32,
+	0x18, 0x2e, 0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2e, 0x6d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79,
+	0x73, 0x2e, 0x56, 0x6f, 0x74, 0x65, 0x45, 0x78, 0x74, 0x42, 0x04, 0xc8, 0xde, 0x1f, 0x00, 0x52,
+	0x0b, 0x76, 0x6f, 0x74, 0x65, 0x45, 0x78, 0x74, 0x4c, 0x69, 0x73, 0x74, 0x42, 0x9c, 0x01, 0x0a,
+	0x13, 0x63, 0x6f, 0x6d, 0x2e, 0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2e, 0x6d, 0x69, 0x6e, 0x61,
+	0x6b, 0x65, 0x79, 0x73, 0x42, 0x0c, 0x47, 0x65, 0x6e, 0x65, 0x73, 0x69, 0x73, 0x50, 0x72, 0x6f,
+	0x74, 0x6f, 0x50, 0x01, 0x5a, 0x1a, 0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2f, 0x61, 0x70, 0x69,
+	0x2f, 0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2f, 0x6d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73,
+	0xa2, 0x02, 0x03, 0x43, 0x4d, 0x58, 0xaa, 0x02, 0x0f, 0x43, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2e,
+	0x4d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0xca, 0x02, 0x0f, 0x43, 0x6f, 0x73, 0x6d, 0x6f,
+	0x73, 0x5c, 0x4d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0xe2, 0x02, 0x1b, 0x43, 0x6f, 0x73,
+	0x6d, 0x6f, 0x73, 0x5c, 0x4d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0x5c, 0x47, 0x50, 0x42,
+	0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0xea, 0x02, 0x10, 0x43, 0x6f, 0x73, 0x6d, 0x6f,
+	0x73, 0x3a, 0x3a, 0x4d, 0x69, 0x6e, 0x61, 0x6b, 0x65, 0x79, 0x73, 0x62, 0x06, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x33,
 }
 
 var (
@@ -697,15 +849,17 @@ var file_cosmos_minakeys_genesis_proto_goTypes = []interface{}{
 	(*GenesisState)(nil), // 0: cosmos.minakeys.GenesisState
 	(*Params)(nil),       // 1: cosmos.minakeys.Params
 	(*KeyStore)(nil),     // 2: cosmos.minakeys.KeyStore
+	(*VoteExt)(nil),      // 3: cosmos.minakeys.VoteExt
 }
 var file_cosmos_minakeys_genesis_proto_depIdxs = []int32{
 	1, // 0: cosmos.minakeys.GenesisState.params:type_name -> cosmos.minakeys.Params
 	2, // 1: cosmos.minakeys.GenesisState.keyStoreList:type_name -> cosmos.minakeys.KeyStore
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3, // 2: cosmos.minakeys.GenesisState.voteExtList:type_name -> cosmos.minakeys.VoteExt
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_cosmos_minakeys_genesis_proto_init() }
@@ -715,6 +869,7 @@ func file_cosmos_minakeys_genesis_proto_init() {
 	}
 	file_cosmos_minakeys_params_proto_init()
 	file_cosmos_minakeys_key_store_proto_init()
+	file_cosmos_minakeys_vote_ext_proto_init()
 	if !protoimpl.UnsafeEnabled {
 		file_cosmos_minakeys_genesis_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GenesisState); i {

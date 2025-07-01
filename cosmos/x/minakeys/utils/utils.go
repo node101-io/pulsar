@@ -5,9 +5,11 @@ import (
 
 	"fmt"
 
-	"github.com/coinbase/kryptology/pkg/signatures/schnorr/mina"
+	"cosmossdk.io/log"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/node101-io/mina-signer-go/keys"
+	"github.com/node101-io/mina-signer-go/signature"
 	"github.com/node101-io/pulsar/cosmos/x/minakeys/types"
 )
 
@@ -36,48 +38,52 @@ func VerifyMinaSignature(minaPubKeyHex string, message string, sigBz []byte) err
 	}
 
 	// Construct schnorr PubKey
-	var pubKey mina.PublicKey
-	err = pubKey.UnmarshalBinary(pubKeyBytes)
+	var pubKey keys.PublicKey
+	err = pubKey.UnmarshalBytes(pubKeyBytes)
 	if err != nil {
 		return sdkerrors.ErrInvalidAddress.Wrap("invalid mina public key")
 	}
 
 	// Decode hex-encoded signature
-	var sig mina.Signature
-	err = sig.UnmarshalBinary(sigBz)
+	var sig signature.Signature
+	err = sig.UnmarshalBytes(sigBz)
 	if err != nil {
 		return sdkerrors.ErrInvalidAddress.Wrap("signature is not correctly encoded")
 	}
 
 	// Verify signature
-	if pubKey.VerifyMessage(&sig, message) != nil {
+	if !pubKey.VerifyMessage(&sig, message, types.DevnetNetworkID) {
 		return sdkerrors.ErrUnauthorized.Wrap("invalid mina signature")
 	}
 	return nil
 }
 
 // LoadSecondaryKeyFromHex takes the hex-string, decodes + unmarshals it.
-func LoadSecondaryKeyFromHex(hexStr string) (*types.SecondaryKey, error) {
+func LoadSecondaryKeyFromHex(hexStr string, logger log.Logger) (*types.SecondaryKey, error) {
 	if hexStr == "" {
+		logger.Error("Hex string is empty", "hexStr", hexStr)
 		return nil, fmt.Errorf("minakeys.secondary_key_hex must be set")
 	}
 
 	raw, err := hex.DecodeString(hexStr)
 	if err != nil {
+		logger.Error("Failed to hex-decode secondary key", "error", err)
 		return nil, fmt.Errorf("failed to hex-decode secondary key: %w", err)
 	}
 
 	// unmarshal into your SecretKey type
-	var sk mina.SecretKey
-	if err := sk.UnmarshalBinary(raw); err != nil {
+	var sk keys.PrivateKey
+	if err := sk.UnmarshalBytes(raw); err != nil {
+		logger.Error("Failed to unmarshal secondary key", "error", err)
 		return nil, fmt.Errorf("failed to unmarshal secondary key: %w", err)
 	}
 
 	// derive the public key
-	pk := sk.GetPublicKey()
+	pk := sk.ToPublicKey()
+	logger.Info("Successfully loaded secondary key", "pk", pk)
 
 	return &types.SecondaryKey{
 		SecretKey: &sk,
-		PublicKey: pk,
+		PublicKey: &pk,
 	}, nil
 }

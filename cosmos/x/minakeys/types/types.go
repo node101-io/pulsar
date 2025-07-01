@@ -1,10 +1,12 @@
 package types
 
 import (
-	"github.com/coinbase/kryptology/pkg/signatures/schnorr/mina"
+	"github.com/node101-io/mina-signer-go/keys"
 )
 
 type SecondaryKey struct {
-	SecretKey *mina.SecretKey
-	PublicKey *mina.PublicKey
+	SecretKey *keys.PrivateKey
+	PublicKey *keys.PublicKey
 }
+
+const DevnetNetworkID = "pulsar-devnet"

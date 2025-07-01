@@ -6,6 +6,7 @@ import "amino/amino.proto";
 import "gogoproto/gogo.proto";
 import "cosmos/minakeys/params.proto";
 import "cosmos/minakeys/key_store.proto";
+import "cosmos/minakeys/vote_ext.proto";
 
 option go_package = "github.com/node101-io/pulsar/cosmos/x/minakeys/types";
 
@@ -15,5 +16,6 @@ message GenesisState {
   // params defines all the parameters of the module.
            Params   params       = 1 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
   repeated KeyStore keyStoreList = 2 [(gogoproto.nullable) = false] ;
+  repeated VoteExt  voteExtList  = 3 [(gogoproto.nullable) = false] ;
 }
 
