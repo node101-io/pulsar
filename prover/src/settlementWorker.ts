@@ -1,24 +1,11 @@
 import { PublicKey } from "o1js";
-import { compileContracts, setMinaNetwork } from "./utils.js";
+import { setMinaNetwork } from "./utils.js";
 import { Worker } from "bullmq";
 import IORedis from "ioredis";
 import logger from "./logger.js";
 import dotenv from "dotenv";
+import { cacheCompile } from "./cache.js";
 dotenv.config();
-
-/**
- * Finalizer Node:
- * - Listen Mina network for actions
- * - Prepare and sign Action Queue
- * - Generate Settlement Proofs
- * - Send Settlement Transactions
- * - Generate and send Reduce Proofs
- *
- * Validator Node:
- * - Listen Light Client
- * - Listen Action State
- * - Validate and sign actions
- */
 
 const redisHost = process.env.REDIS_HOST || "redis";
 const redisPort = process.env.REDIS_PORT || "6379";
@@ -39,7 +26,7 @@ async function main() {
     logger.info("Initializing worker");
     setMinaNetwork();
 
-    await compileContracts();
+    await cacheCompile();
     logger.info("Contracts compiled");
 
     const worker = new Worker(

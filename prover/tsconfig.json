@@ -20,5 +20,5 @@
         "allowSyntheticDefaultImports": true,
         "useDefineForClassFields": false
     },
-    "include": ["./*.ts", "src/proveManager.ts", "src/logger.ts", "src/utils.ts"]
+    "include": ["./*.ts", "src/pulsarListener.ts", "src/logger.ts", "src/utils.ts"]
 }
