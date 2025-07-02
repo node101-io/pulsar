@@ -35,7 +35,7 @@ export {
 };
 
 async function GenerateSettlementProof(
-  blocks: Block[],
+  blocks: Array<Block>,
   signaturePublicKeyLists: Array<SignaturePublicKeyList>,
   proofGenerator: PublicKey
 ) {

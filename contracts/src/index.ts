@@ -9,6 +9,8 @@ import {
   MultisigVerifierProgram,
   SettlementPublicInputs,
   SettlementPublicOutputs,
+  Block,
+  BlockList,
 } from './SettlementProof.js';
 import {
   merkleActionsAdd,
@@ -108,6 +110,8 @@ export {
   MultisigVerifierProgram,
   SettlementPublicInputs,
   SettlementPublicOutputs,
+  Block,
+  BlockList,
   ValidateReduceProof,
   ValidateReduceProgram,
   ValidateReducePublicInput,
