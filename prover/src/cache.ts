@@ -8,10 +8,10 @@ import {
 
 export const cacheCompile = async () => {
     try {
-        const multisigVerifierProgram: Cache = Cache.FileSystem("./multisigVerifierProgram");
-        const validateReduceProgram: Cache = Cache.FileSystem("./validateReduceProgram");
-        const actionStackProgram: Cache = Cache.FileSystem("./actionStackProgram");
-        const settlementContract: Cache = Cache.FileSystem("./settlementContract");
+        const multisigVerifierProgram: Cache = Cache.FileSystem("./cache/multisigVerifierProgram");
+        const validateReduceProgram: Cache = Cache.FileSystem("./cache/validateReduceProgram");
+        const actionStackProgram: Cache = Cache.FileSystem("./cache/actionStackProgram");
+        const settlementContract: Cache = Cache.FileSystem("./cache/settlementContract");
 
         await MultisigVerifierProgram.compile({ cache: multisigVerifierProgram });
         await ValidateReduceProgram.compile({ cache: validateReduceProgram });

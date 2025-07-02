@@ -1,7 +1,7 @@
 import { MongoClient, Collection, Document } from "mongodb";
 import { ActionStackProof, SettlementProof, ValidateReduceProof } from "pulsar-contracts";
-import logger from "./logger";
 import { JsonProof } from "o1js";
+import logger from "./logger";
 
 type ProofKind = "actionStack" | "settlement" | "validateReduce";
 
