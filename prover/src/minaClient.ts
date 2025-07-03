@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
-import { Field, PublicKey } from "o1js";
-import { fetchActions, fetchBlockHeight } from "pulsar-contracts";
+import { fetchAccount, Field, PublicKey, Reducer } from "o1js";
+import { fetchActions, fetchBlockHeight, setMinaNetwork } from "pulsar-contracts";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -14,16 +14,20 @@ const POLL_INTERVAL_MS = 5000;
 export class MinaClient extends EventEmitter {
     watchedAddress: PublicKey;
     fromActionState: Field;
-    network: "devnet" | "mainnet";
+    network: "devnet" | "mainnet" | "lightnet";
     pollInterval: number;
     lastSeenBlockHeight: number;
     running: boolean;
     timer?: NodeJS.Timeout;
 
-    constructor({ watchedAddress, fromActionState, network, pollInterval = POLL_INTERVAL_MS }) {
+    constructor(
+        watchedAddress: PublicKey,
+        network: "devnet" | "mainnet" | "lightnet" = "devnet",
+        pollInterval = POLL_INTERVAL_MS
+    ) {
         super();
         this.watchedAddress = watchedAddress;
-        this.fromActionState = fromActionState;
+        this.fromActionState = Reducer.initialActionState;
         this.network = network;
         this.pollInterval = pollInterval;
         this.lastSeenBlockHeight = 0;
@@ -33,7 +37,16 @@ export class MinaClient extends EventEmitter {
     async start() {
         if (this.running) return;
         this.running = true;
+        setMinaNetwork(this.network);
         this.lastSeenBlockHeight = await fetchBlockHeight(this.network);
+        this.fromActionState = await fetchAccount({
+            publicKey: this.watchedAddress,
+        }).then((account) => {
+            if (account) {
+                return account.account?.zkapp?.appState[0] || Reducer.initialActionState;
+            }
+            return Reducer.initialActionState;
+        });
 
         this.emit("start", this.lastSeenBlockHeight);
 
