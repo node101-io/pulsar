@@ -9,3 +9,5 @@ coverage
 # System
 .DS_Store
 .env
+
+logs/
