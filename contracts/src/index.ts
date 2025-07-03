@@ -45,6 +45,7 @@ import {
   fetchRawActions,
   fetchBlockHeight,
   fetchEvents,
+  setMinaNetwork,
 } from './utils/fetch.js';
 import {
   GenerateSettlementProof,
@@ -93,6 +94,7 @@ export {
   fetchRawActions,
   fetchBlockHeight,
   fetchEvents,
+  setMinaNetwork,
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
