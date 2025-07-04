@@ -33,7 +33,7 @@ import {
 } from '../types/actionHelpers.js';
 import { SETTLEMENT_MATRIX_SIZE } from './constants.js';
 
-export {
+export const TestUtils = {
   GenerateSignaturePubKeyList,
   GenerateSignaturePubKeyMatrix,
   GenerateReducerSignatureList,
@@ -42,6 +42,7 @@ export {
   GenerateTestActions,
   CalculateActionRoot,
   GenerateTestBlocks,
+  CreateValidatorMerkleList,
 };
 
 function GenerateSignaturePubKeyList(

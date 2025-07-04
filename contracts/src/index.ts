@@ -53,6 +53,7 @@ import {
   GenerateSettlementPublicInput,
   GenerateValidateReduceProof,
   GenerateActionStackProof,
+  GeneratePulsarBlock,
 } from './utils/generateFunctions.js';
 import {
   MapFromArray,
@@ -65,6 +66,8 @@ import {
   ValidateReduceProgram,
   ValidateReducePublicInput,
 } from './ValidateReduce.js';
+import { devnetTestAccounts, validatorSet, testAccounts } from './test/mock.js';
+import { TestUtils } from './utils/testUtils.js';
 
 export {
   merkleActionsAdd,
@@ -100,6 +103,7 @@ export {
   GenerateSettlementPublicInput,
   GenerateValidateReduceProof,
   GenerateActionStackProof,
+  GeneratePulsarBlock,
   MapFromArray,
   CalculateMax,
   PackActions,
@@ -119,4 +123,8 @@ export {
   ValidateReducePublicInput,
   PulsarAction,
   Batch,
+  devnetTestAccounts,
+  validatorSet,
+  testAccounts,
+  TestUtils,
 };

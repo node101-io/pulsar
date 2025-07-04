@@ -6,7 +6,7 @@ import {
 } from '../ValidateReduce';
 import { VALIDATOR_NUMBER } from '../utils/constants';
 import { validatorSet } from './mock';
-import { GenerateSignaturePubKeyList } from '../utils/testUtils';
+import { TestUtils } from '../utils/testUtils';
 import { List } from '../types/common';
 import { enableLogs, log } from '../utils/loggers';
 
@@ -63,7 +63,7 @@ describe('ValidateReduceProof tests', () => {
 
   describe('verifySignatures method', () => {
     it('should verify signatures and create a valid ValidateReduceProof', async () => {
-      const privateInputs = GenerateSignaturePubKeyList(
+      const privateInputs = TestUtils.GenerateSignaturePubKeyList(
         publicInputs[publicInputs.length - 1].hash().toFields(),
         validatorSet
       );
@@ -108,7 +108,7 @@ describe('ValidateReduceProof tests', () => {
         })
       );
 
-      const privateInputs = GenerateSignaturePubKeyList(
+      const privateInputs = TestUtils.GenerateSignaturePubKeyList(
         publicInputs[publicInputs.length - 1].hash().toFields(),
         validatorSet
       );
@@ -153,7 +153,7 @@ describe('ValidateReduceProof tests', () => {
         })
       );
 
-      const privateInputs = GenerateSignaturePubKeyList(
+      const privateInputs = TestUtils.GenerateSignaturePubKeyList(
         publicInputs[publicInputs.length - 1].hash().toFields(),
         validatorSet
       );

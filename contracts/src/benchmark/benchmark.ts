@@ -41,11 +41,7 @@ import {
   testAccounts,
   validatorSet,
 } from '../test/mock.js';
-import {
-  GenerateReducerSignatureList,
-  GenerateSignaturePubKeyMatrix,
-  GenerateTestActions,
-} from '../utils/testUtils.js';
+import { TestUtils } from '../utils/testUtils.js';
 import { performance } from 'node:perf_hooks';
 // import { memoryUsage } from 'node:process';
 import why from 'why-is-node-running';
@@ -453,7 +449,7 @@ async function settlementProofBenchmark(
         [validatorSet[0][1]]
       );
 
-      const signatureMatrix = GenerateSignaturePubKeyMatrix(
+      const signatureMatrix = TestUtils.GenerateSignaturePubKeyMatrix(
         blocks.slice(-SETTLEMENT_MATRIX_SIZE),
         Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
       );
@@ -578,7 +574,10 @@ async function MockReducerVerifierProof(
   publicInput: ValidateReducePublicInput,
   validatorSet: Array<[PrivateKey, PublicKey]>
 ) {
-  const signatureList = GenerateReducerSignatureList(publicInput, validatorSet);
+  const signatureList = TestUtils.GenerateReducerSignatureList(
+    publicInput,
+    validatorSet
+  );
 
   const proof = await bench('Generate ValidateReduce proof', () =>
     GenerateValidateReduceProof(publicInput, signatureList)
@@ -694,7 +693,7 @@ async function settleDepositWithdraw(
 }
 
 async function BenchActionStackProgram(numActions: number) {
-  const actions = GenerateTestActions(numActions, merkleList.hash);
+  const actions = TestUtils.GenerateTestActions(numActions, merkleList.hash);
   await bench('Generate Action Stack Proof', () =>
     GenerateActionStackProof(Field.from(0), actions)
   );
