@@ -1,7 +1,9 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
+import dotenv from "dotenv";
+dotenv.config();
 
-export { connection, settleQ, mergeQ, reduceQ, QueueName };
+export { connection, settlementQ, mergeQ, reduceQ, SettlementJob, ReducerJob, QueueName };
 
 const connection = new IORedis({
     host: process.env.REDIS_HOST ?? "redis",
@@ -10,7 +12,15 @@ const connection = new IORedis({
     maxRetriesPerRequest: null,
 });
 
-const settleQ = new Queue("settlement", { connection });
+interface SettlementJob {
+    blocks: any; //Todo: Define a proper type for blocks
+}
+
+interface ReducerJob {
+    height: number;
+}
+
+const settlementQ = new Queue("settlement", { connection });
 const mergeQ = new Queue("merge", { connection });
 const reduceQ = new Queue("reduce", { connection });
 
