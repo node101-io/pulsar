@@ -5,13 +5,7 @@ import {
     ValidateReduceProgram,
 } from "pulsar-contracts";
 
-export {
-    compileContracts,
-    prettierAddress,
-    collectReduceSignatures,
-    collectBlockSignatures,
-    createValidateReduceProof,
-};
+export { compileContracts, prettierAddress };
 
 async function compileContracts() {
     try {
@@ -38,13 +32,3 @@ async function compileContracts() {
 function prettierAddress(address: string): string {
     return `${address.slice(0, 4)}...${address.slice(-6)}`;
 }
-
-async function fetchPulsarBlockHeight(): Promise<number> {
-    return Math.random() * 1000000;
-}
-
-async function collectReduceSignatures() {}
-
-async function collectBlockSignatures() {}
-
-async function createValidateReduceProof() {}
