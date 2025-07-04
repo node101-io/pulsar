@@ -8,8 +8,12 @@ import {
   ZkProgram,
 } from 'o1js';
 import { ProofGenerators } from './types/proofGenerators.js';
-import { AGGREGATE_THRESHOLD, VALIDATOR_NUMBER } from './utils/constants.js';
-import { SignaturePublicKeyList } from './types/signaturePubKeyList.js';
+import {
+  AGGREGATE_THRESHOLD,
+  SETTLEMENT_MATRIX_SIZE,
+  VALIDATOR_NUMBER,
+} from './utils/constants.js';
+import { SignaturePublicKeyMatrix } from './types/signaturePubKeyList.js';
 import { List } from './types/common.js';
 
 export {
@@ -17,6 +21,8 @@ export {
   MultisigVerifierProgram,
   SettlementPublicInputs,
   SettlementPublicOutputs,
+  Block,
+  BlockList,
 };
 
 class SettlementPublicInputs extends Struct({
@@ -93,6 +99,52 @@ class SettlementPublicInputs extends Struct({
   }
 }
 
+class Block extends Struct({
+  InitialMerkleListRoot: Field,
+  InitialStateRoot: Field,
+  InitialBlockHeight: Field,
+
+  NewMerkleListRoot: Field,
+  NewStateRoot: Field,
+  NewBlockHeight: Field,
+}) {
+  hash() {
+    return Poseidon.hash([
+      this.InitialMerkleListRoot,
+      this.InitialStateRoot,
+      this.InitialBlockHeight,
+      this.NewMerkleListRoot,
+      this.NewStateRoot,
+      this.NewBlockHeight,
+    ]);
+  }
+
+  toJSON() {
+    return {
+      InitialMerkleListRoot: this.InitialMerkleListRoot.toString(),
+      InitialStateRoot: this.InitialStateRoot.toString(),
+      InitialBlockHeight: this.InitialBlockHeight.toString(),
+      NewMerkleListRoot: this.NewMerkleListRoot.toString(),
+      NewStateRoot: this.NewStateRoot.toString(),
+      NewBlockHeight: this.NewBlockHeight.toString(),
+    };
+  }
+}
+
+class BlockList extends Struct({
+  list: Provable.Array(Block, SETTLEMENT_MATRIX_SIZE),
+}) {
+  static fromArray(arr: Block[]): BlockList {
+    return new BlockList({
+      list: arr,
+    });
+  }
+
+  toJSON() {
+    return this.list.map((block) => block.toJSON());
+  }
+}
+
 // In case we need to add more fields in the future
 // to the public output, we can do it here
 class SettlementPublicOutputs extends Struct({
@@ -110,32 +162,87 @@ const MultisigVerifierProgram = ZkProgram({
 
   methods: {
     verifySignatures: {
-      privateInputs: [SignaturePublicKeyList, PublicKey],
+      privateInputs: [SignaturePublicKeyMatrix, PublicKey, BlockList],
       async method(
         publicInputs: SettlementPublicInputs,
-        signaturePublicKeyList: SignaturePublicKeyList,
-        proofGenerator: PublicKey
+        signaturePublicKeyMatrix: SignaturePublicKeyMatrix,
+        proofGenerator: PublicKey,
+        pulsarBlocks: BlockList
       ) {
-        let counter = Field.from(0);
-        let list = List.empty();
-        const signatureMessage = publicInputs.hash().toFields();
-
-        for (let i = 0; i < VALIDATOR_NUMBER; i++) {
-          const { signature, publicKey } = signaturePublicKeyList.list[i];
-          const isValid = signature.verify(publicKey, signatureMessage);
-          counter = Provable.if(isValid, counter.add(1), counter);
-
-          list.push(Poseidon.hash(publicKey.toFields()));
-        }
-
-        list.hash.assertEquals(
+        pulsarBlocks.list[0].InitialMerkleListRoot.assertEquals(
           publicInputs.InitialMerkleListRoot,
-          "Validator MerkleList hash doesn't match"
+          'Initial MerkleList root mismatch'
         );
-        counter.assertGreaterThanOrEqual(
-          Field.from((VALIDATOR_NUMBER * 2) / 3),
-          'Not enough valid signatures'
+        pulsarBlocks.list[0].InitialStateRoot.assertEquals(
+          publicInputs.InitialStateRoot,
+          'Initial state root mismatch'
         );
+        pulsarBlocks.list[0].InitialBlockHeight.assertEquals(
+          publicInputs.InitialBlockHeight,
+          'Initial block height mismatch'
+        );
+
+        for (let i = 1; i < SETTLEMENT_MATRIX_SIZE; i++) {
+          pulsarBlocks.list[i].InitialMerkleListRoot.assertEquals(
+            pulsarBlocks.list[i - 1].NewMerkleListRoot,
+            'MerkleList root mismatch between pulsar blocks'
+          );
+
+          pulsarBlocks.list[i].InitialStateRoot.assertEquals(
+            pulsarBlocks.list[i - 1].NewStateRoot,
+            'State root mismatch between pulsar blocks'
+          );
+
+          pulsarBlocks.list[i].InitialBlockHeight.assertEquals(
+            pulsarBlocks.list[i - 1].NewBlockHeight,
+            'Block height mismatch between pulsar blocks'
+          );
+        }
+        pulsarBlocks.list[
+          SETTLEMENT_MATRIX_SIZE - 1
+        ].NewMerkleListRoot.assertEquals(
+          publicInputs.NewMerkleListRoot,
+          'Final MerkleList root mismatch'
+        );
+        pulsarBlocks.list[SETTLEMENT_MATRIX_SIZE - 1].NewStateRoot.assertEquals(
+          publicInputs.NewStateRoot,
+          'Final state root mismatch'
+        );
+        pulsarBlocks.list[
+          SETTLEMENT_MATRIX_SIZE - 1
+        ].NewBlockHeight.assertEquals(
+          publicInputs.NewBlockHeight,
+          'Final block height mismatch'
+        );
+
+        for (let i = 0; i < SETTLEMENT_MATRIX_SIZE; i++) {
+          pulsarBlocks.list[i].NewBlockHeight.assertEquals(
+            pulsarBlocks.list[i].InitialBlockHeight.add(1),
+            'Skipped block'
+          );
+
+          let counter = Field.from(0);
+          let list = List.empty();
+          const signatureMessage = pulsarBlocks.list[i].hash().toFields();
+
+          for (let j = 0; j < VALIDATOR_NUMBER; j++) {
+            const { signature, publicKey } =
+              signaturePublicKeyMatrix.matrix[i].list[j];
+            const isValid = signature.verify(publicKey, signatureMessage);
+            counter = Provable.if(isValid, counter.add(1), counter);
+
+            list.push(Poseidon.hash(publicKey.toFields()));
+          }
+
+          list.hash.assertEquals(
+            publicInputs.InitialMerkleListRoot,
+            "Validator MerkleList hash doesn't match"
+          );
+          counter.assertGreaterThanOrEqual(
+            Field.from((VALIDATOR_NUMBER * 2) / 3),
+            'Not enough valid signatures'
+          );
+        }
 
         let proofGeneratorsList = ProofGenerators.empty().insertAt(
           Field(0),
@@ -145,7 +252,7 @@ const MultisigVerifierProgram = ZkProgram({
 
         return {
           publicOutput: new SettlementPublicOutputs({
-            numberOfSettlementProofs: Field(1),
+            numberOfSettlementProofs: Field(SETTLEMENT_MATRIX_SIZE),
           }),
         };
       },
@@ -224,7 +331,9 @@ const MultisigVerifierProgram = ZkProgram({
 
         publicInputs.ProofGeneratorsList.assertEquals(
           previousPublicInput.ProofGeneratorsList.appendList(
-            previousProof.publicOutput.numberOfSettlementProofs,
+            previousProof.publicOutput.numberOfSettlementProofs.div(
+              Field(SETTLEMENT_MATRIX_SIZE)
+            ),
             afterPublicInput.ProofGeneratorsList
           )
         );

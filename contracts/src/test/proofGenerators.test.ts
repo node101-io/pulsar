@@ -178,12 +178,15 @@ describe('utils classes and function tests', () => {
         const list2 = ProofGenerators.fromPubkeyArray(
           Array(TOTAL_GENERATORS).fill(pubKey2)
         );
-        const appendedList = list1.appendList(Field(10), list2);
+        const appendedList = list1.appendList(
+          Field((TOTAL_GENERATORS + 1) / 2),
+          list2
+        );
         expect(appendedList.list.length).toBe(TOTAL_GENERATORS + 1);
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < (TOTAL_GENERATORS + 1) / 2; i++) {
           expect(appendedList.list[i].equals(pubKey1.x).toBoolean()).toBe(true);
         }
-        for (let i = 10; i < TOTAL_GENERATORS; i++) {
+        for (let i = (TOTAL_GENERATORS + 1) / 2; i < TOTAL_GENERATORS; i++) {
           expect(appendedList.list[i].equals(pubKey2.x).toBoolean()).toBe(true);
         }
 
