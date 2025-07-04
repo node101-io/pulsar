@@ -2,6 +2,8 @@ import { PublicKey } from "o1js";
 import { MinaClient } from "./minaClient.js";
 import dotenv from "dotenv";
 import logger from "./logger.js";
+import { PulsarClient } from "./pulsarClient.js";
+import { reduceQ, settlementQ } from "./workerConnection.js";
 dotenv.config();
 
 async function main() {
@@ -23,8 +25,23 @@ async function main() {
         logger.info(`New block detected: ${blockHeight}`);
     });
 
-    minaClient.on("actions", ({ blockHeight, actions }) => {
+    minaClient.on("actions", async ({ blockHeight, actions }) => {
         logger.info(`Actions fetched for block ${blockHeight}: ${JSON.stringify(actions)}`);
+        await reduceQ.add(
+            "reduce-" + blockHeight,
+            {
+                blockHeight,
+                actions,
+            },
+            {
+                attempts: 5,
+                backoff: {
+                    type: "exponential",
+                    delay: 5_000,
+                },
+                removeOnComplete: true,
+            }
+        );
     });
 
     minaClient.on("error", (error) => {
@@ -35,7 +52,48 @@ async function main() {
         logger.info("Mina client stopped");
     });
 
+    const pulsarClient = new PulsarClient(
+        process.env.PULSAR_RPC_ADDRESS || "localhost:50051",
+        10000
+    );
+
+    pulsarClient.on("start", () => {
+        logger.info("Pulsar client started, listening for new blocks");
+    });
+
+    pulsarClient.on("block", (blockHeight) => {
+        logger.info(`New block from Pulsar: ${blockHeight}`);
+    });
+
+    pulsarClient.on("voteExts", async ({ blockHeight, voteExts }) => {
+        logger.info(`Vote extensions for block ${blockHeight}: ${JSON.stringify(voteExts)}`);
+        await settlementQ.add(
+            "settlement-" + blockHeight,
+            {
+                blockHeight,
+                voteExts,
+            },
+            {
+                attempts: 5,
+                backoff: {
+                    type: "exponential",
+                    delay: 5_000,
+                },
+                removeOnComplete: true,
+            }
+        );
+    });
+
+    pulsarClient.on("error", (error) => {
+        logger.error(`Error in Pulsar client: ${error.message}`);
+    });
+
+    pulsarClient.on("stop", () => {
+        logger.info("Pulsar client stopped");
+    });
+
     await minaClient.start();
+    await pulsarClient.start();
 }
 
 main()
