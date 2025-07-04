@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package voteext;
+
+service BlockService {
+  rpc GetLatestBlock(GetLatestBlockRequest) returns (BlockResponse);
+}
+
+message GetLatestBlockRequest {}
+
+message VoteExt {
+  string index = 1;
+  uint64 height = 2;
+  string validatorAddr = 3;
+  string signature = 4;
+}
+
+message BlockResponse {
+  uint64 height = 1;
+  repeated VoteExt voteExts = 2;
+}

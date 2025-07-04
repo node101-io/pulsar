@@ -11,7 +11,7 @@ import { List } from '../types/common';
 import { enableLogs, log } from '../utils/loggers';
 import { ActionStackProgram, ActionStackQueue } from '../ActionStack';
 import { ACTION_QUEUE_SIZE, VALIDATOR_NUMBER } from '../utils/constants';
-import { CalculateActionRoot, GenerateTestActions } from '../utils/testUtils';
+import { TestUtils } from '../utils/testUtils';
 import { validatorSet } from './mock';
 import { actionListAdd, emptyActionListHash } from '../types/actionHelpers';
 
@@ -43,7 +43,7 @@ describe('Action Stack Proof tests', () => {
 
   describe('ActionStackQueue Struct', () => {
     it('should create an ActionStackQueue from an array of actions', () => {
-      const actions = GenerateTestActions(
+      const actions = TestUtils.GenerateTestActions(
         ACTION_QUEUE_SIZE - 5,
         merkleList.hash,
         Field(0)
@@ -70,7 +70,7 @@ describe('Action Stack Proof tests', () => {
     });
 
     it('should throew an error if too many actions are provided', () => {
-      const tooManyActions = GenerateTestActions(
+      const tooManyActions = TestUtils.GenerateTestActions(
         ACTION_QUEUE_SIZE + 1,
         merkleList.hash,
         Field(0)
@@ -84,13 +84,16 @@ describe('Action Stack Proof tests', () => {
   describe('ProveIntegrity Method', () => {
     it('should prove integrity of the action stack', async () => {
       const initialActionState = Field(0);
-      const actions = GenerateTestActions(
+      const actions = TestUtils.GenerateTestActions(
         ACTION_QUEUE_SIZE / 2,
         merkleList.hash,
         initialActionState
       );
 
-      const endActionState = CalculateActionRoot(initialActionState, actions);
+      const endActionState = TestUtils.CalculateActionRoot(
+        initialActionState,
+        actions
+      );
 
       const start = performance.now();
       const { actionStackProof } = await GenerateActionStackProof(
@@ -109,13 +112,16 @@ describe('Action Stack Proof tests', () => {
 
     it('should prove integrity of the big action stack', async () => {
       const initialActionState = Field(0);
-      const actions = GenerateTestActions(
+      const actions = TestUtils.GenerateTestActions(
         2 * ACTION_QUEUE_SIZE + 123,
         merkleList.hash,
         initialActionState
       );
 
-      const endActionState = CalculateActionRoot(initialActionState, actions);
+      const endActionState = TestUtils.CalculateActionRoot(
+        initialActionState,
+        actions
+      );
 
       const start = performance.now();
       const { actionStackProof } = await GenerateActionStackProof(

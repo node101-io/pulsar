@@ -4,7 +4,13 @@ import { PulsarAction } from '../types/PulsarAction.js';
 import { ENDPOINTS } from './constants.js';
 import { SettlementContract, SettlementEvent } from '../SettlementContract.js';
 
-export { fetchActions, fetchRawActions, fetchBlockHeight, fetchEvents };
+export {
+  fetchActions,
+  fetchRawActions,
+  fetchBlockHeight,
+  fetchEvents,
+  setMinaNetwork,
+};
 
 async function fetchRawActions(
   address: PublicKey,
@@ -53,11 +59,11 @@ async function fetchActions(
   });
 }
 
-async function fetchBlockHeight(network: 'devnet' | 'mainnet' = 'devnet') {
+async function fetchBlockHeight(
+  network: 'devnet' | 'mainnet' | 'lightnet' = 'devnet'
+) {
   try {
-    const lastBlock = await fetchLastBlock(
-      network === 'devnet' ? ENDPOINTS.NODE.devnet : ENDPOINTS.NODE.mainnet
-    );
+    const lastBlock = await fetchLastBlock(ENDPOINTS.NODE[network]);
 
     return Number(lastBlock.blockchainLength.toBigint());
   } catch (error) {
@@ -89,4 +95,13 @@ async function fetchEvents(
     console.error('Error fetching events:', error);
     throw error;
   }
+}
+
+function setMinaNetwork(network: 'devnet' | 'mainnet' | 'lightnet' = 'devnet') {
+  const Network = Mina.Network({
+    mina: ENDPOINTS.NODE[network],
+    archive: ENDPOINTS.ARCHIVE[network],
+  });
+
+  Mina.setActiveInstance(Network);
 }

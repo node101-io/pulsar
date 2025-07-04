@@ -1,7 +1,8 @@
 import { PublicKey, PrivateKey } from 'o1js';
+export { devnetTestAccounts, validatorSet, testAccounts };
 
 // prettier-ignore
-export const devnetTestAccounts: Array<[PrivateKey, PublicKey]> = [
+const devnetTestAccounts: Array<[PrivateKey, PublicKey]> = [
 [PrivateKey.fromBase58("EKFBfDAi3rhmLnxZQivkdD4CtEDWyf3JUfjag95qmh9SpcyUpFUE"), PublicKey.fromBase58("B62qpLy3NEtJLdeWwNgjPXNysDPYJYsM9rxxLMJEuEngeF1fn74U5MJ")],
 [PrivateKey.fromBase58("EKFdeu5o26MKq4yPeANHKExWnPUJkpxCzVSVqKuwjypkpLAjG4RY"), PublicKey.fromBase58("B62qrDCHJDzP9ZUuez5WCnNRCMxReDtfRkLMktD29NnE9vDAP8W9ViX")],
 [PrivateKey.fromBase58("EKFNEWbvZZg6vhhdD9SjtHPVy8uzxBnpdN3rGiK8GkAxBtPavxGT"), PublicKey.fromBase58("B62qr4gw8LNeCGgzwGw2bnCiyeQnD2LKZ5wHTjJ3Gd91bhCTHLsEqrf")],
@@ -10,7 +11,7 @@ export const devnetTestAccounts: Array<[PrivateKey, PublicKey]> = [
 ];
 
 // prettier-ignore
-export const validatorSet: Array<[PrivateKey, PublicKey]> = [
+const validatorSet: Array<[PrivateKey, PublicKey]> = [
 [PrivateKey.fromBase58("EKEBwxfcpGb8u6e1Uv8j4XHd6D5m6UenSSXVvw6HuV2RVeYE8PiX"), PublicKey.fromBase58("B62qiUBVjX2kigiqkdz6M74dDbTEiFRRKP1AdnMGSUM4ozYnhx2Pd9b")],
 [PrivateKey.fromBase58("EKEd88Z189Uw9N2Mz3CZnHtooRqjPQVhG5UeCg3cTnDpEJcgMwNu"), PublicKey.fromBase58("B62qpKT9DUstTLhqJpXUreqiFePo8toBmFddv5xSRoAoxAVcUG3DpoY")],
 [PrivateKey.fromBase58("EKFdRFAt3ZkAQMp76iyMtbXrAKoUZXvAgjRk7NLnoGS5w6CpvxoV"), PublicKey.fromBase58("B62qkvF4cQ8jUjYs4XgsX4Qpof4PeVeJH4Nb6mtREX3WsRPudYtBuX2")],
@@ -74,7 +75,7 @@ export const validatorSet: Array<[PrivateKey, PublicKey]> = [
 ];
 
 // prettier-ignore
-export const testAccounts: Array<[PrivateKey, PublicKey]> = [
+const testAccounts: Array<[PrivateKey, PublicKey]> = [
   [PrivateKey.fromBase58("EKERZkXFAXjEVRGZUHrDsvYECtDDgxA8C8mxPpSvPE9rWdv2SyJV"), PublicKey.fromBase58("B62qivtcFQcAHDLYtjM3LaRreUPxrvMTr3W66cr3EUwNxGwKJ2b3kpo")],
   [PrivateKey.fromBase58("EKENMz4XtnTXduxAGXzy3Nj6MHjKMmNpzD1iTGqgEKRnP4H1MRiU"), PublicKey.fromBase58("B62qoaJYLUD66gzvSnjwsHJP2JHc4mPvsSKhgHUUL4M64uW8Yamj1RD")],
   [PrivateKey.fromBase58("EKE5LKcKLWdCmwD8ejArMHvVEgmqDMm1HQyPPiNUg5FW5p4rTc1n"), PublicKey.fromBase58("B62qmcxsczpcaMyMz9BeCVghhRDw48N17A52zmkx1BRmR83HmdRNiB1")],

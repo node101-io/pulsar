@@ -9,6 +9,8 @@ import {
   MultisigVerifierProgram,
   SettlementPublicInputs,
   SettlementPublicOutputs,
+  Block,
+  BlockList,
 } from './SettlementProof.js';
 import {
   merkleActionsAdd,
@@ -43,6 +45,7 @@ import {
   fetchRawActions,
   fetchBlockHeight,
   fetchEvents,
+  setMinaNetwork,
 } from './utils/fetch.js';
 import {
   GenerateSettlementProof,
@@ -50,6 +53,7 @@ import {
   GenerateSettlementPublicInput,
   GenerateValidateReduceProof,
   GenerateActionStackProof,
+  GeneratePulsarBlock,
 } from './utils/generateFunctions.js';
 import {
   MapFromArray,
@@ -62,6 +66,8 @@ import {
   ValidateReduceProgram,
   ValidateReducePublicInput,
 } from './ValidateReduce.js';
+import { devnetTestAccounts, validatorSet, testAccounts } from './test/mock.js';
+import { TestUtils } from './utils/testUtils.js';
 
 export {
   merkleActionsAdd,
@@ -91,11 +97,13 @@ export {
   fetchRawActions,
   fetchBlockHeight,
   fetchEvents,
+  setMinaNetwork,
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
   GenerateValidateReduceProof,
   GenerateActionStackProof,
+  GeneratePulsarBlock,
   MapFromArray,
   CalculateMax,
   PackActions,
@@ -108,9 +116,15 @@ export {
   MultisigVerifierProgram,
   SettlementPublicInputs,
   SettlementPublicOutputs,
+  Block,
+  BlockList,
   ValidateReduceProof,
   ValidateReduceProgram,
   ValidateReducePublicInput,
   PulsarAction,
   Batch,
+  devnetTestAccounts,
+  validatorSet,
+  testAccounts,
+  TestUtils,
 };
