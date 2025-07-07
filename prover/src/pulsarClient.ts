@@ -22,7 +22,7 @@ const BlockService = protoDescriptor.voteext.BlockService;
 
 export interface VoteExt {
     index: string;
-    height: string | number;
+    height: number;
     validatorAddr: string;
     signature: string;
 }
@@ -55,11 +55,12 @@ export class PulsarClient extends EventEmitter {
                         this.emit("error", err);
                         return;
                     }
-                    const blockHeight =
+                    const blockHeight: number =
                         typeof res.height === "string" ? parseInt(res.height, 10) : res.height;
+                    const voteExts: VoteExt[] = res.voteExts || [];
+
                     if (blockHeight > this.lastSeenBlockHeight) {
-                        this.emit("block", blockHeight);
-                        this.emit("voteExts", { blockHeight, voteExts: res.voteExts });
+                        this.emit("newPulsarBlock", { blockHeight, voteExts });
                         this.lastSeenBlockHeight = blockHeight;
                     }
                 });

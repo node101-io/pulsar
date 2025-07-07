@@ -27,6 +27,7 @@ import {
   SignaturePublicKeyList,
 } from './types/signaturePubKeyList.js';
 import {
+  SETTLEMENT_MATRIX_SIZE,
   VALIDATOR_NUMBER,
   AGGREGATE_THRESHOLD,
   TOTAL_GENERATORS,
@@ -81,6 +82,7 @@ export {
   ProofGenerators,
   SignaturePublicKey,
   SignaturePublicKeyList,
+  SETTLEMENT_MATRIX_SIZE,
   VALIDATOR_NUMBER,
   AGGREGATE_THRESHOLD,
   TOTAL_GENERATORS,

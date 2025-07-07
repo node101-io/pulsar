@@ -3,7 +3,6 @@ src
 benchmarks
 
 build/src/benchmark
-build/src/test
 # Editor
 .vscode
 .prettierrc

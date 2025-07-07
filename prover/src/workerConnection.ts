@@ -1,6 +1,7 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
 import dotenv from "dotenv";
+import { VoteExt } from "./pulsarClient";
 dotenv.config();
 
 export { connection, settlementQ, mergeQ, reduceQ, SettlementJob, ReducerJob, QueueName };
@@ -8,12 +9,13 @@ export { connection, settlementQ, mergeQ, reduceQ, SettlementJob, ReducerJob, Qu
 const connection = new IORedis({
     host: process.env.REDIS_HOST ?? "redis",
     port: Number(process.env.REDIS_PORT) || 6379,
-    password: process.env.REDIS_PASSWRD,
+    password: process.env.REDIS_PASSWORD,
     maxRetriesPerRequest: null,
 });
 
 interface SettlementJob {
-    blocks: any; //Todo: Define a proper type for blocks
+    blockHeight: number;
+    voteExts: VoteExt[];
 }
 
 interface ReducerJob {
