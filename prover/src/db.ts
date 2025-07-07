@@ -43,6 +43,14 @@ export async function initMongo() {
 
     await blocksCol.createIndex({ height: 1 }, { unique: true });
 
+    await storeBlock(
+        0,
+        "0",
+        [],
+        "13658430471246486301243056036277051613844963336367846930281926757677598606706",
+        []
+    );
+
     logger.info(`MongoDB connected at ${uri}, using database "${db}"`);
 }
 
