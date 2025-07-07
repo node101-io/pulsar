@@ -16,6 +16,7 @@ import {
 } from 'o1js';
 import { SettlementProof } from './SettlementProof.js';
 import {
+  AGGREGATE_THRESHOLD,
   BATCH_SIZE,
   MINIMUM_DEPOSIT_AMOUNT,
   WITHDRAW_DOWN_PAYMENT,
@@ -100,10 +101,9 @@ class SettlementContract extends SmartContract {
       'Initial Pulsar state root mismatch with on-chain state'
     );
 
-    // Maybe redundant
-    NewBlockHeight.assertGreaterThan(
-      this.blockHeight.getAndRequireEquals(),
-      'New block height must be greater than on-chain state'
+    NewBlockHeight.assertEquals(
+      InitialBlockHeight.add(Field.from(AGGREGATE_THRESHOLD)),
+      'New block height must be equal to initial block height + AGGREGATE_THRESHOLD'
     );
 
     this.reducer.dispatch(

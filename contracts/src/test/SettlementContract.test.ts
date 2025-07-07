@@ -11,6 +11,7 @@ import {
 } from 'o1js';
 import { MultisigVerifierProgram, SettlementProof } from '../SettlementProof';
 import {
+  AGGREGATE_THRESHOLD,
   ENDPOINTS,
   MINIMUM_DEPOSIT_AMOUNT,
   VALIDATOR_NUMBER,
@@ -463,7 +464,11 @@ describe('SettlementProof tests', () => {
     withdrawRound: number
   ) {
     for (let i = 0; i < settlementRound; i++) {
-      settlementProof = await GenerateTestSettlementProof(activeSet, 0, 16);
+      settlementProof = await GenerateTestSettlementProof(
+        activeSet,
+        i * AGGREGATE_THRESHOLD,
+        (i + 1) * AGGREGATE_THRESHOLD
+      );
       await settle(feePayerKey, settlementProof);
     }
     for (let i = 0; i < depositRound; i++) {
@@ -648,7 +653,7 @@ describe('SettlementProof tests', () => {
       const invalidSettlementProof = await GenerateTestSettlementProof(
         testAccounts.slice(0, VALIDATOR_NUMBER),
         0,
-        16
+        AGGREGATE_THRESHOLD
       );
       await expectSettleToFail(
         feePayerKey,
@@ -661,7 +666,7 @@ describe('SettlementProof tests', () => {
       const invalidSettlementProof = await GenerateTestSettlementProof(
         activeSet,
         1,
-        16
+        17
       );
       await expectSettleToFail(
         feePayerKey,
@@ -671,7 +676,11 @@ describe('SettlementProof tests', () => {
     });
 
     it('Generate a valid settlement proof & Settle method', async () => {
-      settlementProof = await GenerateTestSettlementProof(activeSet, 0, 16);
+      settlementProof = await GenerateTestSettlementProof(
+        activeSet,
+        0,
+        AGGREGATE_THRESHOLD
+      );
       await settle(feePayerKey, settlementProof);
     });
 
@@ -692,8 +701,8 @@ describe('SettlementProof tests', () => {
     it('Reject settlement with invalid proof: wrong state root', async () => {
       const invalidSettlementProof = await GenerateTestSettlementProof(
         activeSet,
-        16,
-        32,
+        AGGREGATE_THRESHOLD,
+        AGGREGATE_THRESHOLD * 2,
         40,
         50
       );
@@ -708,7 +717,7 @@ describe('SettlementProof tests', () => {
       const invalidSettlementProof = await GenerateTestSettlementProof(
         activeSet,
         2,
-        18
+        2 + AGGREGATE_THRESHOLD
       );
 
       await expectSettleToFail(
@@ -778,7 +787,11 @@ describe('SettlementProof tests', () => {
     });
 
     it('Generate a settlement proof', async () => {
-      settlementProof = await GenerateTestSettlementProof(activeSet, 16, 32);
+      settlementProof = await GenerateTestSettlementProof(
+        activeSet,
+        AGGREGATE_THRESHOLD,
+        2 * AGGREGATE_THRESHOLD
+      );
     });
     it('Settle method', async () => {
       await settle(feePayerKey, settlementProof);

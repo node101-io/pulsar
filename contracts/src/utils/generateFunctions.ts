@@ -1,5 +1,7 @@
 import { Bool, Field, PublicKey } from 'o1js';
 import {
+  Block,
+  BlockList,
   MultisigVerifierProgram,
   SettlementProof,
   SettlementPublicInputs,
@@ -10,10 +12,13 @@ import {
   ValidateReduceProgram,
   ValidateReduceProof,
 } from '../ValidateReduce.js';
-import { SignaturePublicKeyList } from '../types/signaturePubKeyList.js';
+import {
+  SignaturePublicKeyList,
+  SignaturePublicKeyMatrix,
+} from '../types/signaturePubKeyList.js';
 import { log, table } from './loggers.js';
 import { PulsarAction } from '../types/PulsarAction.js';
-import { ACTION_QUEUE_SIZE } from './constants.js';
+import { ACTION_QUEUE_SIZE, SETTLEMENT_MATRIX_SIZE } from './constants.js';
 import {
   ActionStackProgram,
   ActionStackProof,
@@ -26,20 +31,49 @@ export {
   GenerateSettlementPublicInput,
   GenerateValidateReduceProof,
   GenerateActionStackProof,
+  GeneratePulsarBlock,
 };
 
 async function GenerateSettlementProof(
-  publicInputs: SettlementPublicInputs,
-  signaturePublicKeyList: SignaturePublicKeyList,
+  blocks: Block[],
+  signaturePublicKeyLists: Array<SignaturePublicKeyList>,
   proofGenerator: PublicKey
 ) {
   let proof: SettlementProof;
+  if (blocks.length !== SETTLEMENT_MATRIX_SIZE) {
+    throw new Error(
+      `Expected ${SETTLEMENT_MATRIX_SIZE} blocks, but got ${blocks.length}`
+    );
+  }
+
+  if (signaturePublicKeyLists.length !== SETTLEMENT_MATRIX_SIZE) {
+    throw new Error(
+      `Expected ${SETTLEMENT_MATRIX_SIZE} signature public key lists, but got ${signaturePublicKeyLists.length}`
+    );
+  }
+
+  const publicInputs = new SettlementPublicInputs({
+    InitialMerkleListRoot: blocks[0].InitialMerkleListRoot,
+    InitialStateRoot: blocks[0].InitialStateRoot,
+    InitialBlockHeight: blocks[0].InitialBlockHeight,
+    NewBlockHeight: blocks[SETTLEMENT_MATRIX_SIZE - 1].NewBlockHeight,
+    NewMerkleListRoot: blocks[SETTLEMENT_MATRIX_SIZE - 1].NewMerkleListRoot,
+    NewStateRoot: blocks[SETTLEMENT_MATRIX_SIZE - 1].NewStateRoot,
+    ProofGeneratorsList: ProofGenerators.empty().insertAt(
+      Field(0),
+      proofGenerator
+    ),
+  });
+
   try {
     proof = (
       await MultisigVerifierProgram.verifySignatures(
         publicInputs,
-        signaturePublicKeyList,
-        proofGenerator
+        SignaturePublicKeyMatrix.fromSignaturePublicKeyLists(
+          signaturePublicKeyLists
+        ),
+        proofGenerator,
+        BlockList.fromArray(blocks)
       )
     ).proof;
   } catch (error) {
@@ -160,6 +194,24 @@ function GenerateSettlementPublicInput(
     NewMerkleListRoot: newMerkleListRoot,
     NewStateRoot: newStateRoot,
     ProofGeneratorsList: proofGenerators,
+  });
+}
+
+function GeneratePulsarBlock(
+  initialMerkleListRoot: Field,
+  initialStateRoot: Field,
+  initialBlockHeight: Field,
+  newMerkleListRoot: Field,
+  newStateRoot: Field,
+  newBlockHeight: Field
+) {
+  return new Block({
+    InitialMerkleListRoot: initialMerkleListRoot,
+    InitialStateRoot: initialStateRoot,
+    InitialBlockHeight: initialBlockHeight,
+    NewBlockHeight: newBlockHeight,
+    NewMerkleListRoot: newMerkleListRoot,
+    NewStateRoot: newStateRoot,
   });
 }
 
