@@ -5,12 +5,9 @@ import logger from "../logger.js";
 import { setMinaNetwork } from "pulsar-contracts";
 import { cacheCompile } from "../cache.js";
 
-// declare global {
-//     var __contractsCompiled__: boolean | undefined;
-// }
-
-setMinaNetwork((process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet") ?? "devnet");
-await compileContracts();
+declare global {
+    var __contractsCompiled__: boolean | undefined;
+}
 
 export interface CreateWorkerParams<Data, Result> {
     queueName: string;
@@ -30,25 +27,46 @@ export function createWorker<Data, Result>(params: CreateWorkerParams<Data, Resu
     } = params;
 
     let jobsProcessed = 0;
+    console.log(
+        `Creating worker for queue "${queueName}" with max jobs per worker: ${maxJobsPerWorker}`
+    );
 
     const processor: Processor<Data, Result, string> = async (job: Job<Data, Result, string>) => {
-        // if (!globalThis.__contractsCompiled__) {
-        // }
-
+        if (!globalThis.__contractsCompiled__) {
+            setMinaNetwork(
+                (process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet") ?? "devnet"
+            );
+            await compileContracts("settlement");
+        }
         // await cacheCompile();
-        // globalThis.__contractsCompiled__ = true;
+        globalThis.__contractsCompiled__ = true;
 
         try {
+            logger.info(
+                `[${queueName}] Processing job ${job.id} (${jobsProcessed}/${maxJobsPerWorker})`
+            );
+
+            // Execute the job handler
             const res = await jobHandler(job);
-            return res;
-        } finally {
-            jobsProcessed += 1;
+            jobsProcessed++;
             if (jobsProcessed >= maxJobsPerWorker) {
                 logger.info(
-                    `[${queueName}] reached ${jobsProcessed} jobs → exiting for fresh spawn`
+                    `[${queueName}] Max jobs processed (${maxJobsPerWorker}). Worker will restart.`
                 );
-                setTimeout(() => process.exit(0), 200);
+                jobsProcessed = 0;
+                worker.close().then(() => {
+                    logger.info(`[${queueName}] Worker closed. Restarting...`);
+                    // createWorker<Data, Result>(params);
+                });
             }
+            return res;
+        } catch (error) {
+            logger.error(
+                `[${queueName}] Job ${job.id} failed: ${
+                    error instanceof Error ? error.stack : error
+                }`
+            );
+            throw error;
         }
     };
 
@@ -71,21 +89,25 @@ export function createWorker<Data, Result>(params: CreateWorkerParams<Data, Resu
         )
     );
 
-    worker.on("failed", (job, err) =>
-        logger.warn(`[${queueName}] job ${job?.id} failed (attempt ${job?.attemptsMade}): ${err}`)
+    worker.on(
+        "failed",
+        (job, err) =>
+            `[${queueName}] job ${job?.id} failed (attempt ${job?.attemptsMade}): ${
+                err?.stack || err
+            }`
     );
 
-    process.on("SIGINT", async () => {
-        logger.info(`[${queueName}] SIGINT received. Closing worker...`);
-        try {
-            await worker.close();
-            logger.info(`[${queueName}] Worker closed. Exiting process.`);
-            process.exit(0);
-        } catch (err) {
-            logger.error(`[${queueName}] Error during shutdown: ${err}`);
-            process.exit(1);
-        }
-    });
+    // process.on("SIGINT", async () => {
+    //     logger.info(`[${queueName}] SIGINT received. Closing worker...`);
+    //     try {
+    //         await worker.close();
+    //         logger.info(`[${queueName}] Worker closed. Exiting process.`);
+    //         process.exit(0);
+    //     } catch (err) {
+    //         logger.error(`[${queueName}] Error during shutdown: ${err}`);
+    //         process.exit(1);
+    //     }
+    // });
 
     return worker;
 }
