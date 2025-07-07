@@ -2,7 +2,7 @@ import { PublicKey } from "o1js";
 import { MinaClient } from "./minaClient.js";
 import dotenv from "dotenv";
 import logger from "./logger.js";
-import { PulsarClient } from "./pulsarClient.js";
+import { PulsarClient, VoteExt } from "./pulsarClient.js";
 import { reduceQ, settlementQ } from "./workerConnection.js";
 dotenv.config();
 
@@ -19,10 +19,6 @@ async function main() {
 
     minaClient.on("start", (blockHeight) => {
         logger.info(`Mina client started, watching actions from block height: ${blockHeight}`);
-    });
-
-    minaClient.on("block", (blockHeight) => {
-        logger.info(`New block detected: ${blockHeight}`);
     });
 
     minaClient.on("actions", async ({ blockHeight, actions }) => {
@@ -46,6 +42,12 @@ async function main() {
 
     minaClient.on("error", (error) => {
         logger.error(`Error in Mina client: ${error.message}`);
+
+        minaClient.stop();
+        logger.info("Mina client stopped due to error, restarting in 5 seconds...");
+        setTimeout(() => {
+            minaClient.start();
+        }, 5000);
     });
 
     minaClient.on("stop", () => {
@@ -61,28 +63,29 @@ async function main() {
         logger.info("Pulsar client started, listening for new blocks");
     });
 
-    pulsarClient.on("block", (blockHeight) => {
-        logger.info(`New block from Pulsar: ${blockHeight}`);
-    });
-
-    pulsarClient.on("voteExts", async ({ blockHeight, voteExts }) => {
-        logger.info(`Vote extensions for block ${blockHeight}: ${JSON.stringify(voteExts)}`);
-        await settlementQ.add(
-            "settlement-" + blockHeight,
-            {
-                blockHeight,
-                voteExts,
-            },
-            {
-                attempts: 5,
-                backoff: {
-                    type: "exponential",
-                    delay: 5_000,
+    pulsarClient.on(
+        "newPulsarBlock",
+        async ({ blockHeight, voteExts }: { blockHeight: number; voteExts: VoteExt[] }) => {
+            logger.info(
+                `New Pulsar block detected: ${blockHeight}, with ${voteExts.length} vote extensions`
+            );
+            await settlementQ.add(
+                "settlement-" + blockHeight,
+                {
+                    blockHeight,
+                    voteExts,
                 },
-                removeOnComplete: true,
-            }
-        );
-    });
+                {
+                    attempts: 5,
+                    backoff: {
+                        type: "exponential",
+                        delay: 5_000,
+                    },
+                    removeOnComplete: true,
+                }
+            );
+        }
+    );
 
     pulsarClient.on("error", (error) => {
         logger.error(`Error in Pulsar client: ${error.message}`);

@@ -2,6 +2,7 @@ import { MongoClient, Collection, Document } from "mongodb";
 import { ActionStackProof, SettlementProof, ValidateReduceProof } from "pulsar-contracts";
 import { JsonProof } from "o1js";
 import logger from "./logger.js";
+import { VoteExt } from "./pulsarClient.js";
 
 type ProofKind = "actionStack" | "settlement" | "validateReduce";
 
@@ -13,7 +14,16 @@ interface ProofDoc extends Document {
     stored_at: Date;
 }
 
+interface BlockDoc extends Document {
+    height: number;
+    stateRoot: string;
+    validators: string[];
+    validatorListHash: string;
+    voteExts: VoteExt[];
+}
+
 let client: MongoClient;
+let blocksCol: Collection<BlockDoc>;
 let proofsCol: Collection<ProofDoc>;
 
 export async function initMongo() {
@@ -26,9 +36,12 @@ export async function initMongo() {
     await client.connect();
 
     proofsCol = client.db(db).collection<ProofDoc>("proofs");
+    blocksCol = client.db(db).collection<BlockDoc>("blocks");
 
     await proofsCol.createIndex({ kind: 1, range_high: 1 }, { unique: true });
     await proofsCol.createIndex({ kind: 1, range_low: 1 });
+
+    await blocksCol.createIndex({ height: 1 }, { unique: true });
 
     logger.info(`MongoDB connected at ${uri}, using database "${db}"`);
 }
@@ -87,4 +100,38 @@ export async function deserializeProof(
     } else {
         return await ValidateReduceProof.fromJSON(json);
     }
+}
+
+export async function storeBlock(
+    height: number,
+    stateRoot: string,
+    validators: string[],
+    validatorListHash: string,
+    voteExts: VoteExt[]
+) {
+    await initMongo();
+
+    const blockDoc: BlockDoc = {
+        height,
+        stateRoot,
+        validators,
+        validatorListHash,
+        voteExts,
+    };
+
+    await blocksCol.updateOne({ height }, { $set: blockDoc }, { upsert: true });
+
+    logger.info(`Stored block at height ${height}`);
+}
+
+export async function fetchBlockRange(range_low: number, range_high: number): Promise<BlockDoc[]> {
+    await initMongo();
+
+    const blocks = await blocksCol
+        .find({ height: { $gte: range_low, $lte: range_high } })
+        .sort({ height: 1 }) // Sort by height ascending
+        .toArray();
+
+    logger.info(`Fetched ${blocks.length} blocks in range [${range_low}, ${range_high}]`);
+    return blocks;
 }

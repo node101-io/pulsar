@@ -3,10 +3,14 @@ import { connection } from "../workerConnection.js";
 import { compileContracts } from "../utils.js";
 import logger from "../logger.js";
 import { setMinaNetwork } from "pulsar-contracts";
+import { cacheCompile } from "../cache.js";
 
-declare global {
-    var __contractsCompiled__: boolean | undefined;
-}
+// declare global {
+//     var __contractsCompiled__: boolean | undefined;
+// }
+
+setMinaNetwork((process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet") ?? "devnet");
+await compileContracts();
 
 export interface CreateWorkerParams<Data, Result> {
     queueName: string;
@@ -28,13 +32,11 @@ export function createWorker<Data, Result>(params: CreateWorkerParams<Data, Resu
     let jobsProcessed = 0;
 
     const processor: Processor<Data, Result, string> = async (job: Job<Data, Result, string>) => {
-        if (!globalThis.__contractsCompiled__) {
-            setMinaNetwork(
-                (process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet") ?? "devnet"
-            );
-            await compileContracts();
-            globalThis.__contractsCompiled__ = true;
-        }
+        // if (!globalThis.__contractsCompiled__) {
+        // }
+
+        // await cacheCompile();
+        // globalThis.__contractsCompiled__ = true;
 
         try {
             const res = await jobHandler(job);
@@ -72,6 +74,18 @@ export function createWorker<Data, Result>(params: CreateWorkerParams<Data, Resu
     worker.on("failed", (job, err) =>
         logger.warn(`[${queueName}] job ${job?.id} failed (attempt ${job?.attemptsMade}): ${err}`)
     );
+
+    process.on("SIGINT", async () => {
+        logger.info(`[${queueName}] SIGINT received. Closing worker...`);
+        try {
+            await worker.close();
+            logger.info(`[${queueName}] Worker closed. Exiting process.`);
+            process.exit(0);
+        } catch (err) {
+            logger.error(`[${queueName}] Error during shutdown: ${err}`);
+            process.exit(1);
+        }
+    });
 
     return worker;
 }

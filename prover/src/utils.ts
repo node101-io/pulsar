@@ -4,11 +4,13 @@ import {
     SettlementContract,
     ValidateReduceProgram,
 } from "pulsar-contracts";
+import logger from "./logger.js";
 
 export { compileContracts, prettierAddress };
 
 async function compileContracts() {
     try {
+        logger.info("Compiling contracts...");
         let time = performance.now();
         await MultisigVerifierProgram.compile();
         console.log(`MultisigVerifierProgram compiled in ${performance.now() - time} ms`);
