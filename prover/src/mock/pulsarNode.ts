@@ -4,6 +4,7 @@ import { PrivateKey, PublicKey, Field } from "o1js";
 import path from "path";
 import { GeneratePulsarBlock, TestUtils, VALIDATOR_NUMBER, validatorSet } from "pulsar-contracts";
 import { fileURLToPath } from "url";
+import { VoteExt } from "../pulsarClient";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,19 +21,20 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 const protoDescriptor: any = grpc.loadPackageDefinition(packageDefinition);
 const blockService = protoDescriptor.voteext.BlockService;
 
-let currentHeight = 0;
+let currentHeight = 1;
 let activeSet: Array<[PrivateKey, PublicKey]> = validatorSet.slice(0, VALIDATOR_NUMBER);
 const merkleList = TestUtils.CreateValidatorMerkleList(activeSet);
 
-function createVoteExts(height: number): any[] {
+function createVoteExts(height: number): VoteExt[] {
     const block = GeneratePulsarBlock(
         merkleList.hash,
-        Field(height),
-        Field(height),
+        Field(height - 1),
+        Field(height - 1),
         merkleList.hash,
-        Field(height + 1),
-        Field(height + 1)
+        Field(height),
+        Field(height)
     );
+    // console.log(JSON.stringify(block.toJSON()));
 
     const signaturePubKeyList = TestUtils.GenerateSignaturePubKeyList(
         block.hash().toFields(),
