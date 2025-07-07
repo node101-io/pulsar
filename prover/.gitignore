@@ -1,6 +1,7 @@
 # NodeJS
 node_modules
 build
+dist
 coverage
 
 # Editor
@@ -9,3 +10,6 @@ coverage
 # System
 .DS_Store
 .env
+
+logs/
+cache/

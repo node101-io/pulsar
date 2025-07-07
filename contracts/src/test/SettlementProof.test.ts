@@ -13,10 +13,7 @@ import {
   GenerateSettlementPublicInput,
   MergeSettlementProofs,
 } from '../utils/generateFunctions';
-import {
-  GenerateSignaturePubKeyMatrix,
-  GenerateTestBlocks,
-} from '../utils/testUtils';
+import { TestUtils } from '../utils/testUtils';
 import { List } from '../types/common';
 import { enableLogs, log } from '../utils/loggers';
 
@@ -48,7 +45,11 @@ describe('SettlementProof tests', () => {
 
   describe('Peripherals', () => {
     it('should create a valid SettlementPublicInputs', () => {
-      blocks = GenerateTestBlocks(Field(1), merkleList.hash, Field(1));
+      blocks = TestUtils.GenerateTestBlocks(
+        Field(1),
+        merkleList.hash,
+        Field(1)
+      );
 
       const publicInput = GenerateSettlementPublicInput(
         blocks[0].InitialMerkleListRoot,
@@ -80,7 +81,7 @@ describe('SettlementProof tests', () => {
 
   describe('verifySignatures method', () => {
     it('should verify signatures and create a valid SettlementProof', async () => {
-      const signerMatrix = GenerateSignaturePubKeyMatrix(
+      const signerMatrix = TestUtils.GenerateSignaturePubKeyMatrix(
         blocks,
         Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
       );
@@ -112,7 +113,7 @@ describe('SettlementProof tests', () => {
     });
 
     it('should create another valid SettlementProof', async () => {
-      blocks = GenerateTestBlocks(
+      blocks = TestUtils.GenerateTestBlocks(
         settlementPublicInputs[settlementPublicInputs.length - 1]
           .NewBlockHeight,
         settlementPublicInputs[settlementPublicInputs.length - 1]
@@ -134,7 +135,7 @@ describe('SettlementProof tests', () => {
 
       settlementPublicInputs.push(publicInput);
 
-      const signerMatrix = GenerateSignaturePubKeyMatrix(
+      const signerMatrix = TestUtils.GenerateSignaturePubKeyMatrix(
         blocks,
         Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
       );
@@ -166,7 +167,7 @@ describe('SettlementProof tests', () => {
     });
 
     it('should create a third valid SettlementProof', async () => {
-      blocks = GenerateTestBlocks(
+      blocks = TestUtils.GenerateTestBlocks(
         settlementPublicInputs[settlementPublicInputs.length - 1]
           .NewBlockHeight,
         settlementPublicInputs[settlementPublicInputs.length - 1]
@@ -188,7 +189,7 @@ describe('SettlementProof tests', () => {
 
       settlementPublicInputs.push(publicInput);
 
-      const signerMatrix = GenerateSignaturePubKeyMatrix(
+      const signerMatrix = TestUtils.GenerateSignaturePubKeyMatrix(
         blocks,
         Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
       );
@@ -220,7 +221,7 @@ describe('SettlementProof tests', () => {
     });
 
     it('should create a fourth valid SettlementProof', async () => {
-      blocks = GenerateTestBlocks(
+      blocks = TestUtils.GenerateTestBlocks(
         settlementPublicInputs[settlementPublicInputs.length - 1]
           .NewBlockHeight,
         settlementPublicInputs[settlementPublicInputs.length - 1]
@@ -242,7 +243,7 @@ describe('SettlementProof tests', () => {
 
       settlementPublicInputs.push(publicInput);
 
-      const signerMatrix = GenerateSignaturePubKeyMatrix(
+      const signerMatrix = TestUtils.GenerateSignaturePubKeyMatrix(
         blocks,
         Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
       );

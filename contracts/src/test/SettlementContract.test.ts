@@ -18,10 +18,7 @@ import {
 } from '../utils/constants';
 import { SettlementContract } from '../SettlementContract';
 import { devnetTestAccounts, validatorSet, testAccounts } from './mock';
-import {
-  GenerateTestSettlementProof,
-  MockReducerVerifierProof,
-} from '../utils/testUtils';
+import { TestUtils } from '../utils/testUtils';
 import { ValidateReduceProgram } from '../ValidateReduce';
 import { List } from '../types/common';
 import { ActionStackProgram } from '../ActionStack';
@@ -399,7 +396,7 @@ describe('SettlementProof tests', () => {
     const { batch, useActionStack, actionStackProof, publicInput, mask } =
       await PrepareBatch(map, zkapp);
 
-    const { validateReduceProof } = await MockReducerVerifierProof(
+    const { validateReduceProof } = await TestUtils.MockReducerVerifierProof(
       publicInput,
       activeSet
     );
@@ -431,7 +428,7 @@ describe('SettlementProof tests', () => {
       const { batch, useActionStack, actionStackProof, publicInput, mask } =
         await PrepareBatch(map, zkapp);
 
-      const { validateReduceProof } = await MockReducerVerifierProof(
+      const { validateReduceProof } = await TestUtils.MockReducerVerifierProof(
         publicInput,
         activeSet
       );
@@ -464,7 +461,7 @@ describe('SettlementProof tests', () => {
     withdrawRound: number
   ) {
     for (let i = 0; i < settlementRound; i++) {
-      settlementProof = await GenerateTestSettlementProof(
+      settlementProof = await TestUtils.GenerateTestSettlementProof(
         activeSet,
         i * AGGREGATE_THRESHOLD,
         (i + 1) * AGGREGATE_THRESHOLD
@@ -650,11 +647,12 @@ describe('SettlementProof tests', () => {
     });
 
     it('Invalid merkle list settlement proof & reject settle', async () => {
-      const invalidSettlementProof = await GenerateTestSettlementProof(
-        testAccounts.slice(0, VALIDATOR_NUMBER),
-        0,
-        AGGREGATE_THRESHOLD
-      );
+      const invalidSettlementProof =
+        await TestUtils.GenerateTestSettlementProof(
+          testAccounts.slice(0, VALIDATOR_NUMBER),
+          0,
+          AGGREGATE_THRESHOLD
+        );
       await expectSettleToFail(
         feePayerKey,
         invalidSettlementProof,
@@ -663,11 +661,8 @@ describe('SettlementProof tests', () => {
     });
 
     it('Invalid block height settlement proof & reject settle', async () => {
-      const invalidSettlementProof = await GenerateTestSettlementProof(
-        activeSet,
-        1,
-        17
-      );
+      const invalidSettlementProof =
+        await TestUtils.GenerateTestSettlementProof(activeSet, 1, 17);
       await expectSettleToFail(
         feePayerKey,
         invalidSettlementProof,
@@ -676,7 +671,7 @@ describe('SettlementProof tests', () => {
     });
 
     it('Generate a valid settlement proof & Settle method', async () => {
-      settlementProof = await GenerateTestSettlementProof(
+      settlementProof = await TestUtils.GenerateTestSettlementProof(
         activeSet,
         0,
         AGGREGATE_THRESHOLD
@@ -699,13 +694,14 @@ describe('SettlementProof tests', () => {
     });
 
     it('Reject settlement with invalid proof: wrong state root', async () => {
-      const invalidSettlementProof = await GenerateTestSettlementProof(
-        activeSet,
-        AGGREGATE_THRESHOLD,
-        AGGREGATE_THRESHOLD * 2,
-        40,
-        50
-      );
+      const invalidSettlementProof =
+        await TestUtils.GenerateTestSettlementProof(
+          activeSet,
+          AGGREGATE_THRESHOLD,
+          AGGREGATE_THRESHOLD * 2,
+          40,
+          50
+        );
       await expectSettleToFail(
         feePayerKey,
         invalidSettlementProof,
@@ -714,11 +710,12 @@ describe('SettlementProof tests', () => {
     });
 
     it('Reject settlement with invalid proof: previous block height', async () => {
-      const invalidSettlementProof = await GenerateTestSettlementProof(
-        activeSet,
-        2,
-        2 + AGGREGATE_THRESHOLD
-      );
+      const invalidSettlementProof =
+        await TestUtils.GenerateTestSettlementProof(
+          activeSet,
+          2,
+          2 + AGGREGATE_THRESHOLD
+        );
 
       await expectSettleToFail(
         feePayerKey,
@@ -787,7 +784,7 @@ describe('SettlementProof tests', () => {
     });
 
     it('Generate a settlement proof', async () => {
-      settlementProof = await GenerateTestSettlementProof(
+      settlementProof = await TestUtils.GenerateTestSettlementProof(
         activeSet,
         AGGREGATE_THRESHOLD,
         2 * AGGREGATE_THRESHOLD
