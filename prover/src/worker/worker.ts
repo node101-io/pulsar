@@ -36,9 +36,9 @@ export function createWorker<Data, Result>(params: CreateWorkerParams<Data, Resu
             setMinaNetwork(
                 (process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet") ?? "devnet"
             );
-            await compileContracts("settlement");
+            await compileContracts(queueName as "settlement" | "reduce" | "merge");
+            // await cacheCompile();
         }
-        // await cacheCompile();
         globalThis.__contractsCompiled__ = true;
 
         try {
@@ -46,7 +46,6 @@ export function createWorker<Data, Result>(params: CreateWorkerParams<Data, Resu
                 `[${queueName}] Processing job ${job.id} (${jobsProcessed}/${maxJobsPerWorker})`
             );
 
-            // Execute the job handler
             const res = await jobHandler(job);
             jobsProcessed++;
             if (jobsProcessed >= maxJobsPerWorker) {
@@ -56,7 +55,7 @@ export function createWorker<Data, Result>(params: CreateWorkerParams<Data, Resu
                 jobsProcessed = 0;
                 worker.close().then(() => {
                     logger.info(`[${queueName}] Worker closed. Restarting...`);
-                    // createWorker<Data, Result>(params);
+                    process.exit(0);
                 });
             }
             return res;
@@ -96,18 +95,6 @@ export function createWorker<Data, Result>(params: CreateWorkerParams<Data, Resu
                 err?.stack || err
             }`
     );
-
-    // process.on("SIGINT", async () => {
-    //     logger.info(`[${queueName}] SIGINT received. Closing worker...`);
-    //     try {
-    //         await worker.close();
-    //         logger.info(`[${queueName}] Worker closed. Exiting process.`);
-    //         process.exit(0);
-    //     } catch (err) {
-    //         logger.error(`[${queueName}] Error during shutdown: ${err}`);
-    //         process.exit(1);
-    //     }
-    // });
 
     return worker;
 }
