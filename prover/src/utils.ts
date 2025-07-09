@@ -5,16 +5,17 @@ import {
     ValidateReduceProgram,
 } from "pulsar-contracts";
 import logger from "./logger.js";
+import { QueueName } from "./workerConnection.js";
 
 export { compileContracts, prettierAddress };
 
-async function compileContracts(mode: "settlement" | "reducer") {
+async function compileContracts(mode: QueueName) {
     try {
         logger.info("Compiling contracts...");
         let time = performance.now();
         await MultisigVerifierProgram.compile();
         console.log(`MultisigVerifierProgram compiled in ${performance.now() - time} ms`);
-        if (mode === "reducer") {
+        if (mode === "reduce") {
             time = performance.now();
             await ValidateReduceProgram.compile();
             console.log(`ValidateReduceProgram compiled in ${performance.now() - time} ms`);
