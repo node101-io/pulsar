@@ -1,4 +1,5 @@
 import {
+    AGGREGATE_THRESHOLD,
     Block,
     GeneratePulsarBlock,
     GenerateSettlementProof,
@@ -6,7 +7,7 @@ import {
     SETTLEMENT_MATRIX_SIZE,
     SignaturePublicKeyList,
 } from "pulsar-contracts";
-import { SettlementJob } from "../workerConnection.js";
+import { mergeQ, SettlementJob } from "../workerConnection.js";
 import { createWorker } from "./worker.js";
 import { fetchBlockRange, initMongo, storeBlock, storeProof } from "../db.js";
 import logger from "../logger.js";
@@ -21,7 +22,6 @@ await initMongo();
  * Invalid signatures
  * No vote extensions for some validators
  */
-
 createWorker<SettlementJob, void>({
     queueName: "settlement",
     maxJobsPerWorker: 1000,
@@ -107,18 +107,46 @@ createWorker<SettlementJob, void>({
                 PrivateKey.fromBase58(process.env.MINA_PRIVATE_KEY || "").toPublicKey()
             );
 
-            await storeProof(
-                blocks[0].NewBlockHeight.toBigInt(),
-                blocks[blocks.length - 1].NewBlockHeight.toBigInt(),
-                "settlement",
-                settlementProof
-            );
+            const rangeLow = Number(settlementProof.publicInput.InitialBlockHeight.toBigInt());
+            const rangeHigh = Number(settlementProof.publicInput.NewBlockHeight.toBigInt());
+
+            await storeProof(rangeLow, rangeHigh, "settlement", settlementProof);
 
             logger.info(
                 `Stored settlement proof for blocks ${blocks[0].NewBlockHeight.toBigInt()} to ${blocks[
                     blocks.length - 1
                 ].NewBlockHeight.toBigInt()}`
             );
+
+            if (blockHeight % AGGREGATE_THRESHOLD !== SETTLEMENT_MATRIX_SIZE) {
+                const lowerBlock = {
+                    rangeLow:
+                        Math.floor((blockHeight - 1) / AGGREGATE_THRESHOLD) * AGGREGATE_THRESHOLD,
+                    rangeHigh: blockHeight - SETTLEMENT_MATRIX_SIZE,
+                };
+                const upperBlock = {
+                    rangeLow: blockHeight - SETTLEMENT_MATRIX_SIZE,
+                    rangeHigh: blockHeight,
+                };
+                logger.info(
+                    `Adding merge job for blocks ${lowerBlock.rangeLow}-${lowerBlock.rangeHigh} and ${upperBlock.rangeLow}-${upperBlock.rangeHigh}`
+                );
+                await mergeQ.add(
+                    "merge-" + blockHeight,
+                    {
+                        lowerBlock,
+                        upperBlock,
+                    },
+                    {
+                        attempts: 50,
+                        backoff: {
+                            type: "exponential",
+                            delay: 5_000,
+                        },
+                        removeOnComplete: true,
+                    }
+                );
+            }
         }
     },
 });
