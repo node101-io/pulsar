@@ -36,22 +36,22 @@ export class MinaClient extends EventEmitter {
 
     async start() {
         if (this.running) return;
-        this.running = true;
-        setMinaNetwork(this.network);
-        this.lastSeenBlockHeight = await fetchBlockHeight(this.network);
-        this.fromActionState = await fetchAccount({
-            publicKey: this.watchedAddress,
-        }).then((account) => {
-            if (account) {
-                return account.account?.zkapp?.appState[0] || Reducer.initialActionState;
-            }
-            return Reducer.initialActionState;
-        });
+        try {
+            this.running = true;
+            setMinaNetwork(this.network);
+            this.lastSeenBlockHeight = await fetchBlockHeight(this.network);
+            this.fromActionState = await fetchAccount({
+                publicKey: this.watchedAddress,
+            }).then((account) => {
+                if (account) {
+                    return account.account?.zkapp?.appState[0] || Reducer.initialActionState;
+                }
+                return Reducer.initialActionState;
+            });
 
-        this.emit("start", this.lastSeenBlockHeight);
+            this.emit("start", this.lastSeenBlockHeight);
 
-        this.timer = setInterval(async () => {
-            try {
+            this.timer = setInterval(async () => {
                 const currentBlockHeight = await fetchBlockHeight(this.network);
 
                 if (currentBlockHeight > this.lastSeenBlockHeight) {
@@ -60,10 +60,10 @@ export class MinaClient extends EventEmitter {
                     this.emit("actions", { blockHeight: currentBlockHeight, actions });
                     this.lastSeenBlockHeight = currentBlockHeight;
                 }
-            } catch (err) {
-                this.emit("error", err);
-            }
-        }, this.pollInterval);
+            }, this.pollInterval);
+        } catch (err) {
+            this.emit("error", err);
+        }
     }
 
     stop() {
