@@ -152,7 +152,9 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
         NewStateRoot: proof.publicInput.NewStateRoot,
         ProofGeneratorsList:
           mergedProof.publicInput.ProofGeneratorsList.appendList(
-            Field(i),
+            mergedProof.publicOutput.numberOfSettlementProofs.div(
+              Field(SETTLEMENT_MATRIX_SIZE)
+            ),
             proof.publicInput.ProofGeneratorsList
           ),
       });
