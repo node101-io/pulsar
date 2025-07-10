@@ -8,8 +8,8 @@ type ProofKind = "actionStack" | "settlement" | "validateReduce";
 
 interface ProofDoc extends Document {
     kind: ProofKind;
-    range_low: bigint;
-    range_high: bigint;
+    range_low: number;
+    range_high: number;
     json: string;
     stored_at: Date;
 }
@@ -38,8 +38,7 @@ export async function initMongo() {
     proofsCol = client.db(db).collection<ProofDoc>("proofs");
     blocksCol = client.db(db).collection<BlockDoc>("blocks");
 
-    await proofsCol.createIndex({ kind: 1, range_high: 1 }, { unique: true });
-    await proofsCol.createIndex({ kind: 1, range_low: 1 });
+    await proofsCol.createIndex({ kind: 1, range_high: 1, range_low: 1 }, { unique: true });
 
     await blocksCol.createIndex({ height: 1 }, { unique: true });
 
@@ -55,34 +54,45 @@ export async function initMongo() {
 }
 
 export async function storeProof(
-    range_low: bigint,
-    range_high: bigint,
+    range_low: number,
+    range_high: number,
     kind: ProofKind,
     proof: ActionStackProof | SettlementProof | ValidateReduceProof
 ) {
     await initMongo();
 
-    await proofsCol.updateOne(
-        { kind, range_high, range_low },
-        {
-            $setOnInsert: {
-                kind,
-                range_low,
-                range_high,
-                json: JSON.stringify(proof.toJSON()),
-                stored_at: new Date(),
+    try {
+        await proofsCol.updateOne(
+            { kind, range_high, range_low },
+            {
+                $setOnInsert: {
+                    kind,
+                    range_low,
+                    range_high,
+                    json: JSON.stringify(proof.toJSON()),
+                    stored_at: new Date(),
+                },
             },
-        },
-        { upsert: true }
-    );
+            { upsert: true }
+        );
 
-    logger.info(`Stored ${kind} proof for range [${range_low}, ${range_high}]`);
+        logger.info(`Stored ${kind} proof for range [${range_low}, ${range_high}]`);
+    } catch (error) {
+        logger.error(`Failed to store proof for range [${range_low}, ${range_high}]: ${error}`);
+        throw error;
+    }
 }
 
-export async function fetchProofs(
+export async function deleteProof(kind: ProofKind, range_low: number, range_high: number) {
+    await initMongo();
+    await proofsCol.deleteOne({ kind, range_low, range_high });
+    logger.info(`Deleted ${kind} proof for range [${range_low}, ${range_high}]`);
+}
+
+export async function fetchMultipleProofs(
     kind: ProofKind,
-    range_low: bigint,
-    range_high: bigint
+    range_low: number,
+    range_high: number
 ): Promise<(ActionStackProof | SettlementProof | ValidateReduceProof)[]> {
     await initMongo();
 
@@ -95,6 +105,21 @@ export async function fetchProofs(
 
     const proofs = docs.map((doc) => deserializeProof(doc));
     return Promise.all(proofs);
+}
+
+export async function fetchProof(
+    kind: ProofKind,
+    range_low: number,
+    range_high: number
+): Promise<ActionStackProof | SettlementProof | ValidateReduceProof> {
+    await initMongo();
+
+    const doc = await proofsCol.findOne({ kind, range_low, range_high });
+    if (!doc) {
+        throw new Error(`Proof not found for kind ${kind} and range [${range_low}, ${range_high}]`);
+    }
+    logger.info(`Fetched ${kind} proof for range [${range_low}, ${range_high}]`);
+    return deserializeProof(doc);
 }
 
 export async function deserializeProof(

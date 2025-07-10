@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import { VoteExt } from "./pulsarClient";
 dotenv.config();
 
-export { connection, settlementQ, mergeQ, reduceQ, SettlementJob, ReducerJob, QueueName };
+export { connection, settlementQ, mergeQ, reduceQ, SettlementJob, MergeJob, ReducerJob, QueueName };
 
 const connection = new IORedis({
     host: process.env.REDIS_HOST ?? "redis",
@@ -16,6 +16,17 @@ const connection = new IORedis({
 interface SettlementJob {
     blockHeight: number;
     voteExts: VoteExt[];
+}
+
+interface MergeJob {
+    lowerBlock: {
+        rangeLow: number;
+        rangeHigh: number;
+    };
+    upperBlock: {
+        rangeLow: number;
+        rangeHigh: number;
+    };
 }
 
 interface ReducerJob {

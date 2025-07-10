@@ -11,7 +11,7 @@ async function main() {
         throw new Error("CONTRACT_ADDRESS is not set in the environment variables");
     }
 
-    const minaClient = new MinaClient(
+    let minaClient = new MinaClient(
         PublicKey.fromBase58(process.env.CONTRACT_ADDRESS),
         "lightnet",
         5000
