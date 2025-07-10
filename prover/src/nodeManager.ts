@@ -3,7 +3,7 @@ import { MinaClient } from "./minaClient.js";
 import dotenv from "dotenv";
 import logger from "./logger.js";
 import { PulsarClient, VoteExt } from "./pulsarClient.js";
-import { reduceQ, settlementQ } from "./workerConnection.js";
+import { collectSignatureQ, settlementQ } from "./workerConnection.js";
 dotenv.config();
 
 async function main() {
@@ -23,8 +23,8 @@ async function main() {
 
     minaClient.on("actions", async ({ blockHeight, actions }) => {
         logger.info(`Actions fetched for block ${blockHeight}: ${JSON.stringify(actions)}`);
-        await reduceQ.add(
-            "reduce-" + blockHeight,
+        await collectSignatureQ.add(
+            "collect-" + blockHeight,
             {
                 blockHeight,
                 actions,

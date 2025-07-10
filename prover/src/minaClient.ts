@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
 import { fetchAccount, Field, PublicKey, Reducer } from "o1js";
-import { fetchActions, fetchBlockHeight, setMinaNetwork } from "pulsar-contracts";
+import { fetchActions, fetchBlockHeight, fetchRawActions, setMinaNetwork } from "pulsar-contracts";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -56,7 +56,10 @@ export class MinaClient extends EventEmitter {
 
                 if (currentBlockHeight > this.lastSeenBlockHeight) {
                     this.emit("block", currentBlockHeight);
-                    const actions = await fetchActions(this.watchedAddress, this.fromActionState);
+                    let actions = await fetchRawActions(this.watchedAddress, this.fromActionState);
+                    if (!actions || actions.length === 0) {
+                        actions = [];
+                    }
                     this.emit("actions", { blockHeight: currentBlockHeight, actions });
                     this.lastSeenBlockHeight = currentBlockHeight;
                 }

@@ -4,7 +4,18 @@ import dotenv from "dotenv";
 import { VoteExt } from "./pulsarClient";
 dotenv.config();
 
-export { connection, settlementQ, mergeQ, reduceQ, SettlementJob, MergeJob, ReducerJob, QueueName };
+export {
+    connection,
+    settlementQ,
+    mergeQ,
+    reduceQ,
+    collectSignatureQ,
+    SettlementJob,
+    MergeJob,
+    ReducerJob,
+    CollectSignatureJob,
+    QueueName,
+};
 
 const connection = new IORedis({
     host: process.env.REDIS_HOST ?? "redis",
@@ -30,11 +41,21 @@ interface MergeJob {
 }
 
 interface ReducerJob {
-    height: number;
+    includedActions: Map<string, number>;
+    signaturePubkeyArray: Array<[string, string]>;
+}
+
+interface CollectSignatureJob {
+    blockHeight: number;
+    actions: {
+        actions: string[][];
+        hash: string;
+    }[];
 }
 
 const settlementQ = new Queue("settlement", { connection });
 const mergeQ = new Queue("merge", { connection });
 const reduceQ = new Queue("reduce", { connection });
+const collectSignatureQ = new Queue("collect-signature", { connection });
 
 type QueueName = "settlement" | "merge" | "reduce";
