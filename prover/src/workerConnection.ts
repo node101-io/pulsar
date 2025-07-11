@@ -58,4 +58,4 @@ const mergeQ = new Queue("merge", { connection });
 const reduceQ = new Queue("reduce", { connection });
 const collectSignatureQ = new Queue("collect-signature", { connection });
 
-type QueueName = "settlement" | "merge" | "reduce";
+type QueueName = "settlement" | "merge" | "reduce" | "collect-signature";
