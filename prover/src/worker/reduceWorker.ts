@@ -32,11 +32,15 @@ createWorker<ReducerJob, void>({
             ])
         );
 
+        logger.info(`Preparing batch for included actions`);
         const { batch, useActionStack, actionStackProof, publicInput, mask } = await PrepareBatch(
             includedActions,
             settlementContract
         );
 
+        //Todo: store proof
+
+        logger.info(`Batch prepared, generating validate reduce proof`);
         const validateReduceProof = await GenerateValidateReduceProof(
             publicInput,
             signaturePublicKeyList
@@ -51,5 +55,7 @@ createWorker<ReducerJob, void>({
                 validateReduceProof
             );
         });
+
+        //Todo: send
     },
 });
