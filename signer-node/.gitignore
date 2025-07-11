@@ -1,0 +1,15 @@
+# NodeJS
+node_modules
+build
+dist
+coverage
+
+# Editor
+.vscode
+
+# System
+.DS_Store
+.env
+
+logs/
+cache/

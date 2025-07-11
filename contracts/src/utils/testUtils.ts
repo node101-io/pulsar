@@ -31,7 +31,13 @@ import {
   emptyActionListHash,
   merkleActionsAdd,
 } from '../types/actionHelpers.js';
-import { SETTLEMENT_MATRIX_SIZE } from './constants.js';
+import {
+  BATCH_SIZE,
+  MAX_DEPOSIT_PER_BATCH,
+  MAX_SETTLEMENT_PER_BATCH,
+  MAX_WITHDRAWAL_PER_BATCH,
+  SETTLEMENT_MATRIX_SIZE,
+} from './constants.js';
 
 export const TestUtils = {
   GenerateSignaturePubKeyList,
@@ -43,6 +49,7 @@ export const TestUtils = {
   CalculateActionRoot,
   GenerateTestBlocks,
   CreateValidatorMerkleList,
+  CalculateFromMockActions,
 };
 
 function GenerateSignaturePubKeyList(
@@ -269,4 +276,80 @@ function GenerateTestBlocks(
   }
 
   return blocks;
+}
+
+function CalculateFromMockActions(
+  initialState: ValidateReducePublicInput,
+  packedActions: Array<{ action: PulsarAction; hash: bigint }>
+) {
+  let withdrawals = 0;
+  let deposits = 0;
+  let settlements = 0;
+
+  const batchActions: Array<PulsarAction> = [];
+  let endActionState = 0n;
+
+  let publicInput = initialState;
+
+  for (const [, pack] of packedActions.entries()) {
+    if (batchActions.length === BATCH_SIZE) {
+      break;
+    }
+
+    if (PulsarAction.isSettlement(pack.action).toBoolean()) {
+      if (settlements === MAX_SETTLEMENT_PER_BATCH) {
+        break;
+      }
+
+      settlements++;
+
+      publicInput = new ValidateReducePublicInput({
+        ...publicInput,
+        stateRoot: pack.action.newState,
+        merkleListRoot: pack.action.newMerkleListRoot,
+        blockHeight: pack.action.newBlockHeight,
+        rewardListHash: Poseidon.hash([
+          publicInput.rewardListHash,
+          pack.action.rewardListUpdateHash,
+        ]),
+      });
+    } else if (PulsarAction.isDeposit(pack.action).toBoolean()) {
+      if (deposits === MAX_DEPOSIT_PER_BATCH) {
+        break;
+      }
+      deposits++;
+
+      publicInput = new ValidateReducePublicInput({
+        ...publicInput,
+        depositListHash: Poseidon.hash([
+          publicInput.depositListHash,
+          ...pack.action.account.toFields(),
+          pack.action.amount,
+        ]),
+      });
+    } else if (PulsarAction.isWithdrawal(pack.action).toBoolean()) {
+      if (withdrawals === MAX_WITHDRAWAL_PER_BATCH) {
+        break;
+      }
+      withdrawals++;
+
+      publicInput = new ValidateReducePublicInput({
+        ...publicInput,
+        withdrawalListHash: Poseidon.hash([
+          publicInput.withdrawalListHash,
+          ...pack.action.account.toFields(),
+          pack.action.amount,
+        ]),
+      });
+    }
+
+    batchActions.push(pack.action);
+    endActionState = BigInt(pack.hash);
+  }
+
+  return {
+    endActionState,
+    batchActions,
+    publicInput,
+  };
 }
