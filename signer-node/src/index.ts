@@ -1,6 +1,8 @@
 import express from "express";
 import { PrivateKey, Signature } from "o1js";
-import { PulsarAction, TestUtils, ValidateReducePublicInput, validatorSet } from "pulsar-contracts";
+import { TestUtils, ValidateReducePublicInput } from "pulsar-contracts";
+import { validateActionQueue } from "pulsar-contracts/build/src/utils/reduceWitness";
+import { signActionQueueLimiter } from "./rateLimit";
 
 const minaPrivateKey = process.env.MINA_PRIVATE_KEY;
 if (!minaPrivateKey) {
@@ -14,18 +16,14 @@ const port = Number(process.env.PORT ?? 6000);
 const app = express();
 app.use(express.json());
 
-app.post("/sign", (req, res) => {
+app.post("/sign", signActionQueueLimiter, (req, res) => {
     const { blockHeight, actions } = req.body;
     if (!blockHeight || !actions)
         return res.status(400).json({ error: "body must contain { blockHeight, actions }" });
 
     try {
-        const typedActions = actions.map((action: { actions: string[][]; hash: string }) => {
-            return {
-                action: PulsarAction.fromRawAction(action.actions[0]),
-                hash: BigInt(action.hash),
-            };
-        });
+        const finalActionState = "IMPLEMENTATION_SPECIFIC_FINAL_STATE";
+        const { actions: typedActions, isValid } = validateActionQueue(actions, finalActionState);
         const { publicInput } = TestUtils.CalculateFromMockActions(
             ValidateReducePublicInput.default, // Todo: use correct public input
             typedActions
