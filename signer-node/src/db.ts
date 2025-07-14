@@ -7,8 +7,15 @@ interface SignatureDoc extends Document {
     signature: string;
 }
 
+interface InvalidAttemptDoc extends Document {
+    ip: string;
+    lastAttempt: Date;
+    count: number;
+}
+
 let client: MongoClient;
 let signaturesCol: Collection<SignatureDoc>;
+let invalidAttemptsCol: Collection<InvalidAttemptDoc>;
 
 export async function initMongo() {
     if (client) return;
@@ -20,7 +27,9 @@ export async function initMongo() {
     await client.connect();
 
     signaturesCol = client.db(db).collection<SignatureDoc>("signatures");
+    invalidAttemptsCol = client.db(db).collection<InvalidAttemptDoc>("invalid_attempts");
 
+    await invalidAttemptsCol.createIndex({ ip: 1 }, { unique: true });
     await signaturesCol.createIndex({ blockHeight: 1, actionState: 1 }, { unique: true });
 
     logger.info(`MongoDB connected at ${uri}, using database "${db}"`);
@@ -54,4 +63,38 @@ export async function getSignature(
     }
 
     return doc.signature;
+}
+
+const MAX_INVALID_ATTEMPTS = 2;
+const WINDOW_MS = 10 * 60 * 1000;
+
+export async function registerInvalidAttempt(ip: string) {
+    await invalidAttemptsCol.findOneAndUpdate(
+        { ip },
+        [
+            {
+                $set: {
+                    count: {
+                        $cond: [
+                            { $lt: ["$lastAttempt", new Date(Date.now() - WINDOW_MS)] },
+                            1,
+                            { $add: ["$count", 1] },
+                        ],
+                    },
+                    lastAttempt: new Date(),
+                },
+            },
+        ],
+        { upsert: true, returnDocument: "after" }
+    );
+}
+
+export async function isIpBlocked(ip: string): Promise<boolean> {
+    const doc = await invalidAttemptsCol.findOne({ ip });
+    if (!doc) return false;
+    return doc.count >= MAX_INVALID_ATTEMPTS && doc.lastAttempt > new Date(Date.now() - WINDOW_MS);
+}
+
+export async function resetInvalidAttempts(ip: string) {
+    await invalidAttemptsCol.deleteOne({ ip });
 }
