@@ -18,7 +18,13 @@ import {
   merkleActionsAdd,
 } from '../types/actionHelpers.js';
 
-export { MapFromArray, CalculateMax, PrepareBatch, PackActions };
+export {
+  MapFromArray,
+  CalculateMax,
+  PrepareBatch,
+  PackActions,
+  validateActionQueue,
+};
 
 function MapFromArray(array: Field[]) {
   const map = new Map<string, number>();
@@ -222,5 +228,57 @@ async function PrepareBatch(
     actionStackProof,
     publicInput,
     mask,
+  };
+}
+
+function validateActionQueue(
+  rawActions: {
+    actions: string[][];
+    hash: string;
+  }[],
+  finalActionState: string
+): {
+  actions: Array<{ action: PulsarAction; hash: bigint }>;
+  isValid: boolean;
+} {
+  if (rawActions.length === 0) {
+    return {
+      actions: [],
+      isValid: false,
+    };
+  }
+
+  const actions = rawActions.map((action) => {
+    return {
+      action: PulsarAction.fromRawAction(action.actions[0]),
+      hash: BigInt(action.hash),
+    };
+  });
+
+  actions.forEach((action, index) => {
+    if (action.action.unconstrainedHash().toBigInt() !== action.hash) {
+      log(
+        `Action hash mismatch at index ${index}: expected ${
+          action.hash
+        }, got ${action.action.unconstrainedHash().toBigInt()}`
+      );
+      return { actions, isValid: false };
+    }
+  });
+
+  let actionListHash = emptyActionListHash;
+  for (const action of actions) {
+    actionListHash = merkleActionsAdd(actionListHash, Field(action.hash));
+  }
+
+  if (actionListHash.toString() !== finalActionState) {
+    log(
+      `Action state mismatch: expected ${finalActionState}, got ${actionListHash.toString()}`
+    );
+    return { actions, isValid: false };
+  }
+  return {
+    actions,
+    isValid: true,
   };
 }
