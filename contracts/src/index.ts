@@ -61,6 +61,7 @@ import {
   CalculateMax,
   PackActions,
   PrepareBatch,
+  validateActionQueue,
 } from './utils/reduceWitness.js';
 import {
   ValidateReduceProof,
@@ -110,6 +111,7 @@ export {
   CalculateMax,
   PackActions,
   PrepareBatch,
+  validateActionQueue,
   ActionStackProof,
   ActionStackQueue,
   ActionStackProgram,
