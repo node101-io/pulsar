@@ -61,6 +61,7 @@ import {
   CalculateMax,
   PackActions,
   PrepareBatch,
+  PrepareBatchWithActions,
   validateActionQueue,
 } from './utils/reduceWitness.js';
 import {
@@ -111,6 +112,7 @@ export {
   CalculateMax,
   PackActions,
   PrepareBatch,
+  PrepareBatchWithActions,
   validateActionQueue,
   ActionStackProof,
   ActionStackQueue,

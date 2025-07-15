@@ -22,6 +22,7 @@ export {
   MapFromArray,
   CalculateMax,
   PrepareBatch,
+  PrepareBatchWithActions,
   PackActions,
   validateActionQueue,
 };
@@ -173,6 +174,72 @@ async function PrepareBatch(
     contractInstance.actionState.get()
   );
 
+  if (packedActions.length === 0) {
+    log('No actions found for the contract.');
+    return {
+      endActionState: 0n,
+      batchActions: [],
+      batch: Batch.empty(),
+      useActionStack: Bool(false),
+      actionStackProof: undefined,
+      publicInput: ValidateReducePublicInput.default,
+      mask: ReduceMask.empty(),
+    };
+  }
+
+  const { endActionState, batchActions, publicInput, mask } = CalculateMax(
+    includedActions,
+    contractInstance,
+    packedActions
+  );
+
+  let actionStack = packedActions
+    .slice(batchActions.length)
+    .map((pack) => pack.action);
+
+  log(
+    'Batch actions:',
+    batchActions.map((action) => action.toJSON()),
+    '\n',
+    'Action stack:',
+    actionStack.map((action) => action.toJSON())
+  );
+
+  const batch = Batch.fromArray(batchActions);
+
+  const { useActionStack, actionStackProof } = await GenerateActionStackProof(
+    Field.from(endActionState),
+    actionStack
+  );
+
+  log(
+    'useActionStack:',
+    useActionStack.toBoolean(),
+    '\n',
+    'actionStackProof Input:',
+    actionStackProof.publicInput.toJSON(),
+    'output:',
+    actionStackProof.publicOutput.toJSON()
+  );
+
+  return {
+    batchActions,
+    batch,
+    useActionStack,
+    actionStackProof,
+    publicInput,
+    mask,
+  };
+}
+
+async function PrepareBatchWithActions(
+  includedActions: Map<string, number>,
+  contractInstance: SettlementContract,
+  packedActions: {
+    action: PulsarAction;
+    hash: bigint;
+  }[]
+) {
   if (packedActions.length === 0) {
     log('No actions found for the contract.');
     return {
