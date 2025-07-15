@@ -43,6 +43,10 @@ interface MergeJob {
 interface ReducerJob {
     includedActions: Map<string, number>;
     signaturePubkeyArray: Array<[string, string]>;
+    actions: {
+        actions: string[][];
+        hash: string;
+    }[];
 }
 
 interface CollectSignatureJob {
