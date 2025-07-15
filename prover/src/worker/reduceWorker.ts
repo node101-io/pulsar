@@ -23,7 +23,7 @@ const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
 createWorker<ReducerJob, void>({
     queueName: "reduce",
-    // maxJobsPerWorker: 5,
+    maxJobsPerWorker: 10,
     jobHandler: async ({ data, id }) => {
         try {
             const { includedActions, signaturePubkeyArray, actions } = data;
