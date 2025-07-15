@@ -11,36 +11,56 @@ services:
         command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
         env_file:
             - .env
+        # healthcheck:
+        #     test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+        #     interval: 10s
+        #     retries: 5
 
     mongo:
         image: mongo:7-jammy
         restart: unless-stopped
         environment:
-            MONGO_INITDB_DATABASE: pulsar
+            MONGO_INITDB_DATABASE: ${MONGO_DB}
         volumes:
             - mongo-data:/data/db
         ports:
             - "27017:27017"
+        # networks: [pulsar-net]
+        # healthcheck:
+        #     test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+        #     interval: 10s
+        #     retries: 5
 
-    # orchestrator:
-    #     build: .
-    #     depends_on: [redis, mongo]
-    #     env_file: .env
-    #     restart: unless-stopped
+    settlement-worker:
+        image: pulsar/worker:1.0.0
+        environment:
+            WORKER: settlementWorker
+            MAX_JOBS_PER_WORKER: ${MAX_JOBS_PER_WORKER}
+        restart: always
+        depends_on: [redis, mongo]
+        # deploy:
+        #     resources:
+        #         limits:
+        #             memory: 3g
+        # healthcheck:
+        #     test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+        #     interval: 30s
+        #     retries: 3
 
-    # settlement-worker:
-    #     build: .
-    #     command: ["node", "dist/src/workers/settlementWorker.js"]
-    #     depends_on: [redis, mongo]
-    #     env_file: .env
-    #     restart: unless-stopped
+    reduce-worker:
+        extends: settlement-worker
+        environment:
+            WORKER: reduceWorker
 
-    # reducer-worker:
-    #     build: .
-    #     command: ["node", "dist/src/workers/reducerWorker.js"]
-    #     depends_on: [redis, mongo]
-    #     env_file: .env
-    #     restart: unless-stopped
+    merge-worker:
+        extends: settlement-worker
+        environment:
+            WORKER: mergeWorker
+
+    collect-worker:
+        extends: settlement-worker
+        environment:
+            WORKER: collectWorker
 
 volumes:
     redis-data:

@@ -19,5 +19,7 @@
   
   ENV NODE_ENV=production
 
-  CMD ["node", "dist/src/nodeManager.js"]
+  # CMD ["node", "dist/src/nodeManager.js"]
+  ENTRYPOINT ["sh", "-c", "node dist/src/workers/$WORKER.js"]
+
   
