@@ -13,16 +13,16 @@ import { ENDPOINTS } from "../mock/mockEndpoints.js";
 
 createWorker<CollectSignatureJob, void>({
     queueName: "collect-signature",
-    jobHandler: async ({ data }) => {
+    jobHandler: async ({ data, id }) => {
         const { blockHeight, actions } = data;
 
         if (actions.length === 0) {
-            logger.warn(`No actions found for block height: ${blockHeight}`);
+            logger.warn(`[Job ${id}] No actions found for block height: ${blockHeight}`);
             return;
         }
 
-        logger.info(`Requesting signatures for block height: ${blockHeight}`);
         try {
+            logger.info(`[Job ${id}] Requesting signatures for block height: ${blockHeight}`);
             const includedActions = await getIncludedActions();
             const signatures = await collectSignatures(ENDPOINTS, includedActions, {
                 blockHeight,
@@ -37,6 +37,7 @@ createWorker<CollectSignatureJob, void>({
                         signature.toBase58(),
                         publicKey.toBase58(),
                     ]),
+                    actions,
                 },
                 {
                     attempts: 5,
@@ -47,9 +48,11 @@ createWorker<CollectSignatureJob, void>({
                     removeOnComplete: true,
                 }
             );
-            logger.info(`Added reduce job for block height: ${blockHeight}`);
+            logger.info(`[Job ${id}] Added reduce job for block height: ${blockHeight}`);
         } catch (error) {
-            logger.error(`Failed to collect signatures for block height ${blockHeight}: ${error}`);
+            logger.error(
+                `[Job ${id}] Failed to collect signatures for block height ${blockHeight}: ${error}`
+            );
             throw error;
         }
     },
