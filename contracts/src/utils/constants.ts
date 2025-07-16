@@ -26,21 +26,42 @@ const MAX_SETTLEMENT_PER_BATCH = 1;
 const MAX_DEPOSIT_PER_BATCH = BATCH_SIZE;
 const MAX_WITHDRAWAL_PER_BATCH = 9;
 const ACTION_QUEUE_SIZE = 3000;
+
+function envOrDefault(key: string, fallback: string) {
+  return typeof process !== 'undefined' &&
+    process.env &&
+    typeof process.env[key] === 'string' &&
+    process.env[key] !== ''
+    ? process.env[key]!
+    : fallback;
+}
+
 const ENDPOINTS = {
   NODE: {
     devnet: 'https://api.minascan.io/node/devnet/v1/graphql',
     mainnet: 'https://api.minascan.io/node/mainnet/v1/graphql',
-    lightnet: 'http://127.0.0.1:8080/graphql',
+    lightnet: envOrDefault(
+      'LIGHTNET_NODE_URL',
+      process.env.DOCKER
+        ? 'http://mina-local-lightnet:8080/graphql'
+        : 'http://127.0.0.1:8080/graphql'
+    ),
   },
   ARCHIVE: {
     devnet: 'https://api.minascan.io/archive/devnet/v1/graphql',
     mainnet: 'https://api.minascan.io/archive/mainnet/v1/graphql',
-    lightnet: 'http://127.0.0.1:8282',
+    lightnet: envOrDefault(
+      'LIGHTNET_ARCHIVE_URL',
+      process.env.DOCKER
+        ? 'http://mina-local-lightnet:8282'
+        : 'http://127.0.0.1:8282'
+    ),
   },
   EXPLORER: {
     devnet: 'https://minascan.io/devnet/tx/',
     mainnet: 'https://minascan.io/mainnet/tx/',
     lightnet:
+      process.env.LIGHTNET_EXPLORER_URL ||
       'file:///Users/kadircan/.cache/zkapp-cli/lightnet/explorer/v0.2.2/index.html?target=block&numberOrHash=',
   },
 };

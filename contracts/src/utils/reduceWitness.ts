@@ -40,6 +40,7 @@ function MapFromArray(array: Field[]) {
   return map;
 }
 
+// maple
 function CalculateMax(
   includedActionsMap: Map<string, number>,
   contractInstance: SettlementContract,
