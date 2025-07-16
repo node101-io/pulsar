@@ -21,4 +21,6 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/src/vote_ext.proto ./src/vote_ext.proto
 
-ENTRYPOINT ["sh", "-c", "node dist/src/worker/$WORKER.js"]
+
+EXPOSE 50051
+CMD ["node", "dist/src/mock/pulsarNode.js"]

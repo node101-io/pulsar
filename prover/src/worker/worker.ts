@@ -1,5 +1,5 @@
 import { Worker, Job, Processor, WorkerOptions, AdvancedOptions } from "bullmq";
-import { connection } from "../workerConnection.js";
+import { connection, QueueName } from "../workerConnection.js";
 import { compileContracts } from "../utils.js";
 import logger from "../logger.js";
 import { setMinaNetwork } from "pulsar-contracts";
@@ -36,7 +36,7 @@ export function createWorker<Data, Result>(params: CreateWorkerParams<Data, Resu
             setMinaNetwork(
                 (process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet") ?? "devnet"
             );
-            await compileContracts(queueName as "settlement" | "reduce" | "merge");
+            await compileContracts(queueName as QueueName);
             // await cacheCompile();
         }
         globalThis.__contractsCompiled__ = true;

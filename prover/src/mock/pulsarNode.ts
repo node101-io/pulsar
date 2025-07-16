@@ -8,7 +8,7 @@ import { VoteExt } from "../pulsarClient";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROTO_PATH = path.join(__dirname, "../../../src/mock/vote_ext.proto");
+const PROTO_PATH = path.join(__dirname, "../../../src/vote_ext.proto");
 
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
     keepCase: true,

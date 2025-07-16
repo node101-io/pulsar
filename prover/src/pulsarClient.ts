@@ -9,7 +9,7 @@ const POLL_INTERVAL_MS = 10000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PROTO_PATH = path.join(__dirname, "../../src/mock/vote_ext.proto");
+const PROTO_PATH = path.join(__dirname, "../../src/vote_ext.proto");
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
     keepCase: true,
     longs: String,
@@ -42,6 +42,7 @@ export class PulsarClient extends EventEmitter {
         this.running = false;
         this.lastSeenBlockHeight = 0;
         this.client = new BlockService(this.rpcAddress, grpc.credentials.createInsecure());
+        console.log(`Pulsar client initialized with RPC address: ${this.rpcAddress}`);
     }
 
     async start() {

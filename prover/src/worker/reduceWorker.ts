@@ -6,13 +6,12 @@ import {
     PrepareBatchWithActions,
     SettlementContract,
     GenerateValidateReduceProof,
-    CalculateMax,
     PulsarAction,
 } from "pulsar-contracts";
 import logger from "../logger.js";
 import { Mina, PrivateKey, PublicKey, Signature } from "o1js";
 
-const settlementContractAddress = process.env.SETTLEMENT_CONTRACT_ADDRESS;
+const settlementContractAddress = process.env.CONTRACT_ADDRESS;
 const minaPrivateKey = process.env.MINA_PRIVATE_KEY;
 const fee = Number(process.env.FEE) || 0.1;
 if (!settlementContractAddress || !minaPrivateKey) {
