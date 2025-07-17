@@ -24,7 +24,7 @@ await initMongo();
  */
 createWorker<SettlementJob, void>({
     queueName: "settlement",
-    maxJobsPerWorker: 80,
+    maxJobsPerWorker: 800,
     jobHandler: async ({ data, id }) => {
         try {
             const { blockHeight, voteExts } = data;
@@ -58,7 +58,7 @@ createWorker<SettlementJob, void>({
                     logger.warn(
                         `[Job ${id}] Not enough blocks to process settlement for height ${blockHeight}. Expected ${
                             SETTLEMENT_MATRIX_SIZE + 1
-                        }, got ${blockDocs.length}`
+                        }, got ${blockDocs.map((doc) => doc.height).join(", ")}`
                     );
                     return;
                 }
