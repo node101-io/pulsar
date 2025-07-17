@@ -49,26 +49,62 @@ export class PulsarClient extends EventEmitter {
         if (this.running) return;
         this.running = true;
         this.emit("start");
-        this.timer = setInterval(async () => {
-            try {
-                this.client.GetLatestBlock({}, (err: any, res: any) => {
-                    if (err) {
-                        this.emit("error", err);
-                        return;
-                    }
-                    const blockHeight: number =
-                        typeof res.height === "string" ? parseInt(res.height, 10) : res.height;
-                    const voteExts: VoteExt[] = res.voteExts || [];
 
-                    if (blockHeight > this.lastSeenBlockHeight) {
-                        this.emit("newPulsarBlock", { blockHeight, voteExts });
-                        this.lastSeenBlockHeight = blockHeight;
-                    }
-                });
-            } catch (err) {
+        await this.syncMissedBlocks();
+
+        this.timer = setInterval(() => this.pollLatestBlock(), this.pollInterval);
+    }
+
+    pollLatestBlock() {
+        this.client.GetLatestBlock({}, (err: any, res: any) => {
+            if (err) {
                 this.emit("error", err);
+                return;
             }
-        }, this.pollInterval);
+            const blockHeight: number =
+                typeof res.height === "string" ? parseInt(res.height, 10) : res.height;
+            const voteExts: VoteExt[] = res.voteExts || [];
+
+            if (blockHeight > this.lastSeenBlockHeight) {
+                this.emit("newPulsarBlock", { blockHeight, voteExts });
+                this.lastSeenBlockHeight = blockHeight;
+            }
+        });
+    }
+
+    async syncMissedBlocks() {
+        return new Promise<void>((resolve, reject) => {
+            this.client.GetLatestBlock({}, async (err: any, res: any) => {
+                if (err) {
+                    this.emit("error", err);
+                    return reject(err);
+                }
+                const latestHeight: number =
+                    typeof res.height === "string" ? parseInt(res.height, 10) : res.height;
+                if (this.lastSeenBlockHeight < latestHeight) {
+                    for (let h = this.lastSeenBlockHeight + 1; h <= latestHeight; ++h) {
+                        try {
+                            await this.getBlockAndEmit(h);
+                        } catch (err) {
+                            this.emit("error", err);
+                        }
+                    }
+                }
+                resolve();
+            });
+        });
+    }
+
+    getBlockAndEmit(height: number): Promise<void> {
+        return new Promise((resolve, reject) => {
+            this.client.GetBlock({ height }, (err: any, res: any) => {
+                if (err) return reject(err);
+                const voteExts: VoteExt[] = res.voteExts || [];
+                this.emit("newPulsarBlock", { blockHeight: height, voteExts });
+                this.lastSeenBlockHeight = height;
+                resolve();
+            });
+        });
     }
 
     stop() {

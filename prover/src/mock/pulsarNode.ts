@@ -21,9 +21,11 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 const protoDescriptor: any = grpc.loadPackageDefinition(packageDefinition);
 const blockService = protoDescriptor.voteext.BlockService;
 
-let currentHeight = 1;
+let currentHeight = 0;
 let activeSet: Array<[PrivateKey, PublicKey]> = validatorSet.slice(0, VALIDATOR_NUMBER);
 const merkleList = TestUtils.CreateValidatorMerkleList(activeSet);
+
+const blockHistory: Record<number, { height: number; voteExts: VoteExt[] }> = {};
 
 function createVoteExts(height: number): VoteExt[] {
     const block = GeneratePulsarBlock(
@@ -51,17 +53,40 @@ function createVoteExts(height: number): VoteExt[] {
     });
 }
 
+blockHistory[currentHeight] = {
+    height: currentHeight,
+    voteExts: createVoteExts(currentHeight),
+};
+
 const serviceImpl = {
     GetLatestBlock: (call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) => {
-        callback(null, {
+        const block = blockHistory[currentHeight] || {
             height: currentHeight,
             voteExts: createVoteExts(currentHeight),
-        });
+        };
+        callback(null, block);
+    },
+    GetBlock: (call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) => {
+        const { height } = call.request;
+        const block = blockHistory[height];
+        if (block) {
+            callback(null, block);
+        } else {
+            callback({
+                code: grpc.status.NOT_FOUND,
+                message: `Block at height ${height} not found`,
+            });
+        }
     },
 };
 
 setInterval(() => {
     currentHeight++;
+    const block = {
+        height: currentHeight,
+        voteExts: createVoteExts(currentHeight),
+    };
+    blockHistory[currentHeight] = block;
     console.log(`Block produced: ${currentHeight}`);
 }, 10_000);
 

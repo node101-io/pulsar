@@ -168,3 +168,16 @@ export async function fetchBlockRange(range_low: number, range_high: number): Pr
     logger.info(`Fetched ${blocks.length} blocks in range [${range_low}, ${range_high}]`);
     return blocks;
 }
+
+export async function fetchLastStoredBlock(): Promise<BlockDoc | null> {
+    await initMongo();
+
+    const block = await blocksCol.findOne({}, { sort: { height: -1 } });
+    if (!block) {
+        logger.warn("No blocks found in the database");
+        return null;
+    }
+
+    logger.info(`Fetched last stored block at height ${block.height}`);
+    return block;
+}

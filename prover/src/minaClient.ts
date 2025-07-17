@@ -23,6 +23,7 @@ export class MinaClient extends EventEmitter {
     constructor(
         watchedAddress: PublicKey,
         network: "devnet" | "mainnet" | "lightnet" = "devnet",
+        lastSeenBlockHeight: number = 0,
         pollInterval = POLL_INTERVAL_MS
     ) {
         super();
@@ -30,7 +31,7 @@ export class MinaClient extends EventEmitter {
         this.fromActionState = Reducer.initialActionState;
         this.network = network;
         this.pollInterval = pollInterval;
-        this.lastSeenBlockHeight = 0;
+        this.lastSeenBlockHeight = lastSeenBlockHeight;
         this.running = false;
     }
 

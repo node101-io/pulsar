@@ -56,6 +56,7 @@ services:
         entrypoint: ["node", "dist/src/nodeManager.js"]
         restart: always
         depends_on: [redis, mongo, mock-pulsar, mina-local-lightnet]
+        profiles: ["app"]
 
     settlement-worker:
         build:
@@ -77,6 +78,7 @@ services:
             MONGO_DB: ${MONGO_DB}
         restart: always
         depends_on: [redis, mongo, node-manager]
+        profiles: ["app"]
         # deploy:
         #     resources:
         #         limits:
@@ -90,16 +92,19 @@ services:
         extends: settlement-worker
         environment:
             WORKER: reduceWorker
+        profiles: ["app"]
 
     merge-worker:
         extends: settlement-worker
         environment:
             WORKER: mergeWorker
+        profiles: ["app"]
 
     collect-worker:
         extends: settlement-worker
         environment:
             WORKER: collectWorker
+        profiles: ["app"]
 
     mock-pulsar:
         build:
@@ -110,6 +115,7 @@ services:
         ports:
             - "50051:50051"
         networks: [pulsar-net]
+        profiles: ["app"]
         # healthcheck:
         # test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
         # interval: 10s
@@ -130,6 +136,7 @@ services:
             - "3085:3085"
             - "5432:5432"
             - "8181:8181"
+        profiles: ["app"]
         # healthcheck:
         #     test: ["CMD", "wget", "-qO-", "http://localhost:8080/graphql"]
         #     interval: 10s
