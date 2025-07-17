@@ -75,7 +75,7 @@ services:
             MONGO_URI: mongodb://mongo:27017/${MONGO_DB}
             MONGO_DB: ${MONGO_DB}
         restart: always
-        depends_on: [redis, mongo, node-manager]
+        depends_on: [redis, mongo, node-manager, mock-pulsar, mina-local-lightnet]
         profiles: ["app"]
         # deploy:
         #     resources:
