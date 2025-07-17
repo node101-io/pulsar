@@ -4,7 +4,7 @@ import * as protoLoader from "@grpc/proto-loader";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const POLL_INTERVAL_MS = 10000;
+const POLL_INTERVAL_MS = 5_000;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,6 +66,12 @@ export class PulsarClient extends EventEmitter {
             const voteExts: VoteExt[] = res.voteExts || [];
 
             if (blockHeight > this.lastSeenBlockHeight) {
+                if (blockHeight > this.lastSeenBlockHeight + 1) {
+                    console.warn(
+                        `Missed blocks detected: last seen ${this.lastSeenBlockHeight}, current ${blockHeight}, syncing...`
+                    );
+                    this.syncMissedBlocks().catch((err) => this.emit("error", err));
+                }
                 this.emit("newPulsarBlock", { blockHeight, voteExts });
                 this.lastSeenBlockHeight = blockHeight;
             }
