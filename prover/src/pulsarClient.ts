@@ -66,14 +66,22 @@ export class PulsarClient extends EventEmitter {
             const voteExts: VoteExt[] = res.voteExts || [];
 
             if (blockHeight > this.lastSeenBlockHeight) {
-                if (blockHeight > this.lastSeenBlockHeight + 1) {
+                if (blockHeight === this.lastSeenBlockHeight + 1) {
+                    this.emit("newPulsarBlock", { blockHeight, voteExts });
+                    this.lastSeenBlockHeight = blockHeight;
+                } else {
                     console.warn(
                         `Missed blocks detected: last seen ${this.lastSeenBlockHeight}, current ${blockHeight}, syncing...`
                     );
-                    this.syncMissedBlocks().catch((err) => this.emit("error", err));
+                    this.syncMissedBlocks()
+                        .then(() => {
+                            this.emit("newPulsarBlock", { blockHeight, voteExts });
+                            this.lastSeenBlockHeight = blockHeight;
+                        })
+                        .catch((err) => {
+                            this.emit("error", err);
+                        });
                 }
-                this.emit("newPulsarBlock", { blockHeight, voteExts });
-                this.lastSeenBlockHeight = blockHeight;
             }
         });
     }
@@ -93,6 +101,8 @@ export class PulsarClient extends EventEmitter {
                             await this.getBlockAndEmit(h);
                         } catch (err) {
                             this.emit("error", err);
+                            console.error(`Failed to fetch block ${h}:`, err);
+                            h--;
                         }
                     }
                 }
