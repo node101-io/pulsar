@@ -12,6 +12,8 @@ RUN npx tsc --project tsconfig.json
 FROM node:20-alpine
 WORKDIR /app
 
+COPY cache/ ./cache/
+
 ENV NODE_ENV=development
 
 COPY package*.json ./

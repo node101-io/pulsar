@@ -33,9 +33,7 @@ services:
         #     retries: 5
 
     node-manager:
-        build:
-            context: .
-            dockerfile: Dockerfile
+        image: kadirchan/pulsar-prover-node:latest
         networks: [pulsar-net]
         env_file: .env
         environment:
@@ -57,9 +55,7 @@ services:
         profiles: ["app"]
 
     settlement-worker:
-        build:
-            context: .
-            dockerfile: Dockerfile
+        image: kadirchan/pulsar-prover-node:latest
         networks: [pulsar-net]
         env_file: .env
         environment:

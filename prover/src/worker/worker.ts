@@ -36,8 +36,8 @@ export function createWorker<Data, Result>(params: CreateWorkerParams<Data, Resu
             setMinaNetwork(
                 (process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet") ?? "devnet"
             );
-            await compileContracts(queueName as QueueName);
-            // await cacheCompile();
+            // await compileContracts(queueName as QueueName);
+            await cacheCompile(queueName as QueueName);
         }
         globalThis.__contractsCompiled__ = true;
 
