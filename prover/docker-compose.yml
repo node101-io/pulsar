@@ -49,8 +49,9 @@ services:
             REDIS_HOST: redis
             REDIS_PORT: 6379
             REDIS_PASSWORD: ${REDIS_PASSWORD}
-            MONGO_URI: mongodb://mongo:27017/${MONGO_DB}
-            MONGO_DB: ${MONGO_DB}
+            MONGO_INITDB_DATABASE: ${MONGO_DB}
+            MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+            MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
         entrypoint: ["node", "dist/src/nodeManager.js"]
         restart: always
         depends_on: [redis, mongo, mock-pulsar, mina-local-lightnet]
@@ -70,8 +71,9 @@ services:
             REDIS_HOST: redis
             REDIS_PORT: 6379
             REDIS_PASSWORD: ${REDIS_PASSWORD}
-            MONGO_URI: mongodb://mongo:27017/${MONGO_DB}
-            MONGO_DB: ${MONGO_DB}
+            MONGO_INITDB_DATABASE: ${MONGO_DB}
+            MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+            MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
         restart: always
         depends_on: [redis, mongo, node-manager, mock-pulsar, mina-local-lightnet]
         profiles: ["app"]
