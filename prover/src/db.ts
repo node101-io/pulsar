@@ -29,7 +29,9 @@ let proofsCol: Collection<ProofDoc>;
 export async function initMongo() {
     if (client) return;
 
-    const uri = `mongodb://${process.env.MONGO_USER}:${process.env.MONGO_PASSWORD}@mongo:27017/${process.env.MONGO_DB}?authSource=admin`;
+    const uri =
+        process.env.MONGO_URI ??
+        `mongodb://${process.env.MONGO_USER}:${process.env.MONGO_PASSWORD}@mongo:27017/${process.env.MONGO_DB}?authSource=admin`;
     const db = process.env.MONGO_DB ?? "pulsar";
 
     client = new MongoClient(uri);
