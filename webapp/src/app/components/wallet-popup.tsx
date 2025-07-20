@@ -3,24 +3,81 @@ import toast from "react-hot-toast"
 import { useWallet } from "@/lib/wallet-context"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "@/lib/client"
+import { fetchPminaBalance } from "@/lib/utils"
 import { useState } from "react"
+
+type WalletType = 'mina' | 'cosmos' | null
 
 interface WalletPopupProps {
   isOpen: boolean
+  walletType: WalletType
   onClose: () => void
 }
 
-const fetchPminaBalance = async (account: string): Promise<number> => {
-  await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+interface ExtensionItemProps {
+  icon?: string
+  iconComponent?: React.ReactNode
+  title: string
+  subtitle?: string
+  onClick: () => void
+  disabled?: boolean
+  isLoading?: boolean
+}
 
-  if (Math.random() < 0.05)
-    throw new Error('Failed to fetch balance from Osmosis RPC');
+const ExtensionItem = ({ icon, iconComponent, title, subtitle, onClick, disabled, isLoading }: ExtensionItemProps) => {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled || isLoading}
+      className={`w-full p-5.5 ${disabled || isLoading
+          ? 'bg-gray-100 cursor-not-allowed'
+          : 'bg-[#CBDBDB] cursor-pointer'
+        } rounded-3xl transition-colors flex items-center gap-3 border-1 border-background border-solid`}
+    >
+      <Image src={icon || ''} alt={title} width={38} height={38} className="border-1 border-background border-solid rounded-full size-9.5" />
+      <div className="text-left flex-1">
+        <div className="text-black font-semibold text-xl leading-none pb-1">
+          {isLoading ? 'Connecting...' : title}
+        </div>
+        {subtitle && (
+          <div className="text-gray-600 text-base leading-none mt-1">
+            {subtitle}
+          </div>
+        )}
+      </div>
+    </button>
+  )
+}
 
-  const mockBalance = 125.674 + (Math.random() - 0.5) * 10;
-  return Number(mockBalance.toFixed(3));
-};
+const TermsOfService = () => {
+  return (
+    <p className="text-gray-600 text-base text-center font-medium leading-none mt-auto">
+      By connecting a wallet, you agree to Pulsar's{' '}
+      <a href="/terms-of-service" className="font-regular text-black">
+        Terms of Service
+      </a>{' '}
+      and consent to its{' '}
+      <a href="/privacy-policy" className="font-regular text-black">
+        Privacy Policies
+      </a>
+      .
+    </p>
+  )
+}
 
-export default function WalletPopup({ isOpen, onClose }: WalletPopupProps) {
+interface PopupTitleProps {
+  children: React.ReactNode
+}
+
+const PopupTitle = ({ children }: PopupTitleProps) => {
+  return (
+    <h3 className="text-xl font-semibold text-black mb-6">
+      {children}
+    </h3>
+  )
+}
+
+export default function WalletPopup({ isOpen, walletType, onClose }: WalletPopupProps) {
   const { connectWallet, isConnected, account, isConnecting, error, isWalletInstalled, disconnectWallet, signMessage } = useWallet();
   const queryClient = useQueryClient();
   const [currentView, setCurrentView] = useState<'main' | 'send'>('main');
@@ -281,8 +338,48 @@ export default function WalletPopup({ isOpen, onClose }: WalletPopupProps) {
     </>
   );
 
-  return (
-    <div className="absolute flex flex-col top-full right-0 mt-2 w-88 min-h-120 bg-white border border-gray-200 rounded-2xl shadow-lg z-50 py-6 px-4">
+    const renderCosmosWallet = () => (
+    <>
+      <PopupTitle>Connect Cosmos Wallet</PopupTitle>
+
+      <div className="space-y-3 mb-6">
+        <ExtensionItem
+          iconComponent={
+            <div className="w-9 h-9 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-lg font-bold">K</span>
+            </div>
+          }
+          title="Keplr Wallet Extension"
+          onClick={() => {
+            toast('Cosmos wallet integration coming soon!', {
+              icon: '🚀',
+              id: 'cosmos-coming-soon'
+            });
+          }}
+        />
+
+        <ExtensionItem
+          iconComponent={
+            <div className="w-9 h-9 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-lg font-bold">C</span>
+            </div>
+          }
+          title="Cosmostation Extension"
+          onClick={() => {
+            toast('Cosmostation integration coming soon!', {
+              icon: '🌌',
+              id: 'cosmostation-coming-soon'
+            });
+          }}
+        />
+      </div>
+
+      <TermsOfService />
+    </>
+  );
+
+  const renderMinaWallet = () => (
+    <>
       {isConnected && account ? (
         currentView === 'send' ? renderSendView() : (
         <>
@@ -385,7 +482,7 @@ export default function WalletPopup({ isOpen, onClose }: WalletPopupProps) {
         )
       ) : (
         <>
-          <h3 className="text-xl font-semibold text-black mb-6">Connect a wallet</h3>
+          <PopupTitle>Connect Mina Wallet</PopupTitle>
 
           {error && (
             <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm">
@@ -394,47 +491,24 @@ export default function WalletPopup({ isOpen, onClose }: WalletPopupProps) {
           )}
 
           <div className="space-y-3 mb-6">
-            <button
+            <ExtensionItem
+              icon="/mina-token-logo.png"
+              title={!isWalletInstalled ? 'Install Auro Wallet Extension' : 'Auro Wallet Extension'}
               onClick={handleAuroExtensionClick}
               disabled={isConnecting}
-              className={`w-full px-5 py-7 ${isConnecting
-                  ? 'bg-gray-100 cursor-not-allowed'
-                  : 'bg-gray-200 hover:bg-gray-300'
-                } rounded-xl transition-colors flex items-center gap-5`}
-            >
-              <Image src="/mina-token-logo.png" alt="Mina Logo" width={36} height={36} />
-              <span className="text-black font-semibold text-xl leading-none">
-                {isConnecting ? 'Connecting...' :
-                  !isWalletInstalled ? 'Install Auro Wallet Extension' : 'Auro Wallet Extension'}
-              </span>
-            </button>
-
-            <button
-              onClick={() => {
-                toast('QR code feature coming soon!', {
-                  icon: '📱',
-                  id: 'qr-coming-soon'
-                });
-                handleClose();
-              }}
-              className="w-full px-5 py-7 bg-gray-200 hover:bg-gray-300 rounded-xl transition-colors flex items-center gap-5"
-            >
-              <div className="relative">
-                <Image src="/mina-token-logo.png" alt="Mina Logo" width={36} height={36} />
-                <Image src="/qr-code.png" alt="QR Code" width={24} height={24} className="absolute top-1/1 left-1/1 -translate-x-3/4 -translate-y-3/4" />
-              </div>
-              <div className="text-left">
-                <div className="text-black font-semibold text-xl leading-none">Auro Mobile</div>
-                <div className="text-gray-600 text-base leading-none">Scan QR code to connect</div>
-              </div>
-            </button>
+              isLoading={isConnecting}
+            />
           </div>
 
-          <p className="text-gray-600 text-base text-center font-light leading-none mt-auto">
-            By connecting a wallet, you agree to Pulsar's <a href="/terms-of-service" className="font-regular text-black">Terms of Service</a> and consent to its <a href="/privacy-policy" className="font-regular text-black">Privacy Policies</a>.
-          </p>
+          <TermsOfService />
         </>
       )}
+    </>
+  );
+
+  return (
+    <div className="absolute flex flex-col top-full right-0 mt-8 w-88 min-h-160 bg-white rounded-4xl shadow-lg z-50 py-6 px-4 font-family-darker-grotesque border-1 border-background border-solid rounded-tr-none">
+      {walletType === 'cosmos' ? renderCosmosWallet() : renderMinaWallet()}
     </div>
   )
 }

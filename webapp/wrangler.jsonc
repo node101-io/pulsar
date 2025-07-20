@@ -1,7 +1,12 @@
 {
-  "name": "jstack-app",
-  "main": "src/server/index.ts",
+  "name": "pulsar-webapp",
+  "main": ".open-next/worker.js",
   "compatibility_date": "2025-02-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
   "observability": {
     "enabled": true
   },
@@ -10,5 +15,11 @@
   },
   "dev": {
     "port": 8080
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "pulsar-webapp-cache"
+    }
+  ]
 }
