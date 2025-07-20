@@ -1,5 +1,6 @@
 import toast from "react-hot-toast"
 import { useWallet } from "@/app/_providers/wallet"
+import { WalletType } from "@/lib/types"
 
 import { LegalNotice } from "./legal-notice"
 import { SendView } from "./send-view"
@@ -7,7 +8,7 @@ import { ConnectView } from "./connect-view"
 import { MainView } from "./main-view"
 import { useState, useEffect, useRef } from "react"
 import { ExtensionItem } from "./extension-item"
-import { WalletType } from "@/lib/types"
+
 
 export default function WalletPopup({ isOpen, walletType, setPopupWalletType }: {
   isOpen: boolean
@@ -25,9 +26,9 @@ export default function WalletPopup({ isOpen, walletType, setPopupWalletType }: 
     };
 
     if (isOpen)
-      document.addEventListener('click', handleClickOutside);
+      document.addEventListener('click', handleClickOutside, true);
 
-    return () => document.removeEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside, true);
   }, [isOpen, setPopupWalletType]);
 
   if (!isOpen) return null;
@@ -87,7 +88,7 @@ export default function WalletPopup({ isOpen, walletType, setPopupWalletType }: 
       ref={popupRef}
       className="absolute flex flex-col top-full right-0 mt-8 w-88 min-h-160 bg-white rounded-4xl shadow-lg z-50 py-6 px-4 font-family-darker-grotesque border-1 border-background border-solid rounded-tr-none"
     >
-      {walletType === 'cosmos' ? renderCosmosWallet() : renderMinaWallet()}
+      {walletType === 'mina' ? renderMinaWallet() : renderCosmosWallet()}
     </div>
   )
 }
