@@ -1,9 +1,36 @@
 @import "tailwindcss";
 
+@plugin 'tailwind-scrollbar' {
+  nocompatible: true;
+  preferredStrategy: 'pseudoelements';
+}
+
 @layer base {
   input[type="number"]::-webkit-inner-spin-button,
   input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
+  }
+}
+
+@theme {
+  --color-background: #1C1C1C;
+  --color-text: #F1F1F1;
+
+  --font-family-recady: var(--font-recady), sans-serif;
+  --font-family-darker-grotesque: var(--font-darker-grotesque), sans-serif;
+}
+
+@layer components {
+  .hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-thumb-border::-webkit-scrollbar-thumb {
+    border: 1px solid #1C1C1C !important;
   }
 }

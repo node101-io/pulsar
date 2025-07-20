@@ -26,6 +26,17 @@ export interface AddChainArgs {
   name: string;
 }
 
+export interface SendPaymentArgs {
+  readonly to: string;
+  readonly amount: number;
+  readonly fee?: number;
+  readonly memo?: string;
+}
+
+export interface SendTransactionResult {
+  hash: string;
+}
+
 export interface MinaProvider {
   requestAccounts(): Promise<string[] | ProviderError>;
   getAccounts(): Promise<string[]>;
@@ -33,6 +44,7 @@ export interface MinaProvider {
   switchChain(args: ChainInfoArgs): Promise<ChainInfoArgs | ProviderError>;
   addChain(args: AddChainArgs): Promise<ChainInfoArgs | ProviderError>;
   signMessage(args: SignMessageArgs): Promise<SignedData | ProviderError>;
+  sendPayment(args: SendPaymentArgs): Promise<SendTransactionResult | ProviderError>;
   on(event: "accountsChanged", callback: (accounts: string[]) => void): void;
   on(event: "chainChanged", callback: (chainInfo: ChainInfoArgs) => void): void;
 }

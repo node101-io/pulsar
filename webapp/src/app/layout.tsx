@@ -1,54 +1,43 @@
 "use client"
 
 import type { Metadata } from "next"
-import { useState } from "react"
 import { Toaster } from "react-hot-toast"
 import { Providers } from "./components/providers"
 import Header from "./components/header"
-import Home from "./components/home"
-import Bridge from "./components/bridge"
-import Transactions from "./components/transactions"
-import Faucet from "./components/faucet"
+import localFont from "next/font/local"
 import { Darker_Grotesque } from "next/font/google"
 
 import "./globals.css"
 
+const recady = localFont({
+  src: "../../fonts/Recady.woff",
+  display: "swap",
+  weight: "400",
+  variable: "--font-recady",
+})
+
 const darkerGrotesque = Darker_Grotesque({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700", "800", "900"],
+  variable: "--font-darker-grotesque",
 })
 
-type Tab = 'home' | 'bridge' | 'transactions' | 'faucet'
+interface RootLayoutProps {
+  children: React.ReactNode
+}
 
-export default function RootLayout() {
-  const [activeTab, setActiveTab] = useState<Tab>('home')
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'home':
-        return <Home />
-      case 'bridge':
-        return <Bridge />
-      case 'transactions':
-        return <Transactions />
-      case 'faucet':
-        return <Faucet />
-      default:
-        return <Home />
-    }
-  }
-
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${recady.variable} ${darkerGrotesque.variable} font-family-recady bg-background h-dvh w-dvw hide-scrollbar`}>
       <head>
         <title>Pulsar - Cross-Chain Bridge Platform</title>
         <meta name="description" content="The ultimate cross-chain bridge platform for seamless asset transfers" />
         <link rel="icon" href="/favicon.ico" />
       </head>
-      <body className={`${darkerGrotesque.className} antialiased`}>
+      <body className={`font-recady antialiased h-dvh w-dvw overscroll-none flex flex-col`}>
         <Providers>
-          <Header activeTab={activeTab} onTabChange={setActiveTab} />
-          {renderContent()}
+          <Header />
+          {children}
           <Toaster
             position="top-center"
             toastOptions={{
