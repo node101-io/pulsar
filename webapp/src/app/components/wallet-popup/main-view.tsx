@@ -120,7 +120,7 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
 
       <div className="flex gap-3 mt-6">
         <button
-          onClick={() => setCurrentView('send')}
+          onClick={() => setCurrentView("send")}
           className="flex-1 flex flex-col gap-1 items-center py-2 bg-neutral-300 hover:bg-neutral-400 rounded-xl transition-colors cursor-pointer"
         >
           <div className="flex items-center justify-center size-9 bg-[#2C202A] rounded-full">
