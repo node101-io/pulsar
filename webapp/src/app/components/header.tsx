@@ -41,10 +41,10 @@ export default function Header() {
 
       <nav className="flex items-center gap-18 text-base text-text">
         <Link
-          href="/bridge"
+          href="/"
           className={cn(
             "font-medium cursor-pointer transition-color duration-300",
-            isActive('/bridge') && "text-[#FB8F6D]"
+            isActive('/') && "text-[#FB8F6D]"
           )}
         >
           Bridge
