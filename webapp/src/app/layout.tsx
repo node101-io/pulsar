@@ -7,6 +7,7 @@ import Header from "./components/header"
 import localFont from "next/font/local"
 import { Darker_Grotesque } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 import "./globals.css"
 
@@ -66,6 +67,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
           />
         </Providers>
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   )
