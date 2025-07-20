@@ -1,5 +1,5 @@
-import Home from "./components/home"
+import Bridge from "./components/bridge"
 
 export default function Page() {
-  return <Home />
+  return <Bridge />
 }

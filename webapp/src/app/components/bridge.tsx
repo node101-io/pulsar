@@ -248,9 +248,19 @@ export default function Bridge() {
               <div className="flex gap-2 items-center w-full">
                 <Image src="/clock.svg" alt="clock" width={14} height={14} />
                 <span className="text-sm text-background leading-none mr-auto mt-1">~2.5 Hours</span>
-                <Image src="/gas.svg" alt="gas" width={15} height={15} />
-                <Image src="/arrow-dark.svg" alt="arrow-right" width={11} height={11} />
-                <span className="text-base font-medium text-background leading-none font-family-darker-grotesque mb-1">{gasFee.toFixed(3)} pMINA</span>
+                <label htmlFor="gas-fee" className="flex items-center gap-0 cursor-pointer">
+                  <input type="checkbox" className="hidden peer/gas-fee" id="gas-fee" defaultChecked={true} />
+                  <Image src="/gas.svg" alt="gas" width={15} height={15} className="mr-2" />
+                  <Image src="/arrow-dark.svg" alt="arrow-right" width={11} height={11} className="peer-checked/gas-fee:rotate-90 transition-all duration-300 mr-2 peer-checked/gas-fee:mr-0" />
+                  <div className={cn(
+                    "grid transition-all duration-300 ease-in-out peer-checked/gas-fee:grid-cols-[0fr] peer-checked/gas-fee:opacity-0",
+                    "grid-cols-[1fr]"
+                  )}>
+                    <div className="overflow-hidden">
+                      <span className="text-nowrap text-base font-medium text-background leading-none font-family-darker-grotesque mb-1">{gasFee.toFixed(3)} pMINA</span>
+                    </div>
+                  </div>
+                </label>
               </div>
             </div>
           </div>

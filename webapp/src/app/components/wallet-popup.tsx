@@ -4,7 +4,7 @@ import { useWallet } from "@/lib/wallet-context"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "@/lib/client"
 import { fetchPminaBalance } from "@/lib/utils"
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 
 type WalletType = 'mina' | 'cosmos' | null
 
@@ -83,6 +83,7 @@ export default function WalletPopup({ isOpen, walletType, onClose }: WalletPopup
   const [currentView, setCurrentView] = useState<'main' | 'send'>('main');
   const [sendAmount, setSendAmount] = useState<string>('');
   const [recipientAddress, setRecipientAddress] = useState<string>('');
+  const popupRef = useRef<HTMLDivElement>(null);
 
   const {
     data: pminaBalance,
@@ -119,10 +120,35 @@ export default function WalletPopup({ isOpen, walletType, onClose }: WalletPopup
     retryDelay: 1000,
   });
 
-  if (balanceError)
-    toast.error('Failed to load balance from Osmosis RPC', { id: 'balance-error' });
+  const handleClose = () => {
+    setCurrentView('main');
+    setSendAmount('');
+    setRecipientAddress('');
+    onClose();
+  };
 
-  if (!isOpen) return null
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(event.target as Node)) {
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [isOpen, handleClose]);
+
+  // Show balance error toast
+  if (balanceError) {
+    toast.error('Failed to load balance from Osmosis RPC', { id: 'balance-error' });
+  }
+
+  if (!isOpen) return null;
 
   const handleAuroExtensionClick = async () => {
     if (!isWalletInstalled) {
@@ -157,13 +183,6 @@ export default function WalletPopup({ isOpen, walletType, onClose }: WalletPopup
         id: 'copy-failed'
       });
     }
-  };
-
-  const handleClose = () => {
-    setCurrentView('main');
-    setSendAmount('');
-    setRecipientAddress('');
-    onClose();
   };
 
   const handleSendClick = () => {
@@ -506,8 +525,11 @@ export default function WalletPopup({ isOpen, walletType, onClose }: WalletPopup
     </>
   );
 
-  return (
-    <div className="absolute flex flex-col top-full right-0 mt-8 w-88 min-h-160 bg-white rounded-4xl shadow-lg z-50 py-6 px-4 font-family-darker-grotesque border-1 border-background border-solid rounded-tr-none">
+    return (
+    <div
+      ref={popupRef}
+      className="absolute flex flex-col top-full right-0 mt-8 w-88 min-h-160 bg-white rounded-4xl shadow-lg z-50 py-6 px-4 font-family-darker-grotesque border-1 border-background border-solid rounded-tr-none"
+    >
       {walletType === 'cosmos' ? renderCosmosWallet() : renderMinaWallet()}
     </div>
   )
