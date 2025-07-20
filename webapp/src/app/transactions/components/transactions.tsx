@@ -3,9 +3,8 @@
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 import Image from "next/image"
-import { useQuery } from "@tanstack/react-query"
-import { client } from "@/lib/client"
-import { useWallet } from "@/lib/wallet-context"
+import { useWallet } from "@/app/_providers/wallet"
+import { useMinaPrice } from "@/lib/hooks"
 
 export default function Transactions() {
   const { account, isConnected } = useWallet()
@@ -13,19 +12,7 @@ export default function Transactions() {
   const [activeStatusFilter, setActiveStatusFilter] = useState<'pending' | 'settled'>('pending')
   const [searchAddress, setSearchAddress] = useState<string>('')
 
-  const {
-    data: priceData,
-  } = useQuery({
-    queryKey: ['minaPrice'],
-    queryFn: async () => {
-      const res = await client.price.mina.$get();
-      return await res.json();
-    },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    retry: 2,
-    retryDelay: 1000,
-  });
+  const { data: priceData } = useMinaPrice();
 
   const price = priceData?.data?.price || 0;
 
