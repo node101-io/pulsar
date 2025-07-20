@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { ProviderError, ChainInfoArgs, SignMessageArgs, SignedData } from './types';
+import { ProviderError, ChainInfoArgs, SignMessageArgs, SignedData } from '../../lib/types';
 
 interface WalletState {
   isConnected: boolean;
@@ -28,11 +28,9 @@ export function useWallet() {
   return context;
 }
 
-interface WalletProviderProps {
+export function WalletProvider({ children }: {
   children: ReactNode;
-}
-
-export function WalletProvider({ children }: WalletProviderProps) {
+}) {
   const [walletState, setWalletState] = useState<WalletState>({
     isConnected: false,
     isConnecting: false,

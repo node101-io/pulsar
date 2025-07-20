@@ -2,17 +2,16 @@
 
 import { useState } from "react"
 import { cn } from "@/lib/utils"
-import { useWallet } from "@/lib/wallet-context"
+import { useWallet } from "@/app/_providers/wallet"
 import { usePathname } from "next/navigation"
-import WalletPopup from "./wallet-popup"
+import WalletPopup from "./wallet-popup/index"
 import Image from "next/image"
 import Link from "next/link"
-
-type WalletType = 'mina' | 'cosmos' | null
+import { WalletType } from "@/lib/types"
 
 export default function Header() {
   const [popupWalletType, setPopupWalletType] = useState<WalletType>(null)
-  const { isConnected, account, disconnectWallet } = useWallet()
+  const { isConnected, account } = useWallet()
   const pathname = usePathname()
 
   const formatAddress = (address: string) => {
@@ -44,7 +43,7 @@ export default function Header() {
           href="/"
           className={cn(
             "font-medium cursor-pointer transition-color duration-300",
-            isActive('/') && "text-[#FB8F6D]"
+            isActive('/bridge') && "text-[#FB8F6D]"
           )}
         >
           Bridge
@@ -70,7 +69,6 @@ export default function Header() {
       </nav>
 
       <div className="relative flex items-center gap-3">
-        {/* Mina Wallet Button */}
         <button
           onClick={() => setPopupWalletType(popupWalletType === 'mina' ? null : 'mina')}
           className={cn(
@@ -81,7 +79,6 @@ export default function Header() {
           <span className="pb-1 pt-2 leading-none text-text pr-1">{isConnected && account ? formatAddress(account) : 'MINA'}</span>
         </button>
 
-        {/* Cosmos Wallet Button */}
         <button
           onClick={() => setPopupWalletType(popupWalletType === 'cosmos' ? null : 'cosmos')}
           className={cn(
@@ -97,7 +94,7 @@ export default function Header() {
         <WalletPopup
           isOpen={popupWalletType !== null}
           walletType={popupWalletType}
-          onClose={() => setPopupWalletType(null)}
+          setPopupWalletType={setPopupWalletType}
         />
       </div>
     </header>

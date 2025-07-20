@@ -1,17 +1,12 @@
 "use client"
 
-import { cn, fetchPminaBalance } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import { useQuery } from "@tanstack/react-query"
-import { client } from "@/lib/client"
-import { useWallet } from "@/lib/wallet-context"
+import { useWallet } from "@/app/_providers/wallet"
+import { BRIDGE_ADDRESS } from "@/lib/constants"
 import { toast } from "react-hot-toast"
-import type { SendTransactionResult, ProviderError } from "@/lib/types"
-
-const MINA_RPC_URL = "https://api.minascan.io/node/mainnet/v1/graphql"
-// Pulsar bridge address - this should be the actual bridge contract address
-const BRIDGE_ADDRESS = "B62qkUHaJUHERZuCHQhXCQ8xsGBqyYSgjQsKnKN5HhSJecakuJ4pYyk"
+import { useMinaPrice, usePminaBalance, useMinaBalance } from "@/lib/hooks"
 
 export default function Bridge() {
   const { account, isConnected } = useWallet()
@@ -20,56 +15,22 @@ export default function Bridge() {
   const [gasFee, setGasFee] = useState<number>(0)
   const [isTransacting, setIsTransacting] = useState(false)
 
-  const {
-    data: priceData,
-  } = useQuery({
-    queryKey: ['minaPrice'],
-    queryFn: async () => {
-      const res = await client.price.mina.$get();
-      return await res.json();
-    },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    retry: 2,
-    retryDelay: 1000,
-  });
+  const { data: priceData } = useMinaPrice();
 
   const {
     data: balanceData,
     isLoading: isLoadingBalance,
     error: balanceError,
-  } = useQuery({
-    queryKey: ['minaBalance', account],
-    queryFn: async () => {
-      if (!account) throw new Error('No account connected');
-
-      const { fetchAccount } = await import('o1js');
-      const accountInfo = await fetchAccount({ publicKey: account }, MINA_RPC_URL);
-
-       if (accountInfo.error || !accountInfo.account)
-         return '';
-
-       return accountInfo.account.balance.toString();
-    },
+  } = useMinaBalance(account, {
     enabled: !!account && isConnected && activeTab === 'deposit',
-    staleTime: 30000,
-    gcTime: 5 * 60 * 1000,
-    retry: 3,
-    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   const {
     data: pminaBalanceData,
     isLoading: isLoadingPminaBalance,
     error: pminaBalanceError,
-  } = useQuery({
-    queryKey: ['pminaBalance', account],
-    queryFn: () => fetchPminaBalance(account!),
+  } = usePminaBalance(account, {
     enabled: !!account && isConnected && activeTab === 'withdraw',
-    staleTime: 30000,
-    gcTime: 5 * 60 * 1000,
-    retry: 3,
-    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   const balance = activeTab === 'deposit'

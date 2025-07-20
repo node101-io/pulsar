@@ -2,7 +2,8 @@
 
 import type { Metadata } from "next"
 import { Toaster } from "react-hot-toast"
-import { Providers } from "./components/providers"
+import { WalletProvider } from "@/app/_providers/wallet"
+import { QueryClientProvider } from "@/app/_providers/query-client-provider"
 import Header from "./components/header"
 import localFont from "next/font/local"
 import { Darker_Grotesque } from "next/font/google"
@@ -24,25 +25,20 @@ const darkerGrotesque = Darker_Grotesque({
   variable: "--font-darker-grotesque",
 })
 
-interface RootLayoutProps {
+export default function RootLayout({ children }: {
   children: React.ReactNode
-}
-
-export default function RootLayout({ children }: RootLayoutProps) {
+}) {
   return (
     <html lang="en" className={`${recady.variable} ${darkerGrotesque.variable} font-family-recady bg-background h-dvh w-dvw hide-scrollbar`}>
       <head>
-        <title>Pulsar - Cross-Chain Bridge Platform</title>
-        <meta name="description" content="The ultimate cross-chain bridge platform for seamless asset transfers" />
+        <title>Pulsar</title>
+        <meta name="description" content="TODO" />
         <link rel="icon" href="/favicon.ico" />
       </head>
       <body className={`font-recady antialiased h-dvh w-dvw overscroll-none flex flex-col`}>
-        <Providers>
-          <Header />
-          {children}
-          <Toaster
-            position="top-center"
-            toastOptions={{
+        <WalletProvider>
+          <QueryClientProvider>
+            <Toaster position="top-center" toastOptions={{
               duration: 3000,
               style: {
                 background: '#fff',
@@ -63,9 +59,11 @@ export default function RootLayout({ children }: RootLayoutProps) {
                   secondary: '#fff',
                 },
               },
-            }}
-          />
-        </Providers>
+            }}/>
+            <Header />
+            {children}
+          </QueryClientProvider>
+        </WalletProvider>
         <Analytics />
         <SpeedInsights />
       </body>

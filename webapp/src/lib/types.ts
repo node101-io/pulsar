@@ -49,6 +49,8 @@ export interface MinaProvider {
   on(event: "chainChanged", callback: (chainInfo: ChainInfoArgs) => void): void;
 }
 
+export type WalletType = 'mina' | 'cosmos' | null
+
 declare global {
   interface Window {
     mina?: MinaProvider;
