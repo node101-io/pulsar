@@ -69,9 +69,14 @@ import {
   ValidateReduceProgram,
   ValidateReducePublicInput,
 } from './ValidateReduce.js';
-import { devnetTestAccounts, validatorSet, testAccounts } from './test/mock.js';
+import {
+  devnetTestAccounts,
+  validatorSet,
+  testAccounts,
+  mockValidatorList,
+} from './test/mock.js';
 import { TestUtils } from './utils/testUtils.js';
-
+import { DeployScripts } from './scripts/deploy.js';
 export {
   merkleActionsAdd,
   emptyActionListHash,
@@ -132,5 +137,7 @@ export {
   devnetTestAccounts,
   validatorSet,
   testAccounts,
+  mockValidatorList,
   TestUtils,
+  DeployScripts,
 };
