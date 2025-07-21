@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
 import { fetchAccount, Field, PublicKey, Reducer } from "o1js";
-import { fetchActions, fetchBlockHeight, fetchRawActions, setMinaNetwork } from "pulsar-contracts";
+import { fetchBlockHeight, fetchRawActions, setMinaNetwork } from "pulsar-contracts";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -22,7 +22,10 @@ export class MinaClient extends EventEmitter {
 
     constructor(
         watchedAddress: PublicKey,
-        network: "devnet" | "mainnet" | "lightnet" = "devnet",
+        network: "devnet" | "mainnet" | "lightnet" = (process.env.MINA_NETWORK as
+            | "devnet"
+            | "mainnet"
+            | "lightnet") || "lightnet",
         lastSeenBlockHeight: number = 0,
         pollInterval = POLL_INTERVAL_MS
     ) {

@@ -10,10 +10,6 @@ services:
         command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
         env_file:
             - .env
-        # healthcheck:
-        #     test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-        #     interval: 10s
-        #     retries: 5
 
     mongo:
         image: mongo:7-jammy
@@ -28,16 +24,12 @@ services:
             - mongo-data:/data/db
         expose:
             - 27017
-        # ports:
-        # - "27017:27017"
-        # networks: [pulsar-net]
-        # healthcheck:
-        #     test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
-        #     interval: 10s
-        #     retries: 5
 
     node-manager:
-        image: kadirchan/pulsar-prover-node:latest
+        # image: kadirchan/pulsar-prover-node:latest
+        build:
+            context: .
+            dockerfile: Dockerfile
         networks: [pulsar-net]
         env_file: .env
         environment:
@@ -58,10 +50,13 @@ services:
         entrypoint: ["node", "dist/src/nodeManager.js"]
         restart: always
         depends_on: [redis, mongo, mock-pulsar, mina-local-lightnet]
-        profiles: ["app"]
+        profiles: ["mock-pulsar", "full-mock", "prod"]
 
     settlement-worker:
-        image: kadirchan/pulsar-prover-node:latest
+        # image: kadirchan/pulsar-prover-node:latest
+        build:
+            context: .
+            dockerfile: Dockerfile
         networks: [pulsar-net]
         env_file: .env
         environment:
@@ -80,33 +75,25 @@ services:
             MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
         restart: always
         depends_on: [redis, mongo, node-manager, mock-pulsar, mina-local-lightnet]
-        profiles: ["app"]
-        # deploy:
-        #     resources:
-        #         limits:
-        #             memory: 3g
-        # healthcheck:
-        #     test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
-        #     interval: 30s
-        #     retries: 3
+        profiles: ["mock-pulsar", "full-mock", "prod"]
 
     reduce-worker:
         extends: settlement-worker
         environment:
             WORKER: reduceWorker
-        profiles: ["app"]
+        profiles: ["mock-pulsar", "full-mock", "prod"]
 
     merge-worker:
         extends: settlement-worker
         environment:
             WORKER: mergeWorker
-        profiles: ["app"]
+        profiles: ["mock-pulsar", "full-mock", "prod"]
 
     collect-worker:
         extends: settlement-worker
         environment:
             WORKER: collectWorker
-        profiles: ["app"]
+        profiles: ["mock-pulsar", "full-mock", "prod"]
 
     mock-pulsar:
         build:
@@ -117,11 +104,7 @@ services:
         ports:
             - "50051:50051"
         networks: [pulsar-net]
-        profiles: ["app"]
-        # healthcheck:
-        # test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
-        # interval: 10s
-        # retries: 3
+        profiles: ["mock-pulsar", "full-mock"]
 
     mina-local-lightnet:
         image: o1labs/mina-local-network:compatible-latest-lightnet
@@ -138,11 +121,21 @@ services:
             - "3085:3085"
             - "5432:5432"
             - "8181:8181"
-        profiles: ["app"]
-        # healthcheck:
-        #     test: ["CMD", "wget", "-qO-", "http://localhost:8080/graphql"]
-        #     interval: 10s
-        #     retries: 5
+        profiles: ["mock-pulsar", "full-mock"]
+
+    mock-contract:
+        build:
+            context: .
+            dockerfile: Dockerfile.mock-contract
+        networks: [pulsar-net]
+        env_file: .env
+        environment:
+            DOCKER: "1"
+            MINA_NETWORK: ${MINA_NETWORK}
+            MINA_PRIVATE_KEY: ${MINA_PRIVATE_KEY}
+            CONTRACT_PRIVATE_KEY: ${CONTRACT_PRIVATE_KEY}
+        depends_on: [mina-local-lightnet]
+        profiles: ["mock-pulsar", "full-mock"]
 
 volumes:
     redis-data:
