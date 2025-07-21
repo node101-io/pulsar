@@ -11,4 +11,12 @@ message Module {
 
   // authority defines the custom module authority. If not set, defaults to the governance module.
   string authority = 1;
+  
+  // secondary_key_hex allows providing the secondary key directly as a hex string.
+  // If provided, this takes precedence over secondary_key_path and the default file lookup.
+  string secondary_key_hex = 2;
+  
+  // secondary_key_path allows specifying a custom path to the secondary key file.
+  // If provided, this takes precedence over the default $HOME/.secondary_key.toml lookup.
+  string secondary_key_path = 3;
 }

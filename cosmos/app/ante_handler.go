@@ -45,7 +45,7 @@ func NewAnteHandler(options HandlerOptions, logger log.Logger) (sdk.AnteHandler,
 	anteDecorators := []sdk.AnteDecorator{
 		ante.NewSetUpContextDecorator(),
 		circuitante.NewCircuitBreakerDecorator(options.CircuitKeeper),
-		ante.NewExtensionOptionsDecorator(options.ExtensionOptionChecker),
+		//ante.NewExtensionOptionsDecorator(options.ExtensionOptionChecker),
 		consumerante.NewDisabledModulesDecorator("/cosmos.evidence", "/cosmos.slashing"),
 		ante.NewValidateBasicDecorator(),
 		ante.NewTxTimeoutHeightDecorator(),
@@ -53,13 +53,24 @@ func NewAnteHandler(options HandlerOptions, logger log.Logger) (sdk.AnteHandler,
 		ante.NewConsumeGasForTxSizeDecorator(options.AccountKeeper),
 		ante.NewDeductFeeDecorator(options.AccountKeeper, options.BankKeeper, options.FeegrantKeeper, options.TxFeeChecker),
 		// SetPubKeyDecorator must be called before all signature verification decorators
-		ante.NewSetPubKeyDecorator(options.AccountKeeper),
+		//ante.NewSetPubKeyDecorator(options.AccountKeeper),
+		minakeysante.NewConditionalSetPubKeyDecorator(
+			ante.NewSetPubKeyDecorator(options.AccountKeeper),
+			logger,
+		),
 		ante.NewValidateSigCountDecorator(options.AccountKeeper),
 		ante.NewSigGasConsumeDecorator(options.AccountKeeper, sigGasConsumer),
-		ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
+		minakeysante.NewConditionalSigVerifyDecorator(
+			ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
+			options.MinaKeeper,
+			options.AccountKeeper,
+			options.SignModeHandler,
+			logger,
+		),
+		//ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
 		ibcante.NewRedundantRelayDecorator(options.IBCKeeper),
-		// MinaKeys kontrolü - signature verification'dan sonra ama transaction commit'ten önce
+		// MinaKeys Checker
 		minakeysante.NewMinaRegistrationDecorator(options.MinaKeeper, options.AccountKeeper),
 	}
 

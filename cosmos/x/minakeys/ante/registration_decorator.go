@@ -1,7 +1,6 @@
 package ante
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	errorsmod "cosmossdk.io/errors"
@@ -67,29 +66,8 @@ func (mrd MinaRegistrationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simu
 		signerStr := sdk.AccAddress(signerAddr).String()
 		fmt.Printf("🔍 Checking signer: %s\n", signerStr)
 
-		// Parse the address
-		signerAddr, err := sdk.AccAddressFromBech32(signerStr)
-		if err != nil {
-			return ctx, errorsmod.Wrapf(sdkerrors.ErrInvalidAddress, "invalid signer address: %s", signerStr)
-		}
-
-		// Get the public key from the account
-		account := mrd.accountKeeper.GetAccount(ctx, signerAddr)
-		if account == nil {
-			return ctx, errorsmod.Wrapf(sdkerrors.ErrUnknownAddress, "account not found: %s", signerStr)
-		}
-
-		pubKey := account.GetPubKey()
-		if pubKey == nil {
-			return ctx, errorsmod.Wrapf(sdkerrors.ErrInvalidPubKey, "account has no public key: %s", signerStr)
-		}
-
-		// Convert the public key to hex
-		pubKeyHex := hex.EncodeToString(pubKey.Bytes())
-		fmt.Printf("🔍 Checking pubKeyHex: %s\n", pubKeyHex)
-
 		// Check if the public key is registered in Mina keystore
-		_, found := mrd.minaKeeper.GetKeyStore(ctx, pubKeyHex)
+		_, found := mrd.minaKeeper.GetKeyStore(ctx, signerStr)
 		if !found {
 			fmt.Printf("❌ NOT FOUND! Signer %s not registered in Mina keystore\n", signerStr)
 			return ctx, errorsmod.Wrapf(

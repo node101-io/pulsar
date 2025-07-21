@@ -103,14 +103,8 @@ func (h *VoteExtHandler) VerifyVoteExtensionHandler() sdk.VerifyVoteExtensionHan
 			return &abci.ResponseVerifyVoteExtension{Status: abci.ResponseVerifyVoteExtension_REJECT}, fmt.Errorf("unknown validator address %s", consAddrStr)
 		}
 
-		pubBytes, err := hex.DecodeString(keyStore.MinaPublicKey)
+		pubKey, err := new(keys.PublicKey).FromAddress(keyStore.MinaPublicKey)
 		if err != nil {
-			ctx.Logger().Info("invalid mina public key hex for validator", "validator", consAddrStr, "error", err)
-			return &abci.ResponseVerifyVoteExtension{Status: abci.ResponseVerifyVoteExtension_REJECT}, fmt.Errorf("invalid mina public key hex for validator %s: %w", consAddrStr, err)
-		}
-
-		pubKey := new(keys.PublicKey)
-		if err := pubKey.UnmarshalBytes(pubBytes); err != nil {
 			ctx.Logger().Info("failed to unmarshal mina public key for validator", "validator", consAddrStr, "error", err)
 			return &abci.ResponseVerifyVoteExtension{Status: abci.ResponseVerifyVoteExtension_REJECT}, fmt.Errorf("failed to unmarshal mina public key for validator %s: %w", consAddrStr, err)
 		}

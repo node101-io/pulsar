@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"cosmossdk.io/core/appmodule"
@@ -15,11 +14,13 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/spf13/viper"
 
 	// this line is used by starport scaffolding # 1
 
@@ -182,8 +183,9 @@ func init() {
 type SecondaryKeyInputs struct {
 	depinject.In
 
-	Config *modulev1.Module
-	Logger log.Logger
+	Config  *modulev1.Module
+	Logger  log.Logger
+	AppOpts servertypes.AppOptions `optional:"true"`
 }
 
 type SecondaryKeyOutputs struct {
@@ -192,25 +194,145 @@ type SecondaryKeyOutputs struct {
 	SecondaryKey *types.SecondaryKey
 }
 
+// readAppTomlConfig attempts to read minakeys configuration from app.toml file
+func readAppTomlConfig(logger log.Logger) (string, string) {
+	var secondaryKeyHex, secondaryKeyPath string
+
+	// Try to find app.toml in common locations
+	possiblePaths := []string{
+		//"config/app.toml", // relative to home
+		"app.toml", // relative to current dir
+		//"/home/littlehatboy/.cosmos/config/app.toml", // absolute path for testing
+	}
+
+	// Also try home directory if available
+	/* if home, err := os.UserHomeDir(); err == nil {
+		possiblePaths = append(possiblePaths, filepath.Join(home, ".cosmos", "config", "app.toml"))
+	} */
+
+	for _, configPath := range possiblePaths {
+		logger.Info("Trying to read app.toml", "path", configPath)
+
+		v := viper.New()
+		v.SetConfigFile(configPath)
+		v.SetConfigType("toml")
+
+		if err := v.ReadInConfig(); err != nil {
+			logger.Info("Could not read config file", "path", configPath, "error", err)
+			continue
+		}
+
+		// Successfully read config file
+		logger.Info("Successfully read app.toml", "path", configPath)
+
+		secondaryKeyHex = v.GetString("minakeys.secondary_key_hex")
+		secondaryKeyPath = v.GetString("minakeys.secondary_key_path")
+
+		logger.Info("Read config values",
+			"secondary_key_hex_length", len(secondaryKeyHex),
+			"secondary_key_path", secondaryKeyPath)
+
+		if secondaryKeyHex != "" || secondaryKeyPath != "" {
+			return secondaryKeyHex, secondaryKeyPath
+		}
+	}
+
+	logger.Info("No app.toml found or no minakeys configuration in app.toml")
+	return "", ""
+}
+
 func ProvideSecondaryKey(in SecondaryKeyInputs) (SecondaryKeyOutputs, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return SecondaryKeyOutputs{}, fmt.Errorf("cannot resolve home directory: %w", err)
+	var hexStr string
+	var err error
+
+	// Debug: Log what we received in the config
+	in.Logger.Info("ProvideSecondaryKey called",
+		"config_is_nil", in.Config == nil,
+		"app_opts_is_nil", in.AppOpts == nil)
+
+	// log the appOpts
+	in.Logger.Info("AppOpts", "appOpts", in.AppOpts)
+	// log the config
+	in.Logger.Info("Config", "config", in.Config)
+
+	// Priority 1: Try to read from app.toml directly
+	hexFromToml, pathFromToml := readAppTomlConfig(in.Logger)
+	if hexFromToml != "" {
+		hexStr = strings.TrimSpace(hexFromToml)
+		in.Logger.Info("Using secondary key hex from app.toml")
+	} else if pathFromToml != "" {
+		data, err := os.ReadFile(pathFromToml)
+		if err != nil {
+			return SecondaryKeyOutputs{}, fmt.Errorf("failed to read secondary key from app.toml path %s: %w", pathFromToml, err)
+		}
+		hexStr = strings.TrimSpace(string(data))
+		in.Logger.Info("Using secondary key from app.toml file path", "path", pathFromToml)
 	}
 
-	path := filepath.Join(home, ".secondary_key.toml")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return SecondaryKeyOutputs{}, fmt.Errorf("failed to read %s: %w", path, err)
+	// Priority 2: Try to read from app.toml via AppOptions (if direct reading didn't work)
+	if hexStr == "" && in.AppOpts != nil {
+		in.Logger.Info("Direct app.toml reading didn't work, trying AppOpts")
+
+		// Try secondary_key_hex first
+		hexFromAppToml := in.AppOpts.Get("minakeys.secondary_key_hex")
+		in.Logger.Info("Checking minakeys.secondary_key_hex from app.toml",
+			"value_is_nil", hexFromAppToml == nil,
+			"value", hexFromAppToml)
+
+		if hexFromAppToml != nil {
+			if hexValue, ok := hexFromAppToml.(string); ok && hexValue != "" {
+				hexStr = strings.TrimSpace(hexValue)
+				in.Logger.Info("Using secondary key hex from app.toml via AppOpts")
+			} else {
+				in.Logger.Info("secondary_key_hex from app.toml is not a valid string", "type", fmt.Sprintf("%T", hexFromAppToml))
+			}
+		}
+
+		// If no hex, try secondary_key_path from app.toml
+		if hexStr == "" {
+			pathFromAppToml := in.AppOpts.Get("minakeys.secondary_key_path")
+			in.Logger.Info("Checking minakeys.secondary_key_path from app.toml",
+				"value_is_nil", pathFromAppToml == nil,
+				"value", pathFromAppToml)
+
+			if pathFromAppToml != nil {
+				if pathValue, ok := pathFromAppToml.(string); ok && pathValue != "" {
+					data, err := os.ReadFile(pathValue)
+					if err != nil {
+						return SecondaryKeyOutputs{}, fmt.Errorf("failed to read secondary key from app.toml path %s: %w", pathValue, err)
+					}
+					hexStr = strings.TrimSpace(string(data))
+					in.Logger.Info("Using secondary key from app.toml file path via AppOpts", "path", pathValue)
+				} else {
+					in.Logger.Info("secondary_key_path from app.toml is not a valid string", "type", fmt.Sprintf("%T", pathFromAppToml))
+				}
+			}
+		}
+	} else if hexStr == "" {
+		in.Logger.Info("AppOpts is nil, cannot read from app.toml via AppOpts")
 	}
 
-	// file is just the raw hex string (whitespace‐trimmed)
-	hexStr := strings.TrimSpace(string(data))
+	// Priority 3: Fallback to module config (for programmatic configuration)
+	if hexStr == "" && in.Config != nil {
+		in.Logger.Info("Fallback to module config")
+		if in.Config.SecondaryKeyHex != "" {
+			hexStr = strings.TrimSpace(in.Config.SecondaryKeyHex)
+			in.Logger.Info("Using secondary key hex from module config")
+		} else if in.Config.SecondaryKeyPath != "" {
+			data, err := os.ReadFile(in.Config.SecondaryKeyPath)
+			if err != nil {
+				return SecondaryKeyOutputs{}, fmt.Errorf("failed to read %s: %w", in.Config.SecondaryKeyPath, err)
+			}
+			hexStr = strings.TrimSpace(string(data))
+			in.Logger.Info("Using secondary key from module config path", "path", in.Config.SecondaryKeyPath)
+		}
+	}
+
+	// If still no configuration found, return error
 	if hexStr == "" {
-		return SecondaryKeyOutputs{}, fmt.Errorf("%s is empty; please put your secondary-key hex there", path)
+		return SecondaryKeyOutputs{}, fmt.Errorf("no secondary key configuration provided: check app.toml [minakeys] section, module config, or %s/.secondary_key.toml", os.Getenv("HOME"))
 	}
 
-	// log the hexStr
 	in.Logger.Info("Hex string of secondary key", "hexStr", hexStr)
 
 	// decode and unmarshal the hex-string into a SecondaryKey
@@ -220,7 +342,7 @@ func ProvideSecondaryKey(in SecondaryKeyInputs) (SecondaryKeyOutputs, error) {
 		return SecondaryKeyOutputs{}, err
 	}
 
-	in.Logger.Info("Secondary key", "secondaryKey", secondaryKey)
+	in.Logger.Info("Secondary key loaded successfully")
 
 	return SecondaryKeyOutputs{SecondaryKey: secondaryKey}, nil
 }

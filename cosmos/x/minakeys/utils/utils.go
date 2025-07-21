@@ -30,16 +30,9 @@ func VerifyCosmosSignature(cosmosPubKeyHex string, message string, sigBz []byte)
 }
 
 // VerifyMinaSignature checks that sigBz is a valid signature of message by the provided Mina public key (hex-encoded).
-func VerifyMinaSignature(minaPubKeyHex string, message string, sigBz []byte) error {
-	// Decode hex-encoded public key
-	pubKeyBytes, err := hex.DecodeString(minaPubKeyHex)
-	if err != nil {
-		return sdkerrors.ErrInvalidAddress.Wrap("invalid mina public key hex")
-	}
-
-	// Construct schnorr PubKey
-	var pubKey keys.PublicKey
-	err = pubKey.UnmarshalBytes(pubKeyBytes)
+func VerifyMinaSignature(minaAddr string, message string, sigBz []byte) error {
+	var minaPubKey keys.PublicKey
+	minaPubKey, err := minaPubKey.FromAddress(minaAddr)
 	if err != nil {
 		return sdkerrors.ErrInvalidAddress.Wrap("invalid mina public key")
 	}
@@ -52,7 +45,7 @@ func VerifyMinaSignature(minaPubKeyHex string, message string, sigBz []byte) err
 	}
 
 	// Verify signature
-	if !pubKey.VerifyMessage(&sig, message, types.DevnetNetworkID) {
+	if !minaPubKey.VerifyMessage(&sig, message, types.DevnetNetworkID) {
 		return sdkerrors.ErrUnauthorized.Wrap("invalid mina signature")
 	}
 	return nil

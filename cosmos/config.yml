@@ -20,9 +20,38 @@ faucet:
 validators:
 - name: alice
   bonded: 100000000stake
+  app:
+    
+    grpc:
+      address: localhost:9091
+
 - name: validator1
   bonded: 100000000stake
+  app:
+    
+    grpc:
+      address: localhost:9091
+
 - name: validator2
   bonded: 200000000stake
+  app:
+   
+    grpc:
+      address: localhost:9091
+
 - name: validator3
   bonded: 300000000stake
+  app:
+    grpc.address: localhost:9091
+    grpc:
+      address: localhost:9091
+
+genesis:
+  consensus:
+    params:
+      abci:
+        vote_extensions_enable_height: "1"
+
+
+  
+

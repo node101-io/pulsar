@@ -69,8 +69,11 @@ import (
 	ibcconsumertypes "github.com/cosmos/interchain-security/v5/x/ccv/consumer/types"
 
 	minakeysmodulekeeper "github.com/node101-io/pulsar/cosmos/x/minakeys/keeper"
+	//minakeystypes "github.com/node101-io/pulsar/cosmos/x/minakeys/types"
+
 	// this line is used by starport scaffolding # stargate/app/moduleImport
 
+	//"github.com/cosmos/gogoproto/proto"
 	"github.com/node101-io/pulsar/cosmos/docs"
 )
 
@@ -148,6 +151,9 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	// Register TxTypeExtension in global protobuf registry
+	//proto.RegisterType((*minakeystypes.TxTypeExtension)(nil), "cosmos.minakeys.TxTypeExtension")
 }
 
 // AppConfig returns the default app config.

@@ -127,7 +127,7 @@ func ProvideClientContext(
 	txConfigOpts tx.ConfigOptions,
 	legacyAmino *codec.LegacyAmino,
 ) client.Context {
-	// Mina algoritmasını keyring'e register etmek için Option fonksiyonu yaratıyoruz
+	// Register the mina algorithm to the keyring
 	minaAlgoOption := func(options *keyring.Options) {
 		options.SupportedAlgos = append(options.SupportedAlgos, signing.Mina)
 	}
