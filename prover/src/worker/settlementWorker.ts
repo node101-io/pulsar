@@ -24,7 +24,7 @@ await initMongo();
  */
 createWorker<SettlementJob, void>({
     queueName: "settlement",
-    maxJobsPerWorker: 800,
+    maxJobsPerWorker: 160,
     jobHandler: async ({ data, id }) => {
         try {
             const { blockHeight, voteExts } = data;
