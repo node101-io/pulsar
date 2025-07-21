@@ -8,7 +8,7 @@ dotenv.config();
 
 createWorker<MergeJob, void>({
     queueName: "merge",
-    maxJobsPerWorker: 100,
+    maxJobsPerWorker: 10,
     jobHandler: async ({ data }) => {
         const { lowerBlock, upperBlock } = data;
 

@@ -18,7 +18,14 @@ import {
   merkleActionsAdd,
 } from '../types/actionHelpers.js';
 
-export { MapFromArray, CalculateMax, PrepareBatch, PackActions };
+export {
+  MapFromArray,
+  CalculateMax,
+  PrepareBatch,
+  PrepareBatchWithActions,
+  PackActions,
+  validateActionQueue,
+};
 
 function MapFromArray(array: Field[]) {
   const map = new Map<string, number>();
@@ -33,6 +40,7 @@ function MapFromArray(array: Field[]) {
   return map;
 }
 
+// maple
 function CalculateMax(
   includedActionsMap: Map<string, number>,
   contractInstance: SettlementContract,
@@ -222,5 +230,123 @@ async function PrepareBatch(
     actionStackProof,
     publicInput,
     mask,
+  };
+}
+
+async function PrepareBatchWithActions(
+  includedActions: Map<string, number>,
+  contractInstance: SettlementContract,
+  packedActions: {
+    action: PulsarAction;
+    hash: bigint;
+  }[]
+) {
+  if (packedActions.length === 0) {
+    log('No actions found for the contract.');
+    return {
+      endActionState: 0n,
+      batchActions: [],
+      batch: Batch.empty(),
+      useActionStack: Bool(false),
+      actionStackProof: undefined,
+      publicInput: ValidateReducePublicInput.default,
+      mask: ReduceMask.empty(),
+    };
+  }
+
+  const { endActionState, batchActions, publicInput, mask } = CalculateMax(
+    includedActions,
+    contractInstance,
+    packedActions
+  );
+
+  let actionStack = packedActions
+    .slice(batchActions.length)
+    .map((pack) => pack.action);
+
+  log(
+    'Batch actions:',
+    batchActions.map((action) => action.toJSON()),
+    '\n',
+    'Action stack:',
+    actionStack.map((action) => action.toJSON())
+  );
+
+  const batch = Batch.fromArray(batchActions);
+
+  const { useActionStack, actionStackProof } = await GenerateActionStackProof(
+    Field.from(endActionState),
+    actionStack
+  );
+
+  log(
+    'useActionStack:',
+    useActionStack.toBoolean(),
+    '\n',
+    'actionStackProof Input:',
+    actionStackProof.publicInput.toJSON(),
+    'output:',
+    actionStackProof.publicOutput.toJSON()
+  );
+
+  return {
+    batchActions,
+    batch,
+    useActionStack,
+    actionStackProof,
+    publicInput,
+    mask,
+  };
+}
+
+function validateActionQueue(
+  rawActions: {
+    actions: string[][];
+    hash: string;
+  }[],
+  finalActionState: string
+): {
+  actions: Array<{ action: PulsarAction; hash: bigint }>;
+  isValid: boolean;
+} {
+  if (rawActions.length === 0) {
+    return {
+      actions: [],
+      isValid: false,
+    };
+  }
+
+  const actions = rawActions.map((action) => {
+    return {
+      action: PulsarAction.fromRawAction(action.actions[0]),
+      hash: BigInt(action.hash),
+    };
+  });
+
+  actions.forEach((action, index) => {
+    if (action.action.unconstrainedHash().toBigInt() !== action.hash) {
+      log(
+        `Action hash mismatch at index ${index}: expected ${
+          action.hash
+        }, got ${action.action.unconstrainedHash().toBigInt()}`
+      );
+      return { actions, isValid: false };
+    }
+  });
+
+  let actionListHash = emptyActionListHash;
+  for (const action of actions) {
+    actionListHash = merkleActionsAdd(actionListHash, Field(action.hash));
+  }
+
+  if (actionListHash.toString() !== finalActionState) {
+    log(
+      `Action state mismatch: expected ${finalActionState}, got ${actionListHash.toString()}`
+    );
+    return { actions, isValid: false };
+  }
+  return {
+    actions,
+    isValid: true,
   };
 }

@@ -6,9 +6,13 @@ import {
     SettlementContract,
 } from "pulsar-contracts";
 import logger from "./logger.js";
+import { QueueName } from "./workerConnection.js";
 
-export const cacheCompile = async (mode: "settlement" | "reducer") => {
+export const cacheCompile = async (mode: QueueName) => {
     try {
+        if (mode === "collect-signature") {
+            return;
+        }
         logger.info("Compiling contracts with cache...");
         const multisigVerifierProgram: Cache = Cache.FileSystem("./cache/multisigVerifierProgram");
         const validateReduceProgram: Cache = Cache.FileSystem("./cache/validateReduceProgram");
@@ -18,7 +22,7 @@ export const cacheCompile = async (mode: "settlement" | "reducer") => {
         let time = performance.now();
         await MultisigVerifierProgram.compile({ cache: multisigVerifierProgram });
         console.log(`MultisigVerifierProgram compiled in ${performance.now() - time} ms`);
-        if (mode === "reducer") {
+        if (mode === "reduce") {
             time = performance.now();
             await ValidateReduceProgram.compile({ cache: validateReduceProgram });
             console.log(`ValidateReduceProgram compiled in ${performance.now() - time} ms`);

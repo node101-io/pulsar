@@ -1,5 +1,7 @@
-import { PublicKey, PrivateKey } from 'o1js';
-export { devnetTestAccounts, validatorSet, testAccounts };
+import { PublicKey, PrivateKey, Poseidon } from 'o1js';
+import { List } from '../types/common.js';
+import { VALIDATOR_NUMBER } from '../utils/constants.js';
+export { devnetTestAccounts, validatorSet, testAccounts, mockValidatorList };
 
 // prettier-ignore
 const devnetTestAccounts: Array<[PrivateKey, PublicKey]> = [
@@ -137,3 +139,10 @@ const testAccounts: Array<[PrivateKey, PublicKey]> = [
   [PrivateKey.fromBase58("EKEV73zwQgHDW8Q4r7e4J97irSRhYKmzENDpfF2q6uhM8Xqkhdt5"), PublicKey.fromBase58("B62qkpuNcxeCAN1vbyC5G3LdWiuoapzLFo5S6K6tjVHfCD1TBNBsjb4")],
   [PrivateKey.fromBase58("EKEngSLWVWtPMLz7RCpMveGBMvawy7NcP5cGzsp35wbJw2xUbcAt"), PublicKey.fromBase58("B62qnSanvgatAL4xVBxZA7wrgZyMRgXTHwwQ4QXZdaMr8neZJPrEwkF")],
 ]
+
+const mockValidatorList = validatorSet
+  .slice(0, VALIDATOR_NUMBER)
+  .reduce((acc, v) => {
+    acc.push(Poseidon.hash(v[1].toFields()));
+    return acc;
+  }, List.empty());

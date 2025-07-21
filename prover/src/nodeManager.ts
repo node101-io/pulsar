@@ -3,7 +3,8 @@ import { MinaClient } from "./minaClient.js";
 import dotenv from "dotenv";
 import logger from "./logger.js";
 import { PulsarClient, VoteExt } from "./pulsarClient.js";
-import { reduceQ, settlementQ } from "./workerConnection.js";
+import { collectSignatureQ, settlementQ } from "./workerConnection.js";
+import { fetchLastStoredBlock, initMongo } from "./db.js";
 dotenv.config();
 
 async function main() {
@@ -11,9 +12,13 @@ async function main() {
         throw new Error("CONTRACT_ADDRESS is not set in the environment variables");
     }
 
+    await initMongo();
+    const lastSeenBlockHeight = (await fetchLastStoredBlock())?.height || 0;
+
     let minaClient = new MinaClient(
         PublicKey.fromBase58(process.env.CONTRACT_ADDRESS),
         "lightnet",
+        lastSeenBlockHeight,
         5000
     );
 
@@ -23,8 +28,8 @@ async function main() {
 
     minaClient.on("actions", async ({ blockHeight, actions }) => {
         logger.info(`Actions fetched for block ${blockHeight}: ${JSON.stringify(actions)}`);
-        await reduceQ.add(
-            "reduce-" + blockHeight,
+        await collectSignatureQ.add(
+            "collect-" + blockHeight,
             {
                 blockHeight,
                 actions,

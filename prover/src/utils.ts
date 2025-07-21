@@ -11,6 +11,9 @@ export { compileContracts, prettierAddress };
 
 async function compileContracts(mode: QueueName) {
     try {
+        if (mode === "collect-signature") {
+            return;
+        }
         logger.info("Compiling contracts...");
         let time = performance.now();
         await MultisigVerifierProgram.compile();

@@ -4,12 +4,12 @@ import * as protoLoader from "@grpc/proto-loader";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const POLL_INTERVAL_MS = 10000;
+const POLL_INTERVAL_MS = 5_000;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PROTO_PATH = path.join(__dirname, "../../src/mock/vote_ext.proto");
+const PROTO_PATH = path.join(__dirname, "../../src/vote_ext.proto");
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
     keepCase: true,
     longs: String,
@@ -42,32 +42,85 @@ export class PulsarClient extends EventEmitter {
         this.running = false;
         this.lastSeenBlockHeight = 0;
         this.client = new BlockService(this.rpcAddress, grpc.credentials.createInsecure());
+        console.log(`Pulsar client initialized with RPC address: ${this.rpcAddress}`);
     }
 
     async start() {
         if (this.running) return;
         this.running = true;
         this.emit("start");
-        this.timer = setInterval(async () => {
-            try {
-                this.client.GetLatestBlock({}, (err: any, res: any) => {
-                    if (err) {
-                        this.emit("error", err);
-                        return;
-                    }
-                    const blockHeight: number =
-                        typeof res.height === "string" ? parseInt(res.height, 10) : res.height;
-                    const voteExts: VoteExt[] = res.voteExts || [];
 
-                    if (blockHeight > this.lastSeenBlockHeight) {
-                        this.emit("newPulsarBlock", { blockHeight, voteExts });
-                        this.lastSeenBlockHeight = blockHeight;
-                    }
-                });
-            } catch (err) {
+        await this.syncMissedBlocks();
+
+        this.timer = setInterval(() => this.pollLatestBlock(), this.pollInterval);
+    }
+
+    pollLatestBlock() {
+        this.client.GetLatestBlock({}, (err: any, res: any) => {
+            if (err) {
                 this.emit("error", err);
+                return;
             }
-        }, this.pollInterval);
+            const blockHeight: number =
+                typeof res.height === "string" ? parseInt(res.height, 10) : res.height;
+            const voteExts: VoteExt[] = res.voteExts || [];
+
+            if (blockHeight > this.lastSeenBlockHeight) {
+                if (blockHeight === this.lastSeenBlockHeight + 1) {
+                    this.emit("newPulsarBlock", { blockHeight, voteExts });
+                    this.lastSeenBlockHeight = blockHeight;
+                } else {
+                    console.warn(
+                        `Missed blocks detected: last seen ${this.lastSeenBlockHeight}, current ${blockHeight}, syncing...`
+                    );
+                    this.syncMissedBlocks()
+                        .then(() => {
+                            this.emit("newPulsarBlock", { blockHeight, voteExts });
+                            this.lastSeenBlockHeight = blockHeight;
+                        })
+                        .catch((err) => {
+                            this.emit("error", err);
+                        });
+                }
+            }
+        });
+    }
+
+    async syncMissedBlocks() {
+        return new Promise<void>((resolve, reject) => {
+            this.client.GetLatestBlock({}, async (err: any, res: any) => {
+                if (err) {
+                    this.emit("error", err);
+                    return reject(err);
+                }
+                const latestHeight: number =
+                    typeof res.height === "string" ? parseInt(res.height, 10) : res.height;
+                if (this.lastSeenBlockHeight < latestHeight) {
+                    for (let h = this.lastSeenBlockHeight + 1; h <= latestHeight; ++h) {
+                        try {
+                            await this.getBlockAndEmit(h);
+                        } catch (err) {
+                            this.emit("error", err);
+                            console.error(`Failed to fetch block ${h}:`, err);
+                            h--;
+                        }
+                    }
+                }
+                resolve();
+            });
+        });
+    }
+
+    getBlockAndEmit(height: number): Promise<void> {
+        return new Promise((resolve, reject) => {
+            this.client.GetBlock({ height }, (err: any, res: any) => {
+                if (err) return reject(err);
+                const voteExts: VoteExt[] = res.voteExts || [];
+                this.emit("newPulsarBlock", { blockHeight: height, voteExts });
+                this.lastSeenBlockHeight = height;
+                resolve();
+            });
+        });
     }
 
     stop() {

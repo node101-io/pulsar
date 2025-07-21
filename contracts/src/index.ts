@@ -61,15 +61,22 @@ import {
   CalculateMax,
   PackActions,
   PrepareBatch,
+  PrepareBatchWithActions,
+  validateActionQueue,
 } from './utils/reduceWitness.js';
 import {
   ValidateReduceProof,
   ValidateReduceProgram,
   ValidateReducePublicInput,
 } from './ValidateReduce.js';
-import { devnetTestAccounts, validatorSet, testAccounts } from './test/mock.js';
+import {
+  devnetTestAccounts,
+  validatorSet,
+  testAccounts,
+  mockValidatorList,
+} from './test/mock.js';
 import { TestUtils } from './utils/testUtils.js';
-
+import { DeployScripts } from './scripts/deploy.js';
 export {
   merkleActionsAdd,
   emptyActionListHash,
@@ -110,6 +117,8 @@ export {
   CalculateMax,
   PackActions,
   PrepareBatch,
+  PrepareBatchWithActions,
+  validateActionQueue,
   ActionStackProof,
   ActionStackQueue,
   ActionStackProgram,
@@ -128,5 +137,7 @@ export {
   devnetTestAccounts,
   validatorSet,
   testAccounts,
+  mockValidatorList,
   TestUtils,
+  DeployScripts,
 };

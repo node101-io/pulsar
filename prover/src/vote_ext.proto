@@ -4,9 +4,14 @@ package voteext;
 
 service BlockService {
   rpc GetLatestBlock(GetLatestBlockRequest) returns (BlockResponse);
+  rpc GetBlock(GetBlockRequest) returns (BlockResponse);
 }
 
 message GetLatestBlockRequest {}
+
+message GetBlockRequest {
+  uint64 height = 1;
+}
 
 message VoteExt {
   string index = 1;

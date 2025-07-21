@@ -29,7 +29,9 @@ let proofsCol: Collection<ProofDoc>;
 export async function initMongo() {
     if (client) return;
 
-    const uri = process.env.MONGO_URI ?? "mongodb://mongo:27017";
+    const uri =
+        process.env.MONGO_URI ??
+        `mongodb://${process.env.MONGO_USER}:${process.env.MONGO_PASSWORD}@mongo:27017/${process.env.MONGO_DB}?authSource=admin`;
     const db = process.env.MONGO_DB ?? "pulsar";
 
     client = new MongoClient(uri);
@@ -167,4 +169,17 @@ export async function fetchBlockRange(range_low: number, range_high: number): Pr
 
     logger.info(`Fetched ${blocks.length} blocks in range [${range_low}, ${range_high}]`);
     return blocks;
+}
+
+export async function fetchLastStoredBlock(): Promise<BlockDoc | null> {
+    await initMongo();
+
+    const block = await blocksCol.findOne({}, { sort: { height: -1 } });
+    if (!block) {
+        logger.warn("No blocks found in the database");
+        return null;
+    }
+
+    logger.info(`Fetched last stored block at height ${block.height}`);
+    return block;
 }
