@@ -4,7 +4,7 @@ import { PrivateKey, PublicKey, Field } from "o1js";
 import path from "path";
 import { GeneratePulsarBlock, TestUtils, VALIDATOR_NUMBER, validatorSet } from "pulsar-contracts";
 import { fileURLToPath } from "url";
-import { VoteExt } from "../pulsarClient";
+import { VoteExt } from "../interfaces.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

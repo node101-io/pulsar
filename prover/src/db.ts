@@ -2,7 +2,7 @@ import { MongoClient, Collection, Document } from "mongodb";
 import { ActionStackProof, SettlementProof, ValidateReduceProof } from "pulsar-contracts";
 import { JsonProof } from "o1js";
 import logger from "./logger.js";
-import { VoteExt } from "./pulsarClient.js";
+import { VoteExt } from "./interfaces.js";
 
 type ProofKind = "actionStack" | "settlement" | "validateReduce";
 

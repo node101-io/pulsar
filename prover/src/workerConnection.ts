@@ -1,7 +1,7 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
 import dotenv from "dotenv";
-import { VoteExt } from "./pulsarClient";
+import { VoteExt } from "./interfaces.js";
 dotenv.config();
 
 export {
