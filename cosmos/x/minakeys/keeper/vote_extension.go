@@ -34,7 +34,6 @@ func (h *VoteExtHandler) ExtendVoteHandler() sdk.ExtendVoteHandler {
 		encodedBlockHash := hex.EncodeToString(latestBlockHash)
 
 		secKey := h.Keeper.secondaryKey.SecretKey
-		//ctx.Logger().Info("Here is the secondary private key of node for vote extension", "secKey", *secKey)
 
 		signature, err := secKey.SignMessage(encodedBlockHash, minakeystypes.DevnetNetworkID)
 		ctx.Logger().Info("Signed block hash with secondary private key", "signature", signature)
@@ -211,6 +210,9 @@ func (h *VoteExtHandler) PreBlocker() sdk.PreBlocker {
 			}
 
 			h.Keeper.SetVoteExt(ctx, record)
+
+			// Update height-based index mapping
+			h.Keeper.SetVoteExtIndex(ctx, targetHeight, idx)
 		}
 
 		// clear from memory after persisting

@@ -40,6 +40,12 @@ service Query {
     option (google.api.http).get = "/pulsar/cosmos/minakeys/vote_ext";
   
   }
+  
+  // Queries VoteExt items by height.
+  rpc VoteExtByHeight (QueryVoteExtByHeightRequest) returns (QueryVoteExtByHeightResponse) {
+    option (google.api.http).get = "/pulsar/cosmos/minakeys/vote_ext/height/{block_height}";
+  
+  }
 }
 // QueryParamsRequest is request type for the Query/Params RPC method.
 message QueryParamsRequest {}
@@ -81,6 +87,16 @@ message QueryAllVoteExtRequest {
 }
 
 message QueryAllVoteExtResponse {
+  repeated VoteExt                                voteExt    = 1 [(gogoproto.nullable) = false];
+           cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+message QueryVoteExtByHeightRequest {
+  uint64 block_height = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+message QueryVoteExtByHeightResponse {
   repeated VoteExt                                voteExt    = 1 [(gogoproto.nullable) = false];
            cosmos.base.query.v1beta1.PageResponse pagination = 2;
 }

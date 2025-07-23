@@ -19,11 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Query_Params_FullMethodName      = "/cosmos.minakeys.Query/Params"
-	Query_KeyStore_FullMethodName    = "/cosmos.minakeys.Query/KeyStore"
-	Query_KeyStoreAll_FullMethodName = "/cosmos.minakeys.Query/KeyStoreAll"
-	Query_VoteExt_FullMethodName     = "/cosmos.minakeys.Query/VoteExt"
-	Query_VoteExtAll_FullMethodName  = "/cosmos.minakeys.Query/VoteExtAll"
+	Query_Params_FullMethodName          = "/cosmos.minakeys.Query/Params"
+	Query_KeyStore_FullMethodName        = "/cosmos.minakeys.Query/KeyStore"
+	Query_KeyStoreAll_FullMethodName     = "/cosmos.minakeys.Query/KeyStoreAll"
+	Query_VoteExt_FullMethodName         = "/cosmos.minakeys.Query/VoteExt"
+	Query_VoteExtAll_FullMethodName      = "/cosmos.minakeys.Query/VoteExtAll"
+	Query_VoteExtByHeight_FullMethodName = "/cosmos.minakeys.Query/VoteExtByHeight"
 )
 
 // QueryClient is the client API for Query service.
@@ -38,6 +39,8 @@ type QueryClient interface {
 	// Queries a list of VoteExt items.
 	VoteExt(ctx context.Context, in *QueryGetVoteExtRequest, opts ...grpc.CallOption) (*QueryGetVoteExtResponse, error)
 	VoteExtAll(ctx context.Context, in *QueryAllVoteExtRequest, opts ...grpc.CallOption) (*QueryAllVoteExtResponse, error)
+	// Queries VoteExt items by height.
+	VoteExtByHeight(ctx context.Context, in *QueryVoteExtByHeightRequest, opts ...grpc.CallOption) (*QueryVoteExtByHeightResponse, error)
 }
 
 type queryClient struct {
@@ -93,6 +96,15 @@ func (c *queryClient) VoteExtAll(ctx context.Context, in *QueryAllVoteExtRequest
 	return out, nil
 }
 
+func (c *queryClient) VoteExtByHeight(ctx context.Context, in *QueryVoteExtByHeightRequest, opts ...grpc.CallOption) (*QueryVoteExtByHeightResponse, error) {
+	out := new(QueryVoteExtByHeightResponse)
+	err := c.cc.Invoke(ctx, Query_VoteExtByHeight_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QueryServer is the server API for Query service.
 // All implementations must embed UnimplementedQueryServer
 // for forward compatibility
@@ -105,6 +117,8 @@ type QueryServer interface {
 	// Queries a list of VoteExt items.
 	VoteExt(context.Context, *QueryGetVoteExtRequest) (*QueryGetVoteExtResponse, error)
 	VoteExtAll(context.Context, *QueryAllVoteExtRequest) (*QueryAllVoteExtResponse, error)
+	// Queries VoteExt items by height.
+	VoteExtByHeight(context.Context, *QueryVoteExtByHeightRequest) (*QueryVoteExtByHeightResponse, error)
 	mustEmbedUnimplementedQueryServer()
 }
 
@@ -126,6 +140,9 @@ func (UnimplementedQueryServer) VoteExt(context.Context, *QueryGetVoteExtRequest
 }
 func (UnimplementedQueryServer) VoteExtAll(context.Context, *QueryAllVoteExtRequest) (*QueryAllVoteExtResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VoteExtAll not implemented")
+}
+func (UnimplementedQueryServer) VoteExtByHeight(context.Context, *QueryVoteExtByHeightRequest) (*QueryVoteExtByHeightResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VoteExtByHeight not implemented")
 }
 func (UnimplementedQueryServer) mustEmbedUnimplementedQueryServer() {}
 
@@ -230,6 +247,24 @@ func _Query_VoteExtAll_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Query_VoteExtByHeight_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryVoteExtByHeightRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).VoteExtByHeight(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_VoteExtByHeight_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).VoteExtByHeight(ctx, req.(*QueryVoteExtByHeightRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Query_ServiceDesc is the grpc.ServiceDesc for Query service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -256,6 +291,10 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VoteExtAll",
 			Handler:    _Query_VoteExtAll_Handler,
+		},
+		{
+			MethodName: "VoteExtByHeight",
+			Handler:    _Query_VoteExtByHeight_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

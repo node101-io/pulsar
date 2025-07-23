@@ -68,3 +68,61 @@ func (k Keeper) GetAllVoteExt(ctx context.Context) (list []types.VoteExt) {
 
 	return
 }
+
+// SetVoteExtIndex sets or updates the index mapping for a given height
+func (k Keeper) SetVoteExtIndex(ctx context.Context, height uint64, voteExtIndex string) {
+	storeAdapter := runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx))
+	store := prefix.NewStore(storeAdapter, types.KeyPrefix(types.VoteExtIndexKeyPrefix))
+
+	// Get existing index or create new one
+	voteExtIndexObj := k.GetVoteExtIndex(ctx, height)
+
+	// Add new index to the array if not already present
+	for _, existingIndex := range voteExtIndexObj.Indexes {
+		if existingIndex == voteExtIndex {
+			return // Already exists
+		}
+	}
+
+	voteExtIndexObj.Height = height
+	voteExtIndexObj.Indexes = append(voteExtIndexObj.Indexes, voteExtIndex)
+
+	b := k.cdc.MustMarshal(&voteExtIndexObj)
+	store.Set(types.VoteExtIndexKey(height), b)
+}
+
+// GetVoteExtIndex returns the index mapping for a given height
+func (k Keeper) GetVoteExtIndex(ctx context.Context, height uint64) types.VoteExtIndex {
+	storeAdapter := runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx))
+	store := prefix.NewStore(storeAdapter, types.KeyPrefix(types.VoteExtIndexKeyPrefix))
+
+	b := store.Get(types.VoteExtIndexKey(height))
+	if b == nil {
+		return types.VoteExtIndex{Height: height, Indexes: []string{}}
+	}
+
+	var val types.VoteExtIndex
+	k.cdc.MustUnmarshal(b, &val)
+	return val
+}
+
+// GetVoteExtsByHeight returns all VoteExt for a given height using index mapping
+func (k Keeper) GetVoteExtsByHeight(ctx context.Context, height uint64) (list []types.VoteExt) {
+	indexMapping := k.GetVoteExtIndex(ctx, height)
+
+	for _, index := range indexMapping.Indexes {
+		voteExt, found := k.GetVoteExt(ctx, index)
+		if found {
+			list = append(list, voteExt)
+		}
+	}
+
+	return list
+}
+
+// RemoveVoteExtIndex removes the index mapping for a given height
+func (k Keeper) RemoveVoteExtIndex(ctx context.Context, height uint64) {
+	storeAdapter := runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx))
+	store := prefix.NewStore(storeAdapter, types.KeyPrefix(types.VoteExtIndexKeyPrefix))
+	store.Delete(types.VoteExtIndexKey(height))
+}

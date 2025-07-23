@@ -8,6 +8,11 @@ message VoteExt {
   uint64 height = 2; 
   string validatorAddr = 3; 
   string signature = 4; 
-  
+}
+
+// Height-based index mapping
+message VoteExtIndex {
+  uint64 height = 1;
+  repeated string indexes = 2; // Array of VoteExt indexes for this height
 }
 
