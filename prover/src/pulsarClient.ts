@@ -35,8 +35,6 @@ export class PulsarClient extends EventEmitter {
 
         const reflectionClient = new GrpcReflection(rpcAddress, credentials);
 
-        console.log("Services:", await reflectionClient.listServices());
-
         const serviceDescriptor = await reflectionClient.getDescriptorBySymbol(_serviceName);
 
         const packageObject = serviceDescriptor.getPackageObject({
@@ -59,16 +57,20 @@ export class PulsarClient extends EventEmitter {
     async start() {
         if (this.running) return;
 
-        console.log("initializing Pulsar client...");
-        this.tmClient = await this.createClient(TENDERMINT_SERVICE_NAME, this.rpcAddress);
-        this.mkClient = await this.createClient(MINA_KEYS_SERVICE_NAME, this.rpcAddress);
+        try {
+            this.tmClient = await this.createClient(TENDERMINT_SERVICE_NAME, this.rpcAddress);
+            this.mkClient = await this.createClient(MINA_KEYS_SERVICE_NAME, this.rpcAddress);
 
-        this.running = true;
-        this.emit("start");
+            this.running = true;
+            this.emit("start");
 
-        await this.syncMissedBlocks();
+            await this.syncMissedBlocks();
 
-        this.timer = setInterval(() => this.pollLatestBlock(), this.pollInterval);
+            this.timer = setInterval(() => this.pollLatestBlock(), this.pollInterval);
+        } catch (error) {
+            this.emit("Error on start retrying....", error);
+            setTimeout(() => this.start(), 5000);
+        }
     }
 
     pollLatestBlock() {
@@ -76,11 +78,11 @@ export class PulsarClient extends EventEmitter {
             if (err) return this.emit("error", err as Error);
 
             const { height: blockHeight } = parseTendermintBlockResponse(res);
-            const voteExts: VoteExt[] = res.voteExts || [];
+            const voteExt: VoteExt[] = res.voteExt || [];
 
             if (blockHeight > this.lastSeenBlockHeight) {
                 if (blockHeight === this.lastSeenBlockHeight + 1) {
-                    this.emit("newPulsarBlock", { blockHeight, voteExts });
+                    this.emit("newPulsarBlock", { blockHeight, voteExt });
                     this.lastSeenBlockHeight = blockHeight;
                 } else {
                     console.warn(
@@ -88,7 +90,7 @@ export class PulsarClient extends EventEmitter {
                     );
                     this.syncMissedBlocks()
                         .then(() => {
-                            this.emit("newPulsarBlock", { blockHeight, voteExts });
+                            this.emit("newPulsarBlock", { blockHeight, voteExt });
                             this.lastSeenBlockHeight = blockHeight;
                         })
                         .catch((err) => {
@@ -118,27 +120,19 @@ export class PulsarClient extends EventEmitter {
     }
 
     async getBlockAndEmit(height: number): Promise<void> {
-        const voteExts: VoteExt[] = [];
+        let voteExt: VoteExt[] = [];
 
-        let pageReq: any = { height: height.toString(), pagination: { limit: 200 } };
+        let pageReq: any = { block_height: height.toString(), pagination: { limit: 200 } };
 
         for (;;) {
             const page = await new Promise<any>((resolve, reject) => {
-                this.mkClient.VoteExtAll(pageReq, (err: unknown, res: any) => {
+                this.mkClient.VoteExtByHeight(pageReq, (err: unknown, res: any) => {
                     if (err) return reject(err);
-                    console.log("res:", res);
                     resolve(res);
                 });
             });
 
-            (page.voteExts ?? []).forEach((v: any) =>
-                voteExts.push({
-                    index: v.index,
-                    height: Number(v.height),
-                    validatorAddr: v.validatorAddr,
-                    signature: v.signature,
-                })
-            );
+            voteExt = parseVoteExtResponse(page);
 
             const nextKey = page.pagination?.next_key;
             if (!nextKey || nextKey.length === 0) break;
@@ -146,9 +140,9 @@ export class PulsarClient extends EventEmitter {
             pageReq.pagination.key = nextKey;
         }
 
-        console.log(`Emitting new block: ${height} with ${voteExts.length} vote extensions`);
+        console.log(`Emitting new block: ${height} with ${voteExt.length} vote extensions`);
 
-        this.emit("newPulsarBlock", { blockHeight: height, voteExts });
+        this.emit("newPulsarBlock", { blockHeight: height, voteExt });
         this.lastSeenBlockHeight = height;
     }
 
@@ -214,4 +208,15 @@ export function parseTendermintBlockResponse(res: any): BlockParserResult {
             nextValidatorsHash: header?.next_validators_hash || "",
         },
     };
+}
+
+export function parseVoteExtResponse(res: any): VoteExt[] {
+    if (!res || !Array.isArray(res.voteExt)) return [];
+
+    return res.voteExt.map((v: any) => ({
+        index: v.index,
+        height: Number(v.height),
+        validatorAddr: v.validatorAddr,
+        signature: v.signature,
+    }));
 }

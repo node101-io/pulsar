@@ -27,14 +27,14 @@ createWorker<SettlementJob, void>({
     maxJobsPerWorker: 160,
     jobHandler: async ({ data, id }) => {
         try {
-            const { blockHeight, voteExts } = data;
+            const { blockHeight, voteExt } = data;
 
-            if (!voteExts || voteExts.length === 0) {
+            if (!voteExt || voteExt.length === 0) {
                 logger.warn(`[Job ${id}] No vote extensions found for block height ${blockHeight}`);
                 return;
             }
 
-            const validators = voteExts.map((voteExt) => voteExt.validatorAddr);
+            const validators = voteExt.map((ext) => ext.validatorAddr);
             const validatorsList = List.empty();
             // Todo unsorted
             for (const validator of validators) {
@@ -43,9 +43,9 @@ createWorker<SettlementJob, void>({
             await storeBlock(
                 blockHeight,
                 blockHeight.toString(),
-                voteExts.map((voteExt) => voteExt.validatorAddr),
+                voteExt.map((ext) => ext.validatorAddr),
                 validatorsList.hash.toString(),
-                voteExts
+                voteExt
             );
 
             if (blockHeight % SETTLEMENT_MATRIX_SIZE == 0) {
@@ -78,9 +78,9 @@ createWorker<SettlementJob, void>({
                     blocks.push(block);
 
                     const signaturePubKeyList = SignaturePublicKeyList.fromArray(
-                        blockDocs[i].voteExts.map((voteExt) => [
-                            Signature.fromJSON(JSON.parse(voteExt.signature)),
-                            PublicKey.fromBase58(voteExt.validatorAddr),
+                        blockDocs[i].voteExt.map((ext) => [
+                            Signature.fromJSON(JSON.parse(ext.signature)),
+                            PublicKey.fromBase58(ext.validatorAddr),
                         ])
                     );
                     signaturePubKeyLists.push(signaturePubKeyList);

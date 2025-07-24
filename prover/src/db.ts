@@ -19,7 +19,7 @@ interface BlockDoc extends Document {
     stateRoot: string;
     validators: string[];
     validatorListHash: string;
-    voteExts: VoteExt[];
+    voteExt: VoteExt[];
 }
 
 let client: MongoClient;
@@ -142,7 +142,7 @@ export async function storeBlock(
     stateRoot: string,
     validators: string[],
     validatorListHash: string,
-    voteExts: VoteExt[]
+    voteExt: VoteExt[]
 ) {
     await initMongo();
 
@@ -151,7 +151,7 @@ export async function storeBlock(
         stateRoot,
         validators,
         validatorListHash,
-        voteExts,
+        voteExt,
     };
 
     await blocksCol.updateOne({ height }, { $set: blockDoc }, { upsert: true });

@@ -26,7 +26,7 @@ const connection = new IORedis({
 
 interface SettlementJob {
     blockHeight: number;
-    voteExts: VoteExt[];
+    voteExt: VoteExt[];
 }
 
 interface MergeJob {

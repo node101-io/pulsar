@@ -1,4 +1,4 @@
-import { PublicKey } from "o1js";
+import { Field, Poseidon, PrivateKey, PublicKey } from "o1js";
 import { MinaClient } from "./minaClient.js";
 import dotenv from "dotenv";
 import logger from "./logger.js";
@@ -6,6 +6,7 @@ import { PulsarClient } from "./pulsarClient.js";
 import { collectSignatureQ, settlementQ } from "./workerConnection.js";
 import { fetchLastStoredBlock, initMongo } from "./db.js";
 import { VoteExt } from "./interfaces.js";
+import { List } from "pulsar-contracts";
 dotenv.config();
 
 async function main() {
@@ -13,52 +14,52 @@ async function main() {
         throw new Error("CONTRACT_ADDRESS is not set in the environment variables");
     }
 
-    // await initMongo();
-    // const lastSeenBlockHeight = (await fetchLastStoredBlock())?.height || 0;
+    await initMongo();
+    const lastSeenBlockHeight = (await fetchLastStoredBlock())?.height || 0;
 
-    // let minaClient = new MinaClient(
-    //     PublicKey.fromBase58(process.env.CONTRACT_ADDRESS),
-    //     "lightnet",
-    //     lastSeenBlockHeight,
-    //     5000
-    // );
+    let minaClient = new MinaClient(
+        PublicKey.fromBase58(process.env.CONTRACT_ADDRESS),
+        "lightnet",
+        lastSeenBlockHeight,
+        5000
+    );
 
-    // minaClient.on("start", (blockHeight) => {
-    //     logger.info(`Mina client started, watching actions from block height: ${blockHeight}`);
-    // });
+    minaClient.on("start", (blockHeight) => {
+        logger.info(`Mina client started, watching actions from block height: ${blockHeight}`);
+    });
 
-    // minaClient.on("actions", async ({ blockHeight, actions }) => {
-    //     logger.info(`Actions fetched for block ${blockHeight}: ${JSON.stringify(actions)}`);
-    //     await collectSignatureQ.add(
-    //         "collect-" + blockHeight,
-    //         {
-    //             blockHeight,
-    //             actions,
-    //         },
-    //         {
-    //             attempts: 5,
-    //             backoff: {
-    //                 type: "exponential",
-    //                 delay: 5_000,
-    //             },
-    //             removeOnComplete: true,
-    //         }
-    //     );
-    // });
+    minaClient.on("actions", async ({ blockHeight, actions }) => {
+        logger.info(`Actions fetched for block ${blockHeight}: ${JSON.stringify(actions)}`);
+        await collectSignatureQ.add(
+            "collect-" + blockHeight,
+            {
+                blockHeight,
+                actions,
+            },
+            {
+                attempts: 5,
+                backoff: {
+                    type: "exponential",
+                    delay: 5_000,
+                },
+                removeOnComplete: true,
+            }
+        );
+    });
 
-    // minaClient.on("error", (error) => {
-    //     logger.error(`Error in Mina client: ${error.message}`);
+    minaClient.on("error", (error) => {
+        logger.error(`Error in Mina client: ${error.message}`);
 
-    //     minaClient.stop();
-    //     logger.info("Mina client stopped due to error, restarting in 5 seconds...");
-    //     setTimeout(() => {
-    //         minaClient.start();
-    //     }, 5000);
-    // });
+        minaClient.stop();
+        logger.info("Mina client stopped due to error, restarting in 5 seconds...");
+        setTimeout(() => {
+            minaClient.start();
+        }, 5000);
+    });
 
-    // minaClient.on("stop", () => {
-    //     logger.info("Mina client stopped");
-    // });
+    minaClient.on("stop", () => {
+        logger.info("Mina client stopped");
+    });
 
     const pulsarClient = new PulsarClient(
         process.env.PULSAR_RPC_ADDRESS || "localhost:50051",
@@ -72,15 +73,15 @@ async function main() {
 
     pulsarClient.on(
         "newPulsarBlock",
-        async ({ blockHeight, voteExts }: { blockHeight: number; voteExts: VoteExt[] }) => {
+        async ({ blockHeight, voteExt }: { blockHeight: number; voteExt: VoteExt[] }) => {
             logger.info(
-                `New Pulsar block detected: ${blockHeight}, with ${voteExts.length} vote extensions`
+                `New Pulsar block detected: ${blockHeight}, with ${voteExt.length} vote extensions`
             );
             await settlementQ.add(
                 "settlement-" + blockHeight,
                 {
                     blockHeight,
-                    voteExts,
+                    voteExt,
                 },
                 {
                     attempts: 5,
@@ -102,7 +103,7 @@ async function main() {
         logger.info("Pulsar client stopped");
     });
 
-    // await minaClient.start();
+    await minaClient.start();
     await pulsarClient.start();
 }
 
