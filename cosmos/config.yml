@@ -21,36 +21,69 @@ validators:
 - name: alice
   bonded: 100000000stake
   app:
-    
     grpc:
       address: localhost:9091
-
+  config:
+    consensus:
+      timeout_propose: "5s"
+      timeout_propose_delta: "1s"
+      timeout_prevote: "3s"
+      timeout_prevote_delta: "500ms"
+      timeout_precommit: "3s"
+      timeout_precommit_delta: "500ms"
+      timeout_commit: "10s"
 - name: validator1
   bonded: 100000000stake
   app:
-    
     grpc:
       address: localhost:9091
+  config:
+    consensus:
+      timeout_propose: "5s"
+      timeout_propose_delta: "1s"
+      timeout_prevote: "3s"
+      timeout_prevote_delta: "500ms"
+      timeout_precommit: "3s"
+      timeout_precommit_delta: "500ms"
+      timeout_commit: "10s"
 
 - name: validator2
   bonded: 200000000stake
   app:
-   
     grpc:
       address: localhost:9091
+  config:
+    consensus:
+      timeout_propose: "5s"
+      timeout_propose_delta: "1s"
+      timeout_prevote: "3s"
+      timeout_prevote_delta: "500ms"
+      timeout_precommit: "3s"
+      timeout_precommit_delta: "500ms"
+      timeout_commit: "10s"
 
 - name: validator3
   bonded: 300000000stake
   app:
-    grpc.address: localhost:9091
     grpc:
       address: localhost:9091
+  config:
+    consensus:
+      timeout_propose: "5s"
+      timeout_propose_delta: "1s"
+      timeout_prevote: "3s"
+      timeout_prevote_delta: "500ms"
+      timeout_precommit: "3s"
+      timeout_precommit_delta: "500ms"
+      timeout_commit: "10s"
 
 genesis:
   consensus:
     params:
       abci:
         vote_extensions_enable_height: "1"
+      block:
+        time_iota_ms: "10000"
 
 
   

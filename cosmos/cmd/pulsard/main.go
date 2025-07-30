@@ -8,7 +8,7 @@ import (
 	svrcmd "github.com/cosmos/cosmos-sdk/server/cmd"
 
 	"github.com/node101-io/pulsar/cosmos/app"
-	"github.com/node101-io/pulsar/cosmos/cmd/cosmosd/cmd"
+	"github.com/node101-io/pulsar/cosmos/cmd/pulsard/cmd"
 )
 
 func main() {

@@ -1,0 +1,33 @@
+{
+  "messages": [
+    {
+      "@type": "/interchain_security.ccv.provider.v1.MsgConsumerAddition",
+      "chain_id": "ccv-1",
+      "initial_height": {
+        "revision_number": "1",
+        "revision_height": "1"
+      },
+      "genesis_hash": "999ebdb97e9d295cceedba2d1198e20cae876a5e37aafdb60971e674355b9134",
+      "binary_hash": "68ad5b35b537908459682a3cb9d2cb878c3decc2fa28f385fa6b066e9dbb7d18",
+      "spawn_time": "2025-07-27T22:50:49Z",
+      "unbonding_period": "600s",
+      "ccv_timeout_period": "1200s",
+      "transfer_timeout_period": "1200s",
+      "consumer_redistribution_fraction": "0.75",
+      "blocks_per_distribution_transmission": "1000",
+      "historical_entries": "1000",
+      "distribution_transmission_channel": "channel-1",
+      "top_N": 95,
+      "validators_power_cap": 0,
+      "validator_set_cap": 0,
+      "allowlist": [],
+      "denylist": [],
+      "authority": "cosmos10d07y265gmmuvt4z0w9aw880jnsr700j6zn9kn"
+    }
+  ],
+  "metadata": "ipfs://CID",
+  "deposit": "10000001stake",
+  "title": "Create a chain",
+  "summary": "Gonna be a great chain",
+  "expedited": false
+}

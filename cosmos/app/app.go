@@ -79,9 +79,9 @@ import (
 
 const (
 	// Name is the name of the application.
-	Name = "cosmos"
+	Name = "pulsar"
 	// AccountAddressPrefix is the prefix for accounts addresses.
-	AccountAddressPrefix = "cosmos"
+	AccountAddressPrefix = "pulsar"
 	// ChainCoinType is the coin type of the chain.
 	ChainCoinType = 118
 )
