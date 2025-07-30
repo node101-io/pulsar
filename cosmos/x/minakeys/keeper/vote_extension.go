@@ -43,6 +43,13 @@ type VoteExtHandler struct {
 	votes map[uint64]map[string][]byte // height -> consAddr -> extension bytes
 }
 
+func NewVoteExtHandler(keeper Keeper, ccvKeeper ibcconsumerkeeper.Keeper) *VoteExtHandler {
+	return &VoteExtHandler{
+		Keeper:    keeper,
+		ccvKeeper: ccvKeeper,
+	}
+}
+
 // ValidatorInfo represents a validator in the set
 type ValidatorInfo struct {
 	Address string
