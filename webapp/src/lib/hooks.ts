@@ -1,7 +1,11 @@
+import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
+
 import { client } from "./client"
 import { fetchPminaBalance } from "./utils"
 import { MINA_RPC_URL } from "./constants"
+import { useMinaWallet } from "@/app/_providers/mina-wallet"
+import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
 
 interface UseMinaPriceOptions {
   enabled?: boolean;
@@ -64,4 +68,29 @@ export function useMinaBalance(account: string | null | undefined, options?: Use
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
     ...options,
   });
+}
+
+export function useConnectedWallet() {
+  const { isConnected: isMinaConnected, account: minaAccount } = useMinaWallet();
+  const { status: keplrStatus, address: keplrAddress, username: keplrUsername } = usePulsarWallet();
+
+  const connectedWallet = useMemo(() => {
+    if (isMinaConnected && minaAccount)
+      return {
+        type: 'mina' as const,
+        address: minaAccount,
+      }
+
+    const cosmosAddress = keplrAddress || keplrUsername;
+
+    if (keplrStatus === 'Connected' && cosmosAddress)
+      return {
+        type: 'cosmos' as const,
+        address: cosmosAddress,
+      }
+
+    return null;
+  }, [isMinaConnected, minaAccount, keplrStatus, keplrAddress, keplrUsername]);
+
+  return connectedWallet;
 }

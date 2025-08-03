@@ -2,7 +2,7 @@ import Image from "next/image"
 import { useState } from "react";
 import { useMinaPrice } from "@/lib/hooks";
 import { toast } from "react-hot-toast";
-import { useWallet } from "@/app/_providers/wallet";
+import { useMinaWallet } from "@/app/_providers/mina-wallet";
 import { usePminaBalance } from "@/lib/hooks";
 
 export const SendView = ({ setCurrentView }: {
@@ -10,7 +10,7 @@ export const SendView = ({ setCurrentView }: {
 }) => {
   const [sendAmount, setSendAmount] = useState<string>('');
   const [recipientAddress, setRecipientAddress] = useState<string>('');
-  const { isConnected, signMessage, account } = useWallet();
+  const { isConnected, signMessage, account } = useMinaWallet();
   const { data: priceData } = useMinaPrice();
   const { data: pminaBalance } = usePminaBalance(account, {
     enabled: !!account && isConnected,

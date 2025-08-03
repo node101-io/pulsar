@@ -1,12 +1,16 @@
-import { useWallet } from "@/app/_providers/wallet"
+import { useMinaWallet } from "@/app/_providers/mina-wallet"
+import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
 import { LegalNotice } from "./legal-notice"
 import { ExtensionItem } from "./extension-item"
-import { toast } from "react-hot-toast"
+import toast from "react-hot-toast"
 
 export const ConnectView = () => {
-  const { error, isWalletInstalled, isConnecting, connectWallet } = useWallet();
+  const { isWalletInstalled, isConnecting: minaConnecting, connectWallet: connectMina } = useMinaWallet();
+  const { connect: connectKeplr, status: keplrStatus } = usePulsarWallet();
 
-  const handleAuroExtensionClick = async () => {
+  const isKeplrConnecting = keplrStatus === 'Connecting';
+
+  const handleAuroClick = async () => {
     if (!isWalletInstalled) {
       toast.error('Auro Wallet not found. Please install the extension first.', {
         id: 'wallet-not-found'
@@ -16,14 +20,29 @@ export const ConnectView = () => {
     }
 
     try {
-      await connectWallet();
-      toast.success('Wallet connected successfully!', {
+      await connectMina();
+      toast.success('Mina Wallet connected successfully!', {
         id: 'wallet-connected'
       });
     } catch (error) {
-      console.error('Failed to connect wallet:', error);
-      toast.error('Failed to connect wallet. Please try again.', {
+      console.error('Failed to connect Mina wallet:', error);
+      toast.error('Failed to connect Mina wallet. Please try again.', {
         id: 'wallet-connection-failed'
+      });
+    }
+  };
+
+  const handleKeplrClick = async () => {
+    try {
+      await connectKeplr();
+      toast.success('Keplr Wallet connected successfully!', {
+        id: 'keplr-connected'
+      });
+    } catch (error) {
+      console.error('Failed to connect Keplr wallet:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      toast.error(`Failed to connect Keplr wallet: ${errorMessage}`, {
+        id: 'keplr-connection-failed'
       });
     }
   };
@@ -31,26 +50,28 @@ export const ConnectView = () => {
   return (
     <>
       <h3 className="text-xl font-semibold text-black mb-6">
-        Connect Mina Wallet
+        Connect Wallet
       </h3>
-
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm">
-          {error}
-        </div>
-      )}
 
       <div className="space-y-3 mb-6">
         <ExtensionItem
-          icon="/mina-token-logo.png"
+          icon="/auro-wallet-logo.png"
           title={!isWalletInstalled ? 'Install Auro Wallet Extension' : 'Auro Wallet Extension'}
-          onClick={handleAuroExtensionClick}
-          disabled={isConnecting}
-          isLoading={isConnecting}
+          onClick={handleAuroClick}
+          disabled={minaConnecting}
+          isLoading={minaConnecting}
+        />
+
+        <ExtensionItem
+          icon="/keplr-wallet-logo.png"
+          title="Keplr Wallet Extension"
+          onClick={handleKeplrClick}
+          disabled={isKeplrConnecting}
+          isLoading={isKeplrConnecting}
         />
       </div>
 
       <LegalNotice />
     </>
-)
-}
+  );
+};

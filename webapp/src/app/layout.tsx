@@ -2,7 +2,8 @@
 
 import type { Metadata } from "next"
 import { Toaster } from "react-hot-toast"
-import { WalletProvider } from "@/app/_providers/wallet"
+import { MinaWalletProvider } from "@/app/_providers/mina-wallet"
+import { PulsarWalletProvider } from "@/app/_providers/pulsar-wallet"
 import { QueryClientProvider } from "@/app/_providers/query-client-provider"
 import Header from "./components/header"
 import localFont from "next/font/local"
@@ -36,8 +37,9 @@ export default function RootLayout({ children }: {
         <link rel="icon" href="/favicon.ico" />
       </head>
       <body className={`font-recady antialiased h-dvh w-dvw overscroll-none flex flex-col`}>
-        <WalletProvider>
-          <QueryClientProvider>
+        <MinaWalletProvider>
+          <PulsarWalletProvider>
+            <QueryClientProvider>
             <Toaster position="top-center" toastOptions={{
               duration: 3000,
               style: {
@@ -60,10 +62,11 @@ export default function RootLayout({ children }: {
                 },
               },
             }}/>
-            <Header />
-            {children}
-          </QueryClientProvider>
-        </WalletProvider>
+              <Header />
+              {children}
+            </QueryClientProvider>
+          </PulsarWalletProvider>
+        </MinaWalletProvider>
         <Analytics />
         <SpeedInsights />
       </body>
