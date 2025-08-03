@@ -11,11 +11,16 @@
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview"
   },
   "dependencies": {
+    "@interchain-kit/core": "^0.3.42",
+    "@interchain-kit/keplr-extension": "^0.3.42",
+    "@interchain-kit/leap-extension": "^0.3.42",
+    "@interchain-kit/react": "^0.3.42",
     "@sentry/nextjs": "^9.40.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@tanstack/react-query": "^5.83.0",
     "@vercel/analytics": "^1.5.0",
     "@vercel/speed-insights": "^1.2.0",
+    "chain-registry": "^2.0.29",
     "clsx": "^2.1.1",
     "hono": "^4.7.0",
     "jstack": "^1.1.1",

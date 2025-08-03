@@ -5,10 +5,13 @@ const nextConfig = {
       {
         source: '/',
         destination: '/bridge',
-        permanent: true,
+        permanent: false,
       },
     ]
   },
+  experimental: {
+    webpackMemoryOptimizations: true,
+  }
 }
 
 export default nextConfig

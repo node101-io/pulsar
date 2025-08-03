@@ -1,8 +1,7 @@
 import Image from "next/image"
 
-export const ExtensionItem = ({ icon, iconComponent, title, subtitle, onClick, disabled, isLoading }: {
+export const ExtensionItem = ({ icon, title, subtitle, onClick, disabled, isLoading }: {
   icon?: string
-  iconComponent?: React.ReactNode
   title: string
   subtitle?: string
   onClick: () => void

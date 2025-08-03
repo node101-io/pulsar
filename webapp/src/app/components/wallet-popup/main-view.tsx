@@ -1,17 +1,21 @@
 import Image from "next/image"
-import { useWallet } from "@/app/_providers/wallet"
+import { useMinaWallet } from "@/app/_providers/mina-wallet"
+import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
 import toast from "react-hot-toast"
 import { useMinaPrice, usePminaBalance } from "@/lib/hooks"
 import { useQueryClient } from "@tanstack/react-query"
-import { WalletType } from "@/lib/types"
 
 export const MainView = ({ setCurrentView, setPopupWalletType }: {
   setCurrentView: (view: 'main' | 'send') => void
-  setPopupWalletType: (walletType: WalletType) => void
+  setPopupWalletType: (isOpen: boolean) => void
 }) => {
-  const { disconnectWallet, account, isConnected } = useWallet();
-
+  const { disconnectWallet: disconnectMina, account: minaAccount, isConnected: isMinaConnected } = useMinaWallet();
+  const { disconnect: disconnectKeplr, address: keplrAddress, status: keplrStatus } = usePulsarWallet();
   const queryClient = useQueryClient();
+
+  const isKeplrConnected = keplrStatus === 'Connected' && keplrAddress;
+  const currentWallet = isMinaConnected && minaAccount ? 'mina' : isKeplrConnected ? 'cosmos' : null;
+  const currentAddress = currentWallet === 'mina' ? minaAccount : keplrAddress;
 
   const {
     data: pminaBalance,
@@ -19,8 +23,8 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
     isFetching: isFetchingBalance,
     error: balanceError,
     refetch: refetchBalance
-  } = usePminaBalance(account, {
-    enabled: !!account && isConnected,
+  } = usePminaBalance(minaAccount, {
+    enabled: !!minaAccount && isMinaConnected && currentWallet === 'mina',
   });
 
   const {
@@ -29,45 +33,87 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
     isFetching: isFetchingPrice,
     error: priceError,
   } = useMinaPrice({
-    enabled: !!account && isConnected && !isLoadingBalance && !isFetchingBalance && pminaBalance !== undefined,
+    enabled: !!minaAccount && isMinaConnected && !isLoadingBalance && !isFetchingBalance && pminaBalance !== undefined && currentWallet === 'mina',
   });
 
   const handleCopyAddress = () => {
-    navigator.clipboard.writeText(account || '')
+    navigator.clipboard.writeText(currentAddress || '')
       .then(() => toast.success('Address copied to clipboard!'))
       .catch(() => toast.error('Failed to copy address. Please try again.'));
   };
 
+  const handleDisconnect = () => {
+    if (currentWallet === 'mina') {
+      disconnectMina();
+      toast.success('Mina Wallet disconnected', { id: 'wallet-disconnected' });
+    } else if (currentWallet === 'cosmos') {
+      disconnectKeplr();
+      toast.success('Cosmos Wallet disconnected', { id: 'wallet-disconnected' });
+    }
+    setPopupWalletType(false);
+  };
+
+  const getBalance = () => {
+    if (currentWallet === 'mina') {
+      return pminaBalance ? `${pminaBalance.toFixed(3)} pMINA` : '0.000 pMINA';
+    } else if (currentWallet === 'cosmos') {
+      return '0.000 ATOM';
+    }
+    return '0.000';
+  };
+
+  const getBalanceUSD = () => {
+    if (currentWallet === 'mina' && priceData?.data && pminaBalance) {
+      return (
+        <h3 className={`text-base transition-all duration-300 ${isLoadingPrice || isFetchingPrice || isFetchingBalance ? 'opacity-30' : ''}`}>
+          <span className="text-black font-medium">
+            ${(pminaBalance * priceData.data.price).toFixed(2)}
+          </span>
+          <span className={`ml-2 ${priceData.data.change24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            ({priceData.data.change24h >= 0 ? '+' : ''}{priceData.data.change24h.toFixed(2)}%)
+          </span>
+        </h3>
+      );
+    }
+    return <h3 className="text-base text-gray-400">$0.00 (0.00%)</h3>;
+  };
+
+  if (!currentWallet) {
+    return (
+      <div className="text-center text-gray-500">
+        No wallet connected
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="flex w-full justify-between">
-        <Image src="/mina-token-logo.png" alt="Mina Logo" width={36} height={36} />
+        {currentWallet === 'mina' ? (
+          <Image src="/mina-token-logo.png" alt="Mina Logo" width={36} height={36} />
+        ) : (
+          <Image src="/pulsar-token-logo.png" alt="Pulsar Logo" width={36} height={36} />
+        )}
         <div className="flex gap-2">
           <button className="flex items-center justify-center size-6 bg-neutral-300 hover:bg-neutral-400 rounded-[10px]">
             <Image src="/settings.svg" alt="Settings" width={14} height={14} />
           </button>
           <button
             className="flex items-center justify-center size-6 bg-neutral-300 hover:bg-neutral-400 rounded-[10px]"
-            onClick={() => {
-              disconnectWallet();
-              toast.success('Wallet disconnected', {
-                id: 'wallet-disconnected'
-              });
-              setPopupWalletType(null);
-            }}
+            onClick={handleDisconnect}
           >
             <Image src="/disconnect.svg" alt="Disconnect" width={14} height={14} />
           </button>
         </div>
       </div>
 
-      <button className="flex items-center gap-2 text-black font-medium text-base leading-none cursor-pointer mt-2" onClick={handleCopyAddress} title={account || ''}>
-        {account?.slice(0, 6)}...{account?.slice(-6)}
+      <button className="flex items-center gap-2 text-black font-medium text-base leading-none cursor-pointer mt-2" onClick={handleCopyAddress} title={currentAddress || ''}>
+        {currentAddress?.slice(0, 6)}...{currentAddress?.slice(-6)}
         <Image src="/copy.svg" alt="Copy" width={10} height={10} className="mt-1" />
       </button>
 
       <div className="mt-4">
-        {balanceError ? (
+        {balanceError && currentWallet === 'mina' ? (
           <div className="flex flex-col gap-2">
             <h1 className="text-red-600 font-bold text-2xl leading-none">Error loading balance</h1>
             <button
@@ -78,27 +124,18 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
             </button>
           </div>
         ) : (
-          <h1 className={`text-black font-bold text-4xl leading-none transition-all duration-300 ${isFetchingBalance ? 'opacity-30' : ''}`}>
-            {pminaBalance ? pminaBalance.toFixed(3) : '0.000'} pMINA
+          <h1 className={`text-black font-bold text-4xl leading-none transition-all duration-300 ${currentWallet === 'mina' && isFetchingBalance ? 'opacity-30' : ''}`}>
+            {getBalance()}
           </h1>
         )}
         <div className="flex items-center justify-between mt-1">
-          {priceError ? (
+          {priceError && currentWallet === 'mina' ? (
             <h3 className="text-base text-red-500">Price unavailable</h3>
-          ) : priceData?.data && pminaBalance ? (
-            <h3 className={`text-base transition-all duration-300 ${isLoadingPrice || isFetchingPrice || isFetchingBalance ? 'opacity-30' : ''}`}>
-              <span className="text-black font-medium">
-                ${(pminaBalance * priceData.data.price).toFixed(2)}
-              </span>
-              <span className={`ml-2 ${priceData.data.change24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                ({priceData.data.change24h >= 0 ? '+' : ''}{priceData.data.change24h.toFixed(2)}%)
-              </span>
-            </h3>
           ) : (
-            <h3 className={`text-base text-gray-400 transition-all duration-300 ${isLoadingPrice || isFetchingPrice || isFetchingBalance ? 'opacity-30' : ''}`}>$0.00 (0.00%)</h3>
+            getBalanceUSD()
           )}
 
-          {!balanceError && (
+          {!balanceError && currentWallet === 'mina' && (
             <button
               onClick={() => {
                 refetchBalance();

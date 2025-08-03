@@ -2,13 +2,13 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ProviderError, ChainInfoArgs, SignMessageArgs, SignedData } from '../../lib/types';
+import toast from 'react-hot-toast';
 
 interface WalletState {
   isConnected: boolean;
   isConnecting: boolean;
   account: string | null;
   network: ChainInfoArgs | null;
-  error: string | null;
 }
 
 interface WalletContextType extends WalletState {
@@ -20,15 +20,16 @@ interface WalletContextType extends WalletState {
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-export function useWallet() {
+export function useMinaWallet() {
   const context = useContext(WalletContext);
-  if (context === undefined) {
-    throw new Error('useWallet must be used within a WalletProvider');
-  }
+
+  if (context === undefined)
+    throw new Error('useMinaWallet must be used within a MinaWalletProvider');
+
   return context;
 }
 
-export function WalletProvider({ children }: {
+export function MinaWalletProvider({ children }: {
   children: ReactNode;
 }) {
   const [walletState, setWalletState] = useState<WalletState>({
@@ -36,16 +37,15 @@ export function WalletProvider({ children }: {
     isConnecting: false,
     account: null,
     network: null,
-    error: null,
   });
 
   const isWalletInstalled = typeof window !== 'undefined' && typeof window.mina !== 'undefined';
 
   useEffect(() => {
-    if (isWalletInstalled) {
-      checkExistingConnection();
-      setupEventListeners();
-    }
+    if (!isWalletInstalled) return;
+
+    checkExistingConnection();
+    setupEventListeners();
   }, [isWalletInstalled]);
 
   const checkExistingConnection = async () => {
@@ -94,17 +94,15 @@ export function WalletProvider({ children }: {
 
   const connectWallet = async () => {
     if (!isWalletInstalled) {
-      setWalletState(prev => ({
-        ...prev,
-        error: 'Auro Wallet is not installed. Please install it from the Chrome Web Store.',
-      }));
+      toast.error('Auro Wallet is not installed. Please install it from the Chrome Web Store.', {
+        id: 'wallet-not-found'
+      });
       return;
     }
 
     setWalletState(prev => ({
       ...prev,
       isConnecting: true,
-      error: null,
     }));
 
     try {
@@ -123,14 +121,12 @@ export function WalletProvider({ children }: {
           isConnecting: false,
           account: accounts[0] || null,
           network: network && !('message' in network) ? network : null,
-          error: null,
         }));
       }
     } catch (error) {
       setWalletState(prev => ({
         ...prev,
         isConnecting: false,
-        error: error instanceof Error ? error.message : 'Failed to connect wallet',
       }));
     }
   };
@@ -141,7 +137,6 @@ export function WalletProvider({ children }: {
       isConnecting: false,
       account: null,
       network: null,
-      error: null,
     });
   };
 

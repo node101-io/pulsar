@@ -3,11 +3,11 @@
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 import Image from "next/image"
-import { useWallet } from "@/app/_providers/wallet"
+import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { useMinaPrice } from "@/lib/hooks"
 
 export default function Transactions() {
-  const { account, isConnected } = useWallet()
+  const { account, isConnected } = useMinaWallet()
   const [activeTransactionType, setActiveTransactionType] = useState<'bridge' | 'pulsar'>('bridge')
   const [activeStatusFilter, setActiveStatusFilter] = useState<'pending' | 'settled'>('pending')
   const [searchAddress, setSearchAddress] = useState<string>('')

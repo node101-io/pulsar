@@ -3,13 +3,13 @@
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import { useWallet } from "@/app/_providers/wallet"
+import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { BRIDGE_ADDRESS } from "@/lib/constants"
 import { toast } from "react-hot-toast"
 import { useMinaPrice, usePminaBalance, useMinaBalance } from "@/lib/hooks"
 
 export default function Bridge() {
-  const { account, isConnected } = useWallet()
+  const { account, isConnected } = useMinaWallet()
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit')
   const [amount, setAmount] = useState<string>('')
   const [gasFee, setGasFee] = useState<number>(0)

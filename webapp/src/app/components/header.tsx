@@ -1,22 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { cn } from "@/lib/utils"
-import { useWallet } from "@/app/_providers/wallet"
 import { usePathname } from "next/navigation"
 import WalletPopup from "./wallet-popup/index"
 import Image from "next/image"
 import Link from "next/link"
-import { WalletType } from "@/lib/types"
+import { useConnectedWallet } from "@/lib/hooks"
+
+const formatAddress = (address: string) => {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`
+}
 
 export default function Header() {
-  const [popupWalletType, setPopupWalletType] = useState<WalletType>(null)
-  const { isConnected, account } = useWallet()
+  const [isWalletPopupOpen, setIsWalletPopupOpen] = useState(false)
+  const walletButtonRef = useRef<HTMLButtonElement>(null)
   const pathname = usePathname()
-
-  const formatAddress = (address: string) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`
-  }
+  const connectedWallet = useConnectedWallet()
 
   const isActive = (path: string) => {
     if (path === '/') {
@@ -24,6 +24,11 @@ export default function Header() {
     }
     return pathname.startsWith(path)
   }
+
+  const handleWalletButtonClick = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    setIsWalletPopupOpen(!isWalletPopupOpen);
+  };
 
   return (
     <header className="w-full px-12 py-4 flex items-center justify-between h-22 bg-background">
@@ -70,31 +75,22 @@ export default function Header() {
 
       <div className="relative flex items-center gap-3">
         <button
-          onClick={() => setPopupWalletType(popupWalletType === 'mina' ? null : 'mina')}
+          ref={walletButtonRef}
+          onClick={handleWalletButtonClick}
           className={cn(
-            "flex cursor-pointer items-center gap-2 border-1 border-text text-base border-solid px-2 py-1.5 rounded-full transition-all duration-100",
+            "flex cursor-pointer items-center gap-2 border-1 border-text text-base border-solid px-4 rounded-full transition-all duration-100 pb-1 pt-2 leading-none text-text pr-1",
           )}
         >
-          <Image src="/mina-token-logo.png" alt="Mina Token" width={24} height={24} className="border-1 border-text rounded-full" />
-          <span className="pb-1 pt-2 leading-none text-text pr-1">{isConnected && account ? formatAddress(account) : 'MINA'}</span>
-        </button>
-
-        <button
-          onClick={() => setPopupWalletType(popupWalletType === 'cosmos' ? null : 'cosmos')}
-          className={cn(
-            "flex cursor-pointer items-center gap-2 border-1 border-text text-base border-solid px-2 py-1.5 rounded-full transition-all duration-100",
-          )}
-        >
-          <div className="w-6 h-6 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
-            <span className="text-white text-xs font-bold">C</span>
-          </div>
-          <span className="pb-1 pt-2 leading-none text-text pr-1">COSMOS</span>
+          {!connectedWallet ? 'Connect Wallet' : (<>
+            <Image src={connectedWallet.type === 'mina' ? "/mina-token-logo.png" : "/pulsar-token-logo.png"} alt="Pulsar Token" width={24} height={24} className="border-1 border-text rounded-full" />
+            {formatAddress(connectedWallet.address)}
+          </>)}
         </button>
 
         <WalletPopup
-          isOpen={popupWalletType !== null}
-          walletType={popupWalletType}
-          setPopupWalletType={setPopupWalletType}
+          isOpen={isWalletPopupOpen}
+          setIsWalletPopupOpen={setIsWalletPopupOpen}
+          walletButtonRef={walletButtonRef}
         />
       </div>
     </header>
