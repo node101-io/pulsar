@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import * as grpc from "@grpc/grpc-js";
 import { BlockParserResult, VoteExt } from "./interfaces.js";
 import { GrpcReflection } from "grpc-js-reflection-client";
+import { PublicKey } from "o1js";
 
 const POLL_INTERVAL_MS = 5_000;
 
@@ -132,7 +133,7 @@ export class PulsarClient extends EventEmitter {
                 });
             });
 
-            voteExt = parseVoteExtResponse(page);
+            voteExt = await this.parseVoteExtResponse(page);
 
             const nextKey = page.pagination?.next_key;
             if (!nextKey || nextKey.length === 0) break;
@@ -150,6 +151,58 @@ export class PulsarClient extends EventEmitter {
         if (this.timer) clearInterval(this.timer);
         this.running = false;
         this.emit("stop");
+    }
+
+    async parseVoteExtResponse(res: any): Promise<VoteExt[]> {
+        let voteExt: VoteExt[] = [];
+        if (!res || !Array.isArray(res.voteExt)) return voteExt;
+
+        try {
+            for (const v of res.voteExt) {
+                const recoveredPubkey = await this.recoverPubkeyFromEncoded(v.validatorAddr);
+
+                const parsedVoteExt: VoteExt = {
+                    index: v.index,
+                    height: Number(v.height),
+                    validatorAddr: recoveredPubkey,
+                    signature: v.signature,
+                };
+                voteExt.push(parsedVoteExt);
+            }
+        } catch (error) {
+            console.error("Error parsing vote extension response:", error);
+            throw error;
+        }
+
+        return voteExt;
+    }
+
+    async recoverPubkeyFromEncoded(encoded: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+            try {
+                this.mkClient.GetMinaPubkey({ validatorAddr: encoded }, (err: any, res: any) => {
+                    if (err) {
+                        console.error("Error retrieving Mina public key:", err);
+                        reject(err);
+                        return;
+                    }
+
+                    try {
+                        const publicKey = PublicKey.from({
+                            x: res.x,
+                            isOdd: res.isOdd,
+                        }).toBase58();
+                        resolve(publicKey);
+                    } catch (parseError) {
+                        console.error("Error parsing public key:", parseError);
+                        reject(parseError);
+                    }
+                });
+            } catch (error) {
+                console.error("Error recovering public key:", error);
+                reject(error);
+            }
+        });
     }
 }
 
@@ -208,15 +261,4 @@ export function parseTendermintBlockResponse(res: any): BlockParserResult {
             nextValidatorsHash: header?.next_validators_hash || "",
         },
     };
-}
-
-export function parseVoteExtResponse(res: any): VoteExt[] {
-    if (!res || !Array.isArray(res.voteExt)) return [];
-
-    return res.voteExt.map((v: any) => ({
-        index: v.index,
-        height: Number(v.height),
-        validatorAddr: v.validatorAddr,
-        signature: v.signature,
-    }));
 }
