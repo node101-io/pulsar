@@ -21,6 +21,6 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/src/vote_ext.proto ./src/vote_ext.proto
+# COPY --from=build /app/src/vote_ext.proto ./src/vote_ext.proto
 
 ENTRYPOINT ["sh", "-c", "node dist/src/worker/$WORKER.js"]
