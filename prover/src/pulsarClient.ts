@@ -2,7 +2,7 @@ import { EventEmitter } from "events";
 import * as grpc from "@grpc/grpc-js";
 import { BlockParserResult, VoteExt } from "./interfaces.js";
 import { GrpcReflection } from "grpc-js-reflection-client";
-import { PublicKey } from "o1js";
+import { PublicKey, Signature } from "o1js";
 
 const POLL_INTERVAL_MS = 5_000;
 
@@ -165,8 +165,9 @@ export class PulsarClient extends EventEmitter {
                     index: v.index,
                     height: Number(v.height),
                     validatorAddr: recoveredPubkey,
-                    signature: v.signature,
+                    signature: decodeMinaSignature(v.signature),
                 };
+
                 voteExt.push(parsedVoteExt);
             }
         } catch (error) {
@@ -190,11 +191,12 @@ export class PulsarClient extends EventEmitter {
                     try {
                         const publicKey = PublicKey.from({
                             x: res.x,
-                            isOdd: res.isOdd,
+                            isOdd: res.is_odd === "true" ? true : false,
                         }).toBase58();
                         resolve(publicKey);
                     } catch (parseError) {
                         console.error("Error parsing public key:", parseError);
+                        console.log("Response data:", res);
                         reject(parseError);
                     }
                 });
@@ -221,7 +223,6 @@ export function parseTendermintBlockResponse(res: any): BlockParserResult {
     const txsDecoded: string[] = txs.map((t: string) => {
         try {
             const decoded = Buffer.from(t, "base64").toString("utf-8");
-            // return JSON.parse(decoded);
             return decoded;
         } catch {
             return "";
@@ -261,4 +262,12 @@ export function parseTendermintBlockResponse(res: any): BlockParserResult {
             nextValidatorsHash: header?.next_validators_hash || "",
         },
     };
+}
+
+function decodeMinaSignature(signatureHex: string): string {
+    const sigBuffer = Buffer.from(signatureHex, "hex");
+    const rHex = sigBuffer.slice(0, 32).toString("hex");
+    const sHex = sigBuffer.slice(32, 64).toString("hex");
+
+    return Signature.fromValue({ r: BigInt("0x" + rHex), s: BigInt("0x" + sHex) }).toBase58();
 }
