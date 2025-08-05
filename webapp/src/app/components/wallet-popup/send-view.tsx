@@ -1,25 +1,62 @@
 import Image from "next/image"
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { useMinaPrice } from "@/lib/hooks";
 import { toast } from "react-hot-toast";
 import { useMinaWallet } from "@/app/_providers/mina-wallet";
 import { usePminaBalance } from "@/lib/hooks";
+
+interface SavedAddress {
+  name: string;
+  address: string;
+  id: string;
+}
 
 export const SendView = ({ setCurrentView }: {
   setCurrentView: (view: 'main' | 'send') => void
 }) => {
   const [sendAmount, setSendAmount] = useState<string>('');
   const [recipientAddress, setRecipientAddress] = useState<string>('');
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [addressName, setAddressName] = useState<string>('');
+  const [showSaveDialog, setShowSaveDialog] = useState<boolean>(false);
   const { isConnected, signMessage, account } = useMinaWallet();
   const { data: priceData } = useMinaPrice();
   const { data: pminaBalance } = usePminaBalance(account, {
     enabled: !!account && isConnected,
   });
 
+  const getSavedAddresses = (): SavedAddress[] => {
+    try {
+      const stored = localStorage.getItem('pulsar-saved-addresses');
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error('Error loading saved addresses:', error);
+      return [];
+    }
+  };
+
+  const saveSavedAddresses = (addresses: SavedAddress[]) => {
+    try {
+      localStorage.setItem('pulsar-saved-addresses', JSON.stringify(addresses));
+      setSavedAddresses(addresses);
+    } catch (error) {
+      console.error('Error saving addresses:', error);
+      toast.error('Failed to save address');
+    }
+  };
+
+  useEffect(() => {
+    const addresses = getSavedAddresses();
+    setSavedAddresses(addresses);
+  }, []);
+
   const handleBackToMain = () => {
     setCurrentView('main');
     setSendAmount('');
     setRecipientAddress('');
+    setShowSaveDialog(false);
+    setAddressName('');
   };
 
   const handleMaxClick = () => {
@@ -36,17 +73,70 @@ export const SendView = ({ setCurrentView }: {
     return '0.00';
   };
 
+  const handleSaveAddressClick = () => {
+    if (!recipientAddress.trim()) {
+      toast.error('Please enter an address first');
+      return;
+    }
+    
+    const exists = savedAddresses.some(addr => addr.address === recipientAddress.trim());
+    if (exists) {
+      toast.error('Address already saved');
+      return;
+    }
+    
+    setShowSaveDialog(true);
+  };
+
+  const saveAddress = () => {
+    if (!addressName.trim()) {
+      toast.error('Please enter a name for the address');
+      return;
+    }
+
+    const aliasExists = savedAddresses.some(addr => addr.name.toLowerCase() === addressName.trim().toLowerCase());
+    if (aliasExists) {
+      toast.error('This alias already exists');
+      return;
+    }
+
+    const newAddress: SavedAddress = {
+      id: Date.now().toString(),
+      name: addressName.trim(),
+      address: recipientAddress.trim(),
+    };
+
+    const updatedAddresses = [...savedAddresses, newAddress];
+    saveSavedAddresses(updatedAddresses);
+    
+    setShowSaveDialog(false);
+    setAddressName('');
+    toast.success('Address saved successfully!');
+  };
+
+  const deleteAddress = (id: string) => {
+    const updatedAddresses = savedAddresses.filter(addr => addr.id !== id);
+    saveSavedAddresses(updatedAddresses);
+    toast.success('Address deleted successfully!');
+  };
+
   return (
     <>
-      <div className="flex items-center gap-3 mb-3 justify-between">
-        <h3 className="text-xl font-semibold text-black">Send pMINA</h3>
-        <Image src="/back-arrow.svg" alt="Back" width={14} height={14} onClick={handleBackToMain} className="cursor-pointer" />
+      <div className="flex items-center gap-3 m-3 cursor-pointer w-fit" onClick={handleBackToMain}>
+        <Image src="/back-arrow.svg" alt="Back" width={8} height={14} className="" />
+        <h3 className="text-xl font-semibold text-background leading-none mb-1">Send pMINA</h3>
       </div>
 
-      <div className="bg-neutral-300 rounded-xl px-4 py-3 flex flex-col gap-1 mb-6">
-        <label className="block text-xl font-medium text-700 mb-2 leading-none">
-          Amount
+      <div className="bg-[#CBDBDB] rounded-[26px] p-5.5 flex gap-3 border border-background items-center">
+        <div className="flex items-center justify-center size-9.5 bg-text border border-background rounded-full">
+          <Image src="/logo-dark.svg" alt="" width={32} height={32} className="" />
+        </div>
+        <label className="block text-xl font-semibold text-700 mb-1 leading-none">
+          pMINA
         </label>
+      </div>
+
+      <div className="bg-[#CBDBDB] rounded-[26px] px-5.5 pb-4 pt-3 flex flex-col gap-1 border border-background">
         <input
           type="number"
           value={sendAmount}
@@ -55,7 +145,7 @@ export const SendView = ({ setCurrentView }: {
           max={pminaBalance || 0}
           step="0.001"
           placeholder="0.000"
-          className="w-full focus:outline-none text-5xl font-semibold placeholder:font-medium bg-transparent"
+          className="w-full focus:outline-none text-5xl font-semibold placeholder:font-medium bg-transparent leading-[1.1]"
         />
         <div className="flex justify-between items-center">
           <span className="text-base text-gray-600 mr-auto">
@@ -73,19 +163,108 @@ export const SendView = ({ setCurrentView }: {
         </div>
       </div>
 
-      <div className="bg-neutral-300 rounded-xl px-4 py-3 flex flex-col gap-1 relative mb-3">
-        <label className="block text-xl font-medium text-700 mb-2 leading-none">
+      <div className="bg-[#CBDBDB] rounded-[26px] p-5.5 flex flex-col gap-1 relative border border-background">
+        <label className="blockleading-none font-family-recady text-base">
           Recipient Address
         </label>
         <input
           type="text"
           value={recipientAddress}
           onChange={(e) => setRecipientAddress(e.target.value)}
-          placeholder="B62q..."
-          className="w-full focus:outline-none text-base placeholder:text-base pr-6"
+          placeholder="B62q... or pulsar..."
+          className="w-full focus:outline-none text-base placeholder:text-base pr-5 relative"
         />
-        <Image src="/notebook.svg" alt="Save address" width={14} height={14} className="absolute right-4 bottom-4" />
+        <div className="size-4 border border-background rounded-sm bg-text absolute right-4 bottom-6 cursor-pointer hover:scale-110 transition-transform duration-200
+            active:scale-104
+            after:w-2
+            after:h-px
+            before:h-2
+            before:w-px
+            after:bg-background
+            before:bg-background
+            after:absolute
+            after:left-1/2
+            after:-translate-x-1/2
+            after:top-1/2
+            after:-translate-y-1/2
+            before:absolute
+            before:left-1/2
+            before:-translate-x-1/2
+            before:top-1/2
+            before:-translate-y-1/2
+            after:rounded-full
+          "
+          onClick={handleSaveAddressClick}
+        >
+        </div>
       </div>
+
+      <AnimatePresence>
+        {showSaveDialog && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-5 bg-black/20 rounded-4xl rounded-tr-none"
+              onClick={() => {
+                setShowSaveDialog(false);
+                setAddressName('');
+              }}
+            />
+              <motion.div
+                initial={{ y: '100%', opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: '100%', opacity: 0 }}
+                transition={{ 
+                  type: "spring",
+                  damping: 30,
+                  stiffness: 300,
+                  duration: 0.3
+                }}
+                className="bg-[#CBDBDB] rounded-t-[26px] p-6 flex flex-col gap-2 border border-background absolute bottom-0 left-0 right-0 z-10 shadow-lg"
+              >
+                <h3 className="text-xl font-semibold text-background">Give it an alias</h3>
+                
+                <div className="bg-text rounded-2xl p-4 border border-background flex items-center gap-3">
+                  <div className="size-8 rounded-full flex items-center justify-center border border-background">
+                    <Image src="/pulsar-token-logo.png" alt="Profile" width={32} height={32} className="rounded-full" />
+                  </div>
+                  <input
+                    type="text"
+                    value={addressName}
+                    onChange={(e) => {
+                      if (e.target.value.length <= 20) {
+                        setAddressName(e.target.value);
+                      }
+                    }}
+                    placeholder="Please enter alias here"
+                    className="flex-1 placeholder:font-medium focus:outline-none text-lg bg-transparent font-semibold text-background placeholder-gray-500 mb-1"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        saveAddress();
+                      }
+                      if (e.key === 'Escape') {
+                        setShowSaveDialog(false);
+                        setAddressName('');
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <span className="text-sm font-medium text-[#585858] mb-1">{addressName.length}/20</span>
+                </div>
+
+                <button
+                  onClick={saveAddress}
+                  disabled={!addressName.trim()}
+                  className="w-full bg-[#FFE68C] hover:bg-[#fff4cd] disabled:bg-gray-300 disabled:text-gray-500 text-background font-normal font-family-recady pt-4 pb-2.5 px-6 rounded-[20px] transition-colors border border-background"
+                >
+                  Confirm
+                </button>
+              </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       <button
         onClick={async () => {
@@ -139,48 +318,46 @@ export const SendView = ({ setCurrentView }: {
             console.error('Transaction signing failed:', error);
           }
         }}
-        className="flex cursor-pointer items-center justify-center gap-3 p-1.5 text-base text-black font-semibold rounded-xl transition-colors bg-neutral-300 hover:bg-neutral-400"
+        className="flex cursor-pointer items-center justify-center gap-3 p-4 text-base text-background font-semibold rounded-full transition-colors bg-[#FFE68C] hover:bg-[#fff4cd] border border-background"
       >
-        <p className="mb-1">Send</p>
-        <div className="flex items-center justify-center size-8 bg-[#2C202A] rounded-full">
-          <Image src="/arrow.svg" alt="Send" width={14} height={14} className="-rotate-45" />
-        </div>
+        <p className="font-family-recady text-base font-normal mt-1 leading-none">Send</p>
       </button>
 
-      <div className="flex flex-col justify-between mt-6 gap-2">
-        <h2 className="text-base font-light text-black">Saved addresses</h2>
-        <div className="flex flex-col items-center w-full cursor-pointer">
-          {[
-            {
-              name: 'Yunus',
-              address: 'B62qneWKP5bz1pJmwBXH13paefN9R59BtYoUszC9vbQEZdV6jqpuGFK',
-            },
-            {
-              name: 'Mete',
-              address: 'B62qpeiVLCfkwetYqDazs9Bz88Ykfw5ZqjqdrvZHrjfpRvTzvboJ1Sp',
-            },
-            {
-              name: 'Aleyna',
-              address: 'B62qpeiVLZqjqdrvZHrjfpRvTzvboJ1SpCfkwetYqDazs9Bz88Ykf25',
-            },
-          ].map((_, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-2 w-full group hover:bg-neutral-300 rounded-xl p-2 transition-colors"
-              onClick={() => {
-                setRecipientAddress(_.address);
-              }}
-            >
-              <Image src="/mina-token-logo.png" alt="Mina Logo" width={32} height={32} />
-              <div className="flex flex-col mr-auto text-base justify-between text-black leading-none">
-                <p className="font-medium">{_.name}</p>
-                <p className="font-light">{_.address.slice(0, 6)}...{_.address.slice(-6)}</p>
+      {savedAddresses.length > 0 && (
+        <div className="flex flex-col justify-between mt-2 gap-2">
+          <div className="flex justify-between text-base font-medium text-[#585858]">
+            <h2 className="">Saved addresses</h2>
+          </div>
+          <div className="flex flex-col items-center w-full cursor-pointer">
+            {savedAddresses.map((savedAddress) => (
+              <div
+                key={savedAddress.id}
+                className="flex items-center gap-2 w-full group hover:bg-neutral-300 rounded-xl p-2 transition-colors duration-200"
+                onClick={() => {
+                  setRecipientAddress(savedAddress.address);
+                }}
+              >
+                <Image src="/pulsar-token-logo.png" alt="Mina Logo" width={32} height={32} className="rounded-full border border-background" />
+                <div className="flex flex-col mr-auto text-base justify-between leading-none font-medium">
+                  <p className="text-background">{savedAddress.name}</p>
+                  <p className="text-[#585858]">{savedAddress.address.slice(0, 6)}...{savedAddress.address.slice(-6)}</p>
+                </div>
+                <Image 
+                  src="/trash-icon.svg" 
+                  alt="Delete" 
+                  width={14} 
+                  height={14} 
+                  className="group-hover:opacity-100 opacity-0 transition-opacity duration-200" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteAddress(savedAddress.id);
+                  }}
+                />
               </div>
-              <Image src="/trash-icon.svg" alt="Delete" width={12} height={12} />
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </>
   )
 }
