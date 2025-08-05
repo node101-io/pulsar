@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, RefObject } from "react"
+import { motion, AnimatePresence } from "motion/react"
 import { SendView } from "./send-view"
 import { ConnectView } from "./connect-view"
 import { MainView } from "./main-view"
@@ -43,16 +44,40 @@ export default function WalletPopup({
     return () => document.removeEventListener('click', handleClickOutside, true);
   }, [isOpen, setIsWalletPopupOpen, walletButtonRef]);
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      ref={popupRef}
-      className="absolute flex flex-col top-full right-0 mt-8 w-88 min-h-160 bg-white rounded-4xl shadow-lg z-50 py-6 px-4 font-family-darker-grotesque border-1 border-background border-solid rounded-tr-none"
-    >
-      {currentView === 'connect' && <ConnectView />}
-      {currentView === 'main' && <MainView setCurrentView={setCurrentView} setPopupWalletType={setIsWalletPopupOpen} />}
-      {currentView === 'send' && <SendView setCurrentView={setCurrentView} />}
-    </div>
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          ref={popupRef}
+          initial={{ 
+            opacity: 0, 
+            scale: 0.95,
+            x: '100%',
+            y: 0
+          }}
+          animate={{ 
+            opacity: 1, 
+            scale: 1,
+            x: 0,
+            y: 0
+          }}
+          exit={{ 
+            opacity: 0, 
+            scale: 0.95,
+            x: '100%',
+            y: 0
+          }}
+          transition={{ 
+            duration: 0.2,
+            ease: "easeInOut"
+          }}
+          className="fixed flex flex-col top-[calc(var(--header-height)+var(--spacing)*5)] right-5 h-[calc(100vh-var(--header-height)-var(--spacing)*10)] w-88 bg-white rounded-4xl shadow-lg z-50 py-6 px-4 font-family-darker-grotesque border-1 border-background border-solid rounded-tr-none"
+        >
+          {currentView === 'connect' && <ConnectView />}
+          {currentView === 'main' && <MainView setCurrentView={setCurrentView} setPopupWalletType={setIsWalletPopupOpen} />}
+          {currentView === 'send' && <SendView setCurrentView={setCurrentView} />}
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

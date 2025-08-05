@@ -110,7 +110,7 @@ export default function Bridge() {
   };
 
   return (
-    <main className="bg-[#CBDBDB] rounded-4xl rounded-b-none px-8 py-12 flex-1 flex flex-col justify-center">
+    <main className="bg-[#CBDBDB] rounded-tl-4xl px-8 py-12 flex-1 flex flex-col justify-center">
       <div className="text-center mb-12">
         <h1 className="text-5xl text-background mb-4 tracking-wide uppercase">
           Jump To Pulsar

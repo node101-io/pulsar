@@ -128,7 +128,7 @@ export default function Transactions() {
   }
 
   return (
-    <main className="bg-[#CBDBDB] rounded-4xl rounded-b-none px-8 py-12 flex-1 flex flex-col justify-center">
+    <main className="bg-[#CBDBDB] rounded-tl-4xl px-8 py-12 flex-1 flex flex-col justify-center">
       <div className="w-144 mx-auto bg-text rounded-[30px] p-3 pb-0 border-1 border-black flex flex-col space-y-5 overflow-hidden">
         {/* Transaction Type Tabs */}
         <div className="mb-5">

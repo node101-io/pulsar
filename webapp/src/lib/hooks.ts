@@ -1,25 +1,16 @@
 import { useMemo } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 
 import { client } from "./client"
 import { fetchPminaBalance } from "./utils"
 import { MINA_RPC_URL } from "./constants"
+import { FaucetResponse } from "./types"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
 
-interface UseMinaPriceOptions {
+export function useMinaPrice(options?: {
   enabled?: boolean;
-}
-
-interface UsePminaBalanceOptions {
-  enabled?: boolean;
-}
-
-interface UseMinaBalanceOptions {
-  enabled?: boolean;
-}
-
-export function useMinaPrice(options?: UseMinaPriceOptions) {
+}) {
   return useQuery({
     queryKey: ['minaPrice'],
     queryFn: async () => {
@@ -34,7 +25,9 @@ export function useMinaPrice(options?: UseMinaPriceOptions) {
   });
 }
 
-export function usePminaBalance(account: string | null | undefined, options?: UsePminaBalanceOptions) {
+export function usePminaBalance(account: string | null | undefined, options?: {
+  enabled?: boolean;
+}) {
   return useQuery({
     queryKey: ['pminaBalance', account],
     queryFn: () => fetchPminaBalance(account!),
@@ -47,7 +40,9 @@ export function usePminaBalance(account: string | null | undefined, options?: Us
   });
 }
 
-export function useMinaBalance(account: string | null | undefined, options?: UseMinaBalanceOptions) {
+export function useMinaBalance(account: string | null | undefined, options?: {
+  enabled?: boolean;
+}) {
   return useQuery({
     queryKey: ['minaBalance', account],
     queryFn: async () => {
@@ -67,6 +62,22 @@ export function useMinaBalance(account: string | null | undefined, options?: Use
     retry: 3,
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
     ...options,
+  });
+}
+
+export function useFaucetDrip() {
+  const queryClient = useQueryClient();
+  
+  return useMutation<FaucetResponse, Error, { walletAddress: string }>({
+    mutationFn: async (data: { walletAddress: string }) => {
+      const res = await client.faucet.drip.$post(data);
+      return await res.json() as FaucetResponse;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ 
+        queryKey: ['pminaBalance', variables.walletAddress] 
+      });
+    },
   });
 }
 

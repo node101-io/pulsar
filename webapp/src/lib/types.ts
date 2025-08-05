@@ -49,6 +49,33 @@ export interface MinaProvider {
   on(event: "chainChanged", callback: (chainInfo: ChainInfoArgs) => void): void;
 }
 
+export interface FaucetSuccessResponse {
+  success: true;
+  data: {
+    amount: number;
+    token: string;
+    walletAddress: string;
+    txHash: string;
+    timestamp: string;
+  };
+}
+
+export interface FaucetErrorResponse {
+  success: false;
+  error: string;
+}
+
+export interface FaucetRateLimitResponse {
+  success: false;
+  error: "Rate limit exceeded";
+  details: {
+    timeLeft: number;
+    message: string;
+  };
+}
+
+export type FaucetResponse = FaucetSuccessResponse | FaucetErrorResponse | FaucetRateLimitResponse;
+
 declare global {
   interface Window {
     mina?: MinaProvider;
