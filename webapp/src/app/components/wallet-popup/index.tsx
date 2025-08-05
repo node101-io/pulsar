@@ -71,7 +71,7 @@ export default function WalletPopup({
             duration: 0.2,
             ease: "easeInOut"
           }}
-          className="fixed flex flex-col top-[calc(var(--header-height)+var(--spacing)*5)] right-5 h-[calc(100vh-var(--header-height)-var(--spacing)*10)] w-88 bg-white rounded-4xl shadow-lg z-50 py-6 px-4 font-family-darker-grotesque border-1 border-background border-solid rounded-tr-none"
+          className="fixed flex flex-col top-[calc(var(--header-height)+var(--spacing)*5)] right-5 h-[calc(100vh-var(--header-height)-var(--spacing)*10)] w-88 bg-white rounded-4xl shadow-lg z-50 p-3.5 font-family-darker-grotesque border-1 border-background border-solid rounded-tr-none gap-2"
         >
           {currentView === 'connect' && <ConnectView />}
           {currentView === 'main' && <MainView setCurrentView={setCurrentView} setPopupWalletType={setIsWalletPopupOpen} />}
