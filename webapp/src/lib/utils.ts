@@ -14,3 +14,9 @@ export const fetchPminaBalance = async (account: string): Promise<number> => {
   const mockBalance = 125.674 + (Math.random() - 0.5) * 10;
   return Number(mockBalance.toFixed(3));
 };
+
+export const formatTimeLeft = (ms: number): string => {
+  const hours = Math.floor(ms / (1000 * 60 * 60))
+  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60))
+  return `${hours}h ${minutes}m`
+}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { usePathname } from "next/navigation"
 import WalletPopup from "./wallet-popup/index"
@@ -14,9 +14,14 @@ const formatAddress = (address: string) => {
 
 export default function Header() {
   const [isWalletPopupOpen, setIsWalletPopupOpen] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
   const walletButtonRef = useRef<HTMLButtonElement>(null)
   const pathname = usePathname()
   const connectedWallet = useConnectedWallet()
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   const isActive = (path: string) => {
     if (path === '/') {
@@ -30,8 +35,10 @@ export default function Header() {
     setIsWalletPopupOpen(!isWalletPopupOpen);
   };
 
+  const showConnectedWallet = isMounted && connectedWallet
+
   return (
-    <header className="w-full px-12 py-4 flex items-center justify-between h-22 bg-background">
+    <header className="w-full px-12 py-4 flex items-center justify-between h-[var(--header-height)] bg-background">
       <Link href="/" className="relative">
         <Image
           src="/logo.svg"
@@ -73,25 +80,29 @@ export default function Header() {
         </Link>
       </nav>
 
-      <div className="relative flex items-center gap-3">
-        <button
-          ref={walletButtonRef}
-          onClick={handleWalletButtonClick}
-          className={cn(
-            "flex cursor-pointer items-center gap-2 border-1 border-text text-base border-solid px-4 rounded-full transition-all duration-100 pb-1 pt-2 leading-none text-text pr-1",
-          )}
-        >
-          {!connectedWallet ? 'Connect Wallet' : (<>
-            <Image src={connectedWallet.type === 'mina' ? "/mina-token-logo.png" : "/pulsar-token-logo.png"} alt="Pulsar Token" width={24} height={24} className="border-1 border-text rounded-full" />
-            {formatAddress(connectedWallet.address)}
-          </>)}
-        </button>
+      <div className={cn("p-1 border-1 rounded-full transition-colors duration-300", isWalletPopupOpen ? "border-text" : "border-transparent")}>
+        <div className={cn("relative flex items-center gap-3 rounded-full transition-colors duration-300", isWalletPopupOpen ? "bg-text" : "bg-background")}>
+          <button
+            ref={walletButtonRef}
+            onClick={handleWalletButtonClick}
+            className={cn(
+              "flex cursor-pointer items-center gap-2 border-1 border-text text-base border-solid px-4 py-1 rounded-full transition-colors duration-300 leading-none text-text",
+              isWalletPopupOpen && "text-background",
+              showConnectedWallet ? "pl-1.5" : "",
+            )}
+          >
+            {!showConnectedWallet ? <span className="pt-2 pb-1">Connect Wallet</span> : (<>
+              <Image src={connectedWallet.type === 'mina' ? "/mina-token-logo.png" : "/pulsar-token-logo.png"} alt="Pulsar Token" width={24} height={24} className={cn("border-1 border-text rounded-full transition-colors duration-300", isWalletPopupOpen ? "border-background" : "border-text")} />
+              <span className="pt-1 pb-0 text-base">{formatAddress(connectedWallet.address)}</span>
+            </>)}
+          </button>
 
-        <WalletPopup
-          isOpen={isWalletPopupOpen}
-          setIsWalletPopupOpen={setIsWalletPopupOpen}
-          walletButtonRef={walletButtonRef}
-        />
+          <WalletPopup
+            isOpen={isWalletPopupOpen}
+            setIsWalletPopupOpen={setIsWalletPopupOpen}
+            walletButtonRef={walletButtonRef}
+          />
+        </div>
       </div>
     </header>
   )
