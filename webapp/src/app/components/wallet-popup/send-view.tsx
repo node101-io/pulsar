@@ -4,7 +4,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { useMinaPrice } from "@/lib/hooks";
 import { toast } from "react-hot-toast";
 import { useMinaWallet } from "@/app/_providers/mina-wallet";
-import { usePminaBalance } from "@/lib/hooks";
+import { usePulsarWallet } from "@/app/_providers/pulsar-wallet";
+import { usePminaBalance, useConnectedWallet } from "@/lib/hooks";
 
 interface SavedAddress {
   name: string;
@@ -20,10 +21,15 @@ export const SendView = ({ setCurrentView }: {
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [addressName, setAddressName] = useState<string>('');
   const [showSaveDialog, setShowSaveDialog] = useState<boolean>(false);
-  const { isConnected, signMessage, account } = useMinaWallet();
+  
+  // Wallet hooks
+  const { isConnected: isMinaConnected, signMessage: minaSignMessage, account: minaAccount } = useMinaWallet();
+  const { signingClient, isSigningClientLoading } = usePulsarWallet();
+  const connectedWallet = useConnectedWallet();
+  
   const { data: priceData } = useMinaPrice();
-  const { data: pminaBalance } = usePminaBalance(account, {
-    enabled: !!account && isConnected,
+  const { data: pminaBalance } = usePminaBalance(connectedWallet?.address, {
+    enabled: !!connectedWallet?.address,
   });
 
   const getSavedAddresses = (): SavedAddress[] => {
@@ -270,57 +276,85 @@ export const SendView = ({ setCurrentView }: {
         onClick={async () => {
           try {
             const amount = parseFloat(sendAmount);
-            if (!sendAmount || amount <= 0) {
-              toast.error('Please enter a valid amount', { id: 'invalid-amount' });
-              return;
-            }
+            if (!sendAmount || amount <= 0)
+              return toast.error('Please enter a valid amount', { id: 'invalid-amount' });
 
-            if (!recipientAddress || recipientAddress.trim() === '') {
-              toast.error('Please enter a recipient address', { id: 'invalid-recipient' });
-              return;
-            }
+            if (!recipientAddress || recipientAddress.trim() === '')
+              return toast.error('Please enter a recipient address', { id: 'invalid-recipient' });
 
-            if (pminaBalance && amount > pminaBalance) {
-              toast.error('Insufficient balance', { id: 'insufficient-balance' });
-              return;
-            }
+            if (pminaBalance && amount > pminaBalance)
+              return toast.error('Insufficient balance', { id: 'insufficient-balance' });
 
-            const transactionMessage = JSON.stringify({
-              type: 'send',
-              from: account,
-              to: recipientAddress.trim(),
-              amount: amount.toString(),
-              currency: 'pMINA',
-              timestamp: new Date().toISOString()
-            });
+            if (!connectedWallet)
+              return toast.error('Please connect a wallet first', { id: 'no-wallet' });
 
             toast.loading('Please sign the transaction in your wallet...', { id: 'signing-transaction' });
 
-            const signedData = await signMessage({ message: transactionMessage });
+            if (connectedWallet.type === 'mina') {
+              const transactionMessage = JSON.stringify({
+                type: 'send',
+                from: connectedWallet.address,
+                to: recipientAddress.trim(),
+                amount: amount.toString(),
+                currency: 'pMINA',
+                timestamp: new Date().toISOString()
+              });
 
-            toast.dismiss('signing-transaction');
-            toast.success('Transaction signed successfully!', { id: 'transaction-signed' });
+              const signedData = await minaSignMessage({ message: transactionMessage });
+              
+              toast.dismiss('signing-transaction');
+              toast.success('Transaction signed successfully with Mina wallet!', { id: 'transaction-signed' });
+              
+              console.log('Mina transaction signed:', {
+                message: transactionMessage,
+                signature: signedData
+              });
+            } else if (connectedWallet.type === 'cosmos') {
+              // Pulsar/Cosmos wallet transaction
+              if (!signingClient || isSigningClientLoading) {
+                toast.dismiss('signing-transaction');
+                toast.error('Wallet client not ready. Please try again.', { id: 'client-not-ready' });
+                return;
+              }
 
-            console.log('Signed transaction:', {
-              message: transactionMessage,
-              signature: signedData
-            });
+              // For now, sign a transaction message (can be implemented with proper transaction later)
+              const transactionMessage = JSON.stringify({
+                type: 'cosmos_send',
+                from: connectedWallet.address,
+                to: recipientAddress.trim(),
+                amount: amount.toString(),
+                currency: 'pMINA',
+                timestamp: new Date().toISOString()
+              });
+
+              // This will be replaced with actual transaction once we have proper implementation
+              console.log('Cosmos transaction message:', transactionMessage);
+
+              toast.dismiss('signing-transaction');
+              toast.success('Transaction prepared with Pulsar wallet!', { id: 'transaction-signed' });
+              
+              console.log('Cosmos transaction prepared for:', {
+                from: connectedWallet.address,
+                to: recipientAddress.trim(),
+                amount: amount.toString()
+              });
+            }
 
             setSendAmount('');
             setRecipientAddress('');
             setCurrentView('main');
-
           } catch (error) {
             toast.dismiss('signing-transaction');
-            toast.error(error instanceof Error ? error.message : 'Failed to sign transaction', {
-              id: 'signing-failed'
-            });
-            console.error('Transaction signing failed:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to process transaction', { id: 'transaction-failed' });
+            console.error('Transaction failed:', error);
           }
         }}
-        className="flex cursor-pointer items-center justify-center gap-3 p-4 text-base text-background font-semibold rounded-full transition-colors bg-[#FFE68C] hover:bg-[#fff4cd] border border-background"
+        disabled={!connectedWallet || (connectedWallet.type === 'cosmos' && isSigningClientLoading)}
+        className="flex cursor-pointer items-center justify-center gap-3 p-4 text-base text-background font-semibold rounded-full transition-colors bg-[#FFE68C] hover:bg-[#fff4cd] border border-background disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <p className="font-family-recady text-base font-normal mt-1 leading-none">Send</p>
+        <p className="font-family-recady text-base font-normal mt-1 leading-none">
+          Send {connectedWallet?.type === 'mina' ? 'with Auro Wallet' : connectedWallet?.type === 'cosmos' ? 'with Keplr Wallet' : ''}
+        </p>
       </button>
 
       {savedAddresses.length > 0 && (

@@ -3,10 +3,11 @@ import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
 import { LegalNotice } from "./legal-notice"
 import { ExtensionItem } from "./extension-item"
 import toast from "react-hot-toast"
+import "@/lib/tx"
 
 export const ConnectView = () => {
   const { isWalletInstalled, isConnecting: minaConnecting, connectWallet: connectMina } = useMinaWallet();
-  const { connect: connectKeplr, status: keplrStatus } = usePulsarWallet();
+  const { connect: connectKeplr, status: keplrStatus, getSigningClient } = usePulsarWallet();
 
   const isKeplrConnecting = keplrStatus === 'Connecting';
 
@@ -35,6 +36,12 @@ export const ConnectView = () => {
   const handleKeplrClick = async () => {
     try {
       await connectKeplr();
+
+      const signingClient = await getSigningClient();
+      const accounts = await signingClient.offlineSigner.getAccounts();
+
+      console.log('Keplr Wallet Accounts:', accounts);
+
       toast.success('Keplr Wallet connected successfully!', {
         id: 'keplr-connected'
       });
@@ -61,7 +68,6 @@ export const ConnectView = () => {
           disabled={minaConnecting}
           isLoading={minaConnecting}
         />
-
         <ExtensionItem
           icon="/keplr-wallet-logo.png"
           title="Keplr Wallet Extension"

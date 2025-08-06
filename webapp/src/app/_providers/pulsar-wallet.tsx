@@ -26,17 +26,13 @@ export function PulsarWalletProvider({ children }: PulsarWalletProviderProps) {
       assetLists={filteredAssetLists}
       signerOptions={{
         signing: (chainName) => {
-          if (chainName === "cosmoshub") {
-            return {
-              gasPrice: "0.025uatom",
-              broadcast: {
-                checkTx: true,
-                deliverTx: true,
-                timeoutMs: 60000,
-              },
-            };
-          }
-          return undefined;
+          return {
+            broadcast: {
+              checkTx: true,
+              deliverTx: true,
+              timeoutMs: 60000
+            },
+          };
         },
         preferredSignType: () => "direct",
       }}
