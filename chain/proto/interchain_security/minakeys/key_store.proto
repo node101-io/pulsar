@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package interchain_security.minakeys;
+
+option go_package = "github.com/interchain-security/v5/x/minakeys/types";
+
+message KeyStore {
+  string cosmosPublicKey = 1; 
+  string minaPublicKey = 2; 
+  string creator = 3;
+}
+

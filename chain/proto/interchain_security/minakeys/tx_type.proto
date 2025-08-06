@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package interchain_security.minakeys;
+
+import "gogoproto/gogo.proto";
+import "google/protobuf/any.proto";
+
+option go_package = "github.com/interchain-security/v5/x/minakeys/types";
+
+// TxType defines the type of transaction for signature verification
+enum TxType {
+  option (gogoproto.goproto_enum_prefix) = false;
+  
+  // Default Cosmos SDK transaction
+  COSMOS_TX = 0;
+  
+  // Mina wallet transaction
+  MINA_TX = 1;
+}
+
+// TxTypeExtension is used as extension option to specify transaction type
+message TxTypeExtension {
+  option (gogoproto.goproto_getters) = false;
+  
+  TxType tx_type = 1;
+} 
