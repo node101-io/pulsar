@@ -9,4 +9,4 @@ type SecondaryKey struct {
 	PublicKey *keys.PublicKey
 }
 
-const DevnetNetworkID = "pulsar-devnet"
+const DevnetNetworkID = "devnet"

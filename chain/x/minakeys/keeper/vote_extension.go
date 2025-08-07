@@ -30,11 +30,11 @@ type MinaSignatureVoteExt struct {
 
 type VoteExtBody struct {
 	InitialValidatorSetRoot *big.Int `json:"initial_validator_set_root"`
-	InitialBlockHeight      int64    `json:"initial_block_height"`
 	InitialStateRoot        []byte   `json:"initial_state_root"`
+	InitialBlockHeight      int64    `json:"initial_block_height"`
 
-	NewStateRoot        []byte   `json:"new_state_root"`
 	NewValidatorSetRoot *big.Int `json:"new_validator_set_root"`
+	NewStateRoot        []byte   `json:"new_state_root"`
 	NewBlockHeight      int64    `json:"new_block_height"`
 }
 
@@ -61,6 +61,31 @@ func NewVoteExtHandler(keeper Keeper, ccvKeeper ibcconsumerkeeper.Keeper) *VoteE
 type ValidatorInfo struct {
 	MinaAddress string
 	Power       int64
+}
+
+func (h *VoteExtHandler) sortValidators(validators []ValidatorInfo) []ValidatorInfo {
+	sort.Slice(validators, func(i, j int) bool {
+		pubKeyI, err := new(keys.PublicKey).FromAddress(validators[i].MinaAddress)
+		if err != nil {
+			return false
+		}
+		pubKeyJ, err := new(keys.PublicKey).FromAddress(validators[j].MinaAddress)
+		if err != nil {
+			return false
+		}
+		return pubKeyI.X.Cmp(pubKeyJ.X) < 0
+	})
+
+	// Sondan başa gidiyoruz, parse edilebilen ilk index’i buluyoruz:
+	lastValidIdx := len(validators) - 1
+	for ; lastValidIdx >= 0; lastValidIdx-- {
+		_, err := new(keys.PublicKey).FromAddress(validators[lastValidIdx].MinaAddress)
+		if err == nil {
+			break
+		}
+	}
+	// Slice'ın sadece parse edilebilen validatorları içeren kısmını döndür
+	return validators[:lastValidIdx+1]
 }
 
 // applyValidatorUpdates applies validator updates to the initial validator set
@@ -115,26 +140,25 @@ func (h *VoteExtHandler) applyValidatorUpdates(ctx sdk.Context, initialValidator
 		result = append(result, *val)
 	}
 
-	// Sort by address in ascending order
-	sort.Slice(result, func(i, j int) bool {
-		return string(result[i].MinaAddress) < string(result[j].MinaAddress)
-	})
+	result = h.sortValidators(result)
 
 	return result, nil
 }
 
 // computeValidatorSetMerkleRoot computes the merkle root for a validator set
 func (h *VoteExtHandler) computeValidatorSetMerkleRoot(validators []ValidatorInfo, poseidonHash *poseidon.Poseidon) (*big.Int, error) {
-	merkleRoot := new(big.Int)
+	input := []*big.Int{big.NewInt(0)}
+	merkleRoot := poseidonHash.Hash(input)
 
 	for _, validator := range validators {
 		// Initialize the input array
-		input := []*big.Int{}
+		input = []*big.Int{}
 
 		MinaPublicKey, err := keys.PublicKey{}.FromAddress(validator.MinaAddress)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert validator address to public key: %w", err)
 		}
+
 		input = append(input, MinaPublicKey.X)
 		if MinaPublicKey.IsOdd {
 			input = append(input, big.NewInt(1))
@@ -186,6 +210,8 @@ func (h *VoteExtHandler) ExtendVoteHandler() sdk.ExtendVoteHandler {
 
 		ctx.Logger().Info("Successfully got all cc validators", "ccValidators", initialValidators)
 
+		initialValidators = h.sortValidators(initialValidators)
+
 		initValSetRoot, err := h.computeValidatorSetMerkleRoot(initialValidators, poseidonHash)
 		if err != nil {
 			return nil, fmt.Errorf("failed to compute initial validator set root: %w", err)
@@ -232,7 +258,7 @@ func (h *VoteExtHandler) ExtendVoteHandler() sdk.ExtendVoteHandler {
 		}
 
 		// Hash the vote extension body
-		extBodyHashInput := extBody.GetPoseidonHashInput(poseidonHash)
+		extBodyHashInput := extBody.GetPoseidonHashInput(ctx, poseidonHash)
 
 		// Sign the vote extension body
 		secKey := h.Keeper.secondaryKey.SecretKey
@@ -328,7 +354,7 @@ func (h *VoteExtHandler) VerifyVoteExtensionHandler() sdk.VerifyVoteExtensionHan
 		// Initialize poseidon hash
 		poseidonHash := poseidon.CreatePoseidon(*field.Fp, constants.PoseidonParamsKimchiFp)
 
-		extBodyHashInput := voteExt.VoteExtBody.GetPoseidonHashInput(poseidonHash)
+		extBodyHashInput := voteExt.VoteExtBody.GetPoseidonHashInput(ctx, poseidonHash)
 
 		// Verify signature; if ok, keep the vote in memory.
 		if pubKey.Verify(sig, extBodyHashInput, minakeystypes.DevnetNetworkID) {
@@ -566,7 +592,7 @@ func (h *VoteExtHandler) ProcessProposalHandler() sdk.ProcessProposalHandler {
 		// Initialize poseidon hash
 		poseidonHash := poseidon.CreatePoseidon(*field.Fp, constants.PoseidonParamsKimchiFp)
 
-		extBodyHashInput := ve.VoteExtBody.GetPoseidonHashInput(poseidonHash)
+		extBodyHashInput := ve.VoteExtBody.GetPoseidonHashInput(ctx, poseidonHash)
 
 		// Verify signature
 		sig := new(signature.Signature)
@@ -640,16 +666,16 @@ func (h *VoteExtHandler) getVoteExtBody(height uint64) (VoteExtBody, error) {
 	return VoteExtBody{}, fmt.Errorf("vote extension not found for height %d", height)
 }
 
-func (b *VoteExtBody) GetPoseidonHashInput(poseidonHash *poseidon.Poseidon) poseidonbigint.HashInput {
+func (b *VoteExtBody) GetPoseidonHashInput(ctx sdk.Context, poseidonHash *poseidon.Poseidon) poseidonbigint.HashInput {
 	// Initialize the input array
 	input := []*big.Int{}
 
 	input = append(input, b.InitialValidatorSetRoot)
-	input = append(input, big.NewInt(b.InitialBlockHeight))
 	input = append(input, big.NewInt(0).SetBytes(b.InitialStateRoot))
-	input = append(input, big.NewInt(b.NewBlockHeight))
+	input = append(input, big.NewInt(b.InitialBlockHeight))
 	input = append(input, b.NewValidatorSetRoot)
 	input = append(input, big.NewInt(0).SetBytes(b.NewStateRoot))
+	input = append(input, big.NewInt(b.NewBlockHeight))
 
 	// Hash the vote extension body
 	hashOfBody := poseidonHash.Hash(input)
