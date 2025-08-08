@@ -239,7 +239,8 @@ const MultisigVerifierProgram = ZkProgram({
             "Validator MerkleList hash doesn't match"
           );
           counter.assertGreaterThanOrEqual(
-            Field.from((VALIDATOR_NUMBER * 2) / 3),
+            // Field.from((VALIDATOR_NUMBER * 2) / 3),
+            Field(VALIDATOR_NUMBER),
             'Not enough valid signatures'
           );
         }
