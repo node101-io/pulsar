@@ -26,10 +26,11 @@ services:
             - 27017
 
     node-manager:
-        image: kadirchan/pulsar-prover-node:latest
-        # build:
-        #     context: .
-        #     dockerfile: Dockerfile
+        # image: kadirchan/pulsar-prover-node:latest
+        # pull_policy: always
+        build:
+            context: .
+            dockerfile: Dockerfile
         networks: [pulsar-net]
         env_file: .env
         environment:
@@ -50,13 +51,14 @@ services:
         entrypoint: ["node", "dist/src/nodeManager.js"]
         restart: always
         depends_on: [redis, mongo]
-        profiles: ["mock-pulsar", "full-mock", "prod"]
+        profiles: ["prod"]
 
     settlement-worker:
-        image: kadirchan/pulsar-prover-node:latest
-        # build:
-        #     context: .
-        #     dockerfile: Dockerfile
+        # image: kadirchan/pulsar-prover-node:latest
+        # pull_policy: always
+        build:
+            context: .
+            dockerfile: Dockerfile
         networks: [pulsar-net]
         env_file: .env
         environment:
@@ -75,25 +77,25 @@ services:
             MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
         restart: always
         depends_on: [redis, mongo, node-manager]
-        profiles: ["mock-pulsar", "full-mock", "prod"]
+        profiles: ["prod"]
 
     reduce-worker:
         extends: settlement-worker
         environment:
             WORKER: reduceWorker
-        profiles: ["mock-pulsar", "full-mock", "prod"]
+        profiles: ["prod"]
 
     merge-worker:
         extends: settlement-worker
         environment:
             WORKER: mergeWorker
-        profiles: ["mock-pulsar", "full-mock", "prod"]
+        profiles: ["prod"]
 
     collect-worker:
         extends: settlement-worker
         environment:
             WORKER: collectWorker
-        profiles: ["mock-pulsar", "full-mock", "prod"]
+        profiles: ["prod"]
 
     mock-pulsar:
         build:
@@ -121,7 +123,7 @@ services:
             - "3085:3085"
             - "5432:5432"
             - "8181:8181"
-        profiles: ["mock-pulsar", "full-mock", "prod"]
+        profiles: ["prod"]
 
     mock-contract:
         build:

@@ -11,5 +11,11 @@ services:
         ports:
             - "27017:27017"
 
+    signer-node:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        restart: unless-stopped
+
 volumes:
     mongo-data:
