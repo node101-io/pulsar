@@ -5,6 +5,13 @@ export interface VoteExt {
     signature: string;
 }
 
+export interface BlockData {
+    height: number;
+    stateRoot: string;
+    validators: string[];
+    voteExt: VoteExt[];
+}
+
 export interface BlockParserResult {
     blockId: string;
     blockHash: string;

@@ -1,7 +1,7 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
 import dotenv from "dotenv";
-import { VoteExt } from "./interfaces.js";
+import { BlockData } from "./interfaces.js";
 dotenv.config();
 
 export {
@@ -25,8 +25,7 @@ const connection = new IORedis({
 });
 
 interface SettlementJob {
-    blockHeight: number;
-    voteExt: VoteExt[];
+    blockData: BlockData;
 }
 
 interface MergeJob {

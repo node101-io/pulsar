@@ -5,7 +5,7 @@ import logger from "./logger.js";
 import { PulsarClient } from "./pulsarClient.js";
 import { collectSignatureQ, settlementQ } from "./workerConnection.js";
 import { fetchLastStoredBlock, initMongo } from "./db.js";
-import { VoteExt } from "./interfaces.js";
+import { BlockData, VoteExt } from "./interfaces.js";
 import { List } from "pulsar-contracts";
 dotenv.config();
 
@@ -63,7 +63,7 @@ async function main() {
 
     const pulsarClient = new PulsarClient(
         process.env.PULSAR_RPC_ADDRESS || "localhost:50051",
-        1,
+        0,
         10000
     );
 
@@ -71,29 +71,23 @@ async function main() {
         logger.info("Pulsar client started, listening for new blocks");
     });
 
-    pulsarClient.on(
-        "newPulsarBlock",
-        async ({ blockHeight, voteExt }: { blockHeight: number; voteExt: VoteExt[] }) => {
-            logger.info(
-                `New Pulsar block detected: ${blockHeight}, with ${voteExt.length} vote extensions`
-            );
-            await settlementQ.add(
-                "settlement-" + blockHeight,
-                {
-                    blockHeight,
-                    voteExt,
+    pulsarClient.on("newPulsarBlock", async ({ blockData }: { blockData: BlockData }) => {
+        logger.info("New Pulsar block detected", blockData);
+        await settlementQ.add(
+            "settlement-" + blockData.height,
+            {
+                blockData,
+            },
+            {
+                attempts: 5,
+                backoff: {
+                    type: "exponential",
+                    delay: 5_000,
                 },
-                {
-                    attempts: 5,
-                    backoff: {
-                        type: "exponential",
-                        delay: 5_000,
-                    },
-                    removeOnComplete: true,
-                }
-            );
-        }
-    );
+                removeOnComplete: true,
+            }
+        );
+    });
 
     pulsarClient.on("error", (error) => {
         logger.error(`Error in Pulsar client: ${error.message}`);
@@ -103,7 +97,7 @@ async function main() {
         logger.info("Pulsar client stopped");
     });
 
-    await minaClient.start();
+    // await minaClient.start();
     await pulsarClient.start();
 }
 

@@ -18,7 +18,6 @@ dotenv.config();
 await initMongo();
 
 /**
- * Handle:
  * Invalid signatures
  * No vote extensions for some validators
  */
@@ -27,36 +26,43 @@ createWorker<SettlementJob, void>({
     maxJobsPerWorker: 160,
     jobHandler: async ({ data, id }) => {
         try {
-            const { blockHeight, voteExt } = data;
+            const { blockData } = data;
 
-            if (!voteExt || voteExt.length === 0) {
-                logger.warn(`[Job ${id}] No vote extensions found for block height ${blockHeight}`);
+            const { height, stateRoot, validators, voteExt } = blockData;
+
+            if (height === 1) {
+                logger.info(`[Job ${id}] Skipping genesis block processing`);
                 return;
             }
 
-            const validators = voteExt.map((ext) => ext.validatorAddr);
+            if (!voteExt || voteExt.length === 0) {
+                logger.warn(`[Job ${id}] No vote extensions found for block height ${height}`);
+                return;
+            }
+
             const validatorsList = List.empty();
             // Todo unsorted
             for (const validator of validators) {
                 validatorsList.push(Poseidon.hash(PublicKey.fromBase58(validator).toFields()));
             }
             await storeBlock(
-                blockHeight,
-                blockHeight.toString(),
-                voteExt.map((ext) => ext.validatorAddr),
+                height,
+                stateRoot,
+                validators,
                 validatorsList.hash.toString(),
                 voteExt
             );
 
-            if (blockHeight % SETTLEMENT_MATRIX_SIZE == 0) {
-                const blockDocs = await fetchBlockRange(
-                    blockHeight - SETTLEMENT_MATRIX_SIZE,
-                    blockHeight
+            if (height % SETTLEMENT_MATRIX_SIZE == 0) {
+                const blockDocs = await fetchBlockRange(height - SETTLEMENT_MATRIX_SIZE, height);
+
+                logger.info(
+                    `[Job ${id}] Fetched blocks ${blockDocs.map((doc) => doc.height).join(", ")}`
                 );
 
                 if (blockDocs.length != SETTLEMENT_MATRIX_SIZE + 1) {
                     logger.warn(
-                        `[Job ${id}] Not enough blocks to process settlement for height ${blockHeight}. Expected ${
+                        `[Job ${id}] Not enough blocks to process settlement for height ${height}. Expected ${
                             SETTLEMENT_MATRIX_SIZE + 1
                         }, got ${blockDocs.map((doc) => doc.height).join(", ")}`
                     );
@@ -74,12 +80,11 @@ createWorker<SettlementJob, void>({
                         Field.from(blockDocs[i].stateRoot),
                         Field.from(blockDocs[i].height)
                     );
-                    // console.log(JSON.stringify(block.toJSON()));
                     blocks.push(block);
 
                     const signaturePubKeyList = SignaturePublicKeyList.fromArray(
                         blockDocs[i].voteExt.map((ext) => [
-                            Signature.fromJSON(JSON.parse(ext.signature)),
+                            Signature.fromBase58(ext.signature),
                             PublicKey.fromBase58(ext.validatorAddr),
                         ])
                     );
@@ -89,16 +94,20 @@ createWorker<SettlementJob, void>({
                     signaturePubKeyList.list.forEach((item) => {
                         if (!item.signature.verify(item.publicKey, message).toBoolean()) {
                             logger.warn(
-                                `[Job ${id}] Invalid signature from validator ${item.publicKey.toBase58()} in block ${block.NewBlockHeight.toBigInt()}`
+                                `[Job ${id}] Invalid signature from validator ${item.publicKey.toBase58()} in block ${block.NewBlockHeight.toBigInt()}: 
+                                ${item.signature.toBase58()} for message ${block
+                                    .hash()
+                                    .toString()} for block ${JSON.stringify(block.toJSON())}
+                                `
                             );
                         }
                     });
                 }
 
                 logger.info(
-                    `[Job ${id}] Generating settlement proof for blocks ${blocks[0].NewBlockHeight.toBigInt()} to ${blocks[
+                    `[Job ${id}] Generating settlement proof for blocks ${blocks[0].InitialBlockHeight.toBigInt()} to ${blocks[
                         blocks.length - 1
-                    ].NewBlockHeight.toBigInt()}`
+                    ].NewBlockHeight.toBigInt()}, total ${blocks.length} blocks`
                 );
 
                 const settlementProof = await GenerateSettlementProof(
@@ -118,22 +127,21 @@ createWorker<SettlementJob, void>({
                     ].NewBlockHeight.toBigInt()}`
                 );
 
-                if (blockHeight % AGGREGATE_THRESHOLD !== SETTLEMENT_MATRIX_SIZE) {
+                if (height % AGGREGATE_THRESHOLD !== SETTLEMENT_MATRIX_SIZE) {
                     const lowerBlock = {
                         rangeLow:
-                            Math.floor((blockHeight - 1) / AGGREGATE_THRESHOLD) *
-                            AGGREGATE_THRESHOLD,
-                        rangeHigh: blockHeight - SETTLEMENT_MATRIX_SIZE,
+                            Math.floor((height - 1) / AGGREGATE_THRESHOLD) * AGGREGATE_THRESHOLD,
+                        rangeHigh: height - SETTLEMENT_MATRIX_SIZE,
                     };
                     const upperBlock = {
-                        rangeLow: blockHeight - SETTLEMENT_MATRIX_SIZE,
-                        rangeHigh: blockHeight,
+                        rangeLow: height - SETTLEMENT_MATRIX_SIZE,
+                        rangeHigh: height,
                     };
                     logger.info(
                         `[Job ${id}] Adding merge job for blocks ${lowerBlock.rangeLow}-${lowerBlock.rangeHigh} and ${upperBlock.rangeLow}-${upperBlock.rangeHigh}`
                     );
                     await mergeQ.add(
-                        "merge-" + blockHeight,
+                        "merge-" + height,
                         {
                             lowerBlock,
                             upperBlock,

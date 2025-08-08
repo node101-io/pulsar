@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
 import * as grpc from "@grpc/grpc-js";
-import { BlockParserResult, VoteExt } from "./interfaces.js";
+import { BlockData, BlockParserResult, VoteExt } from "./interfaces.js";
 import { GrpcReflection } from "grpc-js-reflection-client";
 import { PublicKey, Signature } from "o1js";
 
@@ -14,7 +14,7 @@ export class PulsarClient extends EventEmitter {
     pollInterval: number;
     running: boolean;
     timer?: NodeJS.Timeout;
-    lastSeenBlockHeight: number;
+    lastSeenHeight: number;
     tmClient: any;
     mkClient: any;
 
@@ -27,7 +27,7 @@ export class PulsarClient extends EventEmitter {
         this.rpcAddress = rpcAddress;
         this.pollInterval = pollInterval;
         this.running = false;
-        this.lastSeenBlockHeight = initialHeight;
+        this.lastSeenHeight = initialHeight;
         console.log(`Pulsar client initialized with RPC address: ${this.rpcAddress}`);
     }
 
@@ -78,25 +78,18 @@ export class PulsarClient extends EventEmitter {
         this.tmClient.GetLatestBlock({}, (err: any, res: any) => {
             if (err) return this.emit("error", err as Error);
 
-            const { height: blockHeight } = parseTendermintBlockResponse(res);
-            const voteExt: VoteExt[] = res.voteExt || [];
+            const { height } = parseTendermintBlockResponse(res);
 
-            if (blockHeight > this.lastSeenBlockHeight) {
-                if (blockHeight === this.lastSeenBlockHeight + 1) {
-                    this.emit("newPulsarBlock", { blockHeight, voteExt });
-                    this.lastSeenBlockHeight = blockHeight;
+            if (height > this.lastSeenHeight + 1) {
+                if (height === this.lastSeenHeight + 2) {
+                    this.getBlockAndEmit(height - 1).catch((error) =>
+                        this.emit("error", error as Error)
+                    );
                 } else {
                     console.warn(
-                        `Missed blocks detected: last seen ${this.lastSeenBlockHeight}, current ${blockHeight}, syncing...`
+                        `Missed blocks detected: last seen ${this.lastSeenHeight}, current ${height}, syncing...`
                     );
-                    this.syncMissedBlocks()
-                        .then(() => {
-                            this.emit("newPulsarBlock", { blockHeight, voteExt });
-                            this.lastSeenBlockHeight = blockHeight;
-                        })
-                        .catch((err) => {
-                            this.emit("error", err);
-                        });
+                    this.syncMissedBlocks().catch((error) => this.emit("error", error as Error));
                 }
             }
         });
@@ -109,10 +102,10 @@ export class PulsarClient extends EventEmitter {
 
                 const { height } = parseTendermintBlockResponse(res);
                 console.log(
-                    `Syncing missed blocks from ${this.lastSeenBlockHeight + 1} to ${height}`
+                    `Syncing missed blocks from ${this.lastSeenHeight + 1} to ${height - 1}`
                 );
 
-                for (let h = this.lastSeenBlockHeight + 1; h <= height; ++h) {
+                for (let h = this.lastSeenHeight + 1; h < height; ++h) {
                     await this.getBlockAndEmit(h);
                 }
                 resolve();
@@ -121,6 +114,99 @@ export class PulsarClient extends EventEmitter {
     }
 
     async getBlockAndEmit(height: number): Promise<void> {
+        const { blockHash: stateRoot } = parseTendermintBlockResponse(
+            await new Promise((resolve, reject) => {
+                this.tmClient.GetBlockByHeight(
+                    { height: height.toString() },
+                    (err: any, res: any) => {
+                        if (err) return reject(err as Error);
+                        resolve(res);
+                    }
+                );
+            })
+        );
+        const validators = await this.getValidatorSet(height);
+        const voteExt = await this.getVoteExt(height);
+
+        const blockData: BlockData = {
+            height,
+            stateRoot,
+            validators,
+            voteExt,
+        };
+
+        this.emit("newPulsarBlock", {
+            blockData,
+        });
+        this.lastSeenHeight = height;
+    }
+
+    async getMinaPubKeyFromCosmosAddress(cosmosAddress: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+            this.mkClient.KeyStore({ index: cosmosAddress }, (err: any, res: any) => {
+                if (err) return reject(err as Error);
+
+                try {
+                    const encodedPubkey = res?.keyStore.minaPublicKey;
+
+                    if (!encodedPubkey) {
+                        return reject(
+                            new Error("No Mina public key found for the given Cosmos address")
+                        );
+                    }
+
+                    this.recoverPubkeyFromEncoded(encodedPubkey)
+                        .then((pubkey) => resolve(pubkey))
+                        .catch((error) => reject(error));
+                } catch (error) {
+                    console.error("Error parsing response:", error);
+                    reject(new Error("Failed to parse Mina public key from response"));
+                }
+            });
+        });
+    }
+
+    async getCosmosValidatorSet(height: number): Promise<string[]> {
+        return new Promise((resolve, reject) => {
+            this.tmClient.GetValidatorSetByHeight(
+                { height: height.toString() },
+                (err: any, res: any) => {
+                    if (err) return reject(err as Error);
+
+                    const validators = parseValidatorSetResponse(res);
+                    resolve(validators);
+                }
+            );
+        });
+    }
+
+    async getValidatorSet(height: number): Promise<string[]> {
+        try {
+            const validators = await this.getCosmosValidatorSet(height);
+            if (validators.length === 0) {
+                throw new Error(`No validators found for height ${height}`);
+            }
+
+            const minaPubKeys: string[] = [];
+            for (const validator of validators) {
+                try {
+                    const pubkey = await this.getMinaPubKeyFromCosmosAddress(validator);
+                    minaPubKeys.push(pubkey);
+                } catch (error) {
+                    console.error(
+                        `Error retrieving Mina public key for validator ${validator}:`,
+                        error
+                    );
+                }
+            }
+            return minaPubKeys;
+        } catch (error) {
+            console.error(`Error retrieving validator set for height ${height}:`, error);
+            throw error;
+        }
+    }
+
+    async getVoteExt(height: number): Promise<VoteExt[]> {
         let voteExt: VoteExt[] = [];
 
         let pageReq: any = { block_height: height.toString(), pagination: { limit: 200 } };
@@ -140,11 +226,7 @@ export class PulsarClient extends EventEmitter {
 
             pageReq.pagination.key = nextKey;
         }
-
-        console.log(`Emitting new block: ${height} with ${voteExt.length} vote extensions`);
-
-        this.emit("newPulsarBlock", { blockHeight: height, voteExt });
-        this.lastSeenBlockHeight = height;
+        return voteExt;
     }
 
     stop() {
@@ -208,10 +290,16 @@ export class PulsarClient extends EventEmitter {
     }
 }
 
-export function parseTendermintBlockResponse(res: any): BlockParserResult {
+function parseValidatorSetResponse(res: any): string[] {
+    return res?.validators.map((v: any) => v.address);
+}
+
+function parseTendermintBlockResponse(res: any): BlockParserResult {
     const header = res?.block?.header;
     const blockId = res?.block_id?.hash || null;
-    const blockHash = header?.app_hash || null;
+    const blockHash = BigInt(
+        "0x" + Buffer.from(header.app_hash, "base64").toString("hex")
+    ).toString();
     const height = header?.height ? Number(header.height) : NaN;
     const chainId = header?.chain_id || "";
     const proposerAddress = header?.proposer_address || "";
