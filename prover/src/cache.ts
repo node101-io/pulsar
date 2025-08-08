@@ -37,5 +37,3 @@ export const cacheCompile = async (mode: QueueName) => {
         throw new Error(`Failed to compile contracts: ${err}`);
     }
 };
-
-// await cacheCompile("reduce");

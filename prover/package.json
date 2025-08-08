@@ -10,7 +10,8 @@
         "worker:merge": "npm run build && node --experimental-vm-modules dist/src/worker/mergeWorker.js",
         "worker:reduce": "npm run build && node --experimental-vm-modules dist/src/worker/reducerWorker.js",
         "manager": "npm run build && node dist/src/nodeManager.js",
-        "cache": "npm run build && node --experimental-vm-modules dist/src/cache.js",
+        "cache": "npm run build && node --experimental-vm-modules dist/src/runCache.js",
+        "run-cache": "for i in {1..10}; do npm run cache; done",
         "clean": "rimraf build coverage node_modules package-lock.json"
     },
     "keywords": [
