@@ -10,6 +10,7 @@
         "worker:merge": "npm run build && node --experimental-vm-modules dist/src/worker/mergeWorker.js",
         "worker:reduce": "npm run build && node --experimental-vm-modules dist/src/worker/reducerWorker.js",
         "manager": "npm run build && node dist/src/nodeManager.js",
+        "cache": "npm run build && node --experimental-vm-modules dist/src/cache.js",
         "clean": "rimraf build coverage node_modules package-lock.json"
     },
     "keywords": [
@@ -29,7 +30,7 @@
         "ioredis": "^5.6.1",
         "mongodb": "^6.17.0",
         "node-fetch": "^3.3.2",
-        "pulsar-contracts": "^0.2.35",
+        "pulsar-contracts": "^0.2.5",
         "rimraf": "^6.0.1",
         "winston": "^3.17.0"
     },
