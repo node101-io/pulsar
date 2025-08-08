@@ -26,10 +26,10 @@ services:
             - 27017
 
     node-manager:
-        # image: kadirchan/pulsar-prover-node:latest
-        build:
-            context: .
-            dockerfile: Dockerfile
+        image: kadirchan/pulsar-prover-node:latest
+        # build:
+        #     context: .
+        #     dockerfile: Dockerfile
         networks: [pulsar-net]
         env_file: .env
         environment:
@@ -53,10 +53,10 @@ services:
         profiles: ["mock-pulsar", "full-mock", "prod"]
 
     settlement-worker:
-        # image: kadirchan/pulsar-prover-node:latest
-        build:
-            context: .
-            dockerfile: Dockerfile
+        image: kadirchan/pulsar-prover-node:latest
+        # build:
+        #     context: .
+        #     dockerfile: Dockerfile
         networks: [pulsar-net]
         env_file: .env
         environment:
