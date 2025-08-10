@@ -1,0 +1,14 @@
+syntax = "proto3";
+package interchain_security.bridge.module;
+
+import "cosmos/app/v1alpha1/module.proto";
+
+// Module is the config object for the module.
+message Module {
+  option (cosmos.app.v1alpha1.module) = {
+    go_import: "github.com/cosmos/interchain-security/v5/x/bridge/bridge"
+  };
+
+  // authority defines the custom module authority. If not set, defaults to the governance module.
+  string authority = 1;
+}

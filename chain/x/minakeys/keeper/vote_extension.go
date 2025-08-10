@@ -22,6 +22,10 @@ import (
 	"github.com/node101-io/mina-signer-go/signature"
 )
 
+const (
+	GenesisStateRoot = "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+)
+
 type MinaSignatureVoteExt struct {
 	MinaAddress string      `json:"mina_address"`
 	Signature   []byte      `json:"signature"`
@@ -414,7 +418,7 @@ func (h *VoteExtHandler) PreBlocker() sdk.PreBlocker {
 		if req.GetHeight() == 1 {
 			ctx.Logger().Info("Height is 1, skipping proposal by setting the state root", "height", req.GetHeight())
 			h.stateRoots[req.GetHeight()] = ctx.BlockHeader().AppHash
-			ctx.Logger().Info("State root has been set", "stateRoot", hex.EncodeToString(h.stateRoots[req.GetHeight()]), "height", req.GetHeight())
+			ctx.Logger().Info("PreBlocker: State root has been set", "stateRoot", hex.EncodeToString(h.stateRoots[req.GetHeight()]), "height", req.GetHeight())
 			return &sdk.ResponsePreBlock{}, nil
 		}
 
@@ -475,8 +479,14 @@ func (h *VoteExtHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 		if req.GetHeight() == 1 {
 			ctx.Logger().Info("Height is 1, skipping proposal", "height", req.GetHeight())
 			h.stateRoots[0] = make([]byte, 32)
-			h.stateRoots[1] = make([]byte, 32)
-			ctx.Logger().Info("State root has been set", "stateRoot", hex.EncodeToString(h.stateRoots[0]), "height", 0)
+			genesisStateRoot, err := hex.DecodeString(GenesisStateRoot)
+			if err != nil {
+				ctx.Logger().Info("Failed to decode genesis state root", "error", err)
+				return nil, fmt.Errorf("failed to decode genesis state root: %w", err)
+			}
+			// Set the state root to the genesis state root
+			h.stateRoots[req.GetHeight()] = genesisStateRoot
+			ctx.Logger().Info("PrepareProposalHandler: State root has been set", "stateRoot", hex.EncodeToString(h.stateRoots[0]), "height", 0)
 
 			return &abci.ResponsePrepareProposal{Txs: req.Txs}, nil
 		}
@@ -487,7 +497,7 @@ func (h *VoteExtHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 		if len(votes) == 0 {
 			ctx.Logger().Info("No votes for previous height, accepting proposal", "looking for", targetHeight, "proposal height", req.GetHeight())
 			h.stateRoots[req.GetHeight()] = ctx.BlockHeader().AppHash
-			ctx.Logger().Info("State root has been set", "stateRoot", hex.EncodeToString(h.stateRoots[req.GetHeight()]), "height", req.GetHeight())
+			ctx.Logger().Info("PrepareProposalHandler: State root has been set", "stateRoot", hex.EncodeToString(h.stateRoots[req.GetHeight()]), "height", req.GetHeight())
 
 			return &abci.ResponsePrepareProposal{Txs: req.Txs}, nil
 		}
@@ -509,7 +519,7 @@ func (h *VoteExtHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 		txs = append(txs, req.Txs...)
 
 		h.stateRoots[req.GetHeight()] = ctx.BlockHeader().AppHash
-		ctx.Logger().Info("State root has been set", "stateRoot", hex.EncodeToString(h.stateRoots[req.GetHeight()]), "height", req.GetHeight())
+		ctx.Logger().Info("PrepareProposalHandler: State root has been set", "stateRoot", hex.EncodeToString(h.stateRoots[req.GetHeight()]), "height", req.GetHeight())
 
 		return &abci.ResponsePrepareProposal{Txs: txs}, nil
 	}

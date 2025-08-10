@@ -103,6 +103,10 @@ import (
 	minakeysmodule "github.com/cosmos/interchain-security/v5/x/minakeys/module"
 	minakeysmoduletypes "github.com/cosmos/interchain-security/v5/x/minakeys/types"
 	minakeysutils "github.com/cosmos/interchain-security/v5/x/minakeys/utils"
+
+	bridgekeeper "github.com/cosmos/interchain-security/v5/x/bridge/keeper"
+	bridgemodule "github.com/cosmos/interchain-security/v5/x/bridge/module"
+	bridgemoduletypes "github.com/cosmos/interchain-security/v5/x/bridge/types"
 )
 
 const (
@@ -147,6 +151,7 @@ var (
 		// router.AppModuleBasic{},
 		ibcconsumer.AppModuleBasic{},
 		minakeysmodule.AppModuleBasic{},
+		bridgemodule.AppModuleBasic{},
 	)
 
 	// module account permissions
@@ -197,6 +202,7 @@ type App struct { // nolint: golint
 	ConsumerKeeper        ibcconsumerkeeper.Keeper
 	ConsensusParamsKeeper consensusparamkeeper.Keeper
 	MinakeysKeeper        minakeyskeeper.Keeper
+	BridgeKeeper          bridgekeeper.Keeper
 
 	// make scoped keepers public for test purposes
 	ScopedIBCKeeper         capabilitykeeper.ScopedKeeper
@@ -240,6 +246,7 @@ func New(
 		consensusparamtypes.StoreKey,
 		ibcconsumertypes.StoreKey,
 		minakeysmoduletypes.StoreKey,
+		bridgemoduletypes.StoreKey,
 	)
 	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey)
 	memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
@@ -414,6 +421,14 @@ func New(
 		secondaryKey,
 	)
 
+	// Initialize BridgeKeeper
+	app.BridgeKeeper = bridgekeeper.NewKeeper(
+		appCodec,
+		runtime.NewKVStoreService(keys[bridgemoduletypes.StoreKey]),
+		logger,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
 	minaVoteExtHandler := minakeyskeeper.NewVoteExtHandler(app.MinakeysKeeper, app.ConsumerKeeper)
 	bApp.SetExtendVoteHandler(minaVoteExtHandler.ExtendVoteHandler())
 	bApp.SetVerifyVoteExtensionHandler(minaVoteExtHandler.VerifyVoteExtensionHandler())
@@ -484,6 +499,7 @@ func New(
 		transferModule,
 		consumerModule,
 		minakeysmodule.NewAppModule(appCodec, app.MinakeysKeeper, app.AccountKeeper, app.BankKeeper),
+		bridgemodule.NewAppModule(appCodec, app.BridgeKeeper, app.AccountKeeper, app.BankKeeper),
 	)
 
 	ModuleBasics = module.NewBasicManagerFromManager(
@@ -495,6 +511,7 @@ func New(
 	app.MM.SetOrderPreBlockers(
 		upgradetypes.ModuleName,
 		minakeysmoduletypes.ModuleName,
+		bridgemoduletypes.ModuleName,
 	)
 
 	// During begin block slashing happens after distr.BeginBlocker so that
@@ -519,6 +536,7 @@ func New(
 		vestingtypes.ModuleName,
 		ibcconsumertypes.ModuleName,
 		minakeysmoduletypes.ModuleName,
+		bridgemoduletypes.ModuleName,
 	)
 	//app.SetPreBlocker(app.PreBlocker)
 
@@ -540,6 +558,7 @@ func New(
 		vestingtypes.ModuleName,
 		ibcconsumertypes.ModuleName,
 		minakeysmoduletypes.ModuleName,
+		bridgemoduletypes.ModuleName,
 	)
 
 	// NOTE: The genutils module must occur after staking so that pools are
@@ -565,6 +584,7 @@ func New(
 		vestingtypes.ModuleName,
 		ibcconsumertypes.ModuleName,
 		minakeysmoduletypes.ModuleName,
+		bridgemoduletypes.ModuleName,
 	)
 
 	app.MM.RegisterInvariants(&app.CrisisKeeper)
@@ -891,6 +911,7 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 	paramsKeeper.Subspace(ibchost.ModuleName)
 	paramsKeeper.Subspace(ibcconsumertypes.ModuleName)
 	paramsKeeper.Subspace(minakeysmoduletypes.ModuleName)
+	paramsKeeper.Subspace(bridgemoduletypes.ModuleName)
 
 	return paramsKeeper
 }
