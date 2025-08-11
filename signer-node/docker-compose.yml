@@ -33,3 +33,8 @@ services:
         entrypoint: ["node", "dist/src/index.js"]
 # volumes:
 #     mongo-data:
+
+networks:
+    pulsar-net:
+        external: true
+        name: pulsar-net
