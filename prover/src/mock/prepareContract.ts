@@ -5,7 +5,7 @@ import {
     SettlementContract,
 } from "pulsar-contracts";
 import dotenv from "dotenv";
-import { AccountUpdate, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
+import { AccountUpdate, fetchAccount, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
 import { cacheCompile } from "../cache.js";
 dotenv.config();
 
@@ -43,6 +43,8 @@ async function retryUntilSuccess(delayMs = 5000) {
             });
 
             console.log(`Acquired account: ${privateKey.toPublicKey().toBase58()}`);
+
+            await fetchAccount({ publicKey: privateKey.toPublicKey() });
 
             const tx = await Mina.transaction(
                 { sender: privateKey.toPublicKey(), fee: 1e9 },
