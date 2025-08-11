@@ -37,4 +37,4 @@ services:
 networks:
     pulsar-net:
         external: true
-        name: pulsar-net
+        name: prover_pulsar-net
