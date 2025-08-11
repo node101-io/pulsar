@@ -62,21 +62,31 @@ createWorker<MergeJob, void>({
                 `Deleted old proofs for blocks ${lowerBlock.rangeLow}-${lowerBlock.rangeHigh} and ${upperBlock.rangeLow}-${upperBlock.rangeHigh}`
             );
 
-            await fetchAccount({ publicKey: settlementContract.address });
+            if (
+                mergeProof.publicOutput.numberOfSettlementProofs.toBigInt() ===
+                BigInt(AGGREGATE_THRESHOLD)
+            ) {
+                logger.info(
+                    `Submitting merge transaction for proof: ${JSON.stringify(
+                        mergeProof.publicInput.toJSON()
+                    )}`
+                );
+                await fetchAccount({ publicKey: settlementContract.address });
 
-            const tx = await Mina.transaction(
-                { sender: senderKey.toPublicKey(), fee },
-                async () => {
-                    await settlementContract.settle(mergeProof);
-                }
-            );
+                const tx = await Mina.transaction(
+                    { sender: senderKey.toPublicKey(), fee },
+                    async () => {
+                        await settlementContract.settle(mergeProof);
+                    }
+                );
 
-            await tx.prove();
-            await tx.sign([senderKey]).send();
+                await tx.prove();
+                await tx.sign([senderKey]).send();
 
-            logger.info(
-                `Merge transaction sent successfully for blocks ${lowerBlock.rangeLow}-${lowerBlock.rangeHigh} and ${upperBlock.rangeLow}-${upperBlock.rangeHigh}`
-            );
+                logger.info(
+                    `Merge transaction sent successfully for blocks ${lowerBlock.rangeLow}-${lowerBlock.rangeHigh} and ${upperBlock.rangeLow}-${upperBlock.rangeHigh}`
+                );
+            }
         } catch (e) {
             logger.error(`Failed merge: ${e}`);
             throw e;
