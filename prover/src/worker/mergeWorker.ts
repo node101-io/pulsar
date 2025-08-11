@@ -1,10 +1,25 @@
-import { AGGREGATE_THRESHOLD, MergeSettlementProofs, SettlementProof } from "pulsar-contracts";
+import {
+    AGGREGATE_THRESHOLD,
+    MergeSettlementProofs,
+    SettlementContract,
+    SettlementProof,
+} from "pulsar-contracts";
 import { MergeJob } from "../workerConnection.js";
 import { createWorker } from "./worker.js";
 import { deleteProof, fetchProof, storeProof } from "../db.js";
 import logger from "../logger.js";
 import dotenv from "dotenv";
+import { Mina, PrivateKey, PublicKey } from "o1js";
 dotenv.config();
+
+const settlementContractAddress = process.env.CONTRACT_ADDRESS;
+const minaPrivateKey = process.env.MINA_PRIVATE_KEY;
+const fee = Number(process.env.FEE) || 0.1;
+if (!settlementContractAddress || !minaPrivateKey) {
+    throw new Error("unspecified environment variables");
+}
+const settlementContract = new SettlementContract(PublicKey.fromBase58(settlementContractAddress));
+const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
 createWorker<MergeJob, void>({
     queueName: "merge",
@@ -42,6 +57,24 @@ createWorker<MergeJob, void>({
             );
             await deleteProof("settlement", lowerBlock.rangeLow, lowerBlock.rangeHigh);
             await deleteProof("settlement", upperBlock.rangeLow, upperBlock.rangeHigh);
+
+            logger.info(
+                `Deleted old proofs for blocks ${lowerBlock.rangeLow}-${lowerBlock.rangeHigh} and ${upperBlock.rangeLow}-${upperBlock.rangeHigh}`
+            );
+
+            const tx = await Mina.transaction(
+                { sender: senderKey.toPublicKey(), fee },
+                async () => {
+                    await settlementContract.settle(mergeProof);
+                }
+            );
+
+            await tx.prove();
+            await tx.sign([senderKey]).send();
+
+            logger.info(
+                `Merge transaction sent successfully for blocks ${lowerBlock.rangeLow}-${lowerBlock.rangeHigh} and ${upperBlock.rangeLow}-${upperBlock.rangeHigh}`
+            );
         } catch (e) {
             logger.error(`Failed merge: ${e}`);
             throw e;

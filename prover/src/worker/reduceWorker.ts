@@ -22,7 +22,7 @@ const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
 createWorker<ReducerJob, void>({
     queueName: "reduce",
-    maxJobsPerWorker: 10,
+    maxJobsPerWorker: 100,
     jobHandler: async ({ data, id }) => {
         try {
             const { includedActions, signaturePubkeyArray, actions } = data;
@@ -40,22 +40,9 @@ createWorker<ReducerJob, void>({
                 ])
             );
 
-            // const { batchActions, publicInput } = CalculateMax(
-            //     includedActions,
-            //     settlementContract,
-            //     packedActions
-            // );
-
             logger.info(`[Job ${id}] Preparing batch for included actions`);
             const { batch, useActionStack, publicInput, actionStackProof, mask } =
                 await PrepareBatchWithActions(includedActions, settlementContract, packedActions);
-
-            // await storeProof(
-            //     Number(publicInput.blockHeight.toString()),
-            //     Number(publicInput.blockHeight.toString()),
-            //     "actionStack",
-            //     actionStackProof!
-            // );
 
             logger.info(`[Job ${id}] Batch prepared, generating validate reduce proof`);
             const validateReduceProof = await GenerateValidateReduceProof(
