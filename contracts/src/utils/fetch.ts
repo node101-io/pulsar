@@ -103,5 +103,9 @@ function setMinaNetwork(network: 'devnet' | 'mainnet' | 'lightnet' = 'devnet') {
     archive: ENDPOINTS.ARCHIVE[network],
   });
 
+  console.log(
+    `Setting Mina network to ${network}, Mina endpoint: ${ENDPOINTS.NODE[network]}, Archive endpoint: ${ENDPOINTS.ARCHIVE[network]}`
+  );
+
   Mina.setActiveInstance(Network);
 }
