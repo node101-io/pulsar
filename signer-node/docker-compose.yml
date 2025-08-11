@@ -1,21 +1,18 @@
-version: "3.9"
-
 services:
-    mongo:
-        image: mongo:7-jammy
-        restart: unless-stopped
-        environment:
-            MONGO_INITDB_DATABASE: pulsar
-        volumes:
-            - mongo-data:/data/db
-        ports:
-            - "27017:27017"
+    # mongo:
+    #     image: mongo:7-jammy
+    #     restart: unless-stopped
+    #     environment:
+    #         MONGO_INITDB_DATABASE: pulsar
+    #     volumes:
+    #         - mongo-data:/data/db
+    #     ports:
+    #         - "27017:27017"
 
     signer-node:
         build:
             context: .
             dockerfile: Dockerfile
         restart: unless-stopped
-
-volumes:
-    mongo-data:
+# volumes:
+#     mongo-data:

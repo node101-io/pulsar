@@ -1,6 +1,14 @@
 import express from "express";
-import { PrivateKey, Signature } from "o1js";
-import { TestUtils, ValidateReducePublicInput } from "pulsar-contracts";
+import { Field, PrivateKey, PublicKey, Signature } from "o1js";
+import {
+    CalculateMax,
+    emptyActionListHash,
+    merkleActionsAdd,
+    PulsarAction,
+    SettlementContract,
+    TestUtils,
+    ValidateReducePublicInput,
+} from "pulsar-contracts";
 import { validateActionQueue } from "pulsar-contracts";
 import { signActionQueueLimiter } from "./rateLimit.js";
 import {
@@ -11,6 +19,8 @@ import {
     saveSignature,
 } from "./db.js";
 import logger from "./logger.js";
+import dotenv from "dotenv";
+dotenv.config();
 
 const minaPrivateKey = process.env.MINA_PRIVATE_KEY;
 if (!minaPrivateKey) {
@@ -18,6 +28,10 @@ if (!minaPrivateKey) {
 }
 const privateKey = PrivateKey.fromBase58(minaPrivateKey);
 const publicKey = privateKey.toPublicKey();
+
+const contractInstance = new SettlementContract(
+    PublicKey.fromBase58(process.env.CONTRACT_ADDRESS || "")
+);
 
 const port = Number(process.env.PORT ?? 6000);
 
@@ -35,7 +49,7 @@ app.post("/sign", signActionQueueLimiter, async (req, res) => {
         res.status(400).json({ error: "body must contain { blockHeight, actions }" });
 
     try {
-        const finalActionState = "IMPLEMENTATION_SPECIFIC_FINAL_STATE";
+        const finalActionState = calculateFinalState(actions);
         const { actions: typedActions, isValid } = validateActionQueue(actions, finalActionState);
 
         if (!isValid) {
@@ -58,10 +72,12 @@ app.post("/sign", signActionQueueLimiter, async (req, res) => {
                 signature: cachedSignature,
             });
         } else {
-            const { publicInput } = TestUtils.CalculateFromMockActions(
-                ValidateReducePublicInput.default, // Todo: use correct public input
-                typedActions
-            );
+            const actionHashMap: Map<string, number> = new Map();
+            for (const action of typedActions) {
+                const key = action.action.unconstrainedHash().toString();
+                actionHashMap.set(key, (actionHashMap.get(key) ?? 0) + 1);
+            }
+            const { publicInput } = CalculateMax(actionHashMap, contractInstance, typedActions);
             const signature = Signature.create(privateKey, publicInput.hash().toFields());
 
             await saveSignature(blockHeight, finalActionState, signature.toBase58());
@@ -79,3 +95,39 @@ app.post("/sign", signActionQueueLimiter, async (req, res) => {
 });
 
 app.listen(port, () => console.log(`Signer up on http://localhost:${port}/sign`));
+
+function calculateFinalState(
+    rawActions: {
+        actions: string[][];
+        hash: string;
+    }[]
+): string {
+    if (rawActions.length === 0) {
+        return emptyActionListHash.toString();
+    }
+
+    const actions = rawActions.map((action) => {
+        return {
+            action: PulsarAction.fromRawAction(action.actions[0]),
+            hash: BigInt(action.hash),
+        };
+    });
+
+    actions.forEach((action, index) => {
+        if (action.action.unconstrainedHash().toBigInt() !== action.hash) {
+            logger.error(
+                `Action hash mismatch at index ${index}: expected ${
+                    action.hash
+                }, got ${action.action.unconstrainedHash().toBigInt()}`
+            );
+            return emptyActionListHash.toString();
+        }
+    });
+
+    let actionListHash = emptyActionListHash;
+    for (const action of actions) {
+        actionListHash = merkleActionsAdd(actionListHash, Field(action.hash));
+    }
+
+    return actionListHash.toString();
+}
