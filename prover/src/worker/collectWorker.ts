@@ -2,7 +2,7 @@ import { createWorker } from "./worker.js";
 import { CollectSignatureJob, reduceQ } from "../workerConnection.js";
 import logger from "../logger.js";
 import fetch from "node-fetch";
-import { PublicKey, Signature } from "o1js";
+import { fetchAccount, PublicKey, Signature } from "o1js";
 import { CalculateMax, PulsarAction, SettlementContract, VALIDATOR_NUMBER } from "pulsar-contracts";
 import { ENDPOINTS } from "../mock/mockEndpoints.js";
 import dotenv from "dotenv";
@@ -98,6 +98,7 @@ export async function collectSignatures(
         actionHashMap.set(key, (actionHashMap.get(key) ?? 0) + 1);
     }
 
+    await fetchAccount({ publicKey: contractInstance.address });
     const { publicInput } = CalculateMax(actionHashMap, contractInstance, typedActions);
 
     for (let round = 1; round <= maxRounds && got.length < minRequired; round++) {

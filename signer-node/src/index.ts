@@ -1,5 +1,5 @@
 import express from "express";
-import { Field, PrivateKey, PublicKey, Signature } from "o1js";
+import { fetchAccount, Field, PrivateKey, PublicKey, Signature } from "o1js";
 import {
     CalculateMax,
     emptyActionListHash,
@@ -77,6 +77,7 @@ app.post("/sign", signActionQueueLimiter, async (req, res) => {
                 const key = action.action.unconstrainedHash().toString();
                 actionHashMap.set(key, (actionHashMap.get(key) ?? 0) + 1);
             }
+            await fetchAccount({ publicKey: contractInstance.address });
             const { publicInput } = CalculateMax(actionHashMap, contractInstance, typedActions);
             const signature = Signature.create(privateKey, publicInput.hash().toFields());
 
