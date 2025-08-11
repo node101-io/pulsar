@@ -22,7 +22,7 @@ export const cacheCompile = async (mode: QueueName) => {
         let time = performance.now();
         await MultisigVerifierProgram.compile({ cache: multisigVerifierProgram });
         console.log(`MultisigVerifierProgram compiled in ${performance.now() - time} ms`);
-        if (mode === "reduce") {
+        if (mode === "reduce" || mode === "merge") {
             time = performance.now();
             await ValidateReduceProgram.compile({ cache: validateReduceProgram });
             console.log(`ValidateReduceProgram compiled in ${performance.now() - time} ms`);
