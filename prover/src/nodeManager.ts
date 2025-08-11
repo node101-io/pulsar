@@ -1,12 +1,11 @@
-import { Field, Poseidon, PrivateKey, PublicKey } from "o1js";
+import { PublicKey } from "o1js";
 import { MinaClient } from "./minaClient.js";
 import dotenv from "dotenv";
 import logger from "./logger.js";
 import { PulsarClient } from "./pulsarClient.js";
 import { collectSignatureQ, settlementQ } from "./workerConnection.js";
 import { fetchLastStoredBlock, initMongo } from "./db.js";
-import { BlockData, VoteExt } from "./interfaces.js";
-import { List } from "pulsar-contracts";
+import { BlockData } from "./interfaces.js";
 dotenv.config();
 
 async function main() {
@@ -97,7 +96,7 @@ async function main() {
         logger.info("Pulsar client stopped");
     });
 
-    // await minaClient.start();
+    await minaClient.start();
     await pulsarClient.start();
 }
 
