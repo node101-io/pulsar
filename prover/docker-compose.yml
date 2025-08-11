@@ -50,7 +50,13 @@ services:
             MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
         entrypoint: ["node", "dist/src/nodeManager.js"]
         restart: always
-        depends_on: [redis, mongo]
+        depends_on:
+            redis:
+                condition: service_started
+            mongo:
+                condition: service_started
+            mina-local-lightnet:
+                condition: service_healthy
         profiles: ["prod"]
 
     settlement-worker:
@@ -76,7 +82,13 @@ services:
             MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
             MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
         restart: always
-        depends_on: [redis, mongo, node-manager]
+        depends_on:
+            redis:
+                condition: service_started
+            mongo:
+                condition: service_started
+            mina-local-lightnet:
+                condition: service_healthy
         profiles: ["prod"]
 
     reduce-worker:
@@ -97,17 +109,6 @@ services:
             WORKER: collectWorker
         profiles: ["prod"]
 
-    mock-pulsar:
-        build:
-            context: .
-            dockerfile: Dockerfile.mock-pulsar
-        environment:
-            - NODE_ENV=development
-        ports:
-            - "50051:50051"
-        networks: [pulsar-net]
-        profiles: ["mock-pulsar", "full-mock"]
-
     mina-local-lightnet:
         image: o1labs/mina-local-network:compatible-latest-lightnet
         environment:
@@ -124,6 +125,15 @@ services:
             - "5432:5432"
             - "8181:8181"
         profiles: ["prod"]
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    'curl -fsS -H ''Content-Type: application/json'' -d ''{"query":"{ bestChain(maxLength: 1) { stateHash } }"}'' http://localhost:8080/graphql >/dev/null',
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 30
 
     mock-contract:
         build:
@@ -136,7 +146,9 @@ services:
             MINA_NETWORK: ${MINA_NETWORK}
             MINA_PRIVATE_KEY: ${MINA_PRIVATE_KEY}
             CONTRACT_PRIVATE_KEY: ${CONTRACT_PRIVATE_KEY}
-        depends_on: [mina-local-lightnet]
+        depends_on:
+            mina-local-lightnet:
+                condition: service_healthy
         profiles: ["mock-pulsar", "full-mock", "prod"]
 
 volumes:
