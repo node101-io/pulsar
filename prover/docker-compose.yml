@@ -137,7 +137,7 @@ services:
             MINA_PRIVATE_KEY: ${MINA_PRIVATE_KEY}
             CONTRACT_PRIVATE_KEY: ${CONTRACT_PRIVATE_KEY}
         depends_on: [mina-local-lightnet]
-        profiles: ["mock-pulsar", "full-mock"]
+        profiles: ["mock-pulsar", "full-mock", "prod"]
 
 volumes:
     redis-data:
