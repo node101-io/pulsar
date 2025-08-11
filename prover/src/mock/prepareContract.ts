@@ -30,7 +30,7 @@ const contractInstance = new SettlementContract(contractPrivateKey.toPublicKey()
 async function retryUntilSuccess(delayMs = 5000) {
     while (true) {
         try {
-            console.log("Funding signer...");
+            console.log(`Funding signer: ${signerPrivateKey.toPublicKey().toBase58()}...`);
             const { privateKey } = await Lightnet.acquireKeyPair({
                 isRegularAccount: true,
                 lightnetAccountManagerEndpoint: process.env.DOCKER
