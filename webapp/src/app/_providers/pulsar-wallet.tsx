@@ -1,29 +1,22 @@
 "use client";
 
-import React, { ReactNode } from 'react';
-import { ChainProvider, useChainWallet } from "@interchain-kit/react";
+import { consumerAssetList, consumerChain } from '@/lib/constants';
 import { keplrWallet } from "@interchain-kit/keplr-extension";
-import { leapWallet } from "@interchain-kit/leap-extension";
-import { chains, assetLists } from "chain-registry";
-
-const chainNames = ["cosmoshub"];
-const filteredChains = chains.filter(c => chainNames.includes(c.chainName));
-const filteredAssetLists = assetLists.filter(a => chainNames.includes(a.chainName));
-
-interface PulsarWalletProviderProps {
-  children: ReactNode;
-}
+import { ChainProvider, useChainWallet } from "@interchain-kit/react";
+import React, { ReactNode } from 'react';
 
 export function usePulsarWallet() {
-  return useChainWallet("cosmoshub", "keplr-extension");
+  return useChainWallet("consumer", "keplr-extension");
 }
 
-export function PulsarWalletProvider({ children }: PulsarWalletProviderProps) {
+export function PulsarWalletProvider({ children }: {
+  children: ReactNode;
+}) {
   return (
     <ChainProvider
-      chains={filteredChains}
-      wallets={[keplrWallet, leapWallet]}
-      assetLists={filteredAssetLists}
+      chains={[consumerChain]}
+      wallets={[keplrWallet]}
+      assetLists={[consumerAssetList]}
       signerOptions={{
         signing: (chainName) => {
           return {
@@ -38,10 +31,10 @@ export function PulsarWalletProvider({ children }: PulsarWalletProviderProps) {
       }}
       endpointOptions={{
         endpoints: {
-          'cosmoshub': {
-            rpc: ['https://rpc.cosmos.network'],
-            rest: ['https://rest.cosmos.network']
-          }
+          consumer: {
+            rpc: ["http://5.9.42.22:26657/"],
+            rest: ["http://5.9.42.22:1317"],
+          },
         },
       }}
     >

@@ -4,7 +4,7 @@ import type { Metadata } from "next"
 import { Toaster } from "react-hot-toast"
 import { MinaWalletProvider } from "@/app/_providers/mina-wallet"
 import { PulsarWalletProvider } from "@/app/_providers/pulsar-wallet"
-import { QueryClientProvider } from "@/app/_providers/query-client-provider"
+import { QueryClientProvider } from "@/app/_providers/query-client"
 import Header from "./components/header"
 import localFont from "next/font/local"
 import { Darker_Grotesque } from "next/font/google"
@@ -40,28 +40,31 @@ export default function RootLayout({ children }: {
         <MinaWalletProvider>
           <PulsarWalletProvider>
             <QueryClientProvider>
-            <Toaster position="top-center" toastOptions={{
-              duration: 3000,
-              style: {
-                background: '#fff',
-                color: '#333',
-                borderRadius: '12px',
-                border: '1px solid #e5e7eb',
-                fontSize: '16px',
-              },
-              success: {
-                iconTheme: {
-                  primary: '#10b981',
-                  secondary: '#fff',
-                },
-              },
-              error: {
-                iconTheme: {
-                  primary: '#ef4444',
-                  secondary: '#fff',
-                },
-              },
-            }}/>
+              <Toaster
+                position="top-center"
+                toastOptions={{
+                  duration: 3000,
+                  style: {
+                    background: '#fff',
+                    color: '#333',
+                    borderRadius: '12px',
+                    border: '1px solid #e5e7eb',
+                    fontSize: '16px',
+                  },
+                  success: {
+                    iconTheme: {
+                      primary: '#10b981',
+                      secondary: '#fff',
+                    },
+                  },
+                  error: {
+                    iconTheme: {
+                      primary: '#ef4444',
+                      secondary: '#fff',
+                    },
+                  },
+                }}
+              />
               <Header />
               {children}
             </QueryClientProvider>

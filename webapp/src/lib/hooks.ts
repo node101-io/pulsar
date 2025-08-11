@@ -67,19 +67,62 @@ export function useMinaBalance(account: string | null | undefined, options?: {
 
 export function useFaucetDrip() {
   const queryClient = useQueryClient();
-  
+
   return useMutation<FaucetResponse, Error, { walletAddress: string }>({
     mutationFn: async (data: { walletAddress: string }) => {
       const res = await client.faucet.drip.$post(data);
       return await res.json() as FaucetResponse;
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ 
-        queryKey: ['pminaBalance', variables.walletAddress] 
+      queryClient.invalidateQueries({
+        queryKey: ['pminaBalance', variables.walletAddress]
       });
     },
   });
+};
+
+export function useKeyStore(
+  address: string | null | undefined,
+  options?: { enabled?: boolean }
+) {
+  return useQuery({
+    queryKey: ["keyStore", address],
+    queryFn: async () => {
+      const response = await fetch(`http://5.9.42.22:1317/pulsar/cosmos/minakeys/key_store/${address}`);
+
+      if (!response.ok)
+        throw new Error(`Failed to fetch key store for address: ${address || ""}`);
+
+      return await response.json();
+    },
+    enabled: !!address && (options?.enabled ?? true),
+    staleTime: 15_000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+  });
 }
+
+export function useBroadcastTx() {
+  return useMutation<{ success: boolean, data: { hash: string, code?: number } }, Error, { tx: string }>({
+    mutationFn: async ({ tx }) => {
+      const res = await client.grpc.call.$post({
+        protoFile: "tx_service.proto",
+        pkg: "cosmos.tx.v1beta1",
+        service: "Service",
+        method: "BroadcastTx",
+        request: {
+          txBytes: tx,
+          mode: 'BROADCAST_MODE_SYNC'
+        }
+      });
+
+      const json = await res.json() as any;
+      const hash = json?.data?.txResponse?.txhash || json?.data?.txResponse?.txHash || json?.data?.txhash;
+
+      return { success: !!json?.success, data: { hash, code: json?.data?.txResponse?.code } };
+    },
+  });
+};
 
 export function useConnectedWallet() {
   const { isConnected: isMinaConnected, account: minaAccount } = useMinaWallet();

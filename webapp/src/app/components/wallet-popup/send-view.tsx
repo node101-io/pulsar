@@ -1,11 +1,14 @@
 import Image from "next/image"
 import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { useMinaPrice } from "@/lib/hooks";
+import { useBroadcastTx, useMinaPrice } from "@/lib/hooks";
 import { toast } from "react-hot-toast";
 import { useMinaWallet } from "@/app/_providers/mina-wallet";
 import { usePulsarWallet } from "@/app/_providers/pulsar-wallet";
 import { usePminaBalance, useConnectedWallet } from "@/lib/hooks";
+import { createKeyStoreTx, createSendTokenTx } from "@/lib/tx";
+import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
+import { DeliverTxResponse } from "@interchainjs/types/rpc";
 
 interface SavedAddress {
   name: string;
@@ -21,12 +24,13 @@ export const SendView = ({ setCurrentView }: {
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [addressName, setAddressName] = useState<string>('');
   const [showSaveDialog, setShowSaveDialog] = useState<boolean>(false);
-  
+
   // Wallet hooks
   const { isConnected: isMinaConnected, signMessage: minaSignMessage, account: minaAccount } = useMinaWallet();
-  const { signingClient, isSigningClientLoading } = usePulsarWallet();
+  const { getSigningClient, isSigningClientLoading } = usePulsarWallet();
   const connectedWallet = useConnectedWallet();
-  
+  const broadcastTx = useBroadcastTx();
+
   const { data: priceData } = useMinaPrice();
   const { data: pminaBalance } = usePminaBalance(connectedWallet?.address, {
     enabled: !!connectedWallet?.address,
@@ -84,13 +88,13 @@ export const SendView = ({ setCurrentView }: {
       toast.error('Please enter an address first');
       return;
     }
-    
+
     const exists = savedAddresses.some(addr => addr.address === recipientAddress.trim());
     if (exists) {
       toast.error('Address already saved');
       return;
     }
-    
+
     setShowSaveDialog(true);
   };
 
@@ -114,7 +118,7 @@ export const SendView = ({ setCurrentView }: {
 
     const updatedAddresses = [...savedAddresses, newAddress];
     saveSavedAddresses(updatedAddresses);
-    
+
     setShowSaveDialog(false);
     setAddressName('');
     toast.success('Address saved successfully!');
@@ -222,7 +226,7 @@ export const SendView = ({ setCurrentView }: {
                 initial={{ y: '100%', opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: '100%', opacity: 0 }}
-                transition={{ 
+                transition={{
                   type: "spring",
                   damping: 30,
                   stiffness: 300,
@@ -231,7 +235,7 @@ export const SendView = ({ setCurrentView }: {
                 className="bg-[#CBDBDB] rounded-t-[26px] p-6 flex flex-col gap-2 border border-background absolute bottom-0 left-0 right-0 z-10 shadow-lg"
               >
                 <h3 className="text-xl font-semibold text-background">Give it an alias</h3>
-                
+
                 <div className="bg-text rounded-2xl p-4 border border-background flex items-center gap-3">
                   <div className="size-8 rounded-full flex items-center justify-center border border-background">
                     <Image src="/pulsar-token-logo.png" alt="Profile" width={32} height={32} className="rounded-full" />
@@ -275,6 +279,15 @@ export const SendView = ({ setCurrentView }: {
       <button
         onClick={async () => {
           try {
+            // broadcastTx.mutate({ tx: 'fklşsdkflşdskglşsdkgşlsdkşlsdkfşlsd' }, {
+            //   onSuccess: (data) => {
+            //     console.log(data);
+            //   },
+            //   onError: (error) => {
+            //     toast.error(error instanceof Error ? error.message : 'Failed to broadcast transaction', { id: 'broadcast-transaction-failed' });
+            //   }
+            // });
+
             const amount = parseFloat(sendAmount);
             if (!sendAmount || amount <= 0)
               return toast.error('Please enter a valid amount', { id: 'invalid-amount' });
@@ -290,55 +303,84 @@ export const SendView = ({ setCurrentView }: {
 
             toast.loading('Please sign the transaction in your wallet...', { id: 'signing-transaction' });
 
-            if (connectedWallet.type === 'mina') {
-              const transactionMessage = JSON.stringify({
-                type: 'send',
-                from: connectedWallet.address,
-                to: recipientAddress.trim(),
-                amount: amount.toString(),
-                currency: 'pMINA',
-                timestamp: new Date().toISOString()
-              });
+            const signingClient = await getSigningClient();
+            const accounts = await signingClient.offlineSigner.getAccounts();
 
-              const signedData = await minaSignMessage({ message: transactionMessage });
-              
-              toast.dismiss('signing-transaction');
-              toast.success('Transaction signed successfully with Mina wallet!', { id: 'transaction-signed' });
-              
-              console.log('Mina transaction signed:', {
-                message: transactionMessage,
-                signature: signedData
-              });
-            } else if (connectedWallet.type === 'cosmos') {
-              // Pulsar/Cosmos wallet transaction
-              if (!signingClient || isSigningClientLoading) {
-                toast.dismiss('signing-transaction');
-                toast.error('Wallet client not ready. Please try again.', { id: 'client-not-ready' });
+            if (!accounts[0] || !accounts[0].pubkey || !signingClient.client)
+              return toast.error('Please connect a wallet first', { id: 'no-wallet' });
+
+            const accountNumber = await signingClient.client.getAccountNumber(accounts[0].address).catch(err => {
+              if(/key not found/.test(err.message)) {
+                toast.error('Please get tokens from faucet first', { id: 'no-account' });
                 return;
               }
+              return;
+            });
+            const sequence = await signingClient.client.getSequence(accounts[0].address).catch(err => {
+              if(/key not found/.test(err.message)) {
+                toast.error('Please get tokens from faucet first', { id: 'no-account' });
+                return;
+              }
+              return;
+            });
+            console.log(accountNumber, sequence);
 
-              // For now, sign a transaction message (can be implemented with proper transaction later)
-              const transactionMessage = JSON.stringify({
-                type: 'cosmos_send',
-                from: connectedWallet.address,
-                to: recipientAddress.trim(),
-                amount: amount.toString(),
-                currency: 'pMINA',
-                timestamp: new Date().toISOString()
+            if (accountNumber == undefined || sequence == undefined) return;
+
+            // const {
+            //   signDoc,
+            //   txRaw
+            // } = createSendTokenTx({
+            //   sequence,
+            //   pubkeyBytes: accounts[0].pubkey,
+            //   accountNumber,
+            //   fromAddress: connectedWallet.address,
+            //   toAddress: recipientAddress.trim(),
+            //   amount: amount.toString(),
+            //   walletType: connectedWallet.type
+            // });
+            const {
+              signDoc,
+              txRaw
+            } = createKeyStoreTx({
+              sequence,
+              pubkeyBytes: accounts[0].pubkey,
+              accountNumber,
+              fromAddress: connectedWallet.address,
+              cosmosPublicKeyHex: Buffer.from(accounts[0].pubkey).toString('hex'),
+              minaPublicKey: Buffer.from(accounts[0].pubkey).toString('hex'),
+              cosmosSignature: new Uint8Array(),
+              minaSignature: new Uint8Array(),
+            });
+
+            let txBytes: Uint8Array | undefined;
+
+            if (connectedWallet.type === 'cosmos') {
+              const signedTx = await signingClient.offlineSigner.sign({
+                signerAddress: accounts[0].address,
+                signDoc: signDoc as any, // TODO: fix
               });
+              console.log(signedTx);
 
-              // This will be replaced with actual transaction once we have proper implementation
-              console.log('Cosmos transaction message:', transactionMessage);
+              txBytes = TxRaw.encode(TxRaw.fromPartial({
+                bodyBytes: txRaw.bodyBytes,
+                authInfoBytes: txRaw.authInfoBytes,
+                signatures: [new Uint8Array(Buffer.from(signedTx.signature.signature, 'base64'))],
+              })).finish();
+            } else if (connectedWallet.type === 'mina') {
 
-              toast.dismiss('signing-transaction');
-              toast.success('Transaction prepared with Pulsar wallet!', { id: 'transaction-signed' });
-              
-              console.log('Cosmos transaction prepared for:', {
-                from: connectedWallet.address,
-                to: recipientAddress.trim(),
-                amount: amount.toString()
-              });
             }
+
+            const txResponse = await signingClient.client.broadcast(txBytes!, {});
+
+            if (txResponse?.code !== 0) {
+              if (/Please register your Mina public key first/.test(txResponse?.rawLog || ''))
+                return toast.error('Please register your Mina public key first', { id: 'no-account' });
+
+              return toast.error('Transaction failed', { id: 'transaction-failed' });
+            }
+
+            toast.success('Transaction successful', { id: 'transaction-success' });
 
             setSendAmount('');
             setRecipientAddress('');
@@ -376,12 +418,12 @@ export const SendView = ({ setCurrentView }: {
                   <p className="text-background">{savedAddress.name}</p>
                   <p className="text-[#585858]">{savedAddress.address.slice(0, 6)}...{savedAddress.address.slice(-6)}</p>
                 </div>
-                <Image 
-                  src="/trash-icon.svg" 
-                  alt="Delete" 
-                  width={14} 
-                  height={14} 
-                  className="group-hover:opacity-100 opacity-0 transition-opacity duration-200" 
+                <Image
+                  src="/trash-icon.svg"
+                  alt="Delete"
+                  width={14}
+                  height={14}
+                  className="group-hover:opacity-100 opacity-0 transition-opacity duration-200"
                   onClick={(e) => {
                     e.stopPropagation();
                     deleteAddress(savedAddress.id);

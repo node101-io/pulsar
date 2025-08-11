@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package cosmos.tx.v1beta1;
+
+import "google/protobuf/any.proto";
+
+// BroadcastTx request
+message BroadcastTxRequest {
+  bytes tx_bytes = 1;
+  BroadcastMode mode = 2;
+}
+
+// BroadcastTx response
+message BroadcastTxResponse {
+  TxResponse tx_response = 1;
+}
+
+// Transaction response
+message TxResponse {
+  int32 code = 1;
+  string data = 2;
+  string raw_log = 3;
+  repeated ABCIMessageLog logs = 4;
+  string info = 5;
+  int64 gas_wanted = 6;
+  int64 gas_used = 7;
+  google.protobuf.Any tx = 8;
+  string timestamp = 9;
+  repeated Event events = 10;
+  string codespace = 11;
+  string txhash = 12;
+}
+
+// ABCI message log
+message ABCIMessageLog {
+  uint32 msg_index = 1;
+  string log = 2;
+  repeated StringEvent events = 3;
+}
+
+// String event
+message StringEvent {
+  string type = 1;
+  repeated Attribute attributes = 2;
+}
+
+// Event attribute
+message Attribute {
+  string key = 1;
+  string value = 2;
+  bool index = 3;
+}
+
+// Event
+message Event {
+  string type = 1;
+  repeated Attribute attributes = 2;
+}
+
+// Broadcast mode
+enum BroadcastMode {
+  BROADCAST_MODE_UNSPECIFIED = 0;
+  BROADCAST_MODE_BLOCK = 1;
+  BROADCAST_MODE_SYNC = 2;
+  BROADCAST_MODE_ASYNC = 3;
+}
+
+// Service definition
+service Service {
+  rpc BroadcastTx(BroadcastTxRequest) returns (BroadcastTxResponse);
+}
