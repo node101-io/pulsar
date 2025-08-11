@@ -5,7 +5,7 @@ import {
     SettlementContract,
 } from "pulsar-contracts";
 import dotenv from "dotenv";
-import { AccountUpdate, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
+import { AccountUpdate, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
 import { cacheCompile } from "../cache.js";
 dotenv.config();
 
@@ -49,7 +49,11 @@ async function retryUntilSuccess(delayMs = 5000) {
                     });
                     AccountUpdate.fundNewAccount(privateKey.toPublicKey());
                     await contractInstance.deploy();
-                    await contractInstance.initialize(mockValidatorList.hash);
+                    await contractInstance.initialize(
+                        Field.from(
+                            6310558633462665370159457076080992493592463962672742685757201873330974620505n
+                        )
+                    );
                 }
             );
             console.log("Waiting for transaction to be processed...");
