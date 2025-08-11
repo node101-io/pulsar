@@ -81,10 +81,16 @@ createWorker<MergeJob, void>({
                 );
 
                 await tx.prove();
-                await tx.sign([senderKey]).send();
+                const pendingTransaction = await tx.sign([senderKey]).send();
 
                 logger.info(
-                    `Merge transaction sent successfully for blocks ${lowerBlock.rangeLow}-${lowerBlock.rangeHigh} and ${upperBlock.rangeLow}-${upperBlock.rangeHigh}`
+                    `Settlement transaction sent for blocks ${lowerBlock.rangeLow}-${upperBlock.rangeHigh}: ${pendingTransaction.hash}`
+                );
+
+                await pendingTransaction.wait();
+
+                logger.info(
+                    `Settlement transaction confirmed for blocks ${lowerBlock.rangeLow}-${upperBlock.rangeHigh}`
                 );
             }
         } catch (e) {
