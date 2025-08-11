@@ -14,5 +14,22 @@ services:
             context: .
             dockerfile: Dockerfile
         restart: unless-stopped
+        networks: [pulsar-net]
+        env_file: .env
+        environment:
+            DOCKER: "1"
+            MINA_PRIVATE_KEY: ${MINA_PRIVATE_KEY}
+            MINA_NETWORK: ${MINA_NETWORK}
+            FEE: ${FEE}
+            CONTRACT_ADDRESS: ${CONTRACT_ADDRESS}
+            PULSAR_RPC_ADDRESS: ${PULSAR_RPC_ADDRESS}
+            REDIS_HOST: redis
+            REDIS_PORT: 6379
+            REDIS_PASSWORD: ${REDIS_PASSWORD}
+            MONGO_URI: ${MONGO_URI}
+            MONGO_INITDB_DATABASE: ${MONGO_DB}
+            MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+            MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+        entrypoint: ["node", "dist/src/index.js"]
 # volumes:
 #     mongo-data:
