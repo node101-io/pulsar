@@ -122,7 +122,7 @@ export async function collectSignatures(
                         throw new Error("Invalid response format");
                     }
                     const validatorPubKey = PublicKey.fromBase58(data.validatorPubKey);
-                    const signature = Signature.fromJSON(data.signature);
+                    const signature = Signature.fromJSON(JSON.parse(data.signature));
                     if (signature.verify(validatorPubKey, publicInput.hash().toFields())) {
                         return { url, validatorPubKey, signature };
                     }
