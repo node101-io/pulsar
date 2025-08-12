@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import toast from "react-hot-toast"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
@@ -13,27 +13,36 @@ import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx"
 import { BroadcastMode } from "@interchain-kit/core/types"
 import { useQueryClient } from "@tanstack/react-query"
 import { AnimatePresence, motion } from "motion/react"
+import Image from "next/image"
+import { useKeyStore } from "@/lib/hooks"
 
 export const ConnectView = () => {
   const { isWalletInstalled: isMinaWalletInstalled, isConnecting: minaConnecting, connectWallet: connectMina, signMessage: minaSignMessage, account: minaAccount, isConnected: isMinaConnected } = useMinaWallet();
-  const { status: pulsarStatus, connect: connectPulsar, getSigningClient, wallet } = usePulsarWallet();
-  const [showOnboardDialog, setShowOnboardDialog] = useState(true);
+  const { status: pulsarStatus, connect: connectPulsar, getSigningClient, wallet: pulsarWallet, address } = usePulsarWallet();
+  const [onboardDialog, setOnboardDialog] = useState<'done' | ''>('');
+  const { data: keyStore } = useKeyStore(address);
   const queryClient = useQueryClient();
 
   const isPulsarConnecting = pulsarStatus === WalletState.Connecting;
   const isPulsarWalletInstalled = pulsarStatus !== WalletState.NotExist;
+  const isPulsarConnected = pulsarStatus === WalletState.Connected && address;
+
+  useEffect(() => {
+    if (isMinaConnected && isPulsarConnected && !keyStore)
+      setOnboardDialog('done');
+  }, [keyStore, isMinaConnected, isPulsarConnected]);
 
   const handleCreateKeyStore = async () => {
     try {
       if (!isMinaConnected || !minaAccount) throw new Error('Connect Auro');
 
-      const pulsarWallet = wallet.getWalletOfType(CosmosWallet);
+      const wallet = pulsarWallet.getWalletOfType(CosmosWallet);
 
-      if (!pulsarWallet) throw new Error('Cosmos wallet not available');
+      if (!wallet) throw new Error('Cosmos wallet not available');
 
       const signingClient = await getSigningClient();
-      const account = await pulsarWallet.getAccount(consumerChain.chainId!);
-      
+      const account = await wallet.getAccount(consumerChain.chainId!);
+
       if (!signingClient.client) throw new Error('Keplr not ready');
 
       const cosmosPublicKeyHex = Buffer.from(account.pubkey).toString('hex');
@@ -41,7 +50,7 @@ export const ConnectView = () => {
       const minaPublicKeyHex = await minaPublicKeyToHex(minaSigned.publicKey);
       const minaSignature = packMinaSignature(minaSigned.signature.field, minaSigned.signature.scalar);
 
-      const { signature } = await pulsarWallet.signArbitrary(consumerChain.chainId!, account.address, minaPublicKeyHex);
+      const { signature } = await wallet.signArbitrary(consumerChain.chainId!, account.address, minaPublicKeyHex);
       const cosmosSignature = base64ToBytes(signature);
 
       const accountNumber = await signingClient.client.getAccountNumber(account.address);
@@ -57,7 +66,7 @@ export const ConnectView = () => {
         minaSignature,
       });
 
-      const signedTx = await pulsarWallet.signDirect(consumerChain.chainId!, account.address, signDoc);
+      const signedTx = await wallet.signDirect(consumerChain.chainId!, account.address, signDoc);
 
       const protobufTx = TxRaw.encode({
         bodyBytes: signedTx.signed.bodyBytes,
@@ -65,7 +74,7 @@ export const ConnectView = () => {
         signatures: [new Uint8Array(Buffer.from(signedTx.signature.signature, 'base64'))],
       }).finish();
 
-      const txResponse = await pulsarWallet.sendTx(consumerChain.chainId!, protobufTx, BroadcastMode.Sync);
+      const txResponse = await wallet.sendTx(consumerChain.chainId!, protobufTx, BroadcastMode.Sync);
       console.log('tx hash', Buffer.from(txResponse).toString('hex').toUpperCase());
 
       queryClient.invalidateQueries({ queryKey: ["keyStore"] });
@@ -128,7 +137,7 @@ export const ConnectView = () => {
         Connect Wallet
       </h3>
 
-      <div className="space-y-3 mb-6">
+      <div className="space-y-3 mb-6 mb-auto">
         <ExtensionItem
           icon="/auro-wallet-logo.png"
           title={!isMinaWalletInstalled ? 'Install Auro Wallet Extension' : 'Auro Wallet Extension'}
@@ -145,28 +154,18 @@ export const ConnectView = () => {
         />
       </div>
 
-      <ProgressBar />
-
-      <div className="border border-background rounded-3xl p-4 flex items-center gap-2 bg-[#F5F5F5]">
-        <img src="/warning.svg" alt="warning" />
-        <p className="leading-4">
-          <span className="font-semibold">Attention!</span> To dive into Pulsar, you should connect both your <span className="font-semibold">Mina</span> and <span className="font-semibold">Pulsar</span> wallets. Don't worry this is just for the first time.
-        </p>
-      </div>
+      {!keyStore && <ProgressBar />}
 
       <LegalNotice />
 
       <AnimatePresence>
-        {showOnboardDialog && (
+        {onboardDialog === 'done' && !keyStore && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 z-5 bg-black/20 rounded-4xl rounded-tr-none"
-              onClick={() => {
-                setShowOnboardDialog(false);
-              }}
             />
             <motion.div
               initial={{ y: '100%', opacity: 0 }}
@@ -178,15 +177,18 @@ export const ConnectView = () => {
                 stiffness: 300,
                 duration: 0.3
               }}
-              className="bg-[#CBDBDB] rounded-t-[26px] p-6 flex flex-col gap-2 border border-background absolute bottom-0 left-0 right-0 z-10 shadow-lg"
+              className="bg-[#FFE68C] rounded-t-[26px] p-6 flex flex-col gap-2 border border-background absolute bottom-0 left-0 right-0 z-10 shadow-lg items-center"
             >
-              <h3 className="text-xl font-semibold text-background">Give it an alias</h3>
+              <Image src="/welcome.svg" alt="welcome" width={34} height={34} />
+              <h3 className="text-xl font-semibold text-background">Welcome to Pulsar!</h3>
 
               <button
-                onClick={handleCreateKeyStore}
-                className="w-full bg-[#FFE68C] hover:bg-[#fff4cd] disabled:bg-gray-300 disabled:text-gray-500 text-background font-normal font-family-recady pt-4 pb-2.5 px-6 rounded-[20px] transition-colors border border-background"
+                onClick={() => {
+                  handleCreateKeyStore();
+                }}
+                className="w-full bg-[#CBDBDB] hover:bg-[#fff4cd] disabled:bg-gray-300 disabled:text-gray-500 text-background font-normal font-family-recady pt-4 pb-2.5 px-6 rounded-[20px] transition-colors border border-background"
               >
-                Confirm
+                Dive in
               </button>
             </motion.div>
           </>

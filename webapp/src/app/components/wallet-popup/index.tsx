@@ -63,29 +63,29 @@ export default function WalletPopup({
       {isOpen && (
         <motion.div
           ref={popupRef}
-          initial={{ 
-            opacity: 0, 
+          initial={{
+            opacity: 0,
             scale: 0.95,
             x: '100%',
             y: 0
           }}
-          animate={{ 
-            opacity: 1, 
+          animate={{
+            opacity: 1,
             scale: 1,
             x: 0,
             y: 0
           }}
-          exit={{ 
-            opacity: 0, 
+          exit={{
+            opacity: 0,
             scale: 0.95,
             x: '100%',
             y: 0
           }}
-          transition={{ 
+          transition={{
             duration: 0.2,
             ease: "easeInOut"
           }}
-          className="fixed flex flex-col top-[calc(var(--header-height)+var(--spacing)*5)] right-5 h-[calc(100vh-var(--header-height)-var(--spacing)*10)] w-88 bg-white rounded-4xl shadow-lg z-50 p-3.5 font-family-darker-grotesque border-1 border-background border-solid rounded-tr-none gap-2"
+          className="fixed flex flex-col top-[calc(var(--header-height)+var(--spacing)*5)] right-5 h-[calc(100vh-var(--header-height)-var(--spacing)*10)] w-88 bg-white rounded-4xl shadow-lg z-50 p-3.5 font-family-darker-grotesque border-1 border-background border-solid rounded-tr-none gap-2 overflow-hidden"
         >
           {currentView === 'connect' && <ConnectView />}
           {currentView === 'main' && <MainView setCurrentView={setCurrentView} setPopupWalletType={setIsWalletPopupOpen} />}

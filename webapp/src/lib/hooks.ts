@@ -91,9 +91,14 @@ export function useKeyStore(
       const response = await fetch(`http://5.9.42.22:1317/pulsar/cosmos/minakeys/key_store/${address}`);
 
       if (!response.ok)
-        throw new Error(`Failed to fetch key store for address: ${address || ""}`);
+        return null;
 
-      return await response.json();
+      const data = await response.json() as { keyStore: { cosmosPublicKey: string, minaPublicKey: string, creator: string } } | undefined;
+
+      if (!data || !('keyStore' in data) || !('creator' in data.keyStore))
+        return null;
+
+      return data.keyStore;
     },
     enabled: !!address && (options?.enabled ?? true),
     staleTime: 15_000,

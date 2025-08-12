@@ -37,7 +37,7 @@ export const createSendTokenTx = ({
   toAddress: string,
   amount: string,
   walletType: 'mina' | 'cosmos'
-}): CreateTxReturnType => {
+}): SignDoc => {
   const feeAmount = coin("5000", consumerChain.fees!.feeTokens[0]!.denom);
   const gasLimit = 200_000;
   const chainId = consumerChain.chainId;
@@ -75,16 +75,7 @@ export const createSendTokenTx = ({
     accountNumber: accountNumber,
   });
 
-  const txRaw = TxRaw.fromPartial({
-    bodyBytes,
-    authInfoBytes,
-    signatures: [],
-  });
-
-  return {
-    signDoc,
-    txRaw
-  };
+  return signDoc;
 };
 
 export const createKeyStoreTx = ({
