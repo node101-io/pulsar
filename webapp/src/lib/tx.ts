@@ -21,11 +21,6 @@ const minaTxTypeExtension = Any.fromPartial({
   value: Uint8Array.from([8, 1]), // protobuf encoded: field 1, varint, value 1
 });
 
-interface CreateTxReturnType {
-  signDoc: SignDoc;
-  txRaw: TxRaw;
-}
-
 export const createSendTokenTx = ({
   sequence,
   pubkeyBytes,
@@ -110,7 +105,7 @@ export const createKeyStoreTx = ({
   minaPublicKey: string,
   cosmosSignature: Uint8Array,
   minaSignature: Uint8Array
-}): CreateTxReturnType => {
+}): SignDoc => {
   const feeAmount = coin("1000", consumerChain.fees!.feeTokens[0]!.denom);
   const gasLimit = 200_000;
   const chainId = consumerChain.chainId;
@@ -139,15 +134,6 @@ export const createKeyStoreTx = ({
 
   const signDoc = SignDoc.fromPartial({ bodyBytes, authInfoBytes, chainId, accountNumber });
 
-  const txRaw = TxRaw.fromPartial({
-    bodyBytes,
-    authInfoBytes,
-    signatures: [],
-  });
-
-  return {
-    signDoc,
-    txRaw,
-  };
+  return signDoc;
 };
 

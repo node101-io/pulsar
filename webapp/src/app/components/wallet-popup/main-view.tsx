@@ -4,18 +4,19 @@ import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
 import toast from "react-hot-toast"
 import { useMinaPrice, usePminaBalance } from "@/lib/hooks"
 import { useQueryClient } from "@tanstack/react-query"
+import { WalletState } from "@interchain-kit/core"
 
 export const MainView = ({ setCurrentView, setPopupWalletType }: {
   setCurrentView: (view: 'main' | 'send') => void
   setPopupWalletType: (isOpen: boolean) => void
 }) => {
   const { disconnectWallet: disconnectMina, account: minaAccount, isConnected: isMinaConnected } = useMinaWallet();
-  const { disconnect: disconnectKeplr, address: keplrAddress, status: keplrStatus } = usePulsarWallet();
+  const { disconnect: disconnectPulsar, address: pulsarAddress, status: pulsarStatus } = usePulsarWallet();
   const queryClient = useQueryClient();
 
-  const isKeplrConnected = keplrStatus === 'Connected' && keplrAddress;
-  const currentWallet = isMinaConnected && minaAccount ? 'mina' : isKeplrConnected ? 'cosmos' : null;
-  const currentAddress = currentWallet === 'mina' ? minaAccount : keplrAddress;
+  const isPulsarConnected = pulsarStatus === WalletState.Connected;
+  const currentWallet = isMinaConnected && minaAccount ? 'mina' : isPulsarConnected ? 'pulsar' : null;
+  const currentAddress = currentWallet === 'mina' ? minaAccount : pulsarAddress;
 
   const {
     data: pminaBalance,
@@ -46,9 +47,9 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
     if (currentWallet === 'mina') {
       disconnectMina();
       toast.success('Mina Wallet disconnected', { id: 'wallet-disconnected' });
-    } else if (currentWallet === 'cosmos') {
-      disconnectKeplr();
-      toast.success('Cosmos Wallet disconnected', { id: 'wallet-disconnected' });
+    } else if (currentWallet === 'pulsar') {
+      disconnectPulsar();
+      toast.success('Pulsar Wallet disconnected', { id: 'wallet-disconnected' });
     }
     setPopupWalletType(false);
   };
@@ -56,8 +57,8 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
   const getBalance = () => {
     if (currentWallet === 'mina') {
       return pminaBalance ? `${pminaBalance.toFixed(3)} pMINA` : '0.000 pMINA';
-    } else if (currentWallet === 'cosmos') {
-      return '0.000 ATOM';
+    } else if (currentWallet === 'pulsar') {
+      return '0.000 PULSAR';
     }
     return '0.000';
   };

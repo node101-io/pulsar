@@ -1,17 +1,83 @@
+import { useState } from "react"
+import toast from "react-hot-toast"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
 import { LegalNotice } from "./legal-notice"
 import { ExtensionItem } from "./extension-item"
-import toast from "react-hot-toast"
+import { ProgressBar } from "./progress-bar"
+import { CosmosWallet, WalletState } from "@interchain-kit/core"
+import { consumerChain } from "@/lib/constants"
+import { base64ToBytes, packMinaSignature, minaPublicKeyToHex } from "@/lib/crypto"
+import { createKeyStoreTx } from "@/lib/tx"
+import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx"
+import { BroadcastMode } from "@interchain-kit/core/types"
+import { useQueryClient } from "@tanstack/react-query"
+import { AnimatePresence, motion } from "motion/react"
 
 export const ConnectView = () => {
-  const { isWalletInstalled, isConnecting: minaConnecting, connectWallet: connectMina } = useMinaWallet();
-  const { connect: connectKeplr, status: keplrStatus } = usePulsarWallet();
+  const { isWalletInstalled: isMinaWalletInstalled, isConnecting: minaConnecting, connectWallet: connectMina, signMessage: minaSignMessage, account: minaAccount, isConnected: isMinaConnected } = useMinaWallet();
+  const { status: pulsarStatus, connect: connectPulsar, getSigningClient, wallet } = usePulsarWallet();
+  const [showOnboardDialog, setShowOnboardDialog] = useState(true);
+  const queryClient = useQueryClient();
 
-  const isKeplrConnecting = keplrStatus === 'Connecting';
+  const isPulsarConnecting = pulsarStatus === WalletState.Connecting;
+  const isPulsarWalletInstalled = pulsarStatus !== WalletState.NotExist;
+
+  const handleCreateKeyStore = async () => {
+    try {
+      if (!isMinaConnected || !minaAccount) throw new Error('Connect Auro');
+
+      const pulsarWallet = wallet.getWalletOfType(CosmosWallet);
+
+      if (!pulsarWallet) throw new Error('Cosmos wallet not available');
+
+      const signingClient = await getSigningClient();
+      const account = await pulsarWallet.getAccount(consumerChain.chainId!);
+      
+      if (!signingClient.client) throw new Error('Keplr not ready');
+
+      const cosmosPublicKeyHex = Buffer.from(account.pubkey).toString('hex');
+      const minaSigned = await minaSignMessage({ message: cosmosPublicKeyHex });
+      const minaPublicKeyHex = await minaPublicKeyToHex(minaSigned.publicKey);
+      const minaSignature = packMinaSignature(minaSigned.signature.field, minaSigned.signature.scalar);
+
+      const { signature } = await pulsarWallet.signArbitrary(consumerChain.chainId!, account.address, minaPublicKeyHex);
+      const cosmosSignature = base64ToBytes(signature);
+
+      const accountNumber = await signingClient.client.getAccountNumber(account.address);
+      const sequence = await signingClient.client.getSequence(account.address);
+      const signDoc = createKeyStoreTx({
+        sequence,
+        pubkeyBytes: account.pubkey,
+        accountNumber,
+        fromAddress: account.address,
+        cosmosPublicKeyHex,
+        minaPublicKey: minaPublicKeyHex,
+        cosmosSignature: cosmosSignature.length === 65 ? cosmosSignature.slice(0, 64) : cosmosSignature,
+        minaSignature,
+      });
+
+      const signedTx = await pulsarWallet.signDirect(consumerChain.chainId!, account.address, signDoc);
+
+      const protobufTx = TxRaw.encode({
+        bodyBytes: signedTx.signed.bodyBytes,
+        authInfoBytes: signedTx.signed.authInfoBytes,
+        signatures: [new Uint8Array(Buffer.from(signedTx.signature.signature, 'base64'))],
+      }).finish();
+
+      const txResponse = await pulsarWallet.sendTx(consumerChain.chainId!, protobufTx, BroadcastMode.Sync);
+      console.log('tx hash', Buffer.from(txResponse).toString('hex').toUpperCase());
+
+      queryClient.invalidateQueries({ queryKey: ["keyStore"] });
+      toast.success('Register completed!');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to create KeyStore');
+    } finally {
+    }
+  };
 
   const handleAuroClick = async () => {
-    if (!isWalletInstalled) {
+    if (!isMinaWalletInstalled) {
       toast.error('Auro Wallet not found. Please install the extension first.', {
         id: 'wallet-not-found'
       });
@@ -21,12 +87,12 @@ export const ConnectView = () => {
 
     try {
       await connectMina();
-      toast.success('Mina Wallet connected successfully!', {
+      toast.success('Auro Wallet connected successfully!', {
         id: 'wallet-connected'
       });
     } catch (error) {
-      console.error('Failed to connect Mina wallet:', error);
-      toast.error('Failed to connect Mina wallet. Please try again.', {
+      console.error('Failed to connect Auro Wallet:', error);
+      toast.error('Failed to connect Auro Wallet. Please try again.', {
         id: 'wallet-connection-failed'
       });
     }
@@ -34,7 +100,15 @@ export const ConnectView = () => {
 
   const handleKeplrClick = async () => {
     try {
-      await connectKeplr();
+      if (!isPulsarWalletInstalled) {
+        toast.error('Pulsar Wallet not found. Please install the extension first.', {
+          id: 'wallet-not-found'
+        });
+        window.open('https://chrome.google.com/webstore/detail/keplr/dmkamcknogkgcdfhhbddcghachkejeap', '_blank');
+        return;
+      }
+
+      await connectPulsar();
 
       toast.success('Keplr Wallet connected successfully!', {
         id: 'keplr-connected'
@@ -50,28 +124,74 @@ export const ConnectView = () => {
 
   return (
     <>
-      <h3 className="text-xl font-semibold text-black mb-6">
+      <h3 className="text-xl font-semibold text-black mb-2">
         Connect Wallet
       </h3>
 
       <div className="space-y-3 mb-6">
         <ExtensionItem
           icon="/auro-wallet-logo.png"
-          title={!isWalletInstalled ? 'Install Auro Wallet Extension' : 'Auro Wallet Extension'}
+          title={!isMinaWalletInstalled ? 'Install Auro Wallet Extension' : 'Auro Wallet Extension'}
           onClick={handleAuroClick}
           disabled={minaConnecting}
           isLoading={minaConnecting}
         />
         <ExtensionItem
           icon="/keplr-wallet-logo.png"
-          title="Keplr Wallet Extension"
+          title={!isPulsarWalletInstalled ? 'Install Keplr Wallet Extension' : 'Keplr Wallet Extension'}
           onClick={handleKeplrClick}
-          disabled={isKeplrConnecting}
-          isLoading={isKeplrConnecting}
+          disabled={isPulsarConnecting}
+          isLoading={isPulsarConnecting}
         />
       </div>
 
+      <ProgressBar />
+
+      <div className="border border-background rounded-3xl p-4 flex items-center gap-2 bg-[#F5F5F5]">
+        <img src="/warning.svg" alt="warning" />
+        <p className="leading-4">
+          <span className="font-semibold">Attention!</span> To dive into Pulsar, you should connect both your <span className="font-semibold">Mina</span> and <span className="font-semibold">Pulsar</span> wallets. Don't worry this is just for the first time.
+        </p>
+      </div>
+
       <LegalNotice />
+
+      <AnimatePresence>
+        {showOnboardDialog && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-5 bg-black/20 rounded-4xl rounded-tr-none"
+              onClick={() => {
+                setShowOnboardDialog(false);
+              }}
+            />
+            <motion.div
+              initial={{ y: '100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '100%', opacity: 0 }}
+              transition={{
+                type: "spring",
+                damping: 30,
+                stiffness: 300,
+                duration: 0.3
+              }}
+              className="bg-[#CBDBDB] rounded-t-[26px] p-6 flex flex-col gap-2 border border-background absolute bottom-0 left-0 right-0 z-10 shadow-lg"
+            >
+              <h3 className="text-xl font-semibold text-background">Give it an alias</h3>
+
+              <button
+                onClick={handleCreateKeyStore}
+                className="w-full bg-[#FFE68C] hover:bg-[#fff4cd] disabled:bg-gray-300 disabled:text-gray-500 text-background font-normal font-family-recady pt-4 pb-2.5 px-6 rounded-[20px] transition-colors border border-background"
+              >
+                Confirm
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 };

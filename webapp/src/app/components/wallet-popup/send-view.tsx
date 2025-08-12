@@ -25,7 +25,6 @@ export const SendView = ({ setCurrentView }: {
   const [addressName, setAddressName] = useState<string>('');
   const [showSaveDialog, setShowSaveDialog] = useState<boolean>(false);
 
-  // Wallet hooks
   const { isConnected: isMinaConnected, signMessage: minaSignMessage, account: minaAccount } = useMinaWallet();
   const { getSigningClient, isSigningClientLoading } = usePulsarWallet();
   const connectedWallet = useConnectedWallet();

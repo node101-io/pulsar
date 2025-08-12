@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "motion/react"
 import { SendView } from "./send-view"
 import { ConnectView } from "./connect-view"
 import { MainView } from "./main-view"
-import { useConnectedWallet } from "@/lib/hooks"
+import { useConnectedWallet, useKeyStore } from "@/lib/hooks"
+import { useQueryClient } from "@tanstack/react-query"
 
 export default function WalletPopup({
   isOpen,
@@ -14,18 +15,31 @@ export default function WalletPopup({
   setIsWalletPopupOpen: (isOpen: boolean) => void
   walletButtonRef: RefObject<HTMLButtonElement | null>
 }) {
-  const currentWallet = useConnectedWallet();
   const [currentView, setCurrentView] = useState<'connect' | 'main' | 'send'>('connect');
   const popupRef = useRef<HTMLDivElement>(null);
+  const connectedWallet = useConnectedWallet();
+  const queryClient = useQueryClient();
+  const { data: keyStore } = useKeyStore(connectedWallet?.address);
+
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["keyStore"] });
+  }, [connectedWallet?.type, connectedWallet?.address, queryClient]);
 
   useEffect(() => {
     if (!isOpen) return;
 
-    if (currentWallet)
-      setCurrentView('main');
-    else
+    if (!connectedWallet) {
       setCurrentView('connect');
-  }, [isOpen, currentWallet]);
+      return;
+    }
+
+    if (!keyStore) {
+      setCurrentView('connect');
+      return;
+    }
+
+    setCurrentView('main');
+  }, [isOpen, connectedWallet, keyStore]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
