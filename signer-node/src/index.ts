@@ -5,6 +5,7 @@ import {
     emptyActionListHash,
     merkleActionsAdd,
     PulsarAction,
+    setMinaNetwork,
     SettlementContract,
     TestUtils,
     ValidateReducePublicInput,
@@ -34,6 +35,8 @@ const contractInstance = new SettlementContract(
 );
 
 const port = Number(process.env.PORT ?? 6000);
+
+setMinaNetwork("lightnet");
 
 const app = express();
 app.use(express.json());
