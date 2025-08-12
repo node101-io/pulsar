@@ -40,9 +40,9 @@ app.use(express.json());
 
 app.post("/sign", signActionQueueLimiter, async (req, res) => {
     const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
-    if (await isIpBlocked(ip)) {
-        res.status(429).json({ error: "Too many invalid actions from your IP. Try again later." });
-    }
+    // if (await isIpBlocked(ip)) {
+    //     res.status(429).json({ error: "Too many invalid actions from your IP. Try again later." });
+    // }
 
     const { blockHeight, actions } = req.body;
     if (!blockHeight || !actions)
@@ -81,7 +81,7 @@ app.post("/sign", signActionQueueLimiter, async (req, res) => {
         const { publicInput } = CalculateMax(actionHashMap, contractInstance, typedActions);
         const signature = Signature.create(privateKey, publicInput.hash().toFields());
 
-        await saveSignature(blockHeight, finalActionState, signature.toBase58());
+        // await saveSignature(blockHeight, finalActionState, signature.toBase58());
 
         res.json({
             blockHeight,
