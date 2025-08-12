@@ -52,43 +52,43 @@ app.post("/sign", signActionQueueLimiter, async (req, res) => {
         const finalActionState = calculateFinalState(actions);
         const { actions: typedActions, isValid } = validateActionQueue(actions, finalActionState);
 
-        if (!isValid) {
-            await registerInvalidAttempt(ip);
-            logger.warn(`Invalid action from IP ${ip}`);
-            res.status(400).json({ error: "Invalid action(s) sent." });
+        // if (!isValid) {
+        //     await registerInvalidAttempt(ip);
+        //     logger.warn(`Invalid action from IP ${ip}`);
+        //     res.status(400).json({ error: "Invalid action(s) sent." });
+        // }
+
+        // await resetInvalidAttempts(ip);
+
+        // const cachedSignature = await getSignature(blockHeight, finalActionState);
+
+        // if (cachedSignature) {
+        //     logger.info(
+        //         `Returning cached signature for block ${blockHeight}, state ${finalActionState}`
+        //     );
+        //     res.json({
+        //         blockHeight,
+        //         validatorPubKey: publicKey.toBase58(),
+        //         signature: cachedSignature,
+        //     });
+        // } else {
+        const actionHashMap: Map<string, number> = new Map();
+        for (const action of typedActions) {
+            const key = action.action.unconstrainedHash().toString();
+            actionHashMap.set(key, (actionHashMap.get(key) ?? 0) + 1);
         }
+        await fetchAccount({ publicKey: contractInstance.address });
+        const { publicInput } = CalculateMax(actionHashMap, contractInstance, typedActions);
+        const signature = Signature.create(privateKey, publicInput.hash().toFields());
 
-        await resetInvalidAttempts(ip);
+        await saveSignature(blockHeight, finalActionState, signature.toBase58());
 
-        const cachedSignature = await getSignature(blockHeight, finalActionState);
-
-        if (cachedSignature) {
-            logger.info(
-                `Returning cached signature for block ${blockHeight}, state ${finalActionState}`
-            );
-            res.json({
-                blockHeight,
-                validatorPubKey: publicKey.toBase58(),
-                signature: cachedSignature,
-            });
-        } else {
-            const actionHashMap: Map<string, number> = new Map();
-            for (const action of typedActions) {
-                const key = action.action.unconstrainedHash().toString();
-                actionHashMap.set(key, (actionHashMap.get(key) ?? 0) + 1);
-            }
-            await fetchAccount({ publicKey: contractInstance.address });
-            const { publicInput } = CalculateMax(actionHashMap, contractInstance, typedActions);
-            const signature = Signature.create(privateKey, publicInput.hash().toFields());
-
-            await saveSignature(blockHeight, finalActionState, signature.toBase58());
-
-            res.json({
-                blockHeight,
-                validatorPubKey: publicKey.toBase58(),
-                signature: JSON.stringify(signature.toJSON()),
-            });
-        }
+        res.json({
+            blockHeight,
+            validatorPubKey: publicKey.toBase58(),
+            signature: JSON.stringify(signature.toJSON()),
+        });
+        // }
     } catch (error) {
         console.error("Error signing:", error);
         res.status(500).json({ error: "Failed to sign the request" });
