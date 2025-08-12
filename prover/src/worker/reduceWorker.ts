@@ -41,6 +41,7 @@ createWorker<ReducerJob, void>({
             );
 
             logger.info(`[Job ${id}] Preparing batch for included actions`);
+            await fetchAccount({ publicKey: settlementContract.address });
             const { batch, useActionStack, publicInput, actionStackProof, mask } =
                 await PrepareBatchWithActions(includedActions, settlementContract, packedActions);
 
@@ -49,8 +50,6 @@ createWorker<ReducerJob, void>({
                 publicInput,
                 signaturePublicKeyList
             );
-
-            await fetchAccount({ publicKey: settlementContract.address });
 
             const tx = await Mina.transaction(
                 { sender: senderKey.toPublicKey(), fee },
