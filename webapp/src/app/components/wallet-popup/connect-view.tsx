@@ -46,12 +46,12 @@ export const ConnectView = () => {
       if (!signingClient.client) throw new Error('Keplr not ready');
 
       const cosmosPublicKeyHex = Buffer.from(account.pubkey).toString('hex');
+
       const minaSigned = await minaSignMessage({ message: cosmosPublicKeyHex });
       const minaPublicKeyHex = await minaPublicKeyToHex(minaSigned.publicKey);
       const minaSignature = packMinaSignature(minaSigned.signature.field, minaSigned.signature.scalar);
 
       const { signature } = await wallet.signArbitrary(consumerChain.chainId!, account.address, minaPublicKeyHex);
-      const cosmosSignature = base64ToBytes(signature);
 
       const accountNumber = await signingClient.client.getAccountNumber(account.address);
       const sequence = await signingClient.client.getSequence(account.address);
@@ -62,7 +62,7 @@ export const ConnectView = () => {
         fromAddress: account.address,
         cosmosPublicKeyHex,
         minaPublicKey: minaPublicKeyHex,
-        cosmosSignature: cosmosSignature.length === 65 ? cosmosSignature.slice(0, 64) : cosmosSignature,
+        cosmosSignature: new Uint8Array(Buffer.from(signature, 'base64')),
         minaSignature,
       });
 
