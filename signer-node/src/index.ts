@@ -27,7 +27,7 @@ const minaPrivateKey = process.env.MINA_PRIVATE_KEY;
 if (!minaPrivateKey) {
     throw new Error("Mina private key is not specified in environment variables");
 }
-const privateKey = PrivateKey.fromBase58(minaPrivateKey);
+const privateKey = PrivateKey.fromBigInt(BigInt("0x" + minaPrivateKey));
 const publicKey = privateKey.toPublicKey();
 
 const contractInstance = new SettlementContract(

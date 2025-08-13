@@ -5,7 +5,7 @@
     "scripts": {
         "test": "npm run test",
         "build": "tsc",
-        "start": "node dist/src/index.js",
+        "start": "tsc && node dist/src/index.js",
         "clean": "rimraf build coverage node_modules package-lock.json"
     },
     "keywords": [
