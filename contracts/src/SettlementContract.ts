@@ -48,7 +48,7 @@ class SettlementContract extends SmartContract {
 
   @state(Field) depositListHash = State<Field>();
   @state(Field) withdrawalListHash = State<Field>();
-  @state(Field) rewardListHash = State<Field>();
+  // @state(Field) rewardListHash = State<Field>();
 
   reducer = Reducer({ actionType: PulsarAction });
 
@@ -85,7 +85,7 @@ class SettlementContract extends SmartContract {
       NewBlockHeight,
       NewMerkleListRoot,
       NewStateRoot,
-      ProofGeneratorsList,
+      // ProofGeneratorsList,
     } = settlementProof.publicInput;
 
     InitialBlockHeight.assertEquals(
@@ -106,17 +106,9 @@ class SettlementContract extends SmartContract {
       'New block height must be equal to initial block height + AGGREGATE_THRESHOLD'
     );
 
-    this.reducer.dispatch(
-      PulsarAction.settlement(
-        InitialStateRoot,
-        NewStateRoot,
-        InitialMerkleListRoot,
-        NewMerkleListRoot,
-        InitialBlockHeight,
-        NewBlockHeight,
-        ProofGeneratorsList
-      )
-    );
+    this.blockHeight.set(NewBlockHeight);
+    this.merkleListRoot.set(NewMerkleListRoot);
+    this.stateRoot.set(NewStateRoot);
   }
 
   @method
@@ -159,7 +151,7 @@ class SettlementContract extends SmartContract {
 
     let depositListHash = this.depositListHash.getAndRequireEquals();
     let withdrawalListHash = this.withdrawalListHash.getAndRequireEquals();
-    let rewardListHash = this.rewardListHash.getAndRequireEquals();
+    // let rewardListHash = this.rewardListHash.getAndRequireEquals();
 
     let initialActionState = this.actionState.getAndRequireEquals();
     let actionState = initialActionState;
@@ -177,13 +169,6 @@ class SettlementContract extends SmartContract {
         )
       );
 
-      const shouldSettle = PulsarAction.isSettlement(action)
-        .and(action.initialState.equals(stateRoot))
-        .and(action.initialMerkleListRoot.equals(merkleListRoot))
-        .and(action.initialBlockHeight.equals(blockHeight))
-        .and(isDummy.not())
-        .and(mask.list[i]);
-
       const shouldDeposit = PulsarAction.isDeposit(action)
         .and(isDummy.not())
         .and(mask.list[i]);
@@ -191,20 +176,6 @@ class SettlementContract extends SmartContract {
       const shouldWithdraw = PulsarAction.isWithdrawal(action)
         .and(isDummy.not())
         .and(mask.list[i]);
-
-      stateRoot = Provable.if(shouldSettle, action.newState, stateRoot);
-
-      merkleListRoot = Provable.if(
-        shouldSettle,
-        action.newMerkleListRoot,
-        merkleListRoot
-      );
-
-      blockHeight = Provable.if(
-        shouldSettle,
-        action.newBlockHeight,
-        blockHeight
-      );
 
       depositListHash = Provable.if(
         shouldDeposit,
@@ -234,12 +205,6 @@ class SettlementContract extends SmartContract {
           UInt64.from(0)
         ),
       });
-
-      rewardListHash = Provable.if(
-        shouldSettle,
-        Poseidon.hash([rewardListHash, action.rewardListUpdateHash]),
-        rewardListHash
-      );
     }
 
     validateReduceProof.verify();
@@ -253,7 +218,7 @@ class SettlementContract extends SmartContract {
     withdrawalListHash.assertEquals(
       validateReduceProof.publicInput.withdrawalListHash
     );
-    rewardListHash.assertEquals(validateReduceProof.publicInput.rewardListHash);
+    // rewardListHash.assertEquals(validateReduceProof.publicInput.rewardListHash);
 
     actionStackProof.verifyIf(useActionStack);
     Provable.assertEqualIf(
@@ -277,11 +242,11 @@ class SettlementContract extends SmartContract {
     );
 
     this.actionState.set(actionState);
-    this.stateRoot.set(stateRoot);
-    this.merkleListRoot.set(merkleListRoot);
-    this.blockHeight.set(blockHeight);
+    // this.stateRoot.set(stateRoot);
+    // this.merkleListRoot.set(merkleListRoot);
+    // this.blockHeight.set(blockHeight);
     this.depositListHash.set(depositListHash);
     this.withdrawalListHash.set(withdrawalListHash);
-    this.rewardListHash.set(rewardListHash);
+    // this.rewardListHash.set(rewardListHash);
   }
 }

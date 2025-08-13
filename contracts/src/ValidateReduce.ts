@@ -15,7 +15,7 @@ class ValidateReducePublicInput extends Struct({
   blockHeight: Field,
   depositListHash: Field,
   withdrawalListHash: Field,
-  rewardListHash: Field,
+  // rewardListHash: Field,
 }) {
   static default = new this({
     stateRoot: Field(0),
@@ -23,7 +23,7 @@ class ValidateReducePublicInput extends Struct({
     blockHeight: Field(0),
     depositListHash: Field(0),
     withdrawalListHash: Field(0),
-    rewardListHash: Field(0),
+    // rewardListHash: Field(0),
   });
 
   hash() {
@@ -33,7 +33,7 @@ class ValidateReducePublicInput extends Struct({
       this.blockHeight,
       this.depositListHash,
       this.withdrawalListHash,
-      this.rewardListHash,
+      // this.rewardListHash,
     ]);
   }
 
@@ -44,7 +44,7 @@ class ValidateReducePublicInput extends Struct({
       blockHeight: this.blockHeight.toString(),
       depositListHash: this.depositListHash.toString(),
       withdrawalListHash: this.withdrawalListHash.toString(),
-      rewardListHash: this.rewardListHash.toString(),
+      // rewardListHash: this.rewardListHash.toString(),
     };
   }
 }

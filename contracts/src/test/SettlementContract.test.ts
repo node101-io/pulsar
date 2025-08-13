@@ -633,7 +633,6 @@ describe('SettlementProof tests', () => {
       expect(zkapp.blockHeight.get()).toEqual(Field.from(0));
       expect(zkapp.depositListHash.get()).toEqual(Field(0));
       expect(zkapp.withdrawalListHash.get()).toEqual(Field(0));
-      expect(zkapp.rewardListHash.get()).toEqual(Field(0));
     });
 
     it('Reject contract initialization again', async () => {

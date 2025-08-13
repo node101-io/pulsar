@@ -44,7 +44,6 @@ describe('ValidateReduceProof tests', () => {
           blockHeight: Field(0),
           depositListHash: Field(0),
           withdrawalListHash: Field(0),
-          rewardListHash: Field(0),
         })
       );
 
@@ -55,7 +54,6 @@ describe('ValidateReduceProof tests', () => {
           publicInputs[0].blockHeight,
           publicInputs[0].depositListHash,
           publicInputs[0].withdrawalListHash,
-          publicInputs[0].rewardListHash,
         ])
       );
     });
@@ -104,7 +102,6 @@ describe('ValidateReduceProof tests', () => {
           blockHeight: Field(1),
           depositListHash: Field(1),
           withdrawalListHash: Field(1),
-          rewardListHash: Field(1),
         })
       );
 
@@ -149,7 +146,6 @@ describe('ValidateReduceProof tests', () => {
           blockHeight: Field(2),
           depositListHash: Field(2),
           withdrawalListHash: Field(2),
-          rewardListHash: Field(2),
         })
       );
 
