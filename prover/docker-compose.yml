@@ -27,6 +27,7 @@ services:
 
     node-manager:
         # image: kadirchan/pulsar-prover-node:latest
+        # pull_policy: always
         build:
             context: .
             dockerfile: Dockerfile
@@ -39,7 +40,7 @@ services:
             MINA_NETWORK: ${MINA_NETWORK}
             FEE: ${FEE}
             CONTRACT_ADDRESS: ${CONTRACT_ADDRESS}
-            PULSAR_RPC_ADDRESS: mock-pulsar:50051
+            PULSAR_RPC_ADDRESS: ${PULSAR_RPC_ADDRESS}
             REDIS_HOST: redis
             REDIS_PORT: 6379
             REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -49,11 +50,18 @@ services:
             MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
         entrypoint: ["node", "dist/src/nodeManager.js"]
         restart: always
-        depends_on: [redis, mongo, mock-pulsar, mina-local-lightnet]
-        profiles: ["mock-pulsar", "full-mock", "prod"]
+        depends_on:
+            redis:
+                condition: service_started
+            mongo:
+                condition: service_started
+            mina-local-lightnet:
+                condition: service_healthy
+        profiles: ["prod"]
 
     settlement-worker:
         # image: kadirchan/pulsar-prover-node:latest
+        # pull_policy: always
         build:
             context: .
             dockerfile: Dockerfile
@@ -74,37 +82,32 @@ services:
             MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
             MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
         restart: always
-        depends_on: [redis, mongo, node-manager, mock-pulsar, mina-local-lightnet]
-        profiles: ["mock-pulsar", "full-mock", "prod"]
+        depends_on:
+            redis:
+                condition: service_started
+            mongo:
+                condition: service_started
+            mina-local-lightnet:
+                condition: service_healthy
+        profiles: ["prod"]
 
     reduce-worker:
         extends: settlement-worker
         environment:
             WORKER: reduceWorker
-        profiles: ["mock-pulsar", "full-mock", "prod"]
+        profiles: ["prod"]
 
     merge-worker:
         extends: settlement-worker
         environment:
             WORKER: mergeWorker
-        profiles: ["mock-pulsar", "full-mock", "prod"]
+        profiles: ["prod"]
 
     collect-worker:
         extends: settlement-worker
         environment:
             WORKER: collectWorker
-        profiles: ["mock-pulsar", "full-mock", "prod"]
-
-    mock-pulsar:
-        build:
-            context: .
-            dockerfile: Dockerfile.mock-pulsar
-        environment:
-            - NODE_ENV=development
-        ports:
-            - "50051:50051"
-        networks: [pulsar-net]
-        profiles: ["mock-pulsar", "full-mock"]
+        profiles: ["prod"]
 
     mina-local-lightnet:
         image: o1labs/mina-local-network:compatible-latest-lightnet
@@ -112,7 +115,7 @@ services:
             NETWORK_TYPE: "single-node"
             PROOF_LEVEL: "none"
             LOG_LEVEL: "Trace"
-            RUN_ARCHIVE_NODE: false
+            RUN_ARCHIVE_NODE: true
             SLOT_TIME: 20000
         networks: [pulsar-net]
         ports:
@@ -121,7 +124,16 @@ services:
             - "3085:3085"
             - "5432:5432"
             - "8181:8181"
-        profiles: ["mock-pulsar", "full-mock"]
+        profiles: ["prod"]
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    'curl -fsS -H ''Content-Type: application/json'' -d ''{"query":"{ bestChain(maxLength: 1) { stateHash } }"}'' http://localhost:8080/graphql >/dev/null',
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 30
 
     mock-contract:
         build:
@@ -134,8 +146,10 @@ services:
             MINA_NETWORK: ${MINA_NETWORK}
             MINA_PRIVATE_KEY: ${MINA_PRIVATE_KEY}
             CONTRACT_PRIVATE_KEY: ${CONTRACT_PRIVATE_KEY}
-        depends_on: [mina-local-lightnet]
-        profiles: ["mock-pulsar", "full-mock"]
+        depends_on:
+            mina-local-lightnet:
+                condition: service_healthy
+        profiles: ["mock-pulsar", "full-mock", "prod"]
 
 volumes:
     redis-data:

@@ -1,10 +1,25 @@
-import { AGGREGATE_THRESHOLD, MergeSettlementProofs, SettlementProof } from "pulsar-contracts";
+import {
+    AGGREGATE_THRESHOLD,
+    MergeSettlementProofs,
+    SettlementContract,
+    SettlementProof,
+} from "pulsar-contracts";
 import { MergeJob } from "../workerConnection.js";
 import { createWorker } from "./worker.js";
 import { deleteProof, fetchProof, storeProof } from "../db.js";
 import logger from "../logger.js";
 import dotenv from "dotenv";
+import { fetchAccount, Mina, PrivateKey, PublicKey } from "o1js";
 dotenv.config();
+
+const settlementContractAddress = process.env.CONTRACT_ADDRESS;
+const minaPrivateKey = process.env.MINA_PRIVATE_KEY;
+const fee = Number(process.env.FEE) || 1e8;
+if (!settlementContractAddress || !minaPrivateKey) {
+    throw new Error("unspecified environment variables");
+}
+const settlementContract = new SettlementContract(PublicKey.fromBase58(settlementContractAddress));
+const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
 createWorker<MergeJob, void>({
     queueName: "merge",
@@ -42,6 +57,42 @@ createWorker<MergeJob, void>({
             );
             await deleteProof("settlement", lowerBlock.rangeLow, lowerBlock.rangeHigh);
             await deleteProof("settlement", upperBlock.rangeLow, upperBlock.rangeHigh);
+
+            logger.info(
+                `Deleted old proofs for blocks ${lowerBlock.rangeLow}-${lowerBlock.rangeHigh} and ${upperBlock.rangeLow}-${upperBlock.rangeHigh}`
+            );
+
+            if (
+                mergeProof.publicOutput.numberOfSettlementProofs.toBigInt() ===
+                BigInt(AGGREGATE_THRESHOLD)
+            ) {
+                logger.info(
+                    `Submitting merge transaction for proof: ${JSON.stringify(
+                        mergeProof.publicInput.toJSON()
+                    )}`
+                );
+                await fetchAccount({ publicKey: settlementContract.address });
+
+                const tx = await Mina.transaction(
+                    { sender: senderKey.toPublicKey(), fee },
+                    async () => {
+                        await settlementContract.settle(mergeProof);
+                    }
+                );
+
+                await tx.prove();
+                const pendingTransaction = await tx.sign([senderKey]).send();
+
+                logger.info(
+                    `Settlement transaction sent for blocks ${lowerBlock.rangeLow}-${upperBlock.rangeHigh}: ${pendingTransaction.hash}`
+                );
+
+                await pendingTransaction.wait();
+
+                logger.info(
+                    `Settlement transaction confirmed for blocks ${lowerBlock.rangeLow}-${upperBlock.rangeHigh}`
+                );
+            }
         } catch (e) {
             logger.error(`Failed merge: ${e}`);
             throw e;

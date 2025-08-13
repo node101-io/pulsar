@@ -2,14 +2,15 @@ import { createWorker } from "./worker.js";
 import { CollectSignatureJob, reduceQ } from "../workerConnection.js";
 import logger from "../logger.js";
 import fetch from "node-fetch";
-import { PublicKey, Signature } from "o1js";
-import {
-    PulsarAction,
-    TestUtils,
-    ValidateReducePublicInput,
-    VALIDATOR_NUMBER,
-} from "pulsar-contracts";
+import { fetchAccount, PublicKey, Signature } from "o1js";
+import { CalculateMax, PulsarAction, SettlementContract, VALIDATOR_NUMBER } from "pulsar-contracts";
 import { ENDPOINTS } from "../mock/mockEndpoints.js";
+import dotenv from "dotenv";
+dotenv.config();
+
+const contractInstance = new SettlementContract(
+    PublicKey.fromBase58(process.env.CONTRACT_ADDRESS || "")
+);
 
 createWorker<CollectSignatureJob, void>({
     queueName: "collect-signature",
@@ -90,10 +91,15 @@ export async function collectSignatures(
             hash: BigInt(action.hash),
         };
     });
-    const { publicInput } = TestUtils.CalculateFromMockActions(
-        ValidateReducePublicInput.default, // Todo: use correct public input
-        typedActions
-    );
+
+    const actionHashMap: Map<string, number> = new Map();
+    for (const action of typedActions) {
+        const key = action.action.unconstrainedHash().toString();
+        actionHashMap.set(key, (actionHashMap.get(key) ?? 0) + 1);
+    }
+
+    await fetchAccount({ publicKey: contractInstance.address });
+    const { publicInput } = CalculateMax(actionHashMap, contractInstance, typedActions);
 
     for (let round = 1; round <= maxRounds && got.length < minRequired; round++) {
         logger.info(`Round ${round}, querying ${remaining.length} validators`);
@@ -116,7 +122,7 @@ export async function collectSignatures(
                         throw new Error("Invalid response format");
                     }
                     const validatorPubKey = PublicKey.fromBase58(data.validatorPubKey);
-                    const signature = Signature.fromJSON(data.signature);
+                    const signature = Signature.fromJSON(JSON.parse(data.signature));
                     if (signature.verify(validatorPubKey, publicInput.hash().toFields())) {
                         return { url, validatorPubKey, signature };
                     }

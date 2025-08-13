@@ -2,9 +2,10 @@ import { PublicKey } from "o1js";
 import { MinaClient } from "./minaClient.js";
 import dotenv from "dotenv";
 import logger from "./logger.js";
-import { PulsarClient, VoteExt } from "./pulsarClient.js";
+import { PulsarClient } from "./pulsarClient.js";
 import { collectSignatureQ, settlementQ } from "./workerConnection.js";
 import { fetchLastStoredBlock, initMongo } from "./db.js";
+import { BlockData } from "./interfaces.js";
 dotenv.config();
 
 async function main() {
@@ -61,6 +62,7 @@ async function main() {
 
     const pulsarClient = new PulsarClient(
         process.env.PULSAR_RPC_ADDRESS || "localhost:50051",
+        0,
         10000
     );
 
@@ -68,29 +70,23 @@ async function main() {
         logger.info("Pulsar client started, listening for new blocks");
     });
 
-    pulsarClient.on(
-        "newPulsarBlock",
-        async ({ blockHeight, voteExts }: { blockHeight: number; voteExts: VoteExt[] }) => {
-            logger.info(
-                `New Pulsar block detected: ${blockHeight}, with ${voteExts.length} vote extensions`
-            );
-            await settlementQ.add(
-                "settlement-" + blockHeight,
-                {
-                    blockHeight,
-                    voteExts,
+    pulsarClient.on("newPulsarBlock", async ({ blockData }: { blockData: BlockData }) => {
+        logger.info("New Pulsar block detected", blockData);
+        await settlementQ.add(
+            "settlement-" + blockData.height,
+            {
+                blockData,
+            },
+            {
+                attempts: 5,
+                backoff: {
+                    type: "exponential",
+                    delay: 5_000,
                 },
-                {
-                    attempts: 5,
-                    backoff: {
-                        type: "exponential",
-                        delay: 5_000,
-                    },
-                    removeOnComplete: true,
-                }
-            );
-        }
-    );
+                removeOnComplete: true,
+            }
+        );
+    });
 
     pulsarClient.on("error", (error) => {
         logger.error(`Error in Pulsar client: ${error.message}`);
@@ -105,5 +101,5 @@ async function main() {
 }
 
 main()
-    .then(() => logger.info("Mina client is running"))
-    .catch((error) => logger.error(`Error starting Mina client: ${error.message}`));
+    .then(() => logger.info("Client is running"))
+    .catch((error) => logger.error(`Error starting client: ${error.message}`));

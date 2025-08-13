@@ -9,11 +9,11 @@ import {
     PulsarAction,
 } from "pulsar-contracts";
 import logger from "../logger.js";
-import { Mina, PrivateKey, PublicKey, Signature } from "o1js";
+import { fetchAccount, Mina, PrivateKey, PublicKey, Signature } from "o1js";
 
 const settlementContractAddress = process.env.CONTRACT_ADDRESS;
 const minaPrivateKey = process.env.MINA_PRIVATE_KEY;
-const fee = Number(process.env.FEE) || 0.1;
+const fee = Number(process.env.FEE) || 1e8;
 if (!settlementContractAddress || !minaPrivateKey) {
     throw new Error("unspecified environment variables");
 }
@@ -22,7 +22,7 @@ const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
 createWorker<ReducerJob, void>({
     queueName: "reduce",
-    maxJobsPerWorker: 10,
+    maxJobsPerWorker: 100,
     jobHandler: async ({ data, id }) => {
         try {
             const { includedActions, signaturePubkeyArray, actions } = data;
@@ -40,22 +40,10 @@ createWorker<ReducerJob, void>({
                 ])
             );
 
-            // const { batchActions, publicInput } = CalculateMax(
-            //     includedActions,
-            //     settlementContract,
-            //     packedActions
-            // );
-
             logger.info(`[Job ${id}] Preparing batch for included actions`);
+            await fetchAccount({ publicKey: settlementContract.address });
             const { batch, useActionStack, publicInput, actionStackProof, mask } =
                 await PrepareBatchWithActions(includedActions, settlementContract, packedActions);
-
-            // await storeProof(
-            //     Number(publicInput.blockHeight.toString()),
-            //     Number(publicInput.blockHeight.toString()),
-            //     "actionStack",
-            //     actionStackProof!
-            // );
 
             logger.info(`[Job ${id}] Batch prepared, generating validate reduce proof`);
             const validateReduceProof = await GenerateValidateReduceProof(

@@ -1,8 +1,8 @@
 import { MongoClient, Collection, Document } from "mongodb";
 import { ActionStackProof, SettlementProof, ValidateReduceProof } from "pulsar-contracts";
-import { JsonProof } from "o1js";
+import { JsonProof, Signature } from "o1js";
 import logger from "./logger.js";
-import { VoteExt } from "./pulsarClient.js";
+import { VoteExt } from "./interfaces.js";
 
 type ProofKind = "actionStack" | "settlement" | "validateReduce";
 
@@ -19,7 +19,7 @@ interface BlockDoc extends Document {
     stateRoot: string;
     validators: string[];
     validatorListHash: string;
-    voteExts: VoteExt[];
+    voteExt: VoteExt[];
 }
 
 let client: MongoClient;
@@ -46,10 +46,38 @@ export async function initMongo() {
 
     await storeBlock(
         0,
-        "0",
-        [],
-        "13658430471246486301243056036277051613844963336367846930281926757677598606706",
+        BigInt(
+            "0x" +
+                Buffer.from("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "base64").toString(
+                    "hex"
+                )
+        ).toString(),
+        ["B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb"],
+        "6310558633462665370159457076080992493592463962672742685757201873330974620505",
         []
+    );
+
+    await storeBlock(
+        1,
+        BigInt(
+            "0x" +
+                Buffer.from("47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=", "base64").toString(
+                    "hex"
+                )
+        ).toString(),
+        ["B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb"],
+        "6310558633462665370159457076080992493592463962672742685757201873330974620505",
+        [
+            {
+                index: "0",
+                height: 1,
+                validatorAddr: "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+                signature: Signature.fromValue({
+                    r: 1252644915096851551329970336594686639171015300754931693803244151631871298454n,
+                    s: 20663247868890391450363957100878086376161396675631391829127242325233880313431n,
+                }).toBase58(),
+            },
+        ]
     );
 
     logger.info(`MongoDB connected at ${uri}, using database "${db}"`);
@@ -142,7 +170,7 @@ export async function storeBlock(
     stateRoot: string,
     validators: string[],
     validatorListHash: string,
-    voteExts: VoteExt[]
+    voteExt: VoteExt[]
 ) {
     await initMongo();
 
@@ -151,7 +179,7 @@ export async function storeBlock(
         stateRoot,
         validators,
         validatorListHash,
-        voteExts,
+        voteExt,
     };
 
     await blocksCol.updateOne({ height }, { $set: blockDoc }, { upsert: true });
@@ -166,6 +194,10 @@ export async function fetchBlockRange(range_low: number, range_high: number): Pr
         .find({ height: { $gte: range_low, $lte: range_high } })
         .sort({ height: 1 }) // Sort by height ascending
         .toArray();
+
+    if (range_low < 0) {
+        blocks.unshift(blocks[0]);
+    }
 
     logger.info(`Fetched ${blocks.length} blocks in range [${range_low}, ${range_high}]`);
     return blocks;

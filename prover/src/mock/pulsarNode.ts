@@ -4,7 +4,7 @@ import { PrivateKey, PublicKey, Field } from "o1js";
 import path from "path";
 import { GeneratePulsarBlock, TestUtils, VALIDATOR_NUMBER, validatorSet } from "pulsar-contracts";
 import { fileURLToPath } from "url";
-import { VoteExt } from "../pulsarClient";
+import { VoteExt } from "../interfaces.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,9 +25,9 @@ let currentHeight = 0;
 let activeSet: Array<[PrivateKey, PublicKey]> = validatorSet.slice(0, VALIDATOR_NUMBER);
 const merkleList = TestUtils.CreateValidatorMerkleList(activeSet);
 
-const blockHistory: Record<number, { height: number; voteExts: VoteExt[] }> = {};
+const blockHistory: Record<number, { height: number; voteExt: VoteExt[] }> = {};
 
-function createVoteExts(height: number): VoteExt[] {
+function createVoteExt(height: number): VoteExt[] {
     const block = GeneratePulsarBlock(
         merkleList.hash,
         Field(height - 1),
@@ -55,14 +55,14 @@ function createVoteExts(height: number): VoteExt[] {
 
 blockHistory[currentHeight] = {
     height: currentHeight,
-    voteExts: createVoteExts(currentHeight),
+    voteExt: createVoteExt(currentHeight),
 };
 
 const serviceImpl = {
     GetLatestBlock: (call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) => {
         const block = blockHistory[currentHeight] || {
             height: currentHeight,
-            voteExts: createVoteExts(currentHeight),
+            voteExt: createVoteExt(currentHeight),
         };
         callback(null, block);
     },
@@ -84,7 +84,7 @@ setInterval(() => {
     currentHeight++;
     const block = {
         height: currentHeight,
-        voteExts: createVoteExts(currentHeight),
+        voteExt: createVoteExt(currentHeight),
     };
     blockHistory[currentHeight] = block;
     console.log(`Block produced: ${currentHeight}`);
