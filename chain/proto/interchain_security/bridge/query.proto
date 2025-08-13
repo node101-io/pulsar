@@ -7,6 +7,7 @@ import "gogoproto/gogo.proto";
 import "google/api/annotations.proto";
 import "cosmos/base/query/v1beta1/pagination.proto";
 import "interchain_security/bridge/params.proto";
+import "interchain_security/bridge/deposit_amount_map.proto";
 
 option go_package = "github.com/cosmos/interchain-security/v5/x/bridge/types";
 
@@ -22,6 +23,16 @@ service Query {
   // TestQuery returns a test string "node101"
   rpc TestQuery (QueryTestRequest) returns (QueryTestResponse) {
     option (google.api.http).get = "/interchain_security/bridge/test";
+  }
+
+  // Queries a list of DepositAmountMap items.
+  rpc DepositAmountMapAll (QueryAllDepositAmountMapRequest) returns (QueryAllDepositAmountMapResponse) {
+    option (google.api.http).get = "/interchain_security/bridge/deposit_amount_map";
+  }
+
+  // Queries a DepositAmountMap by address.
+  rpc DepositAmountMap (QueryGetDepositAmountMapRequest) returns (QueryGetDepositAmountMapResponse) {
+    option (google.api.http).get = "/interchain_security/bridge/deposit_amount_map/{address}";
   }
   
 }
@@ -42,4 +53,21 @@ message QueryTestRequest {}
 message QueryTestResponse {
   // result holds the test string
   string result = 1;
+}
+
+message QueryAllDepositAmountMapRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+message QueryAllDepositAmountMapResponse {
+  repeated DepositAmountMap depositAmountMap = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+message QueryGetDepositAmountMapRequest {
+  string address = 1;
+}
+
+message QueryGetDepositAmountMapResponse {
+  DepositAmountMap depositAmountMap = 1 [(gogoproto.nullable) = false];
 }

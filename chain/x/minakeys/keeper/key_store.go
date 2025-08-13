@@ -15,7 +15,7 @@ func (k Keeper) SetKeyStore(ctx context.Context, keyStore types.KeyStore) {
 	store := prefix.NewStore(storeAdapter, types.KeyPrefix(types.KeyStoreKeyPrefix))
 	b := k.cdc.MustMarshal(&keyStore)
 	store.Set(types.KeyStoreKey(
-		keyStore.CosmosPublicKey,
+		keyStore.MinaPublicKey,
 	), b)
 	store.Set(types.KeyStoreKey(keyStore.Creator), b)
 }

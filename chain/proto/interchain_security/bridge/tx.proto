@@ -17,6 +17,7 @@ service Msg {
   // UpdateParams defines a (governance) operation for updating the module
   // parameters. The authority defaults to the x/gov module account.
   rpc UpdateParams   (MsgUpdateParams  ) returns (MsgUpdateParamsResponse);
+  rpc DepositMina    (MsgDepositMina   ) returns (MsgDepositMinaResponse);
 }
 // MsgUpdateParams is the Msg/UpdateParams request type.
 message MsgUpdateParams {
@@ -35,4 +36,13 @@ message MsgUpdateParams {
 // MsgUpdateParamsResponse defines the response structure for executing a
 // MsgUpdateParams message.
 message MsgUpdateParamsResponse {}
+
+message MsgDepositMina {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1;
+  uint64 amount = 2;
+  string recipient = 3;
+}
+
+message MsgDepositMinaResponse {}
 

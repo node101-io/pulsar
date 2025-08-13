@@ -1,30 +1,107 @@
 package utils
 
 import (
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 
 	"fmt"
 
 	"cosmossdk.io/log"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/interchain-security/v5/x/minakeys/types"
 	"github.com/node101-io/mina-signer-go/keys"
 	"github.com/node101-io/mina-signer-go/signature"
 )
 
-// VerifyCosmosSignature checks that sigBz is a valid signature of message by the provided Cosmos secp256k1 public key (hex-encoded).
-func VerifyCosmosSignature(cosmosPubKeyHex string, message string, sigBz []byte) error {
-	// Decode hex-encoded public key
-	pubKeyBytes, err := hex.DecodeString(cosmosPubKeyHex)
+// --- ADR-36 Amino StdSignDoc types ---
+
+type adr36MsgSignData struct {
+	Signer string `json:"signer"`
+	// Base64-encoded raw message bytes per ADR-36
+	Data string `json:"data"`
+}
+
+type adr36Msg struct {
+	Type  string           `json:"type"` // must be "sign/MsgSignData"
+	Value adr36MsgSignData `json:"value"`
+}
+
+type adr36Fee struct {
+	Gas    string `json:"gas"`
+	Amount []struct {
+		Denom  string `json:"denom"`
+		Amount string `json:"amount"`
+	} `json:"amount"`
+}
+
+type adr36StdSignDoc struct {
+	ChainID       string     `json:"chain_id"`       // ""
+	AccountNumber string     `json:"account_number"` // "0"
+	Sequence      string     `json:"sequence"`       // "0"
+	Fee           adr36Fee   `json:"fee"`            // { gas:"0", amount:[] }
+	Msgs          []adr36Msg `json:"msgs"`           // single sign/MsgSignData
+	Memo          string     `json:"memo"`           // ""
+}
+
+// VerifyCosmosSignatureADR36 verifies an ADR-36 signature (64-byte r||s)
+// pubKeyHex: 33-byte compressed secp256k1 pubkey (hex-encoded)
+// signerBech32: bech32 account (e.g., "cosmos1...") used in MsgSignData
+// originalMessage: exact bytes the dApp asked the wallet to sign
+// chainID: chain ID used during signing (can be empty string for off-chain signing)
+func VerifyCosmosSignatureADR36(pubKeyHex string, signerBech32 string, originalMessage string, sigBz []byte, chainID string) error {
+	// 1) Signature length (ADR-36 -> 64 byte r||s)
+	if len(sigBz) != 64 {
+		return sdkerrors.ErrUnauthorized.Wrapf("invalid signature length: got %d, want 64", len(sigBz))
+	}
+
+	// 2) PubKey
+	pubKeyBytes, err := hex.DecodeString(pubKeyHex)
 	if err != nil {
 		return sdkerrors.ErrInvalidAddress.Wrap("invalid cosmos public key hex")
 	}
-	// Construct secp256k1 PubKey
+	if len(pubKeyBytes) != 33 {
+		return sdkerrors.ErrInvalidAddress.Wrapf("invalid secp256k1 pubkey length: got %d, want 33 (compressed)", len(pubKeyBytes))
+	}
 	pubKey := secp256k1.PubKey{Key: pubKeyBytes}
+
+	// 3) ADR-36 sign doc
+	signDoc := adr36StdSignDoc{
+		ChainID:       chainID,
+		AccountNumber: "0",
+		Sequence:      "0",
+		Fee: adr36Fee{
+			Gas: "0",
+			Amount: []struct {
+				Denom  string `json:"denom"`
+				Amount string `json:"amount"`
+			}{},
+		},
+		Msgs: []adr36Msg{
+			{
+				Type: "sign/MsgSignData",
+				Value: adr36MsgSignData{
+					Signer: signerBech32,
+					// data is base64(raw message bytes)
+					Data: base64.StdEncoding.EncodeToString([]byte(originalMessage)),
+				},
+			},
+		},
+		Memo: "",
+	}
+
+	// Amino JSON sign bytes
+	raw, err := json.Marshal(signDoc)
+	if err != nil {
+		return fmt.Errorf("marshal sign doc: %w", err)
+	}
+	signBytes := sdk.MustSortJSON(raw)
+
 	// Verify signature
-	if !pubKey.VerifySignature([]byte(message), sigBz) {
-		return sdkerrors.ErrUnauthorized.Wrap("invalid cosmos signature")
+	if !pubKey.VerifySignature(signBytes, sigBz) {
+		return sdkerrors.ErrUnauthorized.Wrap("invalid ADR-36 signature")
 	}
 	return nil
 }

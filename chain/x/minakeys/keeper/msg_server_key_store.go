@@ -16,7 +16,7 @@ import (
 func (k msgServer) CreateKeyStore(goCtx context.Context, msg *types.MsgCreateKeyStore) (*types.MsgCreateKeyStoreResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	index := msg.CosmosPublicKey
+	index := msg.Creator
 
 	// Derive the expected creator address from the Cosmos public key
 	pubKeyBytes, err := hex.DecodeString(msg.CosmosPublicKey)
@@ -35,7 +35,7 @@ func (k msgServer) CreateKeyStore(goCtx context.Context, msg *types.MsgCreateKey
 	}
 
 	// Verify that the creator signed the MinaPublicKey correctly
-	if err := utils.VerifyCosmosSignature(msg.CosmosPublicKey, msg.MinaPublicKey, msg.CosmosSignature); err != nil {
+	if err := utils.VerifyCosmosSignatureADR36(msg.CosmosPublicKey, msg.Creator, msg.MinaPublicKey, msg.CosmosSignature, ""); err != nil {
 		return nil, errorsmod.Wrap(sdkerrors.ErrInvalidRequest, err.Error())
 	}
 

@@ -124,9 +124,107 @@ func (m *MsgUpdateParamsResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_MsgUpdateParamsResponse proto.InternalMessageInfo
 
+type MsgDepositMina struct {
+	Creator   string `protobuf:"bytes,1,opt,name=creator,proto3" json:"creator,omitempty"`
+	Amount    uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	Recipient string `protobuf:"bytes,3,opt,name=recipient,proto3" json:"recipient,omitempty"`
+}
+
+func (m *MsgDepositMina) Reset()         { *m = MsgDepositMina{} }
+func (m *MsgDepositMina) String() string { return proto.CompactTextString(m) }
+func (*MsgDepositMina) ProtoMessage()    {}
+func (*MsgDepositMina) Descriptor() ([]byte, []int) {
+	return fileDescriptor_05b3428318f0e74b, []int{2}
+}
+func (m *MsgDepositMina) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgDepositMina) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgDepositMina.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgDepositMina) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgDepositMina.Merge(m, src)
+}
+func (m *MsgDepositMina) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgDepositMina) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgDepositMina.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgDepositMina proto.InternalMessageInfo
+
+func (m *MsgDepositMina) GetCreator() string {
+	if m != nil {
+		return m.Creator
+	}
+	return ""
+}
+
+func (m *MsgDepositMina) GetAmount() uint64 {
+	if m != nil {
+		return m.Amount
+	}
+	return 0
+}
+
+func (m *MsgDepositMina) GetRecipient() string {
+	if m != nil {
+		return m.Recipient
+	}
+	return ""
+}
+
+type MsgDepositMinaResponse struct {
+}
+
+func (m *MsgDepositMinaResponse) Reset()         { *m = MsgDepositMinaResponse{} }
+func (m *MsgDepositMinaResponse) String() string { return proto.CompactTextString(m) }
+func (*MsgDepositMinaResponse) ProtoMessage()    {}
+func (*MsgDepositMinaResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_05b3428318f0e74b, []int{3}
+}
+func (m *MsgDepositMinaResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgDepositMinaResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgDepositMinaResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgDepositMinaResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgDepositMinaResponse.Merge(m, src)
+}
+func (m *MsgDepositMinaResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgDepositMinaResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgDepositMinaResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgDepositMinaResponse proto.InternalMessageInfo
+
 func init() {
 	proto.RegisterType((*MsgUpdateParams)(nil), "interchain_security.bridge.MsgUpdateParams")
 	proto.RegisterType((*MsgUpdateParamsResponse)(nil), "interchain_security.bridge.MsgUpdateParamsResponse")
+	proto.RegisterType((*MsgDepositMina)(nil), "interchain_security.bridge.MsgDepositMina")
+	proto.RegisterType((*MsgDepositMinaResponse)(nil), "interchain_security.bridge.MsgDepositMinaResponse")
 }
 
 func init() {
@@ -134,30 +232,36 @@ func init() {
 }
 
 var fileDescriptor_05b3428318f0e74b = []byte{
-	// 353 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x52, 0xce, 0xcc, 0x2b, 0x49,
-	0x2d, 0x4a, 0xce, 0x48, 0xcc, 0xcc, 0x8b, 0x2f, 0x4e, 0x4d, 0x2e, 0x2d, 0xca, 0x2c, 0xa9, 0xd4,
-	0x4f, 0x2a, 0xca, 0x4c, 0x49, 0x4f, 0xd5, 0x2f, 0xa9, 0xd0, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17,
-	0x92, 0xc2, 0xa2, 0x48, 0x0f, 0xa2, 0x48, 0x4a, 0x30, 0x31, 0x37, 0x33, 0x2f, 0x5f, 0x1f, 0x4c,
-	0x42, 0x94, 0x4b, 0x89, 0x27, 0xe7, 0x17, 0xe7, 0xe6, 0x17, 0xeb, 0xe7, 0x16, 0xa7, 0xeb, 0x97,
-	0x19, 0x82, 0x28, 0xa8, 0x84, 0x24, 0x44, 0x22, 0x1e, 0xcc, 0xd3, 0x87, 0x70, 0xa0, 0x52, 0x22,
-	0xe9, 0xf9, 0xe9, 0xf9, 0x10, 0x71, 0x10, 0x0b, 0x2a, 0xaa, 0x8e, 0xc7, 0x75, 0x05, 0x89, 0x45,
-	0x89, 0xb9, 0x50, 0xed, 0x4a, 0x17, 0x19, 0xb9, 0xf8, 0x7d, 0x8b, 0xd3, 0x43, 0x0b, 0x52, 0x12,
-	0x4b, 0x52, 0x03, 0xc0, 0x32, 0x42, 0x66, 0x5c, 0x9c, 0x89, 0xa5, 0x25, 0x19, 0xf9, 0x20, 0x4d,
-	0x12, 0x8c, 0x0a, 0x8c, 0x1a, 0x9c, 0x4e, 0x12, 0x97, 0xb6, 0xe8, 0x8a, 0x40, 0xed, 0x75, 0x4c,
-	0x49, 0x29, 0x4a, 0x2d, 0x2e, 0x0e, 0x2e, 0x29, 0xca, 0xcc, 0x4b, 0x0f, 0x42, 0x28, 0x15, 0x72,
-	0xe5, 0x62, 0x83, 0x98, 0x2d, 0xc1, 0xa4, 0xc0, 0xa8, 0xc1, 0x6d, 0xa4, 0xa4, 0x87, 0xdb, 0xfb,
-	0x7a, 0x10, 0xbb, 0x9c, 0x38, 0x4f, 0xdc, 0x93, 0x67, 0x58, 0xf1, 0x7c, 0x83, 0x16, 0x63, 0x10,
-	0x54, 0xb3, 0x95, 0x7d, 0xd3, 0xf3, 0x0d, 0x5a, 0x08, 0x63, 0xbb, 0x9e, 0x6f, 0xd0, 0xd2, 0xc1,
-	0xe6, 0x9d, 0x0a, 0x98, 0x87, 0xd0, 0xdc, 0xaf, 0x24, 0xc9, 0x25, 0x8e, 0x26, 0x14, 0x94, 0x5a,
-	0x5c, 0x90, 0x9f, 0x57, 0x9c, 0x6a, 0x54, 0xc7, 0xc5, 0xec, 0x5b, 0x9c, 0x2e, 0x54, 0xc0, 0xc5,
-	0x83, 0xe2, 0x63, 0x6d, 0x7c, 0x2e, 0x45, 0x33, 0x4b, 0xca, 0x98, 0x04, 0xc5, 0x30, 0x8b, 0xa5,
-	0x58, 0x1b, 0x40, 0x7e, 0x74, 0x0a, 0x3c, 0xf1, 0x48, 0x8e, 0xf1, 0xc2, 0x23, 0x39, 0xc6, 0x07,
-	0x8f, 0xe4, 0x18, 0x27, 0x3c, 0x96, 0x63, 0xb8, 0xf0, 0x58, 0x8e, 0xe1, 0xc6, 0x63, 0x39, 0x86,
-	0x28, 0xf3, 0xf4, 0xcc, 0x92, 0x8c, 0xd2, 0x24, 0xbd, 0xe4, 0xfc, 0x5c, 0x68, 0x04, 0xeb, 0x23,
-	0xac, 0xd1, 0x85, 0x7b, 0xba, 0xcc, 0x14, 0xe1, 0xef, 0x92, 0xca, 0x82, 0xd4, 0xe2, 0x24, 0x36,
-	0x70, 0x44, 0x1a, 0x03, 0x02, 0x00, 0x00, 0xff, 0xff, 0xa8, 0x87, 0xc4, 0x57, 0x91, 0x02, 0x00,
-	0x00,
+	// 454 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x52, 0x31, 0x6f, 0xd4, 0x30,
+	0x14, 0x3e, 0x53, 0x38, 0x74, 0x6e, 0x05, 0xc2, 0xaa, 0xda, 0x34, 0x42, 0xa1, 0x0a, 0x03, 0x55,
+	0xa0, 0x89, 0xb8, 0x0a, 0x90, 0xba, 0x20, 0x4e, 0x30, 0x46, 0x82, 0x20, 0x16, 0x96, 0xca, 0x97,
+	0x58, 0x3e, 0x0f, 0xb1, 0x2d, 0xdb, 0xa9, 0xda, 0x0d, 0x31, 0x32, 0xf1, 0x33, 0x18, 0x6f, 0xe0,
+	0x47, 0x74, 0x2c, 0x4c, 0x4c, 0x08, 0xdd, 0x0d, 0x37, 0xf1, 0x1f, 0x50, 0x62, 0x87, 0xb4, 0xa7,
+	0x52, 0x60, 0x49, 0xfc, 0xde, 0xfb, 0xde, 0xfb, 0xde, 0xf7, 0xde, 0x83, 0x77, 0x19, 0x37, 0x44,
+	0xe5, 0x13, 0xcc, 0xf8, 0x81, 0x26, 0x79, 0xa5, 0x98, 0x39, 0x4e, 0xc6, 0x8a, 0x15, 0x94, 0x24,
+	0xe6, 0x28, 0x96, 0x4a, 0x18, 0x81, 0xfc, 0x0b, 0x40, 0xb1, 0x05, 0xf9, 0xb7, 0x70, 0xc9, 0xb8,
+	0x48, 0x9a, 0xaf, 0x85, 0xfb, 0x9b, 0xb9, 0xd0, 0xa5, 0xd0, 0x49, 0xa9, 0x69, 0x72, 0xf8, 0xb0,
+	0xfe, 0xb9, 0xc0, 0x96, 0x0d, 0x1c, 0x34, 0x56, 0x62, 0x0d, 0x17, 0x5a, 0xa7, 0x82, 0x0a, 0xeb,
+	0xaf, 0x5f, 0xce, 0x7b, 0xef, 0x92, 0xee, 0x24, 0x56, 0xb8, 0x74, 0xe9, 0xe1, 0x17, 0x00, 0x6f,
+	0xa6, 0x9a, 0xbe, 0x91, 0x05, 0x36, 0xe4, 0x65, 0x13, 0x41, 0x8f, 0xe1, 0x00, 0x57, 0x66, 0x22,
+	0xea, 0x24, 0x0f, 0x6c, 0x83, 0x9d, 0xc1, 0xc8, 0xfb, 0xfa, 0x79, 0x77, 0xdd, 0xf1, 0x3e, 0x2b,
+	0x0a, 0x45, 0xb4, 0x7e, 0x6d, 0x14, 0xe3, 0x34, 0xeb, 0xa0, 0xe8, 0x05, 0xec, 0xdb, 0xda, 0xde,
+	0x95, 0x6d, 0xb0, 0xb3, 0x3a, 0x0c, 0xe3, 0x3f, 0xcb, 0x8f, 0x2d, 0xd7, 0x68, 0x70, 0xf2, 0xfd,
+	0x4e, 0xef, 0xd3, 0x62, 0x1a, 0x81, 0xcc, 0x25, 0xef, 0x3f, 0x7d, 0xbf, 0x98, 0x46, 0x5d, 0xd9,
+	0x0f, 0x8b, 0x69, 0xf4, 0xe0, 0x22, 0x39, 0x47, 0xad, 0xa0, 0xa5, 0xfe, 0xc3, 0x2d, 0xb8, 0xb9,
+	0xe4, 0xca, 0x88, 0x96, 0x82, 0x6b, 0x12, 0x72, 0x78, 0x23, 0xd5, 0xf4, 0x39, 0x91, 0x42, 0x33,
+	0x93, 0x32, 0x8e, 0x91, 0x07, 0xaf, 0xe7, 0x8a, 0x60, 0x23, 0x94, 0x95, 0x9a, 0xb5, 0x26, 0xda,
+	0x80, 0x7d, 0x5c, 0x8a, 0x8a, 0x9b, 0x46, 0xce, 0xd5, 0xcc, 0x59, 0xe8, 0x36, 0x1c, 0x28, 0x92,
+	0x33, 0xc9, 0x08, 0x37, 0xde, 0x4a, 0x93, 0xd3, 0x39, 0xf6, 0xd7, 0xea, 0xee, 0xdb, 0x1a, 0xa1,
+	0x07, 0x37, 0xce, 0xf3, 0xb5, 0x9d, 0x0c, 0x7f, 0x02, 0xb8, 0x92, 0x6a, 0x8a, 0x24, 0x5c, 0x3b,
+	0x37, 0xfc, 0xfb, 0x97, 0x0d, 0x6d, 0x49, 0x96, 0xbf, 0xf7, 0x1f, 0xe0, 0x96, 0x19, 0x95, 0x70,
+	0xf5, 0xec, 0x00, 0xa2, 0xbf, 0xd4, 0x38, 0x83, 0xf5, 0x87, 0xff, 0x8e, 0x6d, 0xe9, 0xfc, 0x6b,
+	0xef, 0xea, 0xed, 0x8e, 0x5e, 0x9d, 0xcc, 0x02, 0x70, 0x3a, 0x0b, 0xc0, 0x8f, 0x59, 0x00, 0x3e,
+	0xce, 0x83, 0xde, 0xe9, 0x3c, 0xe8, 0x7d, 0x9b, 0x07, 0xbd, 0xb7, 0x4f, 0x28, 0x33, 0x93, 0x6a,
+	0x1c, 0xe7, 0xa2, 0x74, 0xa7, 0x9d, 0x74, 0x2c, 0xbb, 0xbf, 0xd7, 0x7d, 0xf8, 0xa8, 0xdb, 0xb8,
+	0x39, 0x96, 0x44, 0x8f, 0xfb, 0xcd, 0x09, 0xef, 0xfd, 0x0a, 0x00, 0x00, 0xff, 0xff, 0x2a, 0x70,
+	0x6e, 0x58, 0x8b, 0x03, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -175,6 +279,7 @@ type MsgClient interface {
 	// UpdateParams defines a (governance) operation for updating the module
 	// parameters. The authority defaults to the x/gov module account.
 	UpdateParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error)
+	DepositMina(ctx context.Context, in *MsgDepositMina, opts ...grpc.CallOption) (*MsgDepositMinaResponse, error)
 }
 
 type msgClient struct {
@@ -194,11 +299,21 @@ func (c *msgClient) UpdateParams(ctx context.Context, in *MsgUpdateParams, opts 
 	return out, nil
 }
 
+func (c *msgClient) DepositMina(ctx context.Context, in *MsgDepositMina, opts ...grpc.CallOption) (*MsgDepositMinaResponse, error) {
+	out := new(MsgDepositMinaResponse)
+	err := c.cc.Invoke(ctx, "/interchain_security.bridge.Msg/DepositMina", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MsgServer is the server API for Msg service.
 type MsgServer interface {
 	// UpdateParams defines a (governance) operation for updating the module
 	// parameters. The authority defaults to the x/gov module account.
 	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
+	DepositMina(context.Context, *MsgDepositMina) (*MsgDepositMinaResponse, error)
 }
 
 // UnimplementedMsgServer can be embedded to have forward compatible implementations.
@@ -207,6 +322,9 @@ type UnimplementedMsgServer struct {
 
 func (*UnimplementedMsgServer) UpdateParams(ctx context.Context, req *MsgUpdateParams) (*MsgUpdateParamsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateParams not implemented")
+}
+func (*UnimplementedMsgServer) DepositMina(ctx context.Context, req *MsgDepositMina) (*MsgDepositMinaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DepositMina not implemented")
 }
 
 func RegisterMsgServer(s grpc1.Server, srv MsgServer) {
@@ -231,6 +349,24 @@ func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Msg_DepositMina_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgDepositMina)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).DepositMina(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/interchain_security.bridge.Msg/DepositMina",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).DepositMina(ctx, req.(*MsgDepositMina))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _Msg_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "interchain_security.bridge.Msg",
 	HandlerType: (*MsgServer)(nil),
@@ -238,6 +374,10 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateParams",
 			Handler:    _Msg_UpdateParams_Handler,
+		},
+		{
+			MethodName: "DepositMina",
+			Handler:    _Msg_DepositMina_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -307,6 +447,71 @@ func (m *MsgUpdateParamsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error)
 	return len(dAtA) - i, nil
 }
 
+func (m *MsgDepositMina) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgDepositMina) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgDepositMina) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Recipient) > 0 {
+		i -= len(m.Recipient)
+		copy(dAtA[i:], m.Recipient)
+		i = encodeVarintTx(dAtA, i, uint64(len(m.Recipient)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.Amount != 0 {
+		i = encodeVarintTx(dAtA, i, uint64(m.Amount))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Creator) > 0 {
+		i -= len(m.Creator)
+		copy(dAtA[i:], m.Creator)
+		i = encodeVarintTx(dAtA, i, uint64(len(m.Creator)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgDepositMinaResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgDepositMinaResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgDepositMinaResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintTx(dAtA []byte, offset int, v uint64) int {
 	offset -= sovTx(v)
 	base := offset
@@ -334,6 +539,35 @@ func (m *MsgUpdateParams) Size() (n int) {
 }
 
 func (m *MsgUpdateParamsResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *MsgDepositMina) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Creator)
+	if l > 0 {
+		n += 1 + l + sovTx(uint64(l))
+	}
+	if m.Amount != 0 {
+		n += 1 + sovTx(uint64(m.Amount))
+	}
+	l = len(m.Recipient)
+	if l > 0 {
+		n += 1 + l + sovTx(uint64(l))
+	}
+	return n
+}
+
+func (m *MsgDepositMinaResponse) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -490,6 +724,189 @@ func (m *MsgUpdateParamsResponse) Unmarshal(dAtA []byte) error {
 		}
 		if fieldNum <= 0 {
 			return fmt.Errorf("proto: MsgUpdateParamsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTx(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthTx
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgDepositMina) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTx
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgDepositMina: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgDepositMina: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Creator", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Creator = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Amount", wireType)
+			}
+			m.Amount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Amount |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Recipient", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Recipient = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTx(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthTx
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgDepositMinaResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTx
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgDepositMinaResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgDepositMinaResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:
