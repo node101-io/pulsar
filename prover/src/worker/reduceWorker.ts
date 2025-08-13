@@ -43,7 +43,11 @@ createWorker<ReducerJob, void>({
             logger.info(`[Job ${id}] Preparing batch for included actions`);
             await fetchAccount({ publicKey: settlementContract.address });
             const { batch, useActionStack, publicInput, actionStackProof, mask } =
-                await PrepareBatchWithActions(includedActions, settlementContract, packedActions);
+                await PrepareBatchWithActions(
+                    toIncludedActionsMap(includedActions),
+                    settlementContract,
+                    packedActions
+                );
 
             logger.info(`[Job ${id}] Batch prepared, generating validate reduce proof`);
             const validateReduceProof = await GenerateValidateReduceProof(
@@ -76,3 +80,9 @@ createWorker<ReducerJob, void>({
         }
     },
 });
+
+function toIncludedActionsMap(raw: unknown): Map<string, number> {
+    if (raw instanceof Map) return raw;
+    if (Array.isArray(raw)) return new Map(raw as [string, number][]);
+    return new Map(Object.entries((raw ?? {}) as Record<string, number>));
+}

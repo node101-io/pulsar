@@ -24,7 +24,8 @@ createWorker<CollectSignatureJob, void>({
 
         try {
             logger.info(`[Job ${id}] Requesting signatures for block height: ${blockHeight}`);
-            const includedActions = await getIncludedActions();
+            const includedActions = await getIncludedActions(actions);
+            const includedActionEntries = Array.from(includedActions.entries());
             const signatures = await collectSignatures(ENDPOINTS, includedActions, {
                 blockHeight,
                 actions,
@@ -33,7 +34,7 @@ createWorker<CollectSignatureJob, void>({
             reduceQ.add(
                 "reduce-" + blockHeight,
                 {
-                    includedActions,
+                    includedActionEntries,
                     signaturePubkeyArray: signatures.map(([signature, publicKey]) => [
                         signature.toBase58(),
                         publicKey.toBase58(),
@@ -92,14 +93,8 @@ export async function collectSignatures(
         };
     });
 
-    const actionHashMap: Map<string, number> = new Map();
-    for (const action of typedActions) {
-        const key = action.action.unconstrainedHash().toString();
-        actionHashMap.set(key, (actionHashMap.get(key) ?? 0) + 1);
-    }
-
     await fetchAccount({ publicKey: contractInstance.address });
-    const { publicInput } = CalculateMax(actionHashMap, contractInstance, typedActions);
+    const { publicInput } = CalculateMax(includedActions, contractInstance, typedActions);
 
     for (let round = 1; round <= maxRounds && got.length < minRequired; round++) {
         logger.info(`Round ${round}, querying ${remaining.length} validators`);
@@ -157,6 +152,20 @@ export async function collectSignatures(
     return got;
 }
 
-async function getIncludedActions(): Promise<Map<string, number>> {
-    return new Map();
+async function getIncludedActions(
+    actions: { actions: string[][]; hash: string }[]
+): Promise<Map<string, number>> {
+    const typedActions = actions.map((action: { actions: string[][]; hash: string }) => {
+        return {
+            action: PulsarAction.fromRawAction(action.actions[0]),
+            hash: BigInt(action.hash),
+        };
+    });
+
+    const actionHashMap: Map<string, number> = new Map();
+    for (const action of typedActions) {
+        const key = action.action.unconstrainedHash().toString();
+        actionHashMap.set(key, (actionHashMap.get(key) ?? 0) + 1);
+    }
+    return actionHashMap;
 }
