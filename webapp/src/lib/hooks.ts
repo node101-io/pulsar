@@ -82,28 +82,56 @@ export function useFaucetDrip() {
 };
 
 export function useKeyStore(
-  address: string | null | undefined,
-  options?: { enabled?: boolean }
+  pulsarWalletAddress?: string | null,
+  minaWalletAddress?: string | null,
 ) {
-  return useQuery({
-    queryKey: ["keyStore", address],
+  return useQuery<{ 
+    keyStore: { 
+      cosmosPublicKey: string,
+      minaPublicKey: string,
+      creator: string
+    } | undefined,
+    error: undefined
+  } | {
+    keyStore: undefined,
+    error: Error
+  }, Error>({
+    queryKey: ["keyStore", pulsarWalletAddress, minaWalletAddress],
     queryFn: async () => {
-      const response = await fetch(`http://5.9.42.22:1317/pulsar/cosmos/minakeys/key_store/${address}`);
+      const [responseForPulsar, responseForMina] = await Promise.allSettled([
+        pulsarWalletAddress ? fetch(`http://5.9.42.22:1317/pulsar/cosmos/minakeys/key_store/${pulsarWalletAddress}`) : null,
+        minaWalletAddress ? fetch(`http://5.9.42.22:1317/pulsar/cosmos/minakeys/key_store/${minaWalletAddress}`) : null,
+      ]);
 
-      if (!response.ok)
-        return null;
+      const dataForPulsar = responseForPulsar && responseForPulsar.status === 'fulfilled'
+        ? await responseForPulsar.value?.json() as { keyStore: { cosmosPublicKey: string, minaPublicKey: string, creator: string } }
+        : undefined;
 
-      const data = await response.json() as { keyStore: { cosmosPublicKey: string, minaPublicKey: string, creator: string } } | undefined;
+      const dataForMina = responseForMina && responseForMina.status === 'fulfilled'
+        ? await responseForMina.value?.json() as { keyStore: { cosmosPublicKey: string, minaPublicKey: string, creator: string } }
+        : undefined;
 
-      if (!data || !('keyStore' in data) || !('creator' in data.keyStore))
-        return null;
+      if (!dataForPulsar && !dataForMina)
+        return { error: new Error('No key store found') };
 
-      return data.keyStore;
+      if (dataForPulsar && dataForMina) {
+        if (
+          dataForPulsar.keyStore.creator !== dataForMina.keyStore.creator ||
+          dataForPulsar.keyStore.cosmosPublicKey !== dataForMina.keyStore.cosmosPublicKey ||
+          dataForPulsar.keyStore.minaPublicKey !== dataForMina.keyStore.minaPublicKey
+        ) {
+          return { error: new Error('Mismatch key store') };
+        }
+
+        return { keyStore: dataForPulsar.keyStore };
+      }
+
+      return { keyStore: dataForPulsar?.keyStore ?? dataForMina?.keyStore };
     },
-    enabled: !!address && (options?.enabled ?? true),
     staleTime: 15_000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
+    enabled: Boolean(pulsarWalletAddress) || Boolean(minaWalletAddress),
   });
 }
 

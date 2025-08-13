@@ -2,6 +2,17 @@ import { j, publicProcedure } from "../jstack";
 import { z } from "zod";
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
+import { createSendTokenTx } from "@/lib/tx";
+import { StargateClient } from "@cosmjs/stargate";
+import { DirectSecp256k1Wallet } from "@cosmjs/proto-signing";
+import { fromHex, fromBase64 } from "@cosmjs/encoding";
+import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
+import { consumerChain } from "@/lib/constants";
+
+const FAUCET_AMOUNT = 10
+
+if (!process.env.FAUCET_WALLET_PRIVATE_KEY)
+  console.warn("⚠️  FAUCET_WALLET_PRIVATE_KEY environment variable not found.")
 
 if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN)
   console.warn("⚠️  KV_REST_API environment variables not found.")
@@ -17,16 +28,12 @@ const ratelimit = new Ratelimit({
   analytics: true,
 })
 
-const FAUCET_AMOUNT = 10
-
 const isValidWalletAddress = async (address: string): Promise<boolean> => {
-  if (address.startsWith('B62q') && address.length === 55) {
+  if (address.startsWith('B62q') && address.length === 55)
     return true
-  }
 
-  if (address.startsWith('cosmos') && address.length > 20) {
+  if (address.startsWith(consumerChain.bech32Prefix!) && address.length > 20)
     return true
-  }
 
   return false
 }
@@ -46,13 +53,50 @@ const checkRateLimit = async (address: string): Promise<{ allowed: boolean; time
   }
 }
 
-// TODO: Implement actual token sending
-const sendTokens = async (address: string, amount: number): Promise<{ txHash: string }> => {
-  await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000))
+const sendTokens = async (recipientAddress: string, amount: number): Promise<{ txHash: string }> => {
+  if (!process.env.FAUCET_WALLET_PRIVATE_KEY)
+    throw new Error("FAUCET_WALLET_PRIVATE_KEY is not set");
 
-  const txHash = `faucet_${Date.now()}_${Math.random().toString(36).substring(7)}`
+  const privHex = process.env.FAUCET_WALLET_PRIVATE_KEY.trim();
+  const privBytes = fromHex(privHex.startsWith("0x") ? privHex.slice(2) : privHex);
 
-  return { txHash }
+  const wallet = await DirectSecp256k1Wallet.fromKey(privBytes, consumerChain.bech32Prefix!);
+  const accounts = await wallet.getAccounts();
+  const faucetAccount = accounts[0];
+  if (!faucetAccount)
+    throw new Error("Failed to derive faucet account from private key");
+
+  const client = await StargateClient.connect(consumerChain.apis?.rpc?.[0]?.address!);
+
+  try {
+    const faucetOnChain = await client.getAccount(faucetAccount.address);
+    if (!faucetOnChain)
+      throw new Error("Faucet account not found on chain");
+
+    const signDoc = createSendTokenTx({
+      sequence: faucetOnChain.sequence,
+      pubkeyBytes: faucetAccount.pubkey,
+      accountNumber: BigInt(faucetOnChain.accountNumber),
+      fromAddress: faucetAccount.address,
+      toAddress: recipientAddress,
+      amount: String(amount),
+      walletType: 'cosmos',
+    });
+
+    const signed = await wallet.signDirect(faucetAccount.address, signDoc);
+
+    const protobufTx = TxRaw.encode({
+      bodyBytes: signed.signed.bodyBytes,
+      authInfoBytes: signed.signed.authInfoBytes,
+      signatures: [fromBase64(signed.signature.signature)],
+    }).finish();
+
+    const txHash = await client.broadcastTxSync(protobufTx);
+    console.log("🚀 ~ sendTokens ~ txHash:", txHash);
+    return { txHash };
+  } finally {
+    client.disconnect();
+  }
 }
 
 export const faucetRouter = j.router({

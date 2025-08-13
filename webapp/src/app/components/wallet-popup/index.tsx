@@ -5,6 +5,8 @@ import { ConnectView } from "./connect-view"
 import { MainView } from "./main-view"
 import { useConnectedWallet, useKeyStore } from "@/lib/hooks"
 import { useQueryClient } from "@tanstack/react-query"
+import { useMinaWallet } from "@/app/_providers/mina-wallet"
+import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
 
 export default function WalletPopup({
   isOpen,
@@ -17,9 +19,11 @@ export default function WalletPopup({
 }) {
   const [currentView, setCurrentView] = useState<'connect' | 'main' | 'send'>('connect');
   const popupRef = useRef<HTMLDivElement>(null);
+  const { account: minaAccount } = useMinaWallet();
+  const { address: pulsarAddress } = usePulsarWallet();
   const connectedWallet = useConnectedWallet();
   const queryClient = useQueryClient();
-  const { data: keyStore } = useKeyStore(connectedWallet?.address);
+  const { data: keyStore } = useKeyStore(pulsarAddress, minaAccount);
 
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ["keyStore"] });
@@ -87,7 +91,7 @@ export default function WalletPopup({
           }}
           className="fixed flex flex-col top-[calc(var(--header-height)+var(--spacing)*5)] right-5 h-[calc(100vh-var(--header-height)-var(--spacing)*10)] w-88 bg-white rounded-4xl shadow-lg z-50 p-3.5 font-family-darker-grotesque border-1 border-background border-solid rounded-tr-none gap-2 overflow-hidden"
         >
-          {currentView === 'connect' && <ConnectView />}
+          {currentView === 'connect' && <ConnectView keyStore={keyStore} />}
           {currentView === 'main' && <MainView setCurrentView={setCurrentView} setPopupWalletType={setIsWalletPopupOpen} />}
           {currentView === 'send' && <SendView setCurrentView={setCurrentView} />}
         </motion.div>

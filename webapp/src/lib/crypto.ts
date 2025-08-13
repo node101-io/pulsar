@@ -1,3 +1,9 @@
+import bs58 from 'bs58';
+
+function bytesToBase58(bytes: Uint8Array): string {
+  return bs58.encode(bytes);
+}
+
 function bigintToBytesBE(input: bigint, length: number): Uint8Array {
   let value = input;
   const bytes = new Uint8Array(length);
@@ -16,12 +22,6 @@ function hexToBytes(hex: string): Uint8Array {
     arr[i] = parseInt(padded.substr(i * 2, 2), 16);
   }
   return arr;
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
 }
 
 export function base64ToBytes(b64: string): Uint8Array {
@@ -43,22 +43,17 @@ export function ensureLength(bytes: Uint8Array, length: number): Uint8Array {
   return out;
 }
 
-// Convert Mina base58 public key to hex encoding expected by backend (kryptology MarshalBinary format):
-// 32-byte big-endian X coordinate with the MSB indicating oddness of Y.
-export async function minaPublicKeyToHex(base58: string): Promise<string> {
+export async function formatMinaPublicKey(base58: string): Promise<string> {
   const { PublicKey } = await import('o1js');
-  const pk = PublicKey.fromBase58(base58);
-  // PublicKey JSON is { x: string (decimal), isOdd: boolean }
-  if (!pk.x) throw new Error('Failed to derive Mina public key X coordinate');
-  const x = BigInt(pk.x.toBigInt());
-  const xBytes = bigintToBytesBE(x, 32);
-  const isOdd = !!pk.isOdd;
-  const first = xBytes[0] ?? 0;
-  xBytes[0] = isOdd ? (first | 0x80) : (first & 0x7f);
-  return bytesToHex(xBytes);
+  const pubkey = PublicKey.fromBase58(base58);
+
+  const out = new Uint8Array(33);
+  out.set(bigintToBytesBE(pubkey.x.toBigInt(), 32), 0);
+  out[32] = pubkey.isOdd.toBoolean() ? 0x01 : 0x00;
+
+  return bytesToBase58(out);
 }
 
-// Pack Auro signature (field, scalar) into 64-byte binary (32 + 32) expected by backend.
 export function packMinaSignature(fieldHex: string, scalarHex: string): Uint8Array {
   const f = ensureLength(hexToBytes(fieldHex), 32);
   const s = ensureLength(hexToBytes(scalarHex), 32);
