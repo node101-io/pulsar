@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import Image from "next/image"
 import toast from "react-hot-toast"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
@@ -7,21 +8,17 @@ import { ExtensionItem } from "./extension-item"
 import { ProgressBar } from "./progress-bar"
 import { CosmosWallet, WalletState } from "@interchain-kit/core"
 import { consumerChain } from "@/lib/constants"
-import { packMinaSignature, formatMinaPublicKey } from "@/lib/crypto"
+import { formatMinaPublicKey, packMinaSignature, hashMessageForSigning } from "@/lib/crypto"
 import { createKeyStoreTx } from "@/lib/tx"
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx"
 import { BroadcastMode } from "@interchain-kit/core/types"
 import { useQueryClient } from "@tanstack/react-query"
 import { AnimatePresence, motion } from "motion/react"
-import Image from "next/image"
+import { KeyStore } from "@/generated/cosmos/minakeys/key_store"
 
 export const ConnectView = ({ keyStore: keyStoreData }: {
   keyStore: {
-    keyStore: {
-      cosmosPublicKey: string;
-      minaPublicKey: string;
-      creator: string;
-    } | undefined;
+    keyStore: KeyStore | undefined;
     error: undefined;
   } | {
     keyStore: undefined;
@@ -76,7 +73,6 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
     if (signStep === 'done') return 'Welcome to Pulsar';
     if (signStep === 'broadcast') return 'Sending transaction...';
     if (signStep === 'keplr') return isBusy ? 'Signing with Keplr...' : 'Sign with Keplr';
-    // default 'auro'
     return isBusy ? 'Signing with Auro...' : 'Sign with Auro';
   };
 
@@ -93,11 +89,23 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
       if (signStep === 'auro') {
         setIsBusy(true);
         const localCosmosPubKeyHex = Buffer.from(account.pubkey).toString('hex');
+        cosmosPublicKeyHexRef.current = localCosmosPubKeyHex;
+
         const minaSigned = await minaSignMessage({ message: localCosmosPubKeyHex });
 
-        cosmosPublicKeyHexRef.current = localCosmosPubKeyHex;
         minaPublicKeyRef.current = await formatMinaPublicKey(minaSigned.publicKey);
         minaSignatureRef.current = packMinaSignature(minaSigned.signature.field, minaSigned.signature.scalar);
+
+        console.log('minaPublicKey', minaPublicKeyRef.current);
+        console.log('minaSignature', Buffer.from(minaSignatureRef.current).toString('hex'));
+        console.log('cosmosPublicKeyHex', cosmosPublicKeyHexRef.current);
+
+        const { Client } = await import('mina-signer');
+        const client = new Client({ network: 'testnet' });
+
+        const isValid = client.verifyMessage({ data: localCosmosPubKeyHex, signature: minaSigned.signature, publicKey: minaSigned.publicKey });
+        console.log('isValid', isValid);
+
         setSignStep('keplr');
         setIsBusy(false);
         return;
