@@ -71,6 +71,7 @@ function CalculateMax(
 
     const hash = pack.action.unconstrainedHash().toString();
     const count = includedActionsMap.get(hash) || 0;
+    console.log(`hash: ${hash}, count: ${count}`);
 
     if (PulsarAction.isSettlement(pack.action).toBoolean()) {
       if (count <= 0) {
