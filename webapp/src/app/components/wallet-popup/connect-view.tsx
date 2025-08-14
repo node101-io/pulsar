@@ -51,7 +51,7 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
       cosmosPublicKeyHexRef.current = null;
       minaPublicKeyRef.current = null;
       minaSignatureRef.current = null;
-      
+
     }
   }, [onboardDialog, keyStoreData?.keyStore]);
 
@@ -91,20 +91,17 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
         const localCosmosPubKeyHex = Buffer.from(account.pubkey).toString('hex');
         cosmosPublicKeyHexRef.current = localCosmosPubKeyHex;
 
-        const minaSigned = await minaSignMessage({ message: localCosmosPubKeyHex });
+        // const minaSigned = await minaSignMessage({ message: localCosmosPubKeyHex });
+        const minaSigned = await minaSignMessage({ message: "node101" });
+
+        console.log("minaSignature", minaSigned.signature);
+        console.log("minaSignature", {
+          r: minaSigned.signature.field,
+          s: minaSigned.signature.scalar,
+        });
 
         minaPublicKeyRef.current = await formatMinaPublicKey(minaSigned.publicKey);
         minaSignatureRef.current = packMinaSignature(minaSigned.signature.field, minaSigned.signature.scalar);
-
-        console.log('minaPublicKey', minaPublicKeyRef.current);
-        console.log('minaSignature', Buffer.from(minaSignatureRef.current).toString('hex'));
-        console.log('cosmosPublicKeyHex', cosmosPublicKeyHexRef.current);
-
-        const { Client } = await import('mina-signer');
-        const client = new Client({ network: 'testnet' });
-
-        const isValid = client.verifyMessage({ data: localCosmosPubKeyHex, signature: minaSigned.signature, publicKey: minaSigned.publicKey });
-        console.log('isValid', isValid);
 
         setSignStep('keplr');
         setIsBusy(false);

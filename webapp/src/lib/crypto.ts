@@ -46,7 +46,7 @@ async function hexToFields(hex: string) {
   return fields;
 }
 
-async function stringToFields(msg: string) {  
+async function stringToFields(msg: string) {
   const { Field } = await import('o1js');
 
   const chunkSize = Field.sizeInBytes;
@@ -76,6 +76,11 @@ async function stringToFields(msg: string) {
 export async function formatMinaPublicKey(base58: string): Promise<string> {
   const { PublicKey } = await import('o1js');
   const pubkey = PublicKey.fromBase58(base58);
+
+  console.log("pubkey", {
+    x: pubkey.x.toBigInt(),
+    isOdd: pubkey.isOdd.toBoolean(),
+  });
 
   const out = new Uint8Array(33);
   out.set(bigintToBytesBE(pubkey.x.toBigInt(), 32), 0);
