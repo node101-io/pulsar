@@ -8,7 +8,7 @@ import { useMinaPrice } from "@/lib/hooks"
 
 export default function Transactions() {
   const { account, isConnected } = useMinaWallet()
-  const [activeTransactionType, setActiveTransactionType] = useState<'bridge' | 'pulsar'>('bridge')
+  const [activeTransactionType, setActiveTransactionType] = useState<'bridge' | 'pulsar'>('pulsar')
   const [activeStatusFilter, setActiveStatusFilter] = useState<'pending' | 'settled'>('pending')
   const [searchAddress, setSearchAddress] = useState<string>('')
 

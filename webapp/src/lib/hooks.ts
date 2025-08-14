@@ -7,6 +7,7 @@ import { MINA_RPC_URL } from "./constants"
 import { FaucetResponse } from "./types"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
+import { formatMinaPublicKey } from "./crypto"
 
 export function useMinaPrice(options?: {
   enabled?: boolean;
@@ -85,8 +86,8 @@ export function useKeyStore(
   pulsarWalletAddress?: string | null,
   minaWalletAddress?: string | null,
 ) {
-  return useQuery<{ 
-    keyStore: { 
+  return useQuery<{
+    keyStore: {
       cosmosPublicKey: string,
       minaPublicKey: string,
       creator: string
@@ -98,18 +99,21 @@ export function useKeyStore(
   }, Error>({
     queryKey: ["keyStore", pulsarWalletAddress, minaWalletAddress],
     queryFn: async () => {
-      const [responseForPulsar, responseForMina] = await Promise.allSettled([
+      const [responseForPulsar, responseForMina] = await Promise.all([
         pulsarWalletAddress ? fetch(`http://5.9.42.22:1317/pulsar/cosmos/minakeys/key_store/${pulsarWalletAddress}`) : null,
-        minaWalletAddress ? fetch(`http://5.9.42.22:1317/pulsar/cosmos/minakeys/key_store/${minaWalletAddress}`) : null,
+        minaWalletAddress ? fetch(`http://5.9.42.22:1317/pulsar/cosmos/minakeys/key_store/${await formatMinaPublicKey(minaWalletAddress)}`) : null,
       ]);
 
-      const dataForPulsar = responseForPulsar && responseForPulsar.status === 'fulfilled'
-        ? await responseForPulsar.value?.json() as { keyStore: { cosmosPublicKey: string, minaPublicKey: string, creator: string } }
+      const dataForPulsar = responseForPulsar && responseForPulsar.ok
+        ? await responseForPulsar.json() as { keyStore: { cosmosPublicKey: string, minaPublicKey: string, creator: string } }
         : undefined;
 
-      const dataForMina = responseForMina && responseForMina.status === 'fulfilled'
-        ? await responseForMina.value?.json() as { keyStore: { cosmosPublicKey: string, minaPublicKey: string, creator: string } }
+      const dataForMina = responseForMina && responseForMina.ok
+        ? await responseForMina.json() as { keyStore: { cosmosPublicKey: string, minaPublicKey: string, creator: string } }
         : undefined;
+
+      console.log("dataForPulsar", dataForPulsar);
+      console.log("dataForMina", dataForMina);
 
       if (!dataForPulsar && !dataForMina)
         return { error: new Error('No key store found') };

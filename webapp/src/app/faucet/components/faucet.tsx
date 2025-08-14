@@ -4,12 +4,13 @@ import { cn } from "@/lib/utils"
 import Image from "next/image"
 import { useConnectedWallet, useFaucetDrip } from "@/lib/hooks"
 import { toast } from "react-hot-toast"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 
 export default function Faucet() {
   const connectedWallet = useConnectedWallet();
   const dripMutation = useFaucetDrip();
   const [mounted, setMounted] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -19,7 +20,7 @@ export default function Faucet() {
     if (!connectedWallet)
       return toast.error('Please connect your wallet first');
 
-    dripMutation.mutate({ walletAddress: connectedWallet.address }, {
+    dripMutation.mutate({ walletAddress: inputRef.current?.value || '' }, {
       onSuccess: (data) => {
         if (!data.success) {
           if (data.error === "Rate limit exceeded" && 'details' in data)
@@ -53,8 +54,9 @@ export default function Faucet() {
 
         <input
           type="text"
-          value={mounted ? (connectedWallet?.address || '') : ''}
-          readOnly
+          // value={mounted ? (connectedWallet?.address || '') : ''}
+          // readOnly
+          ref={inputRef}
           placeholder="Connect wallet to see address"
           className="w-full text-center text-lg text-background focus:outline-none leading-none bg-[#BFBFBF] rounded-2xl p-4 font-family-darker-grotesque placeholder:text-[#666]"
         />

@@ -37,6 +37,7 @@ export default function WalletPopup({
       return;
     }
 
+    console.log("keyStore", keyStore);
     if (!keyStore?.keyStore) {
       setCurrentView('connect');
       return;

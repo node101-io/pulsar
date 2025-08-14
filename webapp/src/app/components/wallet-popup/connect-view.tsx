@@ -8,7 +8,8 @@ import { ExtensionItem } from "./extension-item"
 import { ProgressBar } from "./progress-bar"
 import { CosmosWallet, WalletState } from "@interchain-kit/core"
 import { consumerChain } from "@/lib/constants"
-import { formatMinaPublicKey, packMinaSignature, hashMessageForSigning } from "@/lib/crypto"
+import { waitForTxCommit } from "@/lib/utils"
+import { formatMinaPublicKey, packMinaSignature } from "@/lib/crypto"
 import { createKeyStoreTx } from "@/lib/tx"
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx"
 import { BroadcastMode } from "@interchain-kit/core/types"
@@ -91,8 +92,8 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
         const localCosmosPubKeyHex = Buffer.from(account.pubkey).toString('hex');
         cosmosPublicKeyHexRef.current = localCosmosPubKeyHex;
 
-        // const minaSigned = await minaSignMessage({ message: localCosmosPubKeyHex });
-        const minaSigned = await minaSignMessage({ message: "node101" });
+        const minaSigned = await minaSignMessage({ message: localCosmosPubKeyHex });
+        // const minaSigned = await minaSignMessage({ message: "node101" });
 
         console.log("minaSignature", minaSigned.signature);
         console.log("minaSignature", {
@@ -140,7 +141,10 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
         }).finish();
 
         const txResponse = await wallet.sendTx(consumerChain.chainId!, protobufTx, BroadcastMode.Sync);
-        console.log('tx hash', Buffer.from(txResponse).toString('hex').toUpperCase());
+        const txHashHex = Buffer.from(txResponse).toString('hex').toUpperCase();
+        console.log('tx hash', txHashHex);
+
+        await waitForTxCommit(txHashHex);
 
         await queryClient.invalidateQueries({ queryKey: ["keyStore"] });
         toast.success('Register completed!');

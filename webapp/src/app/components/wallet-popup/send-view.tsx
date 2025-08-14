@@ -280,14 +280,6 @@ export const SendView = ({ setCurrentView }: {
       <button
         onClick={async () => {
           try {
-            // broadcastTx.mutate({ tx: 'fklşsdkflşdskglşsdkgşlsdkşlsdkfşlsd' }, {
-            //   onSuccess: (data) => {
-            //     console.log(data);
-            //   },
-            //   onError: (error) => {
-            //     toast.error(error instanceof Error ? error.message : 'Failed to broadcast transaction', { id: 'broadcast-transaction-failed' });
-            //   }
-            // });
             const wallet = pulsarWallet.getWalletOfType(CosmosWallet);
 
             if (!wallet)
@@ -354,7 +346,7 @@ export const SendView = ({ setCurrentView }: {
               const txResponse = await wallet.sendTx(consumerChain.chainId!, protobufTx, BroadcastMode.Sync);
               console.log('tx hash', Buffer.from(txResponse).toString('hex').toUpperCase());
             } else if (connectedWallet.type === 'mina') {
-
+              // TODO: implement
             }
 
             toast.success('Transaction successful', { id: 'transaction-success' });

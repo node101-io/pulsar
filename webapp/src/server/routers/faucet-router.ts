@@ -9,7 +9,7 @@ import { fromHex, fromBase64 } from "@cosmjs/encoding";
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 import { consumerChain } from "@/lib/constants";
 
-const FAUCET_AMOUNT = 10
+const FAUCET_AMOUNT = 100000
 
 if (!process.env.FAUCET_WALLET_PRIVATE_KEY)
   console.warn("⚠️  FAUCET_WALLET_PRIVATE_KEY environment variable not found.")
@@ -114,23 +114,23 @@ export const faucetRouter = j.router({
         }, 400)
       }
 
-      const rateLimitCheck = await checkRateLimit(walletAddress)
-      console.log(rateLimitCheck)
-      if (!rateLimitCheck.allowed) {
-        const timeLeftHours = Math.ceil((rateLimitCheck.timeLeft || 0) / (60 * 60 * 1000))
-        const timeLeftMinutes = Math.ceil(((rateLimitCheck.timeLeft || 0) % (60 * 60 * 1000)) / (60 * 1000))
+      // const rateLimitCheck = await checkRateLimit(walletAddress)
+      // console.log(rateLimitCheck)
+      // if (!rateLimitCheck.allowed) {
+      //   const timeLeftHours = Math.ceil((rateLimitCheck.timeLeft || 0) / (60 * 60 * 1000))
+      //   const timeLeftMinutes = Math.ceil(((rateLimitCheck.timeLeft || 0) % (60 * 60 * 1000)) / (60 * 1000))
 
-        console.log(timeLeftHours, timeLeftMinutes)
+      //   console.log(timeLeftHours, timeLeftMinutes)
 
-        return c.json({
-          success: false,
-          error: "Rate limit exceeded",
-          details: {
-            timeLeft: rateLimitCheck.timeLeft,
-            message: `Please wait ${timeLeftHours}h ${timeLeftMinutes}m before requesting again`
-          }
-        })
-      }
+      //   return c.json({
+      //     success: false,
+      //     error: "Rate limit exceeded",
+      //     details: {
+      //       timeLeft: rateLimitCheck.timeLeft,
+      //       message: `Please wait ${timeLeftHours}h ${timeLeftMinutes}m before requesting again`
+      //     }
+      //   })
+      // }
 
       try {
         const { txHash } = await sendTokens(walletAddress, FAUCET_AMOUNT)

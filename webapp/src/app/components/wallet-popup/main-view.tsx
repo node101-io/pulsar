@@ -113,21 +113,9 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
       </div>
       <div className="mt-4 bg-[#CBDBDB] rounded-3xl rounded-tr-none p-3 border border-background">
         <div className="p-2.5">
-          {balanceError && currentWallet === 'mina' ? (
-            <div className="flex flex-col gap-2">
-              <h1 className="text-red-600 font-bold text-2xl leading-none">Error loading balance</h1>
-              <button
-                onClick={() => refetchBalance()}
-                className="self-start px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition-colors"
-              >
-                Retry
-              </button>
-            </div>
-          ) : (
-            <h1 className={`text-black font-family-recady font-regular text-2xl leading-none transition-all duration-300 ${currentWallet === 'mina' && isFetchingBalance ? 'opacity-30' : ''}`}>
-              {getBalance()}
-            </h1>
-          )}
+          <h1 className="text-black font-family-recady font-regular text-2xl leading-none transition-all duration-300">
+            {getBalance()}
+          </h1>
           <div className="flex items-center justify-between mt-1">
             {priceError && currentWallet === 'mina' ? (
               <h3 className="text-base text-red-500">Price unavailable</h3>
