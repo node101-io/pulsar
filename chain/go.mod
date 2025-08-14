@@ -158,7 +158,7 @@ require (
 	github.com/cosmos/ibc-go/modules/capability v1.0.1
 	github.com/cosmos/ibc-go/v8 v8.5.2
 	github.com/informalsystems/itf-go v0.0.1
-	github.com/node101-io/mina-signer-go v0.0.0-20250801150942-b94a9408e140
+	github.com/node101-io/mina-signer-go v0.0.0-20250814172031-d9ab98eacc17
 	github.com/spf13/viper v1.19.0
 	golang.org/x/mod v0.19.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20250102185135-69823020774d

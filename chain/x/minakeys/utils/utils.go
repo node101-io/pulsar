@@ -122,7 +122,7 @@ func VerifyMinaSignature(minaAddr string, message string, sigBz []byte) error {
 	}
 
 	// Verify signature
-	if !minaPubKey.VerifyMessage(&sig, message, types.DevnetNetworkID) {
+	if !minaPubKey.VerifyMessageLegacy(&sig, message, types.DevnetNetworkID) {
 		return sdkerrors.ErrUnauthorized.Wrap("invalid mina signature")
 	}
 	return nil

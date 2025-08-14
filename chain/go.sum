@@ -843,6 +843,8 @@ github.com/node101-io/mina-signer-go v0.0.0-20250628232821-1d2ab86e0ea7 h1:NqLpV
 github.com/node101-io/mina-signer-go v0.0.0-20250628232821-1d2ab86e0ea7/go.mod h1:hjPJ5hOp3dms9otbXKwM9MtmkLKfDbe2QfORPKCqxAw=
 github.com/node101-io/mina-signer-go v0.0.0-20250801150942-b94a9408e140 h1:2pK0fCZ5JXX1eShFGDlg3zyi3JLD2wU2c0p36h1MwY0=
 github.com/node101-io/mina-signer-go v0.0.0-20250801150942-b94a9408e140/go.mod h1:hjPJ5hOp3dms9otbXKwM9MtmkLKfDbe2QfORPKCqxAw=
+github.com/node101-io/mina-signer-go v0.0.0-20250814172031-d9ab98eacc17 h1:ZpfDJaoOEnG9DFXnYOwKnZz6OLyIKUB1RuB0daAvnR4=
+github.com/node101-io/mina-signer-go v0.0.0-20250814172031-d9ab98eacc17/go.mod h1:hjPJ5hOp3dms9otbXKwM9MtmkLKfDbe2QfORPKCqxAw=
 github.com/node101-io/pulsar/cosmos v0.0.0-20250730145448-494cca6c241d h1:y4G9+j6bYFqRIqHjIRsjRRmOinQX3z7lvhTut/1U+UA=
 github.com/node101-io/pulsar/cosmos v0.0.0-20250730145448-494cca6c241d/go.mod h1:gl/DFAL5Uthbn0bkha3zq2O/5Iv6/b77u43q7sAKZyw=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
