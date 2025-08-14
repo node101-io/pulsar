@@ -24,6 +24,7 @@ createWorker<CollectSignatureJob, void>({
 
         try {
             logger.info(`[Job ${id}] Requesting signatures for block height: ${blockHeight}`);
+            console.log(`Actions: ${JSON.stringify(actions)}`);
             const includedActions = await getIncludedActions(actions);
             const includedActionEntries = Array.from(includedActions.entries());
             const signatures = await collectSignatures(ENDPOINTS, includedActions, {
