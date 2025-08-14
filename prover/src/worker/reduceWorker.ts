@@ -50,6 +50,8 @@ createWorker<ReducerJob, void>({
                 );
 
             logger.info(`[Job ${id}] Batch prepared, generating validate reduce proof`);
+            console.log(`Public Input: ${JSON.stringify(publicInput.toJSON())}`);
+            console.log(`Signature Public Key List: ${signaturePublicKeyList.toJSON()}`);
             const validateReduceProof = await GenerateValidateReduceProof(
                 publicInput,
                 signaturePublicKeyList
