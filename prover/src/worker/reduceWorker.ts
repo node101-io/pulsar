@@ -26,6 +26,11 @@ createWorker<ReducerJob, void>({
     jobHandler: async ({ data, id }) => {
         try {
             const { includedActions, signaturePubkeyArray, actions } = data;
+            console.log(`Included Actions: ${JSON.stringify(includedActions)}`);
+            const includedActionsMap = toIncludedActionsMap(includedActions);
+            console.log(
+                `Included Actions Map: ${JSON.stringify(Array.from(includedActionsMap.entries()))}`
+            );
             const packedActions = actions.map((action) => {
                 return {
                     action: PulsarAction.fromRawAction(action.actions[0]),
@@ -44,7 +49,7 @@ createWorker<ReducerJob, void>({
             await fetchAccount({ publicKey: settlementContract.address });
             const { batch, useActionStack, publicInput, actionStackProof, mask } =
                 await PrepareBatchWithActions(
-                    toIncludedActionsMap(includedActions),
+                    includedActionsMap,
                     settlementContract,
                     packedActions
                 );
@@ -85,8 +90,10 @@ createWorker<ReducerJob, void>({
     },
 });
 
-function toIncludedActionsMap(raw: unknown): Map<string, number> {
-    if (raw instanceof Map) return raw;
-    if (Array.isArray(raw)) return new Map(raw as [string, number][]);
-    return new Map(Object.entries((raw ?? {}) as Record<string, number>));
+function toIncludedActionsMap(raw: [string, number][]): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const [hash, count] of raw) {
+        map.set(hash, count);
+    }
+    return map;
 }
