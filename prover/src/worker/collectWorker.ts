@@ -101,7 +101,7 @@ export async function collectSignatures(
     const { publicInput } = CalculateMax(includedActions, contractInstance, typedActions);
 
     for (let round = 1; round <= maxRounds && got.length < minRequired; round++) {
-        logger.info(`Round ${round}, querying ${remaining.length} validators`);
+        // logger.info(`Round ${round}, querying ${remaining.length} validators`);
 
         const results = await Promise.all(
             remaining.map(async (url) => {
@@ -126,8 +126,8 @@ export async function collectSignatures(
                         return { url, validatorPubKey, signature };
                     }
                     throw new Error("Signature verification failed");
-                } catch (e: any) {
-                    logger.warn(`Validator ${url} failed: ${e.message}`);
+                } catch (err) {
+                    logger.error(`Error fetching signature from ${url}: ${err}`);
                     return { url, signature: undefined };
                 }
             })

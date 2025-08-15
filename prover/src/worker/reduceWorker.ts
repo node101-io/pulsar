@@ -31,12 +31,14 @@ createWorker<ReducerJob, void>({
             console.log(
                 `Included Actions Map: ${JSON.stringify(Array.from(includedActionsMap.entries()))}`
             );
+
             const packedActions = actions.map((action) => {
                 return {
                     action: PulsarAction.fromRawAction(action.actions[0]),
                     hash: BigInt(action.hash),
                 };
             });
+            console.log(`Action hash: ${packedActions[0].action.unconstrainedHash().toString()}`);
 
             const signaturePublicKeyList = SignaturePublicKeyList.fromArray(
                 signaturePubkeyArray.map(([signature, publicKey]) => [
