@@ -7,6 +7,7 @@ import {
     SettlementContract,
     GenerateValidateReduceProof,
     PulsarAction,
+    ActionStackProof,
 } from "pulsar-contracts";
 import logger from "../logger.js";
 import { fetchAccount, Mina, PrivateKey, PublicKey, Signature } from "o1js";
@@ -55,6 +56,13 @@ createWorker<ReducerJob, void>({
                     settlementContract,
                     packedActions
                 );
+            console.log(
+                "Batch prepared:",
+                batch.actions.map((action) => action.toJSON())
+            );
+            console.log(`Use Action Stack: ${useActionStack.toBoolean()}`);
+            console.log("Public Input:", publicInput.toJSON());
+            console.log("Action Stack Proof Input:", actionStackProof.publicInput.toJSON());
 
             logger.info(`[Job ${id}] Batch prepared, generating validate reduce proof`);
             console.log(`Public Input: ${JSON.stringify(publicInput.toJSON())}`);
@@ -71,8 +79,8 @@ createWorker<ReducerJob, void>({
                 async () => {
                     await settlementContract.reduce(
                         batch,
-                        useActionStack!,
-                        actionStackProof!,
+                        useActionStack,
+                        actionStackProof,
                         mask,
                         validateReduceProof
                     );
