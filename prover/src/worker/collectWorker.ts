@@ -38,7 +38,7 @@ createWorker<CollectSignatureJob, void>({
             reduceQ.add(
                 "reduce-" + blockHeight,
                 {
-                    includedActionEntries,
+                    includedActions: includedActionEntries,
                     signaturePubkeyArray: signatures.map(([signature, publicKey]) => [
                         signature.toBase58(),
                         publicKey.toBase58(),
