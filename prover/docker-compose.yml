@@ -118,7 +118,7 @@ services:
             PROOF_LEVEL: "none"
             LOG_LEVEL: "Trace"
             RUN_ARCHIVE_NODE: true
-            SLOT_TIME: 180000
+            SLOT_TIME: 30000
         networks: [pulsar-net]
         # ports:
         #     - "8080:8080"
