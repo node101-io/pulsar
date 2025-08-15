@@ -226,8 +226,14 @@ class SettlementContract extends SmartContract {
         withdrawalListHash
       );
 
+      const recipient = Provable.if(
+        shouldWithdraw,
+        action.account,
+        PublicKey.empty()
+      );
+
       this.send({
-        to: Provable.if(shouldWithdraw, action.account, PublicKey.empty()),
+        to: AccountUpdate.create(recipient),
         amount: Provable.if(
           shouldWithdraw,
           UInt64.Unsafe.fromField(action.amount).add(WITHDRAW_DOWN_PAYMENT),

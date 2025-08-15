@@ -19,11 +19,7 @@ import {
 import { log, table } from './loggers.js';
 import { PulsarAction } from '../types/PulsarAction.js';
 import { ACTION_QUEUE_SIZE, SETTLEMENT_MATRIX_SIZE } from './constants.js';
-import {
-  ActionStackProgram,
-  ActionStackProof,
-  ActionStackQueue,
-} from '../ActionStack.js';
+import { ActionStackProgram, ActionStackQueue } from '../ActionStack.js';
 
 export {
   GenerateSettlementProof,
@@ -240,7 +236,12 @@ async function GenerateActionStackProof(
   endActionState: Field,
   actions: PulsarAction[]
 ) {
-  let proof = await ActionStackProof.dummy(Field(0), endActionState, 1, 14);
+  let proof = (
+    await ActionStackProgram.proveBase(
+      endActionState,
+      ActionStackQueue.fromArray(actions.slice(0, ACTION_QUEUE_SIZE))
+    )
+  ).proof;
 
   if (actions.length === 0) {
     return {
@@ -252,10 +253,9 @@ async function GenerateActionStackProof(
   try {
     for (let i = 0; i < Math.ceil(actions.length / ACTION_QUEUE_SIZE); i++) {
       proof = (
-        await ActionStackProgram.proveIntegrity(
+        await ActionStackProgram.proveRecursive(
           proof.publicOutput,
           proof,
-          Bool(i === 0),
           ActionStackQueue.fromArray(
             actions.slice(i * ACTION_QUEUE_SIZE, (i + 1) * ACTION_QUEUE_SIZE)
           )
