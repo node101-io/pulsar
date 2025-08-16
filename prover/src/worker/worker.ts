@@ -1,6 +1,5 @@
 import { Worker, Job, Processor, WorkerOptions, AdvancedOptions } from "bullmq";
 import { connection, QueueName } from "../workerConnection.js";
-import { compileContracts } from "../utils.js";
 import logger from "../logger.js";
 import { setMinaNetwork } from "pulsar-contracts";
 import { cacheCompile } from "../cache.js";
