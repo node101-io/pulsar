@@ -71,7 +71,7 @@ async function main() {
     });
 
     pulsarClient.on("newPulsarBlock", async ({ blockData }: { blockData: BlockData }) => {
-        logger.info("New Pulsar block detected", blockData);
+        logger.info("New Pulsar block detected: ", blockData.height);
         await settlementQ.add(
             "settlement-" + blockData.height,
             {
