@@ -24,7 +24,7 @@ createWorker<CollectSignatureJob, void>({
         }
 
         try {
-            const { isNew, batch } = await getOrCreateActionBatch(blockHeight, actions);
+            const { isNew, batch } = await getOrCreateActionBatch(actions);
 
             if (!isNew) {
                 if (batch?.status === "settled") {

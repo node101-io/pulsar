@@ -1,14 +1,13 @@
 import { MongoClient, Collection, Document } from "mongodb";
 import { ActionStackProof, SettlementProof, ValidateReduceProof } from "pulsar-contracts";
-import { JsonProof, Signature } from "o1js";
+import { Field, JsonProof, Poseidon, Signature } from "o1js";
 import logger from "./logger.js";
 import { VoteExt } from "./interfaces.js";
 
 type ProofKind = "actionStack" | "settlement" | "validateReduce";
 
 interface ActionBatchDoc extends Document {
-    blockHeight: number;
-    actionHashes: string[];
+    actionHash: string;
     status: "collecting" | "reducing" | "reduced" | "settled";
     createdAt: Date;
     updatedAt: Date;
@@ -60,7 +59,7 @@ export async function initMongo() {
 
     await actionBatchCol.createIndex({ blockHeight: 1 }, { unique: true });
     await actionBatchCol.createIndex({ status: 1, updatedAt: 1 });
-    await actionBatchCol.createIndex({ actionHashes: 1 });
+    await actionBatchCol.createIndex({ actionHash: 1 });
 
     await storeBlock(
         0,
@@ -236,15 +235,14 @@ export async function fetchLastStoredBlock(): Promise<BlockDoc | null> {
 
 // convert this to indexed by actions
 export async function getOrCreateActionBatch(
-    blockHeight: number,
     actions: { actions: string[][]; hash: string }[]
 ): Promise<{ isNew: boolean; batch: ActionBatchDoc | null }> {
     await initMongo();
 
-    const actionHashes = actions.map((a) => a.hash);
+    const actionHash = Poseidon.hash(actions.map((a) => Field(a.hash))).toString();
 
     try {
-        const existing = await actionBatchCol.findOne({ blockHeight });
+        const existing = await actionBatchCol.findOne({ actionHash });
 
         if (existing) {
             return { isNew: false, batch: existing };
@@ -252,8 +250,7 @@ export async function getOrCreateActionBatch(
 
         try {
             const newDoc: ActionBatchDoc = {
-                blockHeight,
-                actionHashes,
+                actionHash,
                 status: "collecting",
                 createdAt: new Date(),
                 updatedAt: new Date(),
@@ -270,7 +267,7 @@ export async function getOrCreateActionBatch(
             }
         } catch (insertError: any) {
             if (insertError.code === 11000) {
-                const existing = await actionBatchCol.findOne({ blockHeight });
+                const existing = await actionBatchCol.findOne({ actionHash });
                 return { isNew: false, batch: existing };
             }
             throw insertError;
@@ -278,7 +275,7 @@ export async function getOrCreateActionBatch(
 
         throw new Error("Failed to create action batch");
     } catch (error) {
-        logger.error(`Failed to get/create action batch for block ${blockHeight}: ${error}`);
+        logger.error(`Failed to get/create action batch for block ${actionHash}: ${error}`);
         throw error;
     }
 }
