@@ -234,32 +234,49 @@ export async function fetchLastStoredBlock(): Promise<BlockDoc | null> {
     return block;
 }
 
+// convert this to indexed by actions
 export async function getOrCreateActionBatch(
     blockHeight: number,
     actions: { actions: string[][]; hash: string }[]
 ): Promise<{ isNew: boolean; batch: ActionBatchDoc | null }> {
     await initMongo();
 
-    try {
-        const now = new Date();
-        const r = await actionBatchCol.updateOne(
-            { blockHeight },
-            {
-                $setOnInsert: {
-                    blockHeight,
-                    actionHashes: actions.map((a) => a.hash),
-                    status: "collecting",
-                    createdAt: now,
-                    retryCount: 0,
-                },
-                $set: { updatedAt: now },
-            },
-            { upsert: true }
-        );
+    const actionHashes = actions.map((a) => a.hash);
 
-        const isNew = r.upsertedCount === 1;
-        const batch = await actionBatchCol.findOne({ blockHeight });
-        return { isNew, batch: batch as ActionBatchDoc | null };
+    try {
+        const existing = await actionBatchCol.findOne({ blockHeight });
+
+        if (existing) {
+            return { isNew: false, batch: existing };
+        }
+
+        try {
+            const newDoc: ActionBatchDoc = {
+                blockHeight,
+                actionHashes,
+                status: "collecting",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                retryCount: 0,
+            } as ActionBatchDoc;
+
+            const result = await actionBatchCol.insertOne(newDoc);
+
+            if (result.acknowledged) {
+                return {
+                    isNew: true,
+                    batch: { ...newDoc, _id: result.insertedId } as ActionBatchDoc,
+                };
+            }
+        } catch (insertError: any) {
+            if (insertError.code === 11000) {
+                const existing = await actionBatchCol.findOne({ blockHeight });
+                return { isNew: false, batch: existing };
+            }
+            throw insertError;
+        }
+
+        throw new Error("Failed to create action batch");
     } catch (error) {
         logger.error(`Failed to get/create action batch for block ${blockHeight}: ${error}`);
         throw error;
