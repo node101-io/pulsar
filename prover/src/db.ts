@@ -240,37 +240,26 @@ export async function getOrCreateActionBatch(
 ): Promise<{ isNew: boolean; batch: ActionBatchDoc | null }> {
     await initMongo();
 
-    const actionHashes = actions.map((a) => a.hash);
-
     try {
-        const result = await actionBatchCol.findOneAndUpdate(
+        const now = new Date();
+        const r = await actionBatchCol.updateOne(
             { blockHeight },
             {
                 $setOnInsert: {
                     blockHeight,
-                    actionHashes,
+                    actionHashes: actions.map((a) => a.hash),
                     status: "collecting",
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
+                    createdAt: now,
                     retryCount: 0,
                 },
+                $set: { updatedAt: now },
             },
-            {
-                upsert: true,
-                returnDocument: "after",
-            }
+            { upsert: true }
         );
 
-        if (!result) {
-            logger.warn(`No action batch found or created for block ${blockHeight}`);
-            return { isNew: false, batch: null };
-        }
-        const isNew = result.lastErrorObject?.updatedExisting === false;
-
-        return {
-            isNew,
-            batch: result.value as ActionBatchDoc,
-        };
+        const isNew = r.upsertedCount === 1;
+        const batch = await actionBatchCol.findOne({ blockHeight });
+        return { isNew, batch: batch as ActionBatchDoc | null };
     } catch (error) {
         logger.error(`Failed to get/create action batch for block ${blockHeight}: ${error}`);
         throw error;
