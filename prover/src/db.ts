@@ -6,6 +6,18 @@ import { VoteExt } from "./interfaces.js";
 
 type ProofKind = "actionStack" | "settlement" | "validateReduce";
 
+interface ActionBatchDoc extends Document {
+    blockHeight: number;
+    actionHashes: string[];
+    status: "collecting" | "reducing" | "reduced" | "settled";
+    createdAt: Date;
+    updatedAt: Date;
+    reduceJobId?: string;
+    settlementTxHash?: string;
+    error?: string;
+    retryCount: number;
+}
+
 interface ProofDoc extends Document {
     kind: ProofKind;
     range_low: number;
@@ -25,6 +37,7 @@ interface BlockDoc extends Document {
 let client: MongoClient;
 let blocksCol: Collection<BlockDoc>;
 let proofsCol: Collection<ProofDoc>;
+let actionBatchCol: Collection<ActionBatchDoc>;
 
 export async function initMongo() {
     if (client) return;
@@ -39,10 +52,15 @@ export async function initMongo() {
 
     proofsCol = client.db(db).collection<ProofDoc>("proofs");
     blocksCol = client.db(db).collection<BlockDoc>("blocks");
+    actionBatchCol = client.db(db).collection<ActionBatchDoc>("actionBatches");
 
     await proofsCol.createIndex({ kind: 1, range_high: 1, range_low: 1 }, { unique: true });
 
     await blocksCol.createIndex({ height: 1 }, { unique: true });
+
+    await actionBatchCol.createIndex({ blockHeight: 1 }, { unique: true });
+    await actionBatchCol.createIndex({ status: 1, updatedAt: 1 });
+    await actionBatchCol.createIndex({ actionHashes: 1 });
 
     await storeBlock(
         0,
@@ -214,4 +232,94 @@ export async function fetchLastStoredBlock(): Promise<BlockDoc | null> {
 
     logger.info(`Fetched last stored block at height ${block.height}`);
     return block;
+}
+
+export async function getOrCreateActionBatch(
+    blockHeight: number,
+    actions: { actions: string[][]; hash: string }[]
+): Promise<{ isNew: boolean; batch: ActionBatchDoc | null }> {
+    await initMongo();
+
+    const actionHashes = actions.map((a) => a.hash);
+
+    try {
+        const result = await actionBatchCol.findOneAndUpdate(
+            { blockHeight },
+            {
+                $setOnInsert: {
+                    blockHeight,
+                    actionHashes,
+                    status: "collecting",
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    retryCount: 0,
+                },
+            },
+            {
+                upsert: true,
+                returnDocument: "after",
+            }
+        );
+
+        const isNew = result!.lastErrorObject?.updatedExisting;
+
+        return { isNew, batch: result!.value };
+    } catch (error) {
+        logger.error(`Failed to get/create action batch for block ${blockHeight}: ${error}`);
+        throw error;
+    }
+}
+
+export async function updateActionBatchStatus(
+    blockHeight: number,
+    status: ActionBatchDoc["status"],
+    additionalFields?: Partial<ActionBatchDoc>
+) {
+    await initMongo();
+
+    await actionBatchCol.updateOne(
+        { blockHeight },
+        {
+            $set: {
+                status,
+                updatedAt: new Date(),
+                ...additionalFields,
+            },
+        }
+    );
+
+    logger.info(`Updated action batch status for block ${blockHeight} to ${status}`);
+}
+
+export async function getStuckActionBatches(
+    stuckThresholdMinutes: number = 10
+): Promise<ActionBatchDoc[]> {
+    await initMongo();
+
+    const threshold = new Date(Date.now() - stuckThresholdMinutes * 60 * 1000);
+
+    return await actionBatchCol
+        .find({
+            status: { $in: ["collecting", "reducing"] },
+            updatedAt: { $lt: threshold },
+            retryCount: { $lt: 3 },
+        })
+        .toArray();
+}
+
+export async function incrementRetryCount(blockHeight: number) {
+    await initMongo();
+
+    await actionBatchCol.updateOne(
+        { blockHeight },
+        {
+            $inc: { retryCount: 1 },
+            $set: { updatedAt: new Date() },
+        }
+    );
+}
+
+export async function getActionBatch(blockHeight: number): Promise<ActionBatchDoc | null> {
+    await initMongo();
+    return await actionBatchCol.findOne({ blockHeight });
 }

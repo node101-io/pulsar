@@ -6,6 +6,7 @@ import { fetchAccount, PublicKey, Signature } from "o1js";
 import { CalculateMax, PulsarAction, SettlementContract, VALIDATOR_NUMBER } from "pulsar-contracts";
 import { ENDPOINTS } from "../mock/mockEndpoints.js";
 import dotenv from "dotenv";
+import { getOrCreateActionBatch, updateActionBatchStatus } from "../db.js";
 dotenv.config();
 
 const contractInstance = new SettlementContract(
@@ -23,6 +24,39 @@ createWorker<CollectSignatureJob, void>({
         }
 
         try {
+            const { isNew, batch } = await getOrCreateActionBatch(blockHeight, actions);
+
+            if (!isNew) {
+                if (batch?.status === "settled") {
+                    logger.info(
+                        `[Job ${id}] Actions for block ${blockHeight} already settled, skipping`
+                    );
+                    return;
+                }
+
+                if (batch?.status === "reducing" || batch?.status === "reduced") {
+                    logger.info(
+                        `[Job ${id}] Actions for block ${blockHeight} already being processed (status: ${batch.status}), skipping`
+                    );
+                    return;
+                }
+
+                const stuckThreshold = 10 * 60 * 1000; // 10 minutes
+                const isStuck =
+                    batch &&
+                    batch.status === "collecting" &&
+                    Date.now() - batch.updatedAt.getTime() > stuckThreshold;
+
+                if (!isStuck) {
+                    logger.info(
+                        `[Job ${id}] Actions for block ${blockHeight} already being collected, skipping`
+                    );
+                    return;
+                }
+
+                logger.warn(`[Job ${id}] Retrying stuck collection for block ${blockHeight}`);
+            }
+
             logger.info(`[Job ${id}] Requesting signatures for block height: ${blockHeight}`);
             console.log(`Actions: ${JSON.stringify(actions)}`);
             const includedActions = await getIncludedActions(actions);
@@ -35,8 +69,11 @@ createWorker<CollectSignatureJob, void>({
                 actions,
             });
 
+            await updateActionBatchStatus(blockHeight, "reducing");
+
+            const jobId = `reduce-${blockHeight}`;
             reduceQ.add(
-                "reduce-" + blockHeight,
+                jobId,
                 {
                     includedActions: includedActionEntries,
                     signaturePubkeyArray: signatures.map(([signature, publicKey]) => [
@@ -52,8 +89,13 @@ createWorker<CollectSignatureJob, void>({
                         delay: 5_000,
                     },
                     removeOnComplete: true,
+                    jobId: jobId,
                 }
             );
+            await updateActionBatchStatus(blockHeight, "reducing", {
+                reduceJobId: jobId,
+            });
+
             logger.info(`[Job ${id}] Added reduce job for block height: ${blockHeight}`);
         } catch (error) {
             logger.error(

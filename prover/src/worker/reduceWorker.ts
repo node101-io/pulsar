@@ -1,6 +1,6 @@
 import { createWorker } from "./worker.js";
 import { ReducerJob } from "../workerConnection.js";
-import { storeProof } from "../db.js";
+import { getActionBatch, storeProof, updateActionBatchStatus } from "../db.js";
 import {
     SignaturePublicKeyList,
     PrepareBatchWithActions,
@@ -25,6 +25,11 @@ createWorker<ReducerJob, void>({
     queueName: "reduce",
     maxJobsPerWorker: 100,
     jobHandler: async ({ data, id }) => {
+        if (!id) {
+            throw new Error("Job ID is undefined");
+        }
+        const blockHeight = parseInt(id.split("-")[1]);
+
         try {
             const { includedActions, signaturePubkeyArray, actions } = data;
             // console.log(`Included Actions: ${JSON.stringify(includedActions)}`);
@@ -100,13 +105,24 @@ createWorker<ReducerJob, void>({
             );
 
             await tx.prove();
-            await tx.sign([senderKey]).send();
+            const pendingTx = await tx.sign([senderKey]).send();
+            const txHash = pendingTx.hash;
 
-            logger.info(`[Job ${id}] Reduce transaction sent successfully`);
+            await updateActionBatchStatus(blockHeight, "reduced", {
+                settlementTxHash: txHash,
+            });
+
+            logger.info(`[Job ${id}] Reduce transaction sent: ${txHash}`);
+
+            await pendingTx.wait();
+            logger.info(`[Job ${id}] Reduce transaction confirmed: ${txHash}`);
+
+            await updateActionBatchStatus(blockHeight, "settled");
         } catch (err: any) {
             logger.error(
                 `[Job ${id}] Error in reduce worker: ${err?.message || err} \n${err?.stack || ""}`
             );
+            await updateActionBatchStatus(blockHeight, "reducing");
             throw err;
         }
     },
