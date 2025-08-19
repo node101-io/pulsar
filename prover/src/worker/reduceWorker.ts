@@ -1,13 +1,12 @@
 import { createWorker } from "./worker.js";
 import { ReducerJob } from "../workerConnection.js";
-import { getActionBatch, storeProof, updateActionBatchStatus } from "../db.js";
+import { updateActionBatchStatus } from "../db.js";
 import {
     SignaturePublicKeyList,
     PrepareBatchWithActions,
     SettlementContract,
     GenerateValidateReduceProof,
     PulsarAction,
-    ActionStackProof,
 } from "pulsar-contracts";
 import logger from "../logger.js";
 import { fetchAccount, Mina, PrivateKey, PublicKey, Signature } from "o1js";
