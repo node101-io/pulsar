@@ -69,7 +69,7 @@ createWorker<CollectSignatureJob, void>({
                 actions,
             });
 
-            await updateActionBatchStatus(blockHeight, "reducing");
+            await updateActionBatchStatus(actions, "reducing");
 
             const jobId = `reduce-${blockHeight}`;
             reduceQ.add(
@@ -92,7 +92,7 @@ createWorker<CollectSignatureJob, void>({
                     jobId: jobId,
                 }
             );
-            await updateActionBatchStatus(blockHeight, "reducing", {
+            await updateActionBatchStatus(actions, "reducing", {
                 reduceJobId: jobId,
             });
 

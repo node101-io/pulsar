@@ -281,14 +281,16 @@ export async function getOrCreateActionBatch(
 }
 
 export async function updateActionBatchStatus(
-    blockHeight: number,
+    actions: { actions: string[][]; hash: string }[],
     status: ActionBatchDoc["status"],
     additionalFields?: Partial<ActionBatchDoc>
 ) {
     await initMongo();
 
+    const actionHash = Poseidon.hash(actions.map((a) => Field(a.hash))).toString();
+
     await actionBatchCol.updateOne(
-        { blockHeight },
+        { actionHash },
         {
             $set: {
                 status,
@@ -298,7 +300,7 @@ export async function updateActionBatchStatus(
         }
     );
 
-    logger.info(`Updated action batch status for block ${blockHeight} to ${status}`);
+    logger.info(`Updated actions: ${actions.map((a) => a.hash).join(", ")} to status ${status}`);
 }
 
 export async function getStuckActionBatches(

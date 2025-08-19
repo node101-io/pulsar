@@ -27,10 +27,10 @@ createWorker<ReducerJob, void>({
         if (!id) {
             throw new Error("Job ID is undefined");
         }
-        const blockHeight = parseInt(id.split("-")[1]);
+
+        const { includedActions, signaturePubkeyArray, actions } = data;
 
         try {
-            const { includedActions, signaturePubkeyArray, actions } = data;
             // console.log(`Included Actions: ${JSON.stringify(includedActions)}`);
             const includedActionsMap = toIncludedActionsMap(includedActions);
             // console.log(
@@ -107,7 +107,7 @@ createWorker<ReducerJob, void>({
             const pendingTx = await tx.sign([senderKey]).send();
             const txHash = pendingTx.hash;
 
-            await updateActionBatchStatus(blockHeight, "reduced", {
+            await updateActionBatchStatus(actions, "reduced", {
                 settlementTxHash: txHash,
             });
 
@@ -116,12 +116,12 @@ createWorker<ReducerJob, void>({
             await pendingTx.wait();
             logger.info(`[Job ${id}] Reduce transaction confirmed: ${txHash}`);
 
-            await updateActionBatchStatus(blockHeight, "settled");
+            await updateActionBatchStatus(actions, "settled");
         } catch (err: any) {
             logger.error(
                 `[Job ${id}] Error in reduce worker: ${err?.message || err} \n${err?.stack || ""}`
             );
-            await updateActionBatchStatus(blockHeight, "reducing");
+            await updateActionBatchStatus(actions, "reducing");
             throw err;
         }
     },
