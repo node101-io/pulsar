@@ -20,7 +20,7 @@ const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
 createWorker<SubmitJob, void>({
     queueName: "submit",
-    maxJobsPerWorker: 10,
+    maxJobsPerWorker: 100,
     jobHandler: async ({ data }) => {
         const { rangeLow, rangeHigh } = data;
 
@@ -55,11 +55,14 @@ createWorker<SubmitJob, void>({
                 const proofInitialStateRoot = mergedProof.publicInput.InitialStateRoot;
 
                 logger.info(
-                    `Checking contract readiness:
-                    On-chain: height=${onChainBlockHeight.toString()}, merkleRoot=${onChainMerkleRoot
+                    `On-chain: height=${onChainBlockHeight.toString()}, merkleRoot=${onChainMerkleRoot
                         .toString()
-                        .slice(0, 10)}, stateRoot=${onChainStateRoot.toString().slice(0, 10)}
-                    Proof: height=${proofInitialHeight.toString()}, merkleRoot=${proofInitialMerkleRoot
+                        .slice(0, 10)}, stateRoot=${onChainStateRoot
+                        .toString()
+                        .slice(
+                            0,
+                            10
+                        )}, Proof: height=${proofInitialHeight.toString()}, merkleRoot=${proofInitialMerkleRoot
                         .toString()
                         .slice(0, 10)}, stateRoot=${proofInitialStateRoot.toString().slice(0, 10)}`
                 );
@@ -93,6 +96,7 @@ createWorker<SubmitJob, void>({
                     logger.info(
                         `Waiting for contract to reach block height ${proofInitialHeight.toString()} (currently at ${onChainBlockHeight.toString()})`
                     );
+                    await new Promise((resolve) => setTimeout(resolve, 10000));
                 }
             }
 

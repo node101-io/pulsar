@@ -55,6 +55,7 @@ createWorker<MergeJob, void>({
                     `Queueing submission for fully merged proof: blocks ${lowerBlock.rangeLow}-${upperBlock.rangeHigh}`
                 );
 
+                const priority = -lowerBlock.rangeLow;
                 await submitQ.add(
                     `submit-${lowerBlock.rangeLow}-${upperBlock.rangeHigh}`,
                     {
@@ -62,12 +63,14 @@ createWorker<MergeJob, void>({
                         rangeHigh: upperBlock.rangeHigh,
                     },
                     {
-                        attempts: 10,
+                        priority,
+                        attempts: 100,
                         backoff: {
                             type: "exponential",
                             delay: 10_000,
                         },
                         removeOnComplete: true,
+                        removeOnFail: false,
                     }
                 );
 
