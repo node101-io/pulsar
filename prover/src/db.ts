@@ -261,9 +261,16 @@ export async function getOrCreateActionBatch(
             }
         );
 
-        const isNew = result!.lastErrorObject?.updatedExisting;
+        if (!result) {
+            logger.warn(`No action batch found or created for block ${blockHeight}`);
+            return { isNew: false, batch: null };
+        }
+        const isNew = result.lastErrorObject?.updatedExisting === false;
 
-        return { isNew, batch: result!.value };
+        return {
+            isNew,
+            batch: result.value as ActionBatchDoc,
+        };
     } catch (error) {
         logger.error(`Failed to get/create action batch for block ${blockHeight}: ${error}`);
         throw error;
