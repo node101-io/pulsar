@@ -64,7 +64,11 @@ export class MinaClient extends EventEmitter {
 
                 if (currentBlockHeight > this.lastSeenBlockHeight) {
                     this.emit("block", currentBlockHeight);
+                    await fetchAccount({ publicKey: this.watchedAddress });
+                    this.fromActionState = this.settlementContract.actionState.get();
+
                     let actions = await fetchRawActions(this.watchedAddress, this.fromActionState);
+
                     console.table({
                         actionState: this.settlementContract.actionState.get().toString(),
                         merkleListRoot: this.settlementContract.merkleListRoot.get().toString(),

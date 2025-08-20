@@ -18,7 +18,7 @@ async function main() {
 
     let minaClient = new MinaClient(
         PublicKey.fromBase58(process.env.CONTRACT_ADDRESS),
-        "lightnet",
+        process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet",
         lastSeenBlockHeight,
         5000
     );
