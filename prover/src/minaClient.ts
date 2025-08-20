@@ -61,6 +61,7 @@ export class MinaClient extends EventEmitter {
                 if (currentBlockHeight > this.lastSeenBlockHeight) {
                     this.emit("block", currentBlockHeight);
                     let actions = await fetchRawActions(this.watchedAddress, this.fromActionState);
+                    console.log(this.lastSeenBlockHeight, this.fromActionState.toString(), actions);
                     if (!actions || actions.length === 0) {
                         actions = [];
                     }
