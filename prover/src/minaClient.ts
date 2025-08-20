@@ -1,6 +1,11 @@
 import { EventEmitter } from "events";
 import { fetchAccount, Field, PublicKey, Reducer } from "o1js";
-import { fetchBlockHeight, fetchRawActions, setMinaNetwork } from "pulsar-contracts";
+import {
+    fetchBlockHeight,
+    fetchRawActions,
+    setMinaNetwork,
+    SettlementContract,
+} from "pulsar-contracts";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -13,6 +18,7 @@ const POLL_INTERVAL_MS = 5000;
  */
 export class MinaClient extends EventEmitter {
     watchedAddress: PublicKey;
+    settlementContract: SettlementContract;
     fromActionState: Field;
     network: "devnet" | "mainnet" | "lightnet";
     pollInterval: number;
@@ -31,6 +37,7 @@ export class MinaClient extends EventEmitter {
     ) {
         super();
         this.watchedAddress = watchedAddress;
+        this.settlementContract = new SettlementContract(watchedAddress);
         this.fromActionState = Reducer.initialActionState;
         this.network = network;
         this.pollInterval = pollInterval;
@@ -44,14 +51,11 @@ export class MinaClient extends EventEmitter {
             this.running = true;
             setMinaNetwork(this.network);
             this.lastSeenBlockHeight = await fetchBlockHeight(this.network);
-            this.fromActionState = await fetchAccount({
+            await fetchAccount({
                 publicKey: this.watchedAddress,
-            }).then((account) => {
-                if (account) {
-                    return account.account?.zkapp?.appState[0] || Reducer.initialActionState;
-                }
-                return Reducer.initialActionState;
             });
+
+            this.fromActionState = this.settlementContract.actionState.get();
 
             this.emit("start", this.lastSeenBlockHeight);
 
@@ -61,6 +65,20 @@ export class MinaClient extends EventEmitter {
                 if (currentBlockHeight > this.lastSeenBlockHeight) {
                     this.emit("block", currentBlockHeight);
                     let actions = await fetchRawActions(this.watchedAddress, this.fromActionState);
+                    console.table({
+                        actionState: this.settlementContract.actionState.get().toString(),
+                        merkleListRoot: this.settlementContract.merkleListRoot.get().toString(),
+                        stateRoot: this.settlementContract.stateRoot.get().toString(),
+                        blockHeight: this.settlementContract.blockHeight.get().toString(),
+                        depositListHash: this.settlementContract.depositListHash.get().toString(),
+                        withdrawalListHash: this.settlementContract.withdrawalListHash
+                            .get()
+                            .toString(),
+                        rewardListHash: this.settlementContract.rewardListHash.get().toString(),
+                        accountActionState: this.settlementContract.account.actionState
+                            .get()
+                            .toString(),
+                    });
                     console.log(this.lastSeenBlockHeight, this.fromActionState.toString(), actions);
                     if (!actions || actions.length === 0) {
                         actions = [];
