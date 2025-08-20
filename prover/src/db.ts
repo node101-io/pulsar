@@ -240,9 +240,11 @@ export async function getOrCreateActionBatch(
     await initMongo();
 
     const actionHash = Poseidon.hash(actions.map((a) => Field(a.hash))).toString();
+    console.log(`Action hash: ${actionHash}`);
 
     try {
         const existing = await actionBatchCol.findOne({ actionHash });
+        console.log(existing);
 
         if (existing) {
             return { isNew: false, batch: existing };
@@ -260,6 +262,7 @@ export async function getOrCreateActionBatch(
             const result = await actionBatchCol.insertOne(newDoc);
 
             if (result.acknowledged) {
+                logger.info(`Created new action batch with hash ${actionHash}`);
                 return {
                     isNew: true,
                     batch: { ...newDoc, _id: result.insertedId } as ActionBatchDoc,

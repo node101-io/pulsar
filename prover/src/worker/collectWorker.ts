@@ -27,6 +27,7 @@ createWorker<CollectSignatureJob, void>({
             const { isNew, batch } = await getOrCreateActionBatch(actions);
 
             if (!isNew) {
+                console.log(batch);
                 if (batch?.status === "settled") {
                     logger.info(
                         `[Job ${id}] Actions for block ${blockHeight} already settled, skipping`
