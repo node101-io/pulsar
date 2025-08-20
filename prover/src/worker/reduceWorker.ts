@@ -22,7 +22,7 @@ const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
 createWorker<ReducerJob, void>({
     queueName: "reduce",
-    maxJobsPerWorker: 100,
+    maxJobsPerWorker: 50,
     jobHandler: async ({ data, id }) => {
         if (!id) {
             throw new Error("Job ID is undefined");
@@ -31,11 +31,7 @@ createWorker<ReducerJob, void>({
         const { includedActions, signaturePubkeyArray, actions } = data;
 
         try {
-            // console.log(`Included Actions: ${JSON.stringify(includedActions)}`);
             const includedActionsMap = toIncludedActionsMap(includedActions);
-            // console.log(
-            //     `Included Actions Map: ${JSON.stringify(Array.from(includedActionsMap.entries()))}`
-            // );
 
             await fetchAccount({ publicKey: settlementContract.address });
             console.table({
@@ -55,7 +51,6 @@ createWorker<ReducerJob, void>({
                     hash: BigInt(action.hash),
                 };
             });
-            // console.log(`Action hash: ${packedActions[0].action.unconstrainedHash().toString()}`);
 
             const signaturePublicKeyList = SignaturePublicKeyList.fromArray(
                 signaturePubkeyArray.map(([signature, publicKey]) => [
@@ -72,19 +67,8 @@ createWorker<ReducerJob, void>({
                     settlementContract,
                     packedActions
                 );
-            // console.log(
-            //     "Batch prepared:",
-            //     batch.actions.map((action) => action.toJSON())
-            // );
-            // console.log(`Use Action Stack: ${useActionStack.toBoolean()}`);
-            // console.log("Public Input:", publicInput.toJSON());
-            // console.log("Action Stack Proof Input:", actionStackProof.publicInput.toJSON());
 
             logger.info(`[Job ${id}] Batch prepared, generating validate reduce proof`);
-            // console.log(`Public Input: ${JSON.stringify(publicInput.toJSON())}`);
-            // console.log(
-            //     `Signature Public Key List: ${JSON.stringify(signaturePublicKeyList.toJSON())}`
-            // );
             const validateReduceProof = await GenerateValidateReduceProof(
                 publicInput,
                 signaturePublicKeyList

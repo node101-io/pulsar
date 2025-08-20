@@ -64,10 +64,6 @@ const ValidateReduceProgram = ZkProgram({
         let counter = Field.from(0);
         let list = List.empty();
         const signatureMessage = publicInputs.hash().toFields();
-        Provable.asProver(() => {
-          console.log(publicInputs.toJSON());
-          console.log(signatureMessage.toString());
-        });
 
         for (let i = 0; i < VALIDATOR_NUMBER; i++) {
           const { signature, publicKey } = signaturePublicKeyList.list[i];
