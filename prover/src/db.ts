@@ -57,9 +57,9 @@ export async function initMongo() {
 
     await blocksCol.createIndex({ height: 1 }, { unique: true });
 
-    await actionBatchCol.createIndex({ blockHeight: 1 }, { unique: true });
+    await actionBatchCol.createIndex({ blockHeight: 1 });
     await actionBatchCol.createIndex({ status: 1, updatedAt: 1 });
-    await actionBatchCol.createIndex({ actionHash: 1 });
+    await actionBatchCol.createIndex({ actionHash: 1 }, { unique: true });
 
     await storeBlock(
         0,
@@ -239,44 +239,32 @@ export async function getOrCreateActionBatch(
 ): Promise<{ isNew: boolean; batch: ActionBatchDoc | null }> {
     await initMongo();
 
-    const actionHash = Poseidon.hash(actions.map((a) => Field(a.hash))).toString();
+    const actionHash = getActionsHash(actions);
     console.log(`Action hash: ${actionHash}`);
 
     try {
         const existing = await actionBatchCol.findOne({ actionHash });
         console.log(existing);
 
-        if (existing) {
+        if (existing !== null) {
             return { isNew: false, batch: existing };
         }
 
-        try {
-            const newDoc: ActionBatchDoc = {
-                actionHash,
-                status: "collecting",
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                retryCount: 0,
-            } as ActionBatchDoc;
+        const newDoc: ActionBatchDoc = {
+            actionHash,
+            status: "collecting",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            retryCount: 0,
+        } as ActionBatchDoc;
 
-            const result = await actionBatchCol.insertOne(newDoc);
+        const result = await actionBatchCol.insertOne(newDoc);
 
-            if (result.acknowledged) {
-                logger.info(`Created new action batch with hash ${actionHash}`);
-                return {
-                    isNew: true,
-                    batch: { ...newDoc, _id: result.insertedId } as ActionBatchDoc,
-                };
-            }
-        } catch (insertError: any) {
-            if (insertError.code === 11000) {
-                const existing = await actionBatchCol.findOne({ actionHash });
-                return { isNew: false, batch: existing };
-            }
-            throw insertError;
-        }
-
-        throw new Error("Failed to create action batch");
+        logger.info(`Created new action batch with hash ${actionHash}`);
+        return {
+            isNew: true,
+            batch: { ...newDoc, _id: result.insertedId } as ActionBatchDoc,
+        };
     } catch (error) {
         logger.error(`Failed to get/create action batch for block ${actionHash}: ${error}`);
         throw error;
@@ -290,7 +278,7 @@ export async function updateActionBatchStatus(
 ) {
     await initMongo();
 
-    const actionHash = Poseidon.hash(actions.map((a) => Field(a.hash))).toString();
+    const actionHash = getActionsHash(actions);
 
     await actionBatchCol.updateOne(
         { actionHash },
@@ -337,4 +325,8 @@ export async function incrementRetryCount(blockHeight: number) {
 export async function getActionBatch(blockHeight: number): Promise<ActionBatchDoc | null> {
     await initMongo();
     return await actionBatchCol.findOne({ blockHeight });
+}
+
+function getActionsHash(actions: { actions: string[][]; hash: string }[]): string {
+    return Poseidon.hash(actions.map((a) => Field(a.hash))).toString();
 }
