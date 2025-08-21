@@ -7,6 +7,7 @@ import "cosmos/msg/v1/msg.proto";
 import "cosmos_proto/cosmos.proto";
 import "gogoproto/gogo.proto";
 import "interchain_security/bridge/params.proto";
+import "interchain_security/bridge/state.proto";
 
 option go_package = "github.com/cosmos/interchain-security/v5/x/bridge/types";
 
@@ -17,7 +18,9 @@ service Msg {
   // UpdateParams defines a (governance) operation for updating the module
   // parameters. The authority defaults to the x/gov module account.
   rpc UpdateParams   (MsgUpdateParams  ) returns (MsgUpdateParamsResponse);
-  rpc DepositMina    (MsgDepositMina   ) returns (MsgDepositMinaResponse);
+
+  rpc LockForWithdrawal(MsgLockForWithdrawal) returns (MsgLockForWithdrawalResponse);
+  rpc ResolveActions(MsgResolveActions) returns (MsgResolveActionsResponse);
 }
 // MsgUpdateParams is the Msg/UpdateParams request type.
 message MsgUpdateParams {
@@ -37,12 +40,31 @@ message MsgUpdateParams {
 // MsgUpdateParams message.
 message MsgUpdateParamsResponse {}
 
-message MsgDepositMina {
+
+
+message MsgLockForWithdrawal {
   option (cosmos.msg.v1.signer) = "creator";
   string creator = 1;
-  uint64 amount = 2;
-  string recipient = 3;
+  string mina_public_key = 2;
+  string amount = 3 [
+    (gogoproto.customtype) = "cosmossdk.io/math.Int",
+    (gogoproto.nullable) = false
+  ];
 }
 
-message MsgDepositMinaResponse {}
+message MsgLockForWithdrawalResponse {}
+
+message MsgResolveActions {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1;
+  repeated PulsarAction actions = 2 [(gogoproto.nullable) = false];
+  uint64 next_block_height = 3;
+  string merkle_witness = 4;
+}
+
+message MsgResolveActionsResponse {
+  uint64 processed_actions_count = 1;
+  uint64 approved_actions_count = 2;
+  uint64 ignored_actions_count = 3;
+}
 

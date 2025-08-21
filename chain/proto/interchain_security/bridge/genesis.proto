@@ -5,6 +5,7 @@ package interchain_security.bridge;
 import "amino/amino.proto";
 import "gogoproto/gogo.proto";
 import "interchain_security/bridge/params.proto";
+import "interchain_security/bridge/state.proto";
 
 option go_package = "github.com/cosmos/interchain-security/v5/x/bridge/types";
 
@@ -12,6 +13,9 @@ option go_package = "github.com/cosmos/interchain-security/v5/x/bridge/types";
 message GenesisState {
   
   // params defines all the parameters of the module.
-  Params   params       = 1 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
+  Params params = 1 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
+  
+  // bridge_state defines the bridge module state
+  BridgeState bridge_state = 2 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
 }
 

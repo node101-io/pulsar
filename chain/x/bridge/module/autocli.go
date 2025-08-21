@@ -20,17 +20,6 @@ func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 					Use:       "test-query",
 					Short:     "Returns test string 'node101'",
 				},
-				{
-					RpcMethod: "DepositAmountMapAll",
-					Use:       "list-deposit-amount-map",
-					Short:     "List all DepositAmountMap",
-				},
-				{
-					RpcMethod:      "DepositAmountMap",
-					Use:            "show-deposit-amount-map [address]",
-					Short:          "Shows a DepositAmountMap by address",
-					PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "address"}},
-				},
 			},
 		},
 		Tx: &autocliv1.ServiceCommandDescriptor{
@@ -42,10 +31,14 @@ func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 					Skip:      true, // skipped because authority gated
 				},
 				{
-					RpcMethod:      "DepositMina",
-					Use:            "deposit-mina [amount] [recipient]",
-					Short:          "Deposit Mina tokens to the bridge",
-					PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "amount"}, {ProtoField: "recipient"}},
+					RpcMethod: "ResolveActions",
+					Use:       "resolve-actions [next-block-height] [merkle-witness] [actions-json-file]",
+					Short:     "Resolve actions from Mina smart contract",
+					Long:      "Resolve and process a list of actions from the Mina smart contract. Actions should be provided as a JSON file.",
+					PositionalArgs: []*autocliv1.PositionalArgDescriptor{
+						{ProtoField: "next_block_height"},
+						{ProtoField: "merkle_witness"},
+					},
 				},
 			},
 		},

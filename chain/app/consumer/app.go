@@ -160,6 +160,7 @@ var (
 		ibcconsumertypes.ConsumerRedistributeName:     nil,
 		ibcconsumertypes.ConsumerToSendToProviderName: nil,
 		ibctransfertypes.ModuleName:                   {authtypes.Minter, authtypes.Burner},
+		bridgemoduletypes.ModuleName:                  {authtypes.Minter, authtypes.Burner},
 	}
 )
 
@@ -427,6 +428,9 @@ func New(
 		runtime.NewKVStoreService(keys[bridgemoduletypes.StoreKey]),
 		logger,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		app.BankKeeper,
+		app.AccountKeeper,
+		app.MinakeysKeeper,
 	)
 
 	minaVoteExtHandler := minakeyskeeper.NewVoteExtHandler(app.MinakeysKeeper, app.ConsumerKeeper)
