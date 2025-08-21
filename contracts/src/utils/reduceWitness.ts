@@ -53,9 +53,7 @@ function CalculateMax(
 
   let mask = new Array<boolean>(BATCH_SIZE).fill(false);
   let publicInput = new ValidateReducePublicInput({
-    stateRoot: contractInstance.stateRoot.get(),
     merkleListRoot: contractInstance.merkleListRoot.get(),
-    blockHeight: contractInstance.blockHeight.get(),
     depositListHash: contractInstance.depositListHash.get(),
     withdrawalListHash: contractInstance.withdrawalListHash.get(),
   });

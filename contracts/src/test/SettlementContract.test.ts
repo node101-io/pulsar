@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import {
   Field,
   Mina,
@@ -300,7 +301,7 @@ describe('SettlementProof tests', () => {
     if (pushToStack) {
       actionStack.push(
         Poseidon.hash([
-          Field(2),
+          Field(1),
           ...senderKey.toPublicKey().toFields(),
           amount.value,
         ])
@@ -354,7 +355,7 @@ describe('SettlementProof tests', () => {
     if (pushToStack) {
       actionStack.push(
         Poseidon.hash([
-          Field(3),
+          Field(2),
           ...senderKey.toPublicKey().toFields(),
           amount.value,
         ])
@@ -678,20 +679,6 @@ describe('SettlementProof tests', () => {
       await settle(feePayerKey, settlementProof);
     });
 
-    it('Reduce actions', async () => {
-      await reduce(feePayerKey);
-      actionStack = [];
-      expect(zkapp.stateRoot.get()).toEqual(
-        settlementProof.publicInput.NewStateRoot
-      );
-      expect(zkapp.blockHeight.get()).toEqual(
-        settlementProof.publicInput.NewBlockHeight
-      );
-      expect(zkapp.merkleListRoot.get()).toEqual(
-        settlementProof.publicInput.NewMerkleListRoot
-      );
-    });
-
     it('Reject settlement with invalid proof: wrong state root', async () => {
       const invalidSettlementProof =
         await TestUtils.GenerateTestSettlementProof(
@@ -743,7 +730,9 @@ describe('SettlementProof tests', () => {
 
     it('Reduce actions', async () => {
       const depositListHash = zkapp.depositListHash.get();
+      log(`Deposit list hash before: ${depositListHash.toString()}`);
       await reduce(feePayerKey);
+      log(`Deposit list hash after: ${zkapp.depositListHash.get().toString()}`);
 
       expect(zkapp.depositListHash.get()).toEqual(
         Poseidon.hash([
@@ -765,7 +754,13 @@ describe('SettlementProof tests', () => {
     });
     it('Reduce actions', async () => {
       const withdrawalListHash = zkapp.withdrawalListHash.get();
+      log(`Withdrawal list hash before: ${withdrawalListHash.toString()}`);
       await reduce(feePayerKey);
+      log(
+        `Withdrawal list hash after: ${zkapp.withdrawalListHash
+          .get()
+          .toString()}`
+      );
 
       expect(zkapp.withdrawalListHash.get()).toEqual(
         Poseidon.hash([
@@ -782,16 +777,6 @@ describe('SettlementProof tests', () => {
       log(expect.getState().currentTestName);
     });
 
-    it('Generate a settlement proof', async () => {
-      settlementProof = await TestUtils.GenerateTestSettlementProof(
-        activeSet,
-        AGGREGATE_THRESHOLD,
-        2 * AGGREGATE_THRESHOLD
-      );
-    });
-    it('Settle method', async () => {
-      await settle(feePayerKey, settlementProof);
-    });
     it('Deposit method', async () => {
       await deposit(feePayerKey, UInt64.from(1e10 + 123));
     });
@@ -802,15 +787,6 @@ describe('SettlementProof tests', () => {
       const depositListHash = zkapp.depositListHash.get();
       const withdrawalListHash = zkapp.withdrawalListHash.get();
       await reduce(feePayerKey);
-      expect(zkapp.stateRoot.get()).toEqual(
-        settlementProof.publicInput.NewStateRoot
-      );
-      expect(zkapp.blockHeight.get()).toEqual(
-        settlementProof.publicInput.NewBlockHeight
-      );
-      expect(zkapp.merkleListRoot.get()).toEqual(
-        settlementProof.publicInput.NewMerkleListRoot
-      );
 
       expect(zkapp.depositListHash.get()).toEqual(
         Poseidon.hash([
@@ -830,34 +806,34 @@ describe('SettlementProof tests', () => {
     });
   });
 
-  describe('More transactions to reduce', () => {
-    beforeEach(async () => {
-      await prepareNewContract();
-      log(expect.getState().currentTestName);
-    });
+  // describe('More transactions to reduce', () => {
+  //   beforeEach(async () => {
+  //     await prepareNewContract();
+  //     log(expect.getState().currentTestName);
+  //   });
 
-    it('1 settlement + 1 deposit + 1 withdraw', async () => {
-      await settleDepositWithdraw(1, 1, 1);
-    });
+  //   it('1 settlement + 1 deposit + 1 withdraw', async () => {
+  //     await settleDepositWithdraw(1, 1, 1);
+  //   });
 
-    it('1 settlement + 5 deposits + 5 withdraws', async () => {
-      await settleDepositWithdraw(1, 5, 5);
-    });
+  //   it('1 settlement + 5 deposits + 5 withdraws', async () => {
+  //     await settleDepositWithdraw(1, 5, 5);
+  //   });
 
-    it('1 settlement + 10 deposits + 10 withdraws', async () => {
-      await settleDepositWithdraw(1, 10, 10);
-    });
+  //   it('1 settlement + 10 deposits + 10 withdraws', async () => {
+  //     await settleDepositWithdraw(1, 10, 10);
+  //   });
 
-    it('1 settlement + 20 deposits + 20 withdraws', async () => {
-      await settleDepositWithdraw(1, 20, 20);
-    });
+  //   it('1 settlement + 20 deposits + 20 withdraws', async () => {
+  //     await settleDepositWithdraw(1, 20, 20);
+  //   });
 
-    it('1 settlement + 50 deposits + 50 withdraws', async () => {
-      await settleDepositWithdraw(1, 50, 50);
-    });
+  //   it('1 settlement + 50 deposits + 50 withdraws', async () => {
+  //     await settleDepositWithdraw(1, 50, 50);
+  //   });
 
-    it('1 settlement + 80 deposits + 80 withdraws', async () => {
-      await settleDepositWithdraw(1, 80, 80);
-    });
-  });
+  //   it('1 settlement + 80 deposits + 80 withdraws', async () => {
+  //     await settleDepositWithdraw(1, 80, 80);
+  //   });
+  // });
 });

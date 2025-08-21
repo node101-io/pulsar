@@ -48,7 +48,6 @@ class SettlementContract extends SmartContract {
 
   @state(Field) depositListHash = State<Field>();
   @state(Field) withdrawalListHash = State<Field>();
-  // @state(Field) rewardListHash = State<Field>();
 
   reducer = Reducer({ actionType: PulsarAction });
 
@@ -85,7 +84,6 @@ class SettlementContract extends SmartContract {
       NewBlockHeight,
       NewMerkleListRoot,
       NewStateRoot,
-      // ProofGeneratorsList,
     } = settlementProof.publicInput;
 
     InitialBlockHeight.assertEquals(
@@ -145,13 +143,9 @@ class SettlementContract extends SmartContract {
     mask: ReduceMask,
     validateReduceProof: ValidateReduceProof
   ) {
-    let stateRoot = this.stateRoot.getAndRequireEquals();
     let merkleListRoot = this.merkleListRoot.getAndRequireEquals();
-    let blockHeight = this.blockHeight.getAndRequireEquals();
-
     let depositListHash = this.depositListHash.getAndRequireEquals();
     let withdrawalListHash = this.withdrawalListHash.getAndRequireEquals();
-    // let rewardListHash = this.rewardListHash.getAndRequireEquals();
 
     let initialActionState = this.actionState.getAndRequireEquals();
     let actionState = initialActionState;
@@ -209,16 +203,13 @@ class SettlementContract extends SmartContract {
 
     validateReduceProof.verify();
 
-    stateRoot.assertEquals(validateReduceProof.publicInput.stateRoot);
     merkleListRoot.assertEquals(validateReduceProof.publicInput.merkleListRoot);
-    blockHeight.assertEquals(validateReduceProof.publicInput.blockHeight);
     depositListHash.assertEquals(
       validateReduceProof.publicInput.depositListHash
     );
     withdrawalListHash.assertEquals(
       validateReduceProof.publicInput.withdrawalListHash
     );
-    // rewardListHash.assertEquals(validateReduceProof.publicInput.rewardListHash);
 
     actionStackProof.verifyIf(useActionStack);
     Provable.assertEqualIf(
@@ -242,11 +233,7 @@ class SettlementContract extends SmartContract {
     );
 
     this.actionState.set(actionState);
-    // this.stateRoot.set(stateRoot);
-    // this.merkleListRoot.set(merkleListRoot);
-    // this.blockHeight.set(blockHeight);
     this.depositListHash.set(depositListHash);
     this.withdrawalListHash.set(withdrawalListHash);
-    // this.rewardListHash.set(rewardListHash);
   }
 }

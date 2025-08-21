@@ -445,8 +445,7 @@ async function settlementProofBenchmark(
         blocks[blocks.length - SETTLEMENT_MATRIX_SIZE].InitialBlockHeight,
         blocks[blocks.length - 1].NewMerkleListRoot,
         blocks[blocks.length - 1].NewStateRoot,
-        blocks[blocks.length - 1].NewBlockHeight,
-        [validatorSet[0][1]]
+        blocks[blocks.length - 1].NewBlockHeight
       );
 
       const signatureMatrix = TestUtils.GenerateSignaturePubKeyMatrix(
@@ -458,7 +457,6 @@ async function settlementProofBenchmark(
         await MultisigVerifierProgram.verifySignatures(
           publicInput,
           signatureMatrix,
-          validatorSet[0][1],
           BlockList.fromArray(blocks.slice(-SETTLEMENT_MATRIX_SIZE))
         )
       ).proof;
@@ -483,11 +481,6 @@ async function settlementProofBenchmark(
       NewBlockHeight: proof.publicInput.NewBlockHeight,
       NewMerkleListRoot: proof.publicInput.NewMerkleListRoot,
       NewStateRoot: proof.publicInput.NewStateRoot,
-      ProofGeneratorsList:
-        mergedProof.publicInput.ProofGeneratorsList.appendList(
-          Field(i),
-          proof.publicInput.ProofGeneratorsList
-        ),
     });
 
     mergedProof = (
@@ -693,7 +686,7 @@ async function settleDepositWithdraw(
 }
 
 async function BenchActionStackProgram(numActions: number) {
-  const actions = TestUtils.GenerateTestActions(numActions, merkleList.hash);
+  const actions = TestUtils.GenerateTestActions(numActions);
   await bench('Generate Action Stack Proof', () =>
     GenerateActionStackProof(Field.from(0), actions)
   );

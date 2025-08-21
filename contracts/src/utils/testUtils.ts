@@ -157,8 +157,7 @@ async function GenerateTestSettlementProof(
         blocks[blocks.length - SETTLEMENT_MATRIX_SIZE].InitialBlockHeight,
         blocks[blocks.length - 1].NewMerkleListRoot,
         blocks[blocks.length - 1].NewStateRoot,
-        blocks[blocks.length - 1].NewBlockHeight,
-        [validatorSet[0][1]]
+        blocks[blocks.length - 1].NewBlockHeight
       );
 
       const signatureMatrix = GenerateSignaturePubKeyMatrix(
@@ -170,7 +169,6 @@ async function GenerateTestSettlementProof(
         await MultisigVerifierProgram.verifySignatures(
           publicInput,
           signatureMatrix,
-          validatorSet[0][1],
           BlockList.fromArray(blocks.slice(-SETTLEMENT_MATRIX_SIZE))
         )
       ).proof;
