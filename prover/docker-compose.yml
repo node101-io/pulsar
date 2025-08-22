@@ -166,7 +166,7 @@ services:
         networks: [pulsar-net]
         volumes:
             - loki-data:/loki
-        profiles: ["monitoring"]
+        profiles: ["prod"]
 
     promtail:
         image: grafana/promtail:2.9.0
@@ -179,7 +179,7 @@ services:
         networks: [pulsar-net]
         depends_on:
             - loki
-        profiles: ["monitoring"]
+        profiles: ["prod"]
 
     grafana:
         image: grafana/grafana:10.1.0
@@ -193,7 +193,7 @@ services:
         networks: [pulsar-net]
         depends_on:
             - loki
-        profiles: ["monitoring"]
+        profiles: ["prod"]
 
 volumes:
     redis-data:
