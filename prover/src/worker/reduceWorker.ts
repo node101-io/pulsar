@@ -22,7 +22,7 @@ const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
 createWorker<ReducerJob, void>({
     queueName: "reduce",
-    maxJobsPerWorker: 50,
+    maxJobsPerWorker: 5,
     jobHandler: async ({ data, id }) => {
         if (!id) {
             throw new Error("Job ID is undefined");
