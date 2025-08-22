@@ -1,10 +1,21 @@
 import { MongoClient, Collection, Document } from "mongodb";
 import { ActionStackProof, SettlementProof, ValidateReduceProof } from "pulsar-contracts";
-import { JsonProof, Signature } from "o1js";
+import { Field, JsonProof, Poseidon, Signature } from "o1js";
 import logger from "./logger.js";
 import { VoteExt } from "./interfaces.js";
 
 type ProofKind = "actionStack" | "settlement" | "validateReduce";
+
+interface ActionBatchDoc extends Document {
+    actionHash: string;
+    status: "collecting" | "reducing" | "reduced" | "settled";
+    createdAt: Date;
+    updatedAt: Date;
+    reduceJobId?: string;
+    settlementTxHash?: string;
+    error?: string;
+    retryCount: number;
+}
 
 interface ProofDoc extends Document {
     kind: ProofKind;
@@ -25,6 +36,7 @@ interface BlockDoc extends Document {
 let client: MongoClient;
 let blocksCol: Collection<BlockDoc>;
 let proofsCol: Collection<ProofDoc>;
+let actionBatchCol: Collection<ActionBatchDoc>;
 
 export async function initMongo() {
     if (client) return;
@@ -39,10 +51,15 @@ export async function initMongo() {
 
     proofsCol = client.db(db).collection<ProofDoc>("proofs");
     blocksCol = client.db(db).collection<BlockDoc>("blocks");
+    actionBatchCol = client.db(db).collection<ActionBatchDoc>("actionBatches");
 
     await proofsCol.createIndex({ kind: 1, range_high: 1, range_low: 1 }, { unique: true });
 
     await blocksCol.createIndex({ height: 1 }, { unique: true });
+
+    await actionBatchCol.createIndex({ blockHeight: 1 });
+    await actionBatchCol.createIndex({ status: 1, updatedAt: 1 });
+    await actionBatchCol.createIndex({ actionHash: 1 }, { unique: true });
 
     await storeBlock(
         0,
@@ -214,4 +231,102 @@ export async function fetchLastStoredBlock(): Promise<BlockDoc | null> {
 
     logger.info(`Fetched last stored block at height ${block.height}`);
     return block;
+}
+
+// convert this to indexed by actions
+export async function getOrCreateActionBatch(
+    actions: { actions: string[][]; hash: string }[]
+): Promise<{ isNew: boolean; batch: ActionBatchDoc | null }> {
+    await initMongo();
+
+    const actionHash = getActionsHash(actions);
+    console.log(`Action hash: ${actionHash}`);
+
+    try {
+        const existing = await actionBatchCol.findOne({ actionHash });
+        console.log(existing);
+
+        if (existing !== null) {
+            return { isNew: false, batch: existing };
+        }
+
+        const newDoc: ActionBatchDoc = {
+            actionHash,
+            status: "collecting",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            retryCount: 0,
+        } as ActionBatchDoc;
+
+        const result = await actionBatchCol.insertOne(newDoc);
+
+        logger.info(`Created new action batch with hash ${actionHash}`);
+        return {
+            isNew: true,
+            batch: { ...newDoc, _id: result.insertedId } as ActionBatchDoc,
+        };
+    } catch (error) {
+        logger.error(`Failed to get/create action batch for block ${actionHash}: ${error}`);
+        throw error;
+    }
+}
+
+export async function updateActionBatchStatus(
+    actions: { actions: string[][]; hash: string }[],
+    status: ActionBatchDoc["status"],
+    additionalFields?: Partial<ActionBatchDoc>
+) {
+    await initMongo();
+
+    const actionHash = getActionsHash(actions);
+
+    await actionBatchCol.updateOne(
+        { actionHash },
+        {
+            $set: {
+                status,
+                updatedAt: new Date(),
+                ...additionalFields,
+            },
+        }
+    );
+
+    logger.info(`Updated actions: ${actions.map((a) => a.hash).join(", ")} to status ${status}`);
+}
+
+export async function getStuckActionBatches(
+    stuckThresholdMinutes: number = 10
+): Promise<ActionBatchDoc[]> {
+    await initMongo();
+
+    const threshold = new Date(Date.now() - stuckThresholdMinutes * 60 * 1000);
+
+    return await actionBatchCol
+        .find({
+            status: { $in: ["collecting", "reducing"] },
+            updatedAt: { $lt: threshold },
+            retryCount: { $lt: 3 },
+        })
+        .toArray();
+}
+
+export async function incrementRetryCount(blockHeight: number) {
+    await initMongo();
+
+    await actionBatchCol.updateOne(
+        { blockHeight },
+        {
+            $inc: { retryCount: 1 },
+            $set: { updatedAt: new Date() },
+        }
+    );
+}
+
+export async function getActionBatch(blockHeight: number): Promise<ActionBatchDoc | null> {
+    await initMongo();
+    return await actionBatchCol.findOne({ blockHeight });
+}
+
+function getActionsHash(actions: { actions: string[][]; hash: string }[]): string {
+    return Poseidon.hash(actions.map((a) => Field(a.hash))).toString();
 }

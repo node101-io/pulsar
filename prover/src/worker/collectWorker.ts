@@ -6,6 +6,7 @@ import { fetchAccount, PublicKey, Signature } from "o1js";
 import { CalculateMax, PulsarAction, SettlementContract, VALIDATOR_NUMBER } from "pulsar-contracts";
 import { ENDPOINTS } from "../mock/mockEndpoints.js";
 import dotenv from "dotenv";
+import { getOrCreateActionBatch, updateActionBatchStatus } from "../db.js";
 dotenv.config();
 
 const contractInstance = new SettlementContract(
@@ -23,17 +24,59 @@ createWorker<CollectSignatureJob, void>({
         }
 
         try {
+            const { isNew, batch } = await getOrCreateActionBatch(actions);
+
+            if (!isNew) {
+                console.log(batch);
+                if (batch?.status === "settled") {
+                    logger.info(
+                        `[Job ${id}] Actions for block ${blockHeight} already settled, skipping`
+                    );
+                    return;
+                }
+
+                if (batch?.status === "reducing" || batch?.status === "reduced") {
+                    logger.info(
+                        `[Job ${id}] Actions for block ${blockHeight} already being processed (status: ${batch.status}), skipping`
+                    );
+                    return;
+                }
+
+                const stuckThreshold = 10 * 60 * 1000; // 10 minutes
+                const isStuck =
+                    batch &&
+                    batch.status === "collecting" &&
+                    Date.now() - batch.updatedAt.getTime() > stuckThreshold;
+
+                if (!isStuck) {
+                    logger.info(
+                        `[Job ${id}] Actions for block ${blockHeight} already being collected, skipping`
+                    );
+                    return;
+                }
+
+                logger.warn(`[Job ${id}] Retrying stuck collection for block ${blockHeight}`);
+            }
+
             logger.info(`[Job ${id}] Requesting signatures for block height: ${blockHeight}`);
-            const includedActions = await getIncludedActions();
+            // console.log(`Actions: ${JSON.stringify(actions)}`);
+            const includedActions = await getIncludedActions(actions);
+            // console.log(
+            //     `Included Actions: ${JSON.stringify(Array.from(includedActions.entries()))}`
+            // );
+            const includedActionEntries = Array.from(includedActions.entries());
             const signatures = await collectSignatures(ENDPOINTS, includedActions, {
                 blockHeight,
                 actions,
             });
 
+            await updateActionBatchStatus(actions, "reducing");
+
+            const jobId = `reduce-${blockHeight}`;
             reduceQ.add(
-                "reduce-" + blockHeight,
+                jobId,
                 {
-                    includedActions,
+                    includedActions: includedActionEntries,
                     signaturePubkeyArray: signatures.map(([signature, publicKey]) => [
                         signature.toBase58(),
                         publicKey.toBase58(),
@@ -47,8 +90,13 @@ createWorker<CollectSignatureJob, void>({
                         delay: 5_000,
                     },
                     removeOnComplete: true,
+                    jobId: jobId,
                 }
             );
+            await updateActionBatchStatus(actions, "reducing", {
+                reduceJobId: jobId,
+            });
+
             logger.info(`[Job ${id}] Added reduce job for block height: ${blockHeight}`);
         } catch (error) {
             logger.error(
@@ -92,17 +140,11 @@ export async function collectSignatures(
         };
     });
 
-    const actionHashMap: Map<string, number> = new Map();
-    for (const action of typedActions) {
-        const key = action.action.unconstrainedHash().toString();
-        actionHashMap.set(key, (actionHashMap.get(key) ?? 0) + 1);
-    }
-
     await fetchAccount({ publicKey: contractInstance.address });
-    const { publicInput } = CalculateMax(actionHashMap, contractInstance, typedActions);
+    const { publicInput } = CalculateMax(includedActions, contractInstance, typedActions);
 
     for (let round = 1; round <= maxRounds && got.length < minRequired; round++) {
-        logger.info(`Round ${round}, querying ${remaining.length} validators`);
+        // logger.info(`Round ${round}, querying ${remaining.length} validators`);
 
         const results = await Promise.all(
             remaining.map(async (url) => {
@@ -127,8 +169,8 @@ export async function collectSignatures(
                         return { url, validatorPubKey, signature };
                     }
                     throw new Error("Signature verification failed");
-                } catch (e: any) {
-                    logger.warn(`Validator ${url} failed: ${e.message}`);
+                } catch (err) {
+                    logger.error(`Error fetching signature from ${url}: ${err}`);
                     return { url, signature: undefined };
                 }
             })
@@ -157,6 +199,20 @@ export async function collectSignatures(
     return got;
 }
 
-async function getIncludedActions(): Promise<Map<string, number>> {
-    return new Map();
+async function getIncludedActions(
+    actions: { actions: string[][]; hash: string }[]
+): Promise<Map<string, number>> {
+    const typedActions = actions.map((action: { actions: string[][]; hash: string }) => {
+        return {
+            action: PulsarAction.fromRawAction(action.actions[0]),
+            hash: BigInt(action.hash),
+        };
+    });
+
+    const actionHashMap: Map<string, number> = new Map();
+    for (const action of typedActions) {
+        const key = action.action.unconstrainedHash().toString();
+        actionHashMap.set(key, (actionHashMap.get(key) ?? 0) + 1);
+    }
+    return actionHashMap;
 }

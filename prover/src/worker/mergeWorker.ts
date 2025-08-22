@@ -1,25 +1,10 @@
-import {
-    AGGREGATE_THRESHOLD,
-    MergeSettlementProofs,
-    SettlementContract,
-    SettlementProof,
-} from "pulsar-contracts";
-import { MergeJob } from "../workerConnection.js";
+import { AGGREGATE_THRESHOLD, MergeSettlementProofs, SettlementProof } from "pulsar-contracts";
+import { MergeJob, submitQ } from "../workerConnection.js";
 import { createWorker } from "./worker.js";
 import { deleteProof, fetchProof, storeProof } from "../db.js";
 import logger from "../logger.js";
 import dotenv from "dotenv";
-import { fetchAccount, Mina, PrivateKey, PublicKey } from "o1js";
 dotenv.config();
-
-const settlementContractAddress = process.env.CONTRACT_ADDRESS;
-const minaPrivateKey = process.env.MINA_PRIVATE_KEY;
-const fee = Number(process.env.FEE) || 1e8;
-if (!settlementContractAddress || !minaPrivateKey) {
-    throw new Error("unspecified environment variables");
-}
-const settlementContract = new SettlementContract(PublicKey.fromBase58(settlementContractAddress));
-const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
 createWorker<MergeJob, void>({
     queueName: "merge",
@@ -67,30 +52,30 @@ createWorker<MergeJob, void>({
                 BigInt(AGGREGATE_THRESHOLD)
             ) {
                 logger.info(
-                    `Submitting merge transaction for proof: ${JSON.stringify(
-                        mergeProof.publicInput.toJSON()
-                    )}`
+                    `Queueing submission for fully merged proof: blocks ${lowerBlock.rangeLow}-${upperBlock.rangeHigh}`
                 );
-                await fetchAccount({ publicKey: settlementContract.address });
 
-                const tx = await Mina.transaction(
-                    { sender: senderKey.toPublicKey(), fee },
-                    async () => {
-                        await settlementContract.settle(mergeProof);
+                const priority = lowerBlock.rangeLow + 1;
+                await submitQ.add(
+                    `submit-${lowerBlock.rangeLow}-${upperBlock.rangeHigh}`,
+                    {
+                        rangeLow: lowerBlock.rangeLow,
+                        rangeHigh: upperBlock.rangeHigh,
+                    },
+                    {
+                        priority,
+                        attempts: 100,
+                        backoff: {
+                            type: "exponential",
+                            delay: 10_000,
+                        },
+                        removeOnComplete: true,
+                        removeOnFail: false,
                     }
                 );
 
-                await tx.prove();
-                const pendingTransaction = await tx.sign([senderKey]).send();
-
                 logger.info(
-                    `Settlement transaction sent for blocks ${lowerBlock.rangeLow}-${upperBlock.rangeHigh}: ${pendingTransaction.hash}`
-                );
-
-                await pendingTransaction.wait();
-
-                logger.info(
-                    `Settlement transaction confirmed for blocks ${lowerBlock.rangeLow}-${upperBlock.rangeHigh}`
+                    `Submission job queued for blocks ${lowerBlock.rangeLow}-${upperBlock.rangeHigh}`
                 );
             }
         } catch (e) {

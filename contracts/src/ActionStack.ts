@@ -51,21 +51,36 @@ const ActionStackProgram = ZkProgram({
   publicInput: Field,
   publicOutput: Field,
   methods: {
-    proveIntegrity: {
-      privateInputs: [SelfProof<Field, Field>, Bool, ActionStackQueue],
+    proveBase: {
+      privateInputs: [ActionStackQueue],
+      async method(initialActionState: Field, actionQueue: ActionStackQueue) {
+        let actionState = initialActionState;
+        for (let i = 0; i < ACTION_QUEUE_SIZE; i++) {
+          const action = actionQueue.stack[i];
+          actionState = Provable.if(
+            action.isDummy,
+            actionState,
+            merkleActionsAdd(actionState, action.actionListHash)
+          );
+        }
+
+        return {
+          publicOutput: actionState,
+        };
+      },
+    },
+
+    proveRecursive: {
+      privateInputs: [SelfProof<Field, Field>, ActionStackQueue],
       async method(
         initialActionState: Field,
         proofSoFar: SelfProof<Field, Field>,
-        isRecursive: Bool,
         actionQueue: ActionStackQueue
       ) {
-        proofSoFar.verifyIf(isRecursive);
+        proofSoFar.verify();
+        initialActionState.assertEquals(proofSoFar.publicOutput);
 
-        let actionState = Provable.if(
-          isRecursive,
-          proofSoFar.publicOutput,
-          initialActionState
-        );
+        let actionState = initialActionState;
 
         for (let i = 0; i < ACTION_QUEUE_SIZE; i++) {
           const action = actionQueue.stack[i];

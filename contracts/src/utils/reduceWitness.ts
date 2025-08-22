@@ -16,6 +16,7 @@ import {
   emptyActionListHash,
   merkleActionsAdd,
 } from '../types/actionHelpers.js';
+import { ActionStackProof } from '../ActionStack.js';
 
 export {
   MapFromArray,
@@ -66,6 +67,7 @@ function CalculateMax(
 
     const hash = pack.action.unconstrainedHash().toString();
     const count = includedActionsMap.get(hash) || 0;
+    console.log(`hash: ${hash}, count: ${count}`);
 
     if (PulsarAction.isDeposit(pack.action).toBoolean()) {
       if (deposits === MAX_DEPOSIT_PER_BATCH) {
@@ -214,12 +216,13 @@ async function PrepareBatchWithActions(
 ) {
   if (packedActions.length === 0) {
     log('No actions found for the contract.');
+    let proof = await ActionStackProof.dummy(Field(0), Field(0), 1, 14);
     return {
-      endActionState: 0n,
-      batchActions: [],
+      endActionState: Field(0),
+      batchActions: [PulsarAction.fromRawAction([])],
       batch: Batch.empty(),
       useActionStack: Bool(false),
-      actionStackProof: undefined,
+      actionStackProof: proof,
       publicInput: ValidateReducePublicInput.default,
       mask: ReduceMask.empty(),
     };
@@ -261,6 +264,7 @@ async function PrepareBatchWithActions(
   );
 
   return {
+    endActionState: Field.from(endActionState),
     batchActions,
     batch,
     useActionStack,

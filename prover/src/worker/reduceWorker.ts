@@ -1,6 +1,6 @@
 import { createWorker } from "./worker.js";
 import { ReducerJob } from "../workerConnection.js";
-import { storeProof } from "../db.js";
+import { updateActionBatchStatus } from "../db.js";
 import {
     SignaturePublicKeyList,
     PrepareBatchWithActions,
@@ -22,10 +22,29 @@ const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
 createWorker<ReducerJob, void>({
     queueName: "reduce",
-    maxJobsPerWorker: 100,
+    maxJobsPerWorker: 50,
     jobHandler: async ({ data, id }) => {
+        if (!id) {
+            throw new Error("Job ID is undefined");
+        }
+
+        const { includedActions, signaturePubkeyArray, actions } = data;
+
         try {
-            const { includedActions, signaturePubkeyArray, actions } = data;
+            const includedActionsMap = toIncludedActionsMap(includedActions);
+
+            await fetchAccount({ publicKey: settlementContract.address });
+            console.table({
+                actionState: settlementContract.actionState.get().toString(),
+                merkleListRoot: settlementContract.merkleListRoot.get().toString(),
+                stateRoot: settlementContract.stateRoot.get().toString(),
+                blockHeight: settlementContract.blockHeight.get().toString(),
+                depositListHash: settlementContract.depositListHash.get().toString(),
+                withdrawalListHash: settlementContract.withdrawalListHash.get().toString(),
+                rewardListHash: settlementContract.rewardListHash.get().toString(),
+                accountActionState: settlementContract.account.actionState.get().toString(),
+            });
+
             const packedActions = actions.map((action) => {
                 return {
                     action: PulsarAction.fromRawAction(action.actions[0]),
@@ -43,7 +62,11 @@ createWorker<ReducerJob, void>({
             logger.info(`[Job ${id}] Preparing batch for included actions`);
             await fetchAccount({ publicKey: settlementContract.address });
             const { batch, useActionStack, publicInput, actionStackProof, mask } =
-                await PrepareBatchWithActions(includedActions, settlementContract, packedActions);
+                await PrepareBatchWithActions(
+                    includedActionsMap,
+                    settlementContract,
+                    packedActions
+                );
 
             logger.info(`[Job ${id}] Batch prepared, generating validate reduce proof`);
             const validateReduceProof = await GenerateValidateReduceProof(
@@ -56,8 +79,8 @@ createWorker<ReducerJob, void>({
                 async () => {
                     await settlementContract.reduce(
                         batch,
-                        useActionStack!,
-                        actionStackProof!,
+                        useActionStack,
+                        actionStackProof,
                         mask,
                         validateReduceProof
                     );
@@ -65,14 +88,33 @@ createWorker<ReducerJob, void>({
             );
 
             await tx.prove();
-            await tx.sign([senderKey]).send();
+            const pendingTx = await tx.sign([senderKey]).send();
+            const txHash = pendingTx.hash;
 
-            logger.info(`[Job ${id}] Reduce transaction sent successfully`);
+            await updateActionBatchStatus(actions, "reduced", {
+                settlementTxHash: txHash,
+            });
+
+            logger.info(`[Job ${id}] Reduce transaction sent: ${txHash}`);
+
+            await pendingTx.wait();
+            logger.info(`[Job ${id}] Reduce transaction confirmed: ${txHash}`);
+
+            await updateActionBatchStatus(actions, "settled");
         } catch (err: any) {
             logger.error(
                 `[Job ${id}] Error in reduce worker: ${err?.message || err} \n${err?.stack || ""}`
             );
+            await updateActionBatchStatus(actions, "reducing");
             throw err;
         }
     },
 });
+
+function toIncludedActionsMap(raw: [string, number][]): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const [hash, count] of raw) {
+        map.set(hash, count);
+    }
+    return map;
+}

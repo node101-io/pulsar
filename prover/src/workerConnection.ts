@@ -10,11 +10,13 @@ export {
     mergeQ,
     reduceQ,
     collectSignatureQ,
+    submitQ,
     SettlementJob,
     MergeJob,
     ReducerJob,
     CollectSignatureJob,
     QueueName,
+    SubmitJob,
 };
 
 const connection = new IORedis({
@@ -23,6 +25,11 @@ const connection = new IORedis({
     password: process.env.REDIS_PASSWORD,
     maxRetriesPerRequest: null,
 });
+
+interface SubmitJob {
+    rangeLow: number;
+    rangeHigh: number;
+}
 
 interface SettlementJob {
     blockData: BlockData;
@@ -40,7 +47,7 @@ interface MergeJob {
 }
 
 interface ReducerJob {
-    includedActions: Map<string, number>;
+    includedActions: [string, number][];
     signaturePubkeyArray: Array<[string, string]>;
     actions: {
         actions: string[][];
@@ -60,5 +67,6 @@ const settlementQ = new Queue("settlement", { connection });
 const mergeQ = new Queue("merge", { connection });
 const reduceQ = new Queue("reduce", { connection });
 const collectSignatureQ = new Queue("collect-signature", { connection });
+const submitQ = new Queue("submit", { connection });
 
-type QueueName = "settlement" | "merge" | "reduce" | "collect-signature";
+type QueueName = "settlement" | "merge" | "submit" | "reduce" | "collect-signature";
