@@ -112,8 +112,8 @@ createWorker<SettlementJob, void>({
 
                 const settlementProof = await GenerateSettlementProof(
                     blocks,
-                    signaturePubKeyLists,
-                    PrivateKey.fromBase58(process.env.MINA_PRIVATE_KEY || "").toPublicKey()
+                    signaturePubKeyLists
+                    // PrivateKey.fromBase58(process.env.MINA_PRIVATE_KEY || "").toPublicKey()
                 );
 
                 const rangeLow = Number(settlementProof.publicInput.InitialBlockHeight.toBigInt());

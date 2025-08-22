@@ -41,7 +41,7 @@ createWorker<ReducerJob, void>({
                 blockHeight: settlementContract.blockHeight.get().toString(),
                 depositListHash: settlementContract.depositListHash.get().toString(),
                 withdrawalListHash: settlementContract.withdrawalListHash.get().toString(),
-                rewardListHash: settlementContract.rewardListHash.get().toString(),
+                // rewardListHash: settlementContract.rewardListHash.get().toString(),
                 accountActionState: settlementContract.account.actionState.get().toString(),
             });
 

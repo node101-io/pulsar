@@ -78,7 +78,7 @@ export class MinaClient extends EventEmitter {
                         withdrawalListHash: this.settlementContract.withdrawalListHash
                             .get()
                             .toString(),
-                        rewardListHash: this.settlementContract.rewardListHash.get().toString(),
+                        // rewardListHash: this.settlementContract.rewardListHash.get().toString(),
                         accountActionState: this.settlementContract.account.actionState
                             .get()
                             .toString(),
