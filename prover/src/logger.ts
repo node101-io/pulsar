@@ -26,10 +26,8 @@ class StructuredLogger {
             level: process.env.LOG_LEVEL || (isProduction ? "info" : "debug"),
             defaultMeta: {
                 service: "pulsar-prover",
-                version: process.env.npm_package_version || "unknown",
                 environment: process.env.NODE_ENV || "development",
                 container: process.env.HOSTNAME || "local",
-                pid: process.pid,
             },
             format: winston.format.combine(
                 winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" }),
