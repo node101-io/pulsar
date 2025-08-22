@@ -369,7 +369,6 @@ describe('SettlementProof tests', () => {
     );
   }
 
-  // eslint-disable-next-line no-unused-vars
   async function expectWithdrawToFail(
     senderKey: PrivateKey,
     amount: UInt64,
@@ -418,7 +417,6 @@ describe('SettlementProof tests', () => {
     await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
   }
 
-  // eslint-disable-next-line no-unused-vars
   async function expectReduceToFail(
     senderKey: PrivateKey,
     expectedMsg: string = 'Transaction failed'
