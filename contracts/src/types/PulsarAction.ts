@@ -1,61 +1,75 @@
 import { Bool, Field, Poseidon, Provable, PublicKey, Struct } from 'o1js';
 import { BATCH_SIZE } from '../utils/constants.js';
 
-export { PulsarAction, Batch };
+export { PulsarAction, Batch, PulsarActionBase, PulsarAuth };
 
-[
-  '1',
-  '0',
-  '0',
-  '0',
-  '0',
-  '1599161376933717509482429054827422356400816166140895701993041518123932732815',
-  '6310558633462665370159457076080992493592463962672742685757201873330974620505',
-  '6310558633462665370159457076080992493592463962672742685757201873330974620505',
-  '0',
-  '32',
-  '22007313283418838888498787034324580777946548475718234604119834451319224566874',
-];
+class PulsarAuth extends Struct({
+  cosmosAddress: Field,
+  cosmosSignature: Provable.Array(Field, 2),
+}) {
+  static empty() {
+    return new this({
+      cosmosAddress: Field(0),
+      cosmosSignature: [Field(0), Field(0)],
+    });
+  }
+
+  static from(cosmosAddress: Field, cosmosSignature: Field[]) {
+    if (cosmosSignature.length !== 2) {
+      throw new Error('Cosmos signature must be an array of 2 Fields');
+    }
+    return new this({ cosmosAddress, cosmosSignature });
+  }
+
+  toFields() {
+    return [this.cosmosAddress, ...this.cosmosSignature];
+  }
+
+  toJSON() {
+    return {
+      cosmosAddress: this.cosmosAddress.toString(),
+      cosmosSignature: this.cosmosSignature.map((f) => f.toString()),
+    };
+  }
+}
+
+type PulsarActionBase = {
+  type: Field; // deposit (1), or withdrawal (2)
+  account: PublicKey;
+  amount: Field;
+  blockHeight: Field;
+  pulsarAuth: PulsarAuth;
+};
 
 class PulsarAction extends Struct({
-  type: Field, // deposit (1), or withdrawal (2)
-  account: PublicKey, // only defined for types of deposit and withdrawal
-  amount: Field, //only defined for types of deposit and withdrawal
-  initialState: Field, // only defined for types of settlement
-  newState: Field, // only defined for types of settlement
-  initialMerkleListRoot: Field, // only defined for types of settlement
-  newMerkleListRoot: Field, // only defined for types of settlement,
-  initialBlockHeight: Field, // only defined for types of settlement
-  newBlockHeight: Field, // only defined for types of settlement
-  rewardListUpdateHash: Field, // only defined for types of settlement and withdrawal
+  type: Field,
+  account: PublicKey,
+  amount: Field,
+  blockHeight: Field,
+  pulsarAuth: PulsarAuth,
 }) {
-  static deposit(account: PublicKey, amount: Field) {
+  static deposit(
+    account: PublicKey,
+    amount: Field,
+    blockHeight: Field,
+    pulsarAuth: PulsarAuth
+  ) {
     return new this({
       type: Field(1),
       account,
       amount,
-      initialState: Field(0),
-      newState: Field(0),
-      initialMerkleListRoot: Field(0),
-      newMerkleListRoot: Field(0),
-      initialBlockHeight: Field(0),
-      newBlockHeight: Field(0),
-      rewardListUpdateHash: Field(0),
+      blockHeight,
+      pulsarAuth,
     });
   }
 
-  static withdrawal(account: PublicKey, amount: Field) {
+  static withdrawal(account: PublicKey, amount: Field, blockHeight: Field) {
     return new this({
       type: Field(2),
       account,
       amount,
-      initialState: Field(0),
-      newState: Field(0),
-      initialMerkleListRoot: Field(0),
-      newMerkleListRoot: Field(0),
-      initialBlockHeight: Field(0),
-      newBlockHeight: Field(0),
-      rewardListUpdateHash: Field(0),
+      blockHeight,
+      pulsarAuth: PulsarAuth.empty(),
     });
   }
 
@@ -77,12 +91,15 @@ class PulsarAction extends Struct({
         this.type,
         ...this.account.toFields(),
         this.amount,
+        this.blockHeight,
+        ...this.pulsarAuth.toFields(),
       ]);
     } else if (PulsarAction.isWithdrawal(this).toBoolean()) {
       return Poseidon.hash([
         this.type,
         ...this.account.toFields(),
         this.amount,
+        this.blockHeight,
       ]);
     } else {
       return Field(0);
@@ -90,31 +107,18 @@ class PulsarAction extends Struct({
   }
 
   static fromRawAction(rawAction: string[]) {
-    const [
-      type,
-      x,
-      isOdd,
-      amount,
-      initialState,
-      newState,
-      initialMerkleListRoot,
-      newMerkleListRoot,
-      initialBlockHeight,
-      newBlockHeight,
-      rewardListUpdateHash,
-    ] = rawAction.map(Field);
+    const [type, x, isOdd, amount, blockHeight, cosmosAddress, sig1, sig2] =
+      rawAction.map(Field);
 
     return new PulsarAction({
       type,
       account: PublicKey.fromValue({ x, isOdd: Bool.fromFields([isOdd]) }),
       amount,
-      initialState,
-      newState,
-      initialMerkleListRoot,
-      newMerkleListRoot,
-      initialBlockHeight,
-      newBlockHeight,
-      rewardListUpdateHash,
+      blockHeight,
+      pulsarAuth: new PulsarAuth({
+        cosmosAddress,
+        cosmosSignature: [sig1, sig2],
+      }),
     });
   }
   toJSON() {
@@ -122,13 +126,8 @@ class PulsarAction extends Struct({
       type: this.type.toString(),
       account: this.account.toBase58(),
       amount: this.amount.toString(),
-      initialState: this.initialState.toString(),
-      newState: this.newState.toString(),
-      initialMerkleListRoot: this.initialMerkleListRoot.toString(),
-      newMerkleListRoot: this.newMerkleListRoot.toString(),
-      initialBlockHeight: this.initialBlockHeight.toString(),
-      newBlockHeight: this.newBlockHeight.toString(),
-      rewardListUpdateHash: this.rewardListUpdateHash.toString(),
+      blockHeight: this.blockHeight.toString(),
+      pulsarAuth: this.pulsarAuth.toJSON(),
     };
   }
 }

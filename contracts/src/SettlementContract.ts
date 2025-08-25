@@ -22,7 +22,7 @@ import {
   WITHDRAW_DOWN_PAYMENT,
 } from './utils/constants.js';
 import { ValidateReduceProof } from './ValidateReduce.js';
-import { Batch, PulsarAction } from './types/PulsarAction.js';
+import { Batch, PulsarAction, PulsarAuth } from './types/PulsarAction.js';
 import { ReduceMask } from './types/common.js';
 import { ActionStackProof } from './ActionStack.js';
 import {
@@ -110,7 +110,7 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async deposit(amount: UInt64) {
+  async deposit(amount: UInt64, pulsarAuth: PulsarAuth) {
     amount.assertGreaterThanOrEqual(
       UInt64.from(MINIMUM_DEPOSIT_AMOUNT),
       `At least ${Number(MINIMUM_DEPOSIT_AMOUNT / 1e9)} MINA is required`
@@ -119,7 +119,14 @@ class SettlementContract extends SmartContract {
     const depositAccountUpdate = AccountUpdate.createSigned(sender);
     depositAccountUpdate.send({ to: this.address, amount });
 
-    this.reducer.dispatch(PulsarAction.deposit(sender, amount.value));
+    this.reducer.dispatch(
+      PulsarAction.deposit(
+        sender,
+        amount.value,
+        this.network.blockchainLength.getAndRequireEquals().value,
+        pulsarAuth
+      )
+    );
   }
 
   @method
@@ -132,7 +139,13 @@ class SettlementContract extends SmartContract {
       amount: amount.add(UInt64.from(WITHDRAW_DOWN_PAYMENT)),
     });
 
-    this.reducer.dispatch(PulsarAction.withdrawal(account, amount.value));
+    this.reducer.dispatch(
+      PulsarAction.withdrawal(
+        account,
+        amount.value,
+        this.network.blockchainLength.getAndRequireEquals().value
+      )
+    );
   }
 
   @method
@@ -177,6 +190,8 @@ class SettlementContract extends SmartContract {
           depositListHash,
           ...action.account.toFields(),
           action.amount,
+          action.blockHeight,
+          ...action.pulsarAuth.toFields(),
         ]),
         depositListHash
       );
@@ -187,6 +202,7 @@ class SettlementContract extends SmartContract {
           withdrawalListHash,
           ...action.account.toFields(),
           action.amount,
+          action.blockHeight,
         ]),
         withdrawalListHash
       );

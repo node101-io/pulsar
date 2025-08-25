@@ -230,7 +230,7 @@ async function GenerateActionStackProof(
   }
 
   try {
-    for (let i = 0; i < Math.ceil(actions.length / ACTION_QUEUE_SIZE); i++) {
+    for (let i = 1; i < Math.ceil(actions.length / ACTION_QUEUE_SIZE); i++) {
       proof = (
         await ActionStackProgram.proveRecursive(
           proof.publicOutput,

@@ -1,5 +1,5 @@
-import { Field, MerkleList, Poseidon, PublicKey } from 'o1js';
-import { PulsarAction } from './PulsarAction.js';
+import { Field, MerkleList, Poseidon } from 'o1js';
+import { PulsarAction, PulsarActionBase } from './PulsarAction.js';
 
 export {
   merkleActionsAdd,
@@ -44,20 +44,7 @@ const merkleActionsAdd = (hash: Field, actionsListHash: Field): Field => {
 
 const emptyActionListHash = emptyHashWithPrefix('MinaZkappActionsEmpty');
 
-type PulsarActionData = {
-  type: Field;
-  account: PublicKey;
-  amount: Field;
-  initialState: Field;
-  newState: Field;
-  initialMerkleListRoot: Field;
-  newMerkleListRoot: Field;
-  initialBlockHeight: Field;
-  newBlockHeight: Field;
-  rewardListUpdateHash: Field;
-};
-
-const actionListAdd = (hash: Field, action: PulsarActionData): Field => {
+const actionListAdd = (hash: Field, action: PulsarActionBase): Field => {
   return Poseidon.hashWithPrefix('MinaZkappSeqEvents**', [
     hash,
     Poseidon.hashWithPrefix(

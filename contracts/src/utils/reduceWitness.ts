@@ -67,7 +67,6 @@ function CalculateMax(
 
     const hash = pack.action.unconstrainedHash().toString();
     const count = includedActionsMap.get(hash) || 0;
-    console.log(`hash: ${hash}, count: ${count}`);
 
     if (PulsarAction.isDeposit(pack.action).toBoolean()) {
       if (deposits === MAX_DEPOSIT_PER_BATCH) {
@@ -83,6 +82,8 @@ function CalculateMax(
           publicInput.depositListHash,
           ...pack.action.account.toFields(),
           pack.action.amount,
+          pack.action.blockHeight,
+          ...pack.action.pulsarAuth.toFields(),
         ]),
       });
     } else if (PulsarAction.isWithdrawal(pack.action).toBoolean()) {
@@ -104,6 +105,7 @@ function CalculateMax(
           publicInput.withdrawalListHash,
           ...pack.action.account.toFields(),
           pack.action.amount,
+          pack.action.blockHeight,
         ]),
       });
     }
