@@ -30,6 +30,7 @@ import {
   log,
   logZkappState,
 } from '../utils/loggers';
+import { PulsarAuth } from '../types/PulsarAction';
 
 describe('SettlementProof tests', () => {
   const testEnvironment = process.env.TEST_ENV ?? 'local';
@@ -294,7 +295,10 @@ describe('SettlementProof tests', () => {
     const tx = await Mina.transaction(
       { sender: senderKey.toPublicKey(), fee },
       async () => {
-        await zkapp.deposit(amount);
+        await zkapp.deposit(
+          amount,
+          PulsarAuth.from(Field(0), [Field(0), Field(0)])
+        );
       }
     );
 
@@ -304,6 +308,8 @@ describe('SettlementProof tests', () => {
           Field(1),
           ...senderKey.toPublicKey().toFields(),
           amount.value,
+          Mina.getNetworkState().blockchainLength.value,
+          ...PulsarAuth.from(Field(0), [Field(0), Field(0)]).toFields(),
         ])
       );
     }
@@ -323,7 +329,10 @@ describe('SettlementProof tests', () => {
       const tx = await Mina.transaction(
         { sender: senderKey.toPublicKey(), fee },
         async () => {
-          await zkapp.deposit(amount);
+          await zkapp.deposit(
+            amount,
+            PulsarAuth.from(Field(0), [Field(0), Field(0)])
+          );
         }
       );
       await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
@@ -358,6 +367,7 @@ describe('SettlementProof tests', () => {
           Field(2),
           ...senderKey.toPublicKey().toFields(),
           amount.value,
+          Mina.getNetworkState().blockchainLength.value,
         ])
       );
     }
@@ -737,6 +747,8 @@ describe('SettlementProof tests', () => {
           depositListHash,
           ...feePayerAccount.toFields(),
           Field(1e10),
+          Mina.getNetworkState().blockchainLength.value,
+          ...PulsarAuth.from(Field(0), [Field(0), Field(0)]).toFields(),
         ])
       );
     });
@@ -765,6 +777,7 @@ describe('SettlementProof tests', () => {
           withdrawalListHash,
           ...feePayerAccount.toFields(),
           Field(1e9),
+          Mina.getNetworkState().blockchainLength.value,
         ])
       );
     });
@@ -791,6 +804,8 @@ describe('SettlementProof tests', () => {
           depositListHash,
           ...feePayerAccount.toFields(),
           Field(1e10 + 123),
+          Mina.getNetworkState().blockchainLength.value,
+          ...PulsarAuth.from(Field(0), [Field(0), Field(0)]).toFields(),
         ])
       );
 
@@ -799,6 +814,7 @@ describe('SettlementProof tests', () => {
           withdrawalListHash,
           ...feePayerAccount.toFields(),
           Field(1e9 + 123),
+          Mina.getNetworkState().blockchainLength.value,
         ])
       );
     });

@@ -56,6 +56,7 @@ import {
   AGGREGATE_THRESHOLD,
   SETTLEMENT_MATRIX_SIZE,
 } from '../utils/constants.js';
+import { PulsarAuth } from '../types/PulsarAction.js';
 
 // function logMem(label = '') {
 //   if (!logsEnabled) return;
@@ -520,7 +521,10 @@ async function deposit(
   await fetchAccounts([senderKey.toPublicKey()]);
   const tx = await bench('Deposit transaction', () =>
     Mina.transaction({ sender: senderKey.toPublicKey(), fee }, async () => {
-      await zkapp.deposit(amount);
+      await zkapp.deposit(
+        amount,
+        PulsarAuth.from(Field(0), [Field(0), Field(0)])
+      );
     })
   );
 
@@ -686,7 +690,10 @@ async function settleDepositWithdraw(
 }
 
 async function BenchActionStackProgram(numActions: number) {
-  const actions = TestUtils.GenerateTestActions(numActions);
+  const actions = TestUtils.GenerateTestActions(
+    numActions,
+    Number(Mina.getNetworkState().blockchainLength.value.toString())
+  );
   await bench('Generate Action Stack Proof', () =>
     GenerateActionStackProof(Field.from(0), actions)
   );
