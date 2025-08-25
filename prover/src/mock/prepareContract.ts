@@ -1,12 +1,8 @@
-import {
-    DeployScripts,
-    mockValidatorList,
-    setMinaNetwork,
-    SettlementContract,
-} from "pulsar-contracts";
+import { DeployScripts, setMinaNetwork, SettlementContract } from "pulsar-contracts";
 import dotenv from "dotenv";
 import { AccountUpdate, fetchAccount, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
 import { cacheCompile } from "../cache.js";
+import logger from "../logger.js";
 dotenv.config();
 
 if (
@@ -21,7 +17,7 @@ if (
 
 const signerPrivateKey = PrivateKey.fromBase58(process.env.MINA_PRIVATE_KEY);
 const contractPrivateKey = PrivateKey.fromBase58(process.env.CONTRACT_PRIVATE_KEY);
-console.log(
+logger.info(
     `Signer public key: ${signerPrivateKey
         .toPublicKey()
         .toBase58()}, Contract public key: ${contractPrivateKey.toPublicKey().toBase58()}`
@@ -42,7 +38,7 @@ async function retryUntilSuccess(delayMs = 5000) {
                     : "http://localhost:8181",
             });
 
-            console.log(`Acquired account: ${privateKey.toPublicKey().toBase58()}`);
+            logger.info(`Acquired account: ${privateKey.toPublicKey().toBase58()}`);
 
             await fetchAccount({ publicKey: privateKey.toPublicKey() });
 
@@ -64,13 +60,13 @@ async function retryUntilSuccess(delayMs = 5000) {
                     );
                 }
             );
-            console.log("Waiting for transaction to be processed...");
+            logger.info("Waiting for transaction to be processed...");
             await DeployScripts.waitTransactionAndFetchAccount(
                 tx,
                 [privateKey, contractPrivateKey],
                 [contractInstance.address, signerPrivateKey.toPublicKey(), privateKey.toPublicKey()]
             );
-            console.log("Deployment successful!");
+            logger.info("Deployment successful!");
             break;
         } catch (e) {
             console.error("Deployment failed, retrying in", delayMs / 1000, "seconds");
