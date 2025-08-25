@@ -27,7 +27,13 @@ createWorker<CollectSignatureJob, void>({
             const { isNew, batch } = await getOrCreateActionBatch(actions);
 
             if (!isNew) {
-                console.log(batch);
+                logger.debug("Action batch already exists", {
+                    batchId: batch?.id,
+                    status: batch?.status,
+                    blockHeight,
+                    actionsCount: actions.length,
+                    event: "existing_action_batch",
+                });
                 if (batch?.status === "settled") {
                     logger.info(
                         `[Job ${id}] Actions for block ${blockHeight} already settled, skipping`
@@ -59,11 +65,7 @@ createWorker<CollectSignatureJob, void>({
             }
 
             logger.info(`[Job ${id}] Requesting signatures for block height: ${blockHeight}`);
-            // console.log(`Actions: ${JSON.stringify(actions)}`);
             const includedActions = await getIncludedActions(actions);
-            // console.log(
-            //     `Included Actions: ${JSON.stringify(Array.from(includedActions.entries()))}`
-            // );
             const includedActionEntries = Array.from(includedActions.entries());
             const signatures = await collectSignatures(ENDPOINTS, includedActions, {
                 blockHeight,

@@ -22,7 +22,7 @@ const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
 createWorker<ReducerJob, void>({
     queueName: "reduce",
-    maxJobsPerWorker: 50,
+    maxJobsPerWorker: 5,
     jobHandler: async ({ data, id }) => {
         if (!id) {
             throw new Error("Job ID is undefined");
@@ -41,7 +41,7 @@ createWorker<ReducerJob, void>({
                 blockHeight: settlementContract.blockHeight.get().toString(),
                 depositListHash: settlementContract.depositListHash.get().toString(),
                 withdrawalListHash: settlementContract.withdrawalListHash.get().toString(),
-                rewardListHash: settlementContract.rewardListHash.get().toString(),
+                // rewardListHash: settlementContract.rewardListHash.get().toString(),
                 accountActionState: settlementContract.account.actionState.get().toString(),
             });
 

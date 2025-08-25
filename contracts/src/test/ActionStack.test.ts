@@ -43,11 +43,7 @@ describe('Action Stack Proof tests', () => {
 
   describe('ActionStackQueue Struct', () => {
     it('should create an ActionStackQueue from an array of actions', () => {
-      const actions = TestUtils.GenerateTestActions(
-        ACTION_QUEUE_SIZE - 5,
-        merkleList.hash,
-        Field(0)
-      );
+      const actions = TestUtils.GenerateTestActions(ACTION_QUEUE_SIZE - 5, 1);
       const actionQueue = ActionStackQueue.fromArray(actions);
       expect(
         actionQueue.stack
@@ -72,8 +68,7 @@ describe('Action Stack Proof tests', () => {
     it('should throew an error if too many actions are provided', () => {
       const tooManyActions = TestUtils.GenerateTestActions(
         ACTION_QUEUE_SIZE + 1,
-        merkleList.hash,
-        Field(0)
+        1
       );
       expect(() => ActionStackQueue.fromArray(tooManyActions)).toThrow(
         `Too many actions, max is ${ACTION_QUEUE_SIZE}`
@@ -84,11 +79,8 @@ describe('Action Stack Proof tests', () => {
   describe('ProveIntegrity Method', () => {
     it('should prove integrity of the action stack', async () => {
       const initialActionState = Field(0);
-      const actions = TestUtils.GenerateTestActions(
-        ACTION_QUEUE_SIZE / 2,
-        merkleList.hash,
-        initialActionState
-      );
+      const actions = TestUtils.GenerateTestActions(ACTION_QUEUE_SIZE / 2, 1);
+      log('Number of actions:', actions.length);
 
       const endActionState = TestUtils.CalculateActionRoot(
         initialActionState,
@@ -114,8 +106,7 @@ describe('Action Stack Proof tests', () => {
       const initialActionState = Field(0);
       const actions = TestUtils.GenerateTestActions(
         2 * ACTION_QUEUE_SIZE + 123,
-        merkleList.hash,
-        initialActionState
+        1
       );
 
       const endActionState = TestUtils.CalculateActionRoot(

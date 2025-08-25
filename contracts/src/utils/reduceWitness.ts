@@ -4,7 +4,6 @@ import { log } from './loggers.js';
 import {
   BATCH_SIZE,
   MAX_DEPOSIT_PER_BATCH,
-  MAX_SETTLEMENT_PER_BATCH,
   MAX_WITHDRAWAL_PER_BATCH,
 } from './constants.js';
 import { Batch, PulsarAction } from '../types/PulsarAction.js';
@@ -49,19 +48,15 @@ function CalculateMax(
 ) {
   let withdrawals = 0;
   let deposits = 0;
-  let settlements = 0;
 
   const batchActions: Array<PulsarAction> = [];
   let endActionState = 0n;
 
   let mask = new Array<boolean>(BATCH_SIZE).fill(false);
   let publicInput = new ValidateReducePublicInput({
-    stateRoot: contractInstance.stateRoot.get(),
     merkleListRoot: contractInstance.merkleListRoot.get(),
-    blockHeight: contractInstance.blockHeight.get(),
     depositListHash: contractInstance.depositListHash.get(),
     withdrawalListHash: contractInstance.withdrawalListHash.get(),
-    rewardListHash: contractInstance.rewardListHash.get(),
   });
 
   for (const [i, pack] of packedActions.entries()) {
@@ -72,33 +67,8 @@ function CalculateMax(
 
     const hash = pack.action.unconstrainedHash().toString();
     const count = includedActionsMap.get(hash) || 0;
-    console.log(`hash: ${hash}, count: ${count}`);
 
-    if (PulsarAction.isSettlement(pack.action).toBoolean()) {
-      if (count <= 0) {
-        log('Action skipped:', pack.action.toJSON());
-        batchActions.push(pack.action);
-        endActionState = BigInt(pack.hash);
-        continue;
-      } else if (settlements === MAX_SETTLEMENT_PER_BATCH) {
-        log('Max settlements reached for batch');
-        break;
-      }
-
-      settlements++;
-      mask[i] = true;
-
-      publicInput = new ValidateReducePublicInput({
-        ...publicInput,
-        stateRoot: pack.action.newState,
-        merkleListRoot: pack.action.newMerkleListRoot,
-        blockHeight: pack.action.newBlockHeight,
-        rewardListHash: Poseidon.hash([
-          publicInput.rewardListHash,
-          pack.action.rewardListUpdateHash,
-        ]),
-      });
-    } else if (PulsarAction.isDeposit(pack.action).toBoolean()) {
+    if (PulsarAction.isDeposit(pack.action).toBoolean()) {
       if (deposits === MAX_DEPOSIT_PER_BATCH) {
         log('Max deposits reached for batch');
         break;
@@ -112,6 +82,8 @@ function CalculateMax(
           publicInput.depositListHash,
           ...pack.action.account.toFields(),
           pack.action.amount,
+          pack.action.blockHeight,
+          ...pack.action.pulsarAuth.toFields(),
         ]),
       });
     } else if (PulsarAction.isWithdrawal(pack.action).toBoolean()) {
@@ -133,6 +105,7 @@ function CalculateMax(
           publicInput.withdrawalListHash,
           ...pack.action.account.toFields(),
           pack.action.amount,
+          pack.action.blockHeight,
         ]),
       });
     }

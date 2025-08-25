@@ -26,9 +26,15 @@ export function createWorker<Data, Result>(params: CreateWorkerParams<Data, Resu
     } = params;
 
     let jobsProcessed = 0;
-    console.log(
-        `Creating worker for queue "${queueName}" with max jobs per worker: ${maxJobsPerWorker}`
-    );
+    const workerLogger = logger.child({ 
+        workerType: queueName, 
+        workerId: `${queueName}-${process.pid}`,
+        maxJobsPerWorker
+    });
+    
+    workerLogger.info(`Worker initialized for queue "${queueName}"`, {
+        event: "worker_initialized"
+    });
 
     const processor: Processor<Data, Result, string> = async (job: Job<Data, Result, string>) => {
         if (!globalThis.__contractsCompiled__) {
@@ -41,29 +47,43 @@ export function createWorker<Data, Result>(params: CreateWorkerParams<Data, Resu
         globalThis.__contractsCompiled__ = true;
 
         try {
-            logger.info(
-                `[${queueName}] Processing job ${job.id} (${jobsProcessed}/${maxJobsPerWorker})`
-            );
+            const startTime = Date.now();
+            workerLogger.jobStarted(job.id!, queueName, {
+                jobsProcessed,
+                maxJobsPerWorker,
+                jobData: job.data
+            });
 
             const res = await jobHandler(job);
+            const duration = Date.now() - startTime;
             jobsProcessed++;
+            
+            workerLogger.jobCompleted(job.id!, queueName, duration, {
+                jobsProcessed,
+                maxJobsPerWorker
+            });
+            
             if (jobsProcessed >= maxJobsPerWorker) {
-                logger.info(
-                    `[${queueName}] Max jobs processed (${maxJobsPerWorker}). Worker will restart.`
-                );
+                workerLogger.info("Worker reached max jobs limit, restarting", {
+                    event: "worker_restart",
+                    jobsProcessed,
+                    maxJobsPerWorker
+                });
                 jobsProcessed = 0;
                 worker.close().then(() => {
-                    logger.info(`[${queueName}] Worker closed. Restarting...`);
+                    workerLogger.info("Worker closed successfully", {
+                        event: "worker_closed"
+                    });
                     process.exit(0);
                 });
             }
             return res;
         } catch (error) {
-            logger.error(
-                `[${queueName}] Job ${job.id} failed: ${
-                    error instanceof Error ? error.stack : error
-                }`
-            );
+            workerLogger.jobFailed(job.id!, queueName, error as Error, {
+                jobsProcessed,
+                maxJobsPerWorker,
+                jobData: job.data
+            });
             throw error;
         }
     };

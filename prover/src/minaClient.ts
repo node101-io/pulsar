@@ -6,6 +6,7 @@ import {
     setMinaNetwork,
     SettlementContract,
 } from "pulsar-contracts";
+import logger from "./logger.js";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -69,21 +70,28 @@ export class MinaClient extends EventEmitter {
 
                     let actions = await fetchRawActions(this.watchedAddress, this.fromActionState);
 
-                    console.table({
+                    logger.debug("Settlement contract state", {
                         actionState: this.settlementContract.actionState.get().toString(),
                         merkleListRoot: this.settlementContract.merkleListRoot.get().toString(),
                         stateRoot: this.settlementContract.stateRoot.get().toString(),
-                        blockHeight: this.settlementContract.blockHeight.get().toString(),
+                        blockHeight: Number(this.settlementContract.blockHeight.get().toString()),
                         depositListHash: this.settlementContract.depositListHash.get().toString(),
                         withdrawalListHash: this.settlementContract.withdrawalListHash
                             .get()
                             .toString(),
-                        rewardListHash: this.settlementContract.rewardListHash.get().toString(),
                         accountActionState: this.settlementContract.account.actionState
                             .get()
                             .toString(),
+                        event: "contract_state_debug",
+                        currentBlockHeight: currentBlockHeight,
                     });
-                    console.log(this.lastSeenBlockHeight, this.fromActionState.toString(), actions);
+                    logger.debug("Processing new block actions", {
+                        lastSeenBlockHeight: this.lastSeenBlockHeight,
+                        fromActionState: this.fromActionState.toString(),
+                        actionsCount: actions?.length || 0,
+                        blockHeight: currentBlockHeight,
+                        event: "new_block_actions",
+                    });
                     if (!actions || actions.length === 0) {
                         actions = [];
                     }

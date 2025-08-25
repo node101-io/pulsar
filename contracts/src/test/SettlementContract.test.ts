@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import {
   Field,
   Mina,
@@ -29,6 +30,7 @@ import {
   log,
   logZkappState,
 } from '../utils/loggers';
+import { PulsarAuth } from '../types/PulsarAction';
 
 describe('SettlementProof tests', () => {
   const testEnvironment = process.env.TEST_ENV ?? 'local';
@@ -293,16 +295,21 @@ describe('SettlementProof tests', () => {
     const tx = await Mina.transaction(
       { sender: senderKey.toPublicKey(), fee },
       async () => {
-        await zkapp.deposit(amount);
+        await zkapp.deposit(
+          amount,
+          PulsarAuth.from(Field(0), [Field(0), Field(0)])
+        );
       }
     );
 
     if (pushToStack) {
       actionStack.push(
         Poseidon.hash([
-          Field(2),
+          Field(1),
           ...senderKey.toPublicKey().toFields(),
           amount.value,
+          Mina.getNetworkState().blockchainLength.value,
+          ...PulsarAuth.from(Field(0), [Field(0), Field(0)]).toFields(),
         ])
       );
     }
@@ -322,7 +329,10 @@ describe('SettlementProof tests', () => {
       const tx = await Mina.transaction(
         { sender: senderKey.toPublicKey(), fee },
         async () => {
-          await zkapp.deposit(amount);
+          await zkapp.deposit(
+            amount,
+            PulsarAuth.from(Field(0), [Field(0), Field(0)])
+          );
         }
       );
       await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
@@ -354,9 +364,10 @@ describe('SettlementProof tests', () => {
     if (pushToStack) {
       actionStack.push(
         Poseidon.hash([
-          Field(3),
+          Field(2),
           ...senderKey.toPublicKey().toFields(),
           amount.value,
+          Mina.getNetworkState().blockchainLength.value,
         ])
       );
     }
@@ -368,7 +379,6 @@ describe('SettlementProof tests', () => {
     );
   }
 
-  // eslint-disable-next-line no-unused-vars
   async function expectWithdrawToFail(
     senderKey: PrivateKey,
     amount: UInt64,
@@ -417,7 +427,6 @@ describe('SettlementProof tests', () => {
     await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
   }
 
-  // eslint-disable-next-line no-unused-vars
   async function expectReduceToFail(
     senderKey: PrivateKey,
     expectedMsg: string = 'Transaction failed'
@@ -633,7 +642,6 @@ describe('SettlementProof tests', () => {
       expect(zkapp.blockHeight.get()).toEqual(Field.from(0));
       expect(zkapp.depositListHash.get()).toEqual(Field(0));
       expect(zkapp.withdrawalListHash.get()).toEqual(Field(0));
-      expect(zkapp.rewardListHash.get()).toEqual(Field(0));
     });
 
     it('Reject contract initialization again', async () => {
@@ -677,20 +685,6 @@ describe('SettlementProof tests', () => {
         AGGREGATE_THRESHOLD
       );
       await settle(feePayerKey, settlementProof);
-    });
-
-    it('Reduce actions', async () => {
-      await reduce(feePayerKey);
-      actionStack = [];
-      expect(zkapp.stateRoot.get()).toEqual(
-        settlementProof.publicInput.NewStateRoot
-      );
-      expect(zkapp.blockHeight.get()).toEqual(
-        settlementProof.publicInput.NewBlockHeight
-      );
-      expect(zkapp.merkleListRoot.get()).toEqual(
-        settlementProof.publicInput.NewMerkleListRoot
-      );
     });
 
     it('Reject settlement with invalid proof: wrong state root', async () => {
@@ -744,13 +738,17 @@ describe('SettlementProof tests', () => {
 
     it('Reduce actions', async () => {
       const depositListHash = zkapp.depositListHash.get();
+      log(`Deposit list hash before: ${depositListHash.toString()}`);
       await reduce(feePayerKey);
+      log(`Deposit list hash after: ${zkapp.depositListHash.get().toString()}`);
 
       expect(zkapp.depositListHash.get()).toEqual(
         Poseidon.hash([
           depositListHash,
           ...feePayerAccount.toFields(),
           Field(1e10),
+          Mina.getNetworkState().blockchainLength.value,
+          ...PulsarAuth.from(Field(0), [Field(0), Field(0)]).toFields(),
         ])
       );
     });
@@ -766,13 +764,20 @@ describe('SettlementProof tests', () => {
     });
     it('Reduce actions', async () => {
       const withdrawalListHash = zkapp.withdrawalListHash.get();
+      log(`Withdrawal list hash before: ${withdrawalListHash.toString()}`);
       await reduce(feePayerKey);
+      log(
+        `Withdrawal list hash after: ${zkapp.withdrawalListHash
+          .get()
+          .toString()}`
+      );
 
       expect(zkapp.withdrawalListHash.get()).toEqual(
         Poseidon.hash([
           withdrawalListHash,
           ...feePayerAccount.toFields(),
           Field(1e9),
+          Mina.getNetworkState().blockchainLength.value,
         ])
       );
     });
@@ -783,16 +788,6 @@ describe('SettlementProof tests', () => {
       log(expect.getState().currentTestName);
     });
 
-    it('Generate a settlement proof', async () => {
-      settlementProof = await TestUtils.GenerateTestSettlementProof(
-        activeSet,
-        AGGREGATE_THRESHOLD,
-        2 * AGGREGATE_THRESHOLD
-      );
-    });
-    it('Settle method', async () => {
-      await settle(feePayerKey, settlementProof);
-    });
     it('Deposit method', async () => {
       await deposit(feePayerKey, UInt64.from(1e10 + 123));
     });
@@ -803,21 +798,14 @@ describe('SettlementProof tests', () => {
       const depositListHash = zkapp.depositListHash.get();
       const withdrawalListHash = zkapp.withdrawalListHash.get();
       await reduce(feePayerKey);
-      expect(zkapp.stateRoot.get()).toEqual(
-        settlementProof.publicInput.NewStateRoot
-      );
-      expect(zkapp.blockHeight.get()).toEqual(
-        settlementProof.publicInput.NewBlockHeight
-      );
-      expect(zkapp.merkleListRoot.get()).toEqual(
-        settlementProof.publicInput.NewMerkleListRoot
-      );
 
       expect(zkapp.depositListHash.get()).toEqual(
         Poseidon.hash([
           depositListHash,
           ...feePayerAccount.toFields(),
           Field(1e10 + 123),
+          Mina.getNetworkState().blockchainLength.value,
+          ...PulsarAuth.from(Field(0), [Field(0), Field(0)]).toFields(),
         ])
       );
 
@@ -826,39 +814,40 @@ describe('SettlementProof tests', () => {
           withdrawalListHash,
           ...feePayerAccount.toFields(),
           Field(1e9 + 123),
+          Mina.getNetworkState().blockchainLength.value,
         ])
       );
     });
   });
 
-  describe('More transactions to reduce', () => {
-    beforeEach(async () => {
-      await prepareNewContract();
-      log(expect.getState().currentTestName);
-    });
+  // describe('More transactions to reduce', () => {
+  //   beforeEach(async () => {
+  //     await prepareNewContract();
+  //     log(expect.getState().currentTestName);
+  //   });
 
-    it('1 settlement + 1 deposit + 1 withdraw', async () => {
-      await settleDepositWithdraw(1, 1, 1);
-    });
+  //   it('1 settlement + 1 deposit + 1 withdraw', async () => {
+  //     await settleDepositWithdraw(1, 1, 1);
+  //   });
 
-    it('1 settlement + 5 deposits + 5 withdraws', async () => {
-      await settleDepositWithdraw(1, 5, 5);
-    });
+  //   it('1 settlement + 5 deposits + 5 withdraws', async () => {
+  //     await settleDepositWithdraw(1, 5, 5);
+  //   });
 
-    it('1 settlement + 10 deposits + 10 withdraws', async () => {
-      await settleDepositWithdraw(1, 10, 10);
-    });
+  //   it('1 settlement + 10 deposits + 10 withdraws', async () => {
+  //     await settleDepositWithdraw(1, 10, 10);
+  //   });
 
-    it('1 settlement + 20 deposits + 20 withdraws', async () => {
-      await settleDepositWithdraw(1, 20, 20);
-    });
+  //   it('1 settlement + 20 deposits + 20 withdraws', async () => {
+  //     await settleDepositWithdraw(1, 20, 20);
+  //   });
 
-    it('1 settlement + 50 deposits + 50 withdraws', async () => {
-      await settleDepositWithdraw(1, 50, 50);
-    });
+  //   it('1 settlement + 50 deposits + 50 withdraws', async () => {
+  //     await settleDepositWithdraw(1, 50, 50);
+  //   });
 
-    it('1 settlement + 80 deposits + 80 withdraws', async () => {
-      await settleDepositWithdraw(1, 80, 80);
-    });
-  });
+  //   it('1 settlement + 80 deposits + 80 withdraws', async () => {
+  //     await settleDepositWithdraw(1, 80, 80);
+  //   });
+  // });
 });

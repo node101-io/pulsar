@@ -20,7 +20,7 @@ const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
 createWorker<SubmitJob, void>({
     queueName: "submit",
-    maxJobsPerWorker: 100,
+    maxJobsPerWorker: 40,
     jobHandler: async ({ data }) => {
         const { rangeLow, rangeHigh } = data;
 
