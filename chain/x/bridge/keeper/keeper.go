@@ -86,8 +86,13 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 	k.SetApprovedActions(ctx, bridgeState.ApprovedActions)
 
 	// Set hashes
-	k.SetApprovedActionHash(ctx, bridgeState.ApprovedActionHash)
-	k.SetAllActionHash(ctx, bridgeState.AllActionHash)
+	if len(bridgeState.ApprovedActions) > 0 {
+		k.SetApprovedActionHash(ctx, bridgeState.ApprovedActionHash)
+		k.SetAllActionHash(ctx, bridgeState.AllActionHash)
+	} else {
+		k.SetApprovedActionHash(ctx, k.InitializeHash())
+		k.SetAllActionHash(ctx, k.InitializeHash())
+	}
 
 	// Set settled block height
 	k.SetSettledBlockHeight(ctx, bridgeState.SettledBlockHeight)

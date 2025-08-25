@@ -20,6 +20,11 @@ func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 					Use:       "test-query",
 					Short:     "Returns test string 'node101'",
 				},
+				{
+					RpcMethod: "BridgeState",
+					Use:       "bridge-state",
+					Short:     "Shows the complete bridge state",
+				},
 			},
 		},
 		Tx: &autocliv1.ServiceCommandDescriptor{

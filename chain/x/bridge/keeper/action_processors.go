@@ -13,7 +13,7 @@ func (k Keeper) processDepositAction(ctx sdk.Context, action types.PulsarAction,
 	// Check if Mina public key is registered
 	if !k.IsMinaPublicKeyRegistered(action.PublicKey) {
 		ctx.Logger().Info("Ignoring deposit: Mina public key not registered",
-			"public_key", action.PublicKey,
+			"mina_public_key", action.PublicKey,
 			"amount", action.Amount.String())
 		return false
 	}
@@ -22,7 +22,7 @@ func (k Keeper) processDepositAction(ctx sdk.Context, action types.PulsarAction,
 	cosmosAddr, err := k.MinaPublicKeyToCosmosAddress(action.PublicKey)
 	if err != nil {
 		ctx.Logger().Error("Failed to convert Mina public key to Cosmos address",
-			"public_key", action.PublicKey,
+			"mina_public_key", action.PublicKey,
 			"error", err)
 		return false
 	}
@@ -30,7 +30,7 @@ func (k Keeper) processDepositAction(ctx sdk.Context, action types.PulsarAction,
 	// Mint pMINA to the account
 	if err := k.MintPMina(ctx, cosmosAddr, action.Amount); err != nil {
 		ctx.Logger().Error("Failed to mint pMINA for deposit",
-			"public_key", action.PublicKey,
+			"mina_public_key", action.PublicKey,
 			"cosmos_address", cosmosAddr.String(),
 			"amount", action.Amount.String(),
 			"error", err)
@@ -52,7 +52,7 @@ func (k Keeper) processDepositAction(ctx sdk.Context, action types.PulsarAction,
 	)
 
 	ctx.Logger().Info("Deposit action processed successfully",
-		"public_key", action.PublicKey,
+		"mina_public_key", action.PublicKey,
 		"cosmos_address", cosmosAddr.String(),
 		"amount", action.Amount.String())
 
@@ -67,7 +67,7 @@ func (k Keeper) processWithdrawalAction(ctx sdk.Context, action types.PulsarActi
 
 	if currentBalance.LT(action.Amount) {
 		ctx.Logger().Info("Ignoring withdrawal: insufficient balance",
-			"public_key", action.PublicKey,
+			"mina_public_key", action.PublicKey,
 			"requested_amount", action.Amount.String(),
 			"current_balance", currentBalance.String())
 		return false
@@ -93,7 +93,7 @@ func (k Keeper) processWithdrawalAction(ctx sdk.Context, action types.PulsarActi
 	)
 
 	ctx.Logger().Info("Withdrawal action processed successfully",
-		"public_key", action.PublicKey,
+		"mina_public_key", action.PublicKey,
 		"amount", action.Amount.String(),
 		"new_balance", newBalance.String())
 
@@ -118,6 +118,6 @@ func (k Keeper) processSettlementAction(ctx sdk.Context, action types.PulsarActi
 	)
 
 	ctx.Logger().Info("Settlement action processed successfully",
-		"public_key", action.PublicKey,
+		"mina_public_key", action.PublicKey,
 		"amount", action.Amount.String())
 }

@@ -44,7 +44,7 @@ func (k Keeper) ProcessActions(ctx sdk.Context, actions []types.PulsarAction, ne
 		ctx.Logger().Debug("Processing action",
 			"index", i,
 			"action_type", action.ActionType,
-			"public_key", action.PublicKey,
+			"mina_public_key", action.PublicKey,
 			"amount", action.Amount.String(),
 			"block_height", action.BlockHeight)
 
@@ -64,7 +64,7 @@ func (k Keeper) ProcessActions(ctx sdk.Context, actions []types.PulsarAction, ne
 		default:
 			ctx.Logger().Warn("Unknown action type, ignoring",
 				"action_type", action.ActionType,
-				"public_key", action.PublicKey)
+				"mina_public_key", action.PublicKey)
 			result.IgnoredCount++
 			continue
 		}
