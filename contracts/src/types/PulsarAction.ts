@@ -121,6 +121,17 @@ class PulsarAction extends Struct({
       }),
     });
   }
+
+  toFields() {
+    return [
+      this.type,
+      ...this.account.toFields(),
+      this.amount,
+      this.blockHeight,
+      ...this.pulsarAuth.toFields(),
+    ];
+  }
+
   toJSON() {
     return {
       type: this.type.toString(),

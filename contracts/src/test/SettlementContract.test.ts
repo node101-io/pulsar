@@ -30,7 +30,9 @@ import {
   log,
   logZkappState,
 } from '../utils/loggers';
-import { PulsarAuth } from '../types/PulsarAction';
+import { PulsarAction, PulsarAuth } from '../types/PulsarAction';
+import { fetchRawActions } from '../utils/fetch';
+import { actionListAdd, emptyActionListHash } from '../types/actionHelpers';
 
 describe('SettlementProof tests', () => {
   const testEnvironment = process.env.TEST_ENV ?? 'local';
@@ -797,6 +799,35 @@ describe('SettlementProof tests', () => {
     it('Reduce actions', async () => {
       const depositListHash = zkapp.depositListHash.get();
       const withdrawalListHash = zkapp.withdrawalListHash.get();
+
+      const actions = await fetchRawActions(
+        zkapp.address,
+        zkapp.actionState.get()
+      );
+      console.log(JSON.stringify(actions, null, 2));
+
+      if (!actions) throw new Error('No actions found');
+
+      console.log(emptyActionListHash.toString());
+      console.log(
+        Poseidon.hash(
+          PulsarAction.fromRawAction(actions[0].actions[0]).toFields()
+        ).toString()
+      );
+
+      console.log(
+        Poseidon.hash([
+          emptyActionListHash,
+          ...PulsarAction.fromRawAction(actions[0].actions[0]).toFields(),
+        ]).toString()
+      );
+      console.log(
+        actionListAdd(
+          emptyActionListHash,
+          PulsarAction.fromRawAction(actions[0].actions[0])
+        ).toString()
+      );
+
       await reduce(feePayerKey);
 
       expect(zkapp.depositListHash.get()).toEqual(
