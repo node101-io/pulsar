@@ -59,10 +59,10 @@ import {
 import {
   MapFromArray,
   CalculateMax,
+  CalculateMaxWithBalances,
   PackActions,
   PrepareBatch,
   PrepareBatchWithActions,
-  validateActionQueue,
 } from './utils/reduceWitness.js';
 import {
   ValidateReduceProof,
@@ -115,10 +115,10 @@ export {
   GeneratePulsarBlock,
   MapFromArray,
   CalculateMax,
+  CalculateMaxWithBalances,
   PackActions,
   PrepareBatch,
   PrepareBatchWithActions,
-  validateActionQueue,
   ActionStackProof,
   ActionStackQueue,
   ActionStackProgram,

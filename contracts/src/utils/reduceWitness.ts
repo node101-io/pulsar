@@ -21,10 +21,10 @@ import { ActionStackProof } from '../ActionStack.js';
 export {
   MapFromArray,
   CalculateMax,
+  CalculateMaxWithBalances,
   PrepareBatch,
   PrepareBatchWithActions,
   PackActions,
-  validateActionQueue,
 };
 
 function MapFromArray(array: Field[]) {
@@ -40,7 +40,6 @@ function MapFromArray(array: Field[]) {
   return map;
 }
 
-// maple
 function CalculateMax(
   includedActionsMap: Map<string, number>,
   contractInstance: SettlementContract,
@@ -88,6 +87,90 @@ function CalculateMax(
       });
     } else if (PulsarAction.isWithdrawal(pack.action).toBoolean()) {
       if (count <= 0) {
+        log('Action skipped:', pack.action.toJSON());
+        batchActions.push(pack.action);
+        endActionState = BigInt(pack.hash);
+        continue;
+      } else if (withdrawals === MAX_WITHDRAWAL_PER_BATCH) {
+        log('Max withdrawals reached for batch');
+        break;
+      }
+      withdrawals++;
+      mask[i] = true;
+
+      publicInput = new ValidateReducePublicInput({
+        ...publicInput,
+        withdrawalListHash: Poseidon.hash([
+          publicInput.withdrawalListHash,
+          ...pack.action.account.toFields(),
+          pack.action.amount,
+          pack.action.blockHeight,
+        ]),
+      });
+    }
+
+    batchActions.push(pack.action);
+    endActionState = BigInt(pack.hash);
+  }
+
+  return {
+    endActionState,
+    batchActions,
+    publicInput,
+    mask: ReduceMask.fromArray(mask),
+  };
+}
+
+function CalculateMaxWithBalances(
+  withdrawBalances: Map<string, number>,
+  contractInstance: SettlementContract,
+  packedActions: Array<{ action: PulsarAction; hash: bigint }>
+) {
+  let withdrawals = 0;
+  let deposits = 0;
+
+  const batchActions: Array<PulsarAction> = [];
+  let endActionState = 0n;
+
+  let mask = new Array<boolean>(BATCH_SIZE).fill(false);
+  let publicInput = new ValidateReducePublicInput({
+    merkleListRoot: contractInstance.merkleListRoot.get(),
+    depositListHash: contractInstance.depositListHash.get(),
+    withdrawalListHash: contractInstance.withdrawalListHash.get(),
+  });
+
+  for (const [i, pack] of packedActions.entries()) {
+    if (batchActions.length === BATCH_SIZE) {
+      log('Batch size reached:', batchActions.length);
+      break;
+    }
+
+    if (PulsarAction.isDeposit(pack.action).toBoolean()) {
+      if (deposits === MAX_DEPOSIT_PER_BATCH) {
+        log('Max deposits reached for batch');
+        break;
+      }
+      deposits++;
+      mask[i] = true;
+
+      publicInput = new ValidateReducePublicInput({
+        ...publicInput,
+        depositListHash: Poseidon.hash([
+          publicInput.depositListHash,
+          ...pack.action.account.toFields(),
+          pack.action.amount,
+          pack.action.blockHeight,
+          ...pack.action.pulsarAuth.toFields(),
+        ]),
+      });
+    } else if (PulsarAction.isWithdrawal(pack.action).toBoolean()) {
+      const accountBalance = withdrawBalances.get(
+        pack.action.account.toString()
+      );
+      if (
+        accountBalance === undefined ||
+        pack.action.amount.toBigInt() > BigInt(accountBalance)
+      ) {
         log('Action skipped:', pack.action.toJSON());
         batchActions.push(pack.action);
         endActionState = BigInt(pack.hash);
@@ -273,57 +356,5 @@ async function PrepareBatchWithActions(
     actionStackProof,
     publicInput,
     mask,
-  };
-}
-
-function validateActionQueue(
-  rawActions: {
-    actions: string[][];
-    hash: string;
-  }[],
-  finalActionState: string
-): {
-  actions: Array<{ action: PulsarAction; hash: bigint }>;
-  isValid: boolean;
-} {
-  if (rawActions.length === 0) {
-    return {
-      actions: [],
-      isValid: false,
-    };
-  }
-
-  const actions = rawActions.map((action) => {
-    return {
-      action: PulsarAction.fromRawAction(action.actions[0]),
-      hash: BigInt(action.hash),
-    };
-  });
-
-  actions.forEach((action, index) => {
-    if (action.action.unconstrainedHash().toBigInt() !== action.hash) {
-      log(
-        `Action hash mismatch at index ${index}: expected ${
-          action.hash
-        }, got ${action.action.unconstrainedHash().toBigInt()}`
-      );
-      return { actions, isValid: false };
-    }
-  });
-
-  let actionListHash = emptyActionListHash;
-  for (const action of actions) {
-    actionListHash = merkleActionsAdd(actionListHash, Field(action.hash));
-  }
-
-  if (actionListHash.toString() !== finalActionState) {
-    log(
-      `Action state mismatch: expected ${finalActionState}, got ${actionListHash.toString()}`
-    );
-    return { actions, isValid: false };
-  }
-  return {
-    actions,
-    isValid: true,
   };
 }
