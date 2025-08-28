@@ -15,7 +15,7 @@ import (
 
 	tmtypes "github.com/cometbft/cometbft/proto/tendermint/types"
 
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // provider message types

@@ -8,7 +8,7 @@ import "interchain_security/minakeys/params.proto";
 import "interchain_security/minakeys/key_store.proto";
 import "interchain_security/minakeys/vote_ext.proto";
 
-option go_package = "github.com/interchain-security/v5/x/minakeys/types";
+option go_package = "github.com/node101-io/pulsar/chain/x/minakeys/types";
 
 // GenesisState defines the minakeys module's genesis state.
 message GenesisState {

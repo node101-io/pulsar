@@ -93,20 +93,20 @@ import (
 	tmos "github.com/cometbft/cometbft/libs/os"
 	dbm "github.com/cosmos/cosmos-db"
 
-	appencoding "github.com/node101-io/pulsar/chain/interchain-security/v5/app/encoding"
-	testutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/integration"
-	ibcconsumer "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer"
-	ibcconsumerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/keeper"
-	ibcconsumertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/types"
+	appencoding "github.com/node101-io/pulsar/chain/app/encoding"
+	testutil "github.com/node101-io/pulsar/chain/testutil/integration"
+	ibcconsumer "github.com/node101-io/pulsar/chain/x/ccv/consumer"
+	ibcconsumerkeeper "github.com/node101-io/pulsar/chain/x/ccv/consumer/keeper"
+	ibcconsumertypes "github.com/node101-io/pulsar/chain/x/ccv/consumer/types"
 
-	minakeyskeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/keeper"
-	minakeysmodule "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/module"
-	minakeysmoduletypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
-	minakeysutils "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/utils"
+	minakeyskeeper "github.com/node101-io/pulsar/chain/x/minakeys/keeper"
+	minakeysmodule "github.com/node101-io/pulsar/chain/x/minakeys/module"
+	minakeysmoduletypes "github.com/node101-io/pulsar/chain/x/minakeys/types"
+	minakeysutils "github.com/node101-io/pulsar/chain/x/minakeys/utils"
 
-	bridgekeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/keeper"
-	bridgemodule "github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/module"
-	bridgemoduletypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
+	bridgekeeper "github.com/node101-io/pulsar/chain/x/bridge/keeper"
+	bridgemodule "github.com/node101-io/pulsar/chain/x/bridge/module"
+	bridgemoduletypes "github.com/node101-io/pulsar/chain/x/bridge/types"
 )
 
 const (

@@ -11,8 +11,8 @@ import (
 
 	tmtypes "github.com/cometbft/cometbft/types"
 
-	testkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
+	testkeeper "github.com/node101-io/pulsar/chain/testutil/keeper"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
 )
 
 // TestSlashMeterReplenishment tests the CheckForSlashMeterReplenishment, ReplenishSlashMeter,

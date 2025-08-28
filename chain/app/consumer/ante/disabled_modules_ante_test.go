@@ -12,8 +12,8 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/app/consumer/ante"
-	appencoding "github.com/node101-io/pulsar/chain/interchain-security/v5/app/encoding"
+	"github.com/node101-io/pulsar/chain/app/consumer/ante"
+	appencoding "github.com/node101-io/pulsar/chain/app/encoding"
 )
 
 func TestDisabledModulesDecorator(t *testing.T) {

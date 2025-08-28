@@ -14,11 +14,11 @@ import (
 
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 
-	testcrypto "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/crypto"
-	testkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider"
-	keeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/keeper"
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
+	testcrypto "github.com/node101-io/pulsar/chain/testutil/crypto"
+	testkeeper "github.com/node101-io/pulsar/chain/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider"
+	keeper "github.com/node101-io/pulsar/chain/x/ccv/provider/keeper"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
 )
 
 func TestInvalidMsg(t *testing.T) {

@@ -11,10 +11,10 @@ import (
 
 	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
 
-	testkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
-	ccv "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	testkeeper "github.com/node101-io/pulsar/chain/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/types"
+	ccv "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // Tests the provider's InitGenesis implementation against the spec.

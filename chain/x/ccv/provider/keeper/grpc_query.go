@@ -11,8 +11,8 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 var _ types.QueryServer = Keeper{}

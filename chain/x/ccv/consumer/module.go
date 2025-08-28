@@ -19,10 +19,10 @@ import (
 
 	abci "github.com/cometbft/cometbft/abci/types"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/client/cli"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/keeper"
-	consumertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/types"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	"github.com/node101-io/pulsar/chain/x/ccv/consumer/client/cli"
+	"github.com/node101-io/pulsar/chain/x/ccv/consumer/keeper"
+	consumertypes "github.com/node101-io/pulsar/chain/x/ccv/consumer/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 var (

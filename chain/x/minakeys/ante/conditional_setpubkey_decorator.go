@@ -7,7 +7,7 @@ import (
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/gogoproto/proto"
-	minakeystypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
+	minakeystypes "github.com/node101-io/pulsar/chain/x/minakeys/types"
 )
 
 // ConditionalSetPubKeyDecorator chooses between Cosmos and Mina pubkey setting

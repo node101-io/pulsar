@@ -12,8 +12,8 @@ import (
 
 	tmprotocrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // ParseConsumerKey parses the ED25519 PubKey`consumerKey` from a JSON string

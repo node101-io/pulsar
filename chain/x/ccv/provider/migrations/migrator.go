@@ -6,12 +6,12 @@ import (
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 
-	providerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/keeper"
-	v3 "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/migrations/v3"
-	v4 "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/migrations/v4"
-	v5 "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/migrations/v5"
-	v6 "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/migrations/v6"
-	v7 "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/migrations/v7"
+	providerkeeper "github.com/node101-io/pulsar/chain/x/ccv/provider/keeper"
+	v3 "github.com/node101-io/pulsar/chain/x/ccv/provider/migrations/v3"
+	v4 "github.com/node101-io/pulsar/chain/x/ccv/provider/migrations/v4"
+	v5 "github.com/node101-io/pulsar/chain/x/ccv/provider/migrations/v5"
+	v6 "github.com/node101-io/pulsar/chain/x/ccv/provider/migrations/v6"
+	v7 "github.com/node101-io/pulsar/chain/x/ccv/provider/migrations/v7"
 )
 
 // Migrator is a struct for handling in-place store migrations.

@@ -17,10 +17,10 @@ import (
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/client/cli"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/keeper"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/migrations"
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/client/cli"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/keeper"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/migrations"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
 )
 
 var (

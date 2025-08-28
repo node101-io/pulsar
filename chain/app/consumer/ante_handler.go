@@ -8,11 +8,11 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	ibcante "github.com/cosmos/ibc-go/v8/modules/core/ante"
 	ibckeeper "github.com/cosmos/ibc-go/v8/modules/core/keeper"
-	consumerante "github.com/node101-io/pulsar/chain/interchain-security/v5/app/consumer/ante"
-	ibcconsumerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/keeper"
+	consumerante "github.com/node101-io/pulsar/chain/app/consumer/ante"
+	ibcconsumerkeeper "github.com/node101-io/pulsar/chain/x/ccv/consumer/keeper"
 
-	minakeysante "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/ante"
-	minakeyskeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/keeper"
+	minakeysante "github.com/node101-io/pulsar/chain/x/minakeys/ante"
+	minakeyskeeper "github.com/node101-io/pulsar/chain/x/minakeys/keeper"
 )
 
 // HandlerOptions extend the SDK's AnteHandler options by requiring the IBC channel keeper.

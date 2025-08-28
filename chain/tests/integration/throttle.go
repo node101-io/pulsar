@@ -11,10 +11,10 @@ import (
 
 	tmtypes "github.com/cometbft/cometbft/types"
 
-	icstestingutils "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/ibc_testing"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider"
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	icstestingutils "github.com/node101-io/pulsar/chain/testutil/ibc_testing"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 const fullSlashMeterString = "1.0"

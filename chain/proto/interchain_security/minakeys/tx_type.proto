@@ -5,7 +5,7 @@ package interchain_security.minakeys;
 import "gogoproto/gogo.proto";
 import "google/protobuf/any.proto";
 
-option go_package = "github.com/interchain-security/v5/x/minakeys/types";
+option go_package = "github.com/node101-io/pulsar/chain/x/minakeys/types";
 
 // TxType defines the type of transaction for signature verification
 enum TxType {

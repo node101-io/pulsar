@@ -20,10 +20,10 @@ import (
 
 	"github.com/cometbft/cometbft/proto/tendermint/crypto"
 
-	testkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/keeper"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	testkeeper "github.com/node101-io/pulsar/chain/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/keeper"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 func TestHandleOptIn(t *testing.T) {

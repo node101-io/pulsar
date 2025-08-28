@@ -4,7 +4,7 @@ import (
 	"context"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
+	"github.com/node101-io/pulsar/chain/x/bridge/types"
 )
 
 // MinaPublicKeyToCosmosAddress converts a Mina public key to registered Cosmos address

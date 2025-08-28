@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/node101-io/mina-signer-go/keys"
-	keepertest "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/keeper"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
+	keepertest "github.com/node101-io/pulsar/chain/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/x/minakeys/keeper"
+	"github.com/node101-io/pulsar/chain/x/minakeys/types"
 )
 
 // Prevent strconv unused error

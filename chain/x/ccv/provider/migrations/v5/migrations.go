@@ -3,7 +3,7 @@ package v5
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	providerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/keeper"
+	providerkeeper "github.com/node101-io/pulsar/chain/x/ccv/provider/keeper"
 )
 
 // This migration only takes already registered chains into account.

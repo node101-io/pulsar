@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	testutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	consumertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/types"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	testutil "github.com/node101-io/pulsar/chain/testutil/keeper"
+	consumertypes "github.com/node101-io/pulsar/chain/x/ccv/consumer/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 func TestPacketSendingPermitted(t *testing.T) {

@@ -22,10 +22,10 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 
-	icstestingutils "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/ibc_testing"
-	testutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/integration"
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
-	ccv "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	icstestingutils "github.com/node101-io/pulsar/chain/testutil/ibc_testing"
+	testutil "github.com/node101-io/pulsar/chain/testutil/integration"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
+	ccv "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // ChainType defines the type of chain (either provider or consumer)

@@ -106,12 +106,12 @@ import (
 	tmos "github.com/cometbft/cometbft/libs/os"
 	dbm "github.com/cosmos/cosmos-db"
 
-	appencoding "github.com/node101-io/pulsar/chain/interchain-security/v5/app/encoding"
-	testutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/integration"
-	ibcprovider "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider"
-	ibcproviderclient "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/client"
-	ibcproviderkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/keeper"
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
+	appencoding "github.com/node101-io/pulsar/chain/app/encoding"
+	testutil "github.com/node101-io/pulsar/chain/testutil/integration"
+	ibcprovider "github.com/node101-io/pulsar/chain/x/ccv/provider"
+	ibcproviderclient "github.com/node101-io/pulsar/chain/x/ccv/provider/client"
+	ibcproviderkeeper "github.com/node101-io/pulsar/chain/x/ccv/provider/keeper"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
 
 	"github.com/cosmos/cosmos-sdk/testutil/testdata/testpb"
 	sigtypes "github.com/cosmos/cosmos-sdk/types/tx/signing"

@@ -18,11 +18,11 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/crypto"
-	testkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	consumerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/keeper"
-	consumertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/types"
-	ccv "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	"github.com/node101-io/pulsar/chain/testutil/crypto"
+	testkeeper "github.com/node101-io/pulsar/chain/testutil/keeper"
+	consumerkeeper "github.com/node101-io/pulsar/chain/x/ccv/consumer/keeper"
+	consumertypes "github.com/node101-io/pulsar/chain/x/ccv/consumer/types"
+	ccv "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // TestInitGenesis tests that a consumer chain is correctly initialised from genesis.

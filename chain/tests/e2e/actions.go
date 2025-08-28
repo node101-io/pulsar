@@ -19,10 +19,10 @@ import (
 	"github.com/tidwall/gjson"
 	"golang.org/x/mod/semver"
 
-	e2e "github.com/node101-io/pulsar/chain/interchain-security/v5/tests/e2e/testlib"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/client"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	e2e "github.com/node101-io/pulsar/chain/tests/e2e/testlib"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/client"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 const (

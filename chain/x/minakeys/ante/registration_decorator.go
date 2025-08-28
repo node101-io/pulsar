@@ -7,8 +7,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/keeper"
-	minakeystypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
+	"github.com/node101-io/pulsar/chain/x/minakeys/keeper"
+	minakeystypes "github.com/node101-io/pulsar/chain/x/minakeys/types"
 )
 
 type MinaRegistrationDecorator struct {

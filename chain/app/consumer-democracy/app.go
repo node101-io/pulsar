@@ -109,14 +109,14 @@ import (
 	tmos "github.com/cometbft/cometbft/libs/os"
 	dbm "github.com/cosmos/cosmos-db"
 
-	appencoding "github.com/node101-io/pulsar/chain/interchain-security/v5/app/encoding"
-	testutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/integration"
-	consumer "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer"
-	consumerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/keeper"
-	consumertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/types"
-	ccvdistr "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/democracy/distribution"
-	ccvgov "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/democracy/governance"
-	ccvstaking "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/democracy/staking"
+	appencoding "github.com/node101-io/pulsar/chain/app/encoding"
+	testutil "github.com/node101-io/pulsar/chain/testutil/integration"
+	consumer "github.com/node101-io/pulsar/chain/x/ccv/consumer"
+	consumerkeeper "github.com/node101-io/pulsar/chain/x/ccv/consumer/keeper"
+	consumertypes "github.com/node101-io/pulsar/chain/x/ccv/consumer/types"
+	ccvdistr "github.com/node101-io/pulsar/chain/x/ccv/democracy/distribution"
+	ccvgov "github.com/node101-io/pulsar/chain/x/ccv/democracy/governance"
+	ccvstaking "github.com/node101-io/pulsar/chain/x/ccv/democracy/staking"
 )
 
 const (

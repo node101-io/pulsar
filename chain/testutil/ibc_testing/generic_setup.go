@@ -7,7 +7,7 @@ import (
 
 	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
 	ibctesting "github.com/cosmos/ibc-go/v8/testing"
-	testkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
+	testkeeper "github.com/node101-io/pulsar/chain/testutil/keeper"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -17,9 +17,9 @@ import (
 	tmencoding "github.com/cometbft/cometbft/crypto/encoding"
 	tmtypes "github.com/cometbft/cometbft/types"
 
-	testutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/integration"
-	consumerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/keeper"
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
+	testutil "github.com/node101-io/pulsar/chain/testutil/integration"
+	consumerkeeper "github.com/node101-io/pulsar/chain/x/ccv/consumer/keeper"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
 )
 
 type (

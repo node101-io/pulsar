@@ -19,11 +19,11 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	cryptotestutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/crypto"
-	testkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	providerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/keeper"
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	cryptotestutil "github.com/node101-io/pulsar/chain/testutil/crypto"
+	testkeeper "github.com/node101-io/pulsar/chain/testutil/keeper"
+	providerkeeper "github.com/node101-io/pulsar/chain/x/ccv/provider/keeper"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 //

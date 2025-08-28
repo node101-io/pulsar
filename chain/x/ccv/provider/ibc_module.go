@@ -15,9 +15,9 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/keeper"
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
-	ccv "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/keeper"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
+	ccv "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // OnChanOpenInit implements the IBCModule interface

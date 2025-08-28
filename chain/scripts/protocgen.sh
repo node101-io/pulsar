@@ -16,6 +16,6 @@ done
 cd ..
 
 # move proto files to the right places
-cp -r github.com/node101-io/pulsar/chain/interchain-security/v5/* ./
+cp -r github.com/node101-io/pulsar/chain/* ./
 rm -rf github.com
 

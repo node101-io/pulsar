@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/sample"
+	"github.com/node101-io/pulsar/chain/testutil/sample"
 	"github.com/stretchr/testify/require"
 )
 

@@ -7,7 +7,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
-	ccv "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	ccv "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // Tests the functionality of stopping a consumer chain at a higher level than unit tests

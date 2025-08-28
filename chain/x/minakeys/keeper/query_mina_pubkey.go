@@ -4,7 +4,7 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
+	"github.com/node101-io/pulsar/chain/x/minakeys/types"
 	"github.com/node101-io/mina-signer-go/keys"
 )
 

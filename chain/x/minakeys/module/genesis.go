@@ -3,8 +3,8 @@ package minakeys
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/keeper"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
+	"github.com/node101-io/pulsar/chain/x/minakeys/keeper"
+	"github.com/node101-io/pulsar/chain/x/minakeys/types"
 )
 
 // InitGenesis initializes the module's state from a provided genesis state.

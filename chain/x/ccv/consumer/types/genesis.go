@@ -7,7 +7,7 @@ import (
 
 	abci "github.com/cometbft/cometbft/abci/types"
 
-	ccv "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	ccv "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // NewRestartGenesisState returns a consumer GenesisState that has already been established.

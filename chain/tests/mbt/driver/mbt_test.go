@@ -21,10 +21,10 @@ import (
 
 	tmencoding "github.com/cometbft/cometbft/crypto/encoding"
 	cmttypes "github.com/cometbft/cometbft/types"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/integration"
+	"github.com/node101-io/pulsar/chain/testutil/integration"
 
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
+	"github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 const verbose = false

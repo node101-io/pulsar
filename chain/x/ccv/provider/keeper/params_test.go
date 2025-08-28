@@ -12,8 +12,8 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	testkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
+	testkeeper "github.com/node101-io/pulsar/chain/testutil/keeper"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
 )
 
 // TestParams tests the getting/setting of provider ccv module params.

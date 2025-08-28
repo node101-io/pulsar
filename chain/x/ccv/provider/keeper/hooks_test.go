@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	cryptotestutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/crypto"
-	testkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	providerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/keeper"
+	cryptotestutil "github.com/node101-io/pulsar/chain/testutil/crypto"
+	testkeeper "github.com/node101-io/pulsar/chain/testutil/keeper"
+	providerkeeper "github.com/node101-io/pulsar/chain/x/ccv/provider/keeper"
 	"github.com/golang/mock/gomock"
 )
 

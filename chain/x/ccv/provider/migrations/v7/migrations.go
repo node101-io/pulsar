@@ -2,8 +2,8 @@ package v7
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	providerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/keeper"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	providerkeeper "github.com/node101-io/pulsar/chain/x/ccv/provider/keeper"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // MigrateParams migrates the provider module's parameters from the x/params to self store.

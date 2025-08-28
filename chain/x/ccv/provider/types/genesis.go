@@ -9,7 +9,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	ccv "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	ccv "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 func NewGenesisState(

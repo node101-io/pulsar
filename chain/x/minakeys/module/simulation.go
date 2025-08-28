@@ -8,9 +8,9 @@ import (
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	"github.com/cosmos/cosmos-sdk/x/simulation"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/sample"
-	minakeyssimulation "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/simulation"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
+	"github.com/node101-io/pulsar/chain/testutil/sample"
+	minakeyssimulation "github.com/node101-io/pulsar/chain/x/minakeys/simulation"
+	"github.com/node101-io/pulsar/chain/x/minakeys/types"
 )
 
 // avoid unused import issue

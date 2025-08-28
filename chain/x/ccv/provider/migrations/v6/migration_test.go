@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	testutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
+	testutil "github.com/node101-io/pulsar/chain/testutil/keeper"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
 )
 
 func TestMigrateParams(t *testing.T) {

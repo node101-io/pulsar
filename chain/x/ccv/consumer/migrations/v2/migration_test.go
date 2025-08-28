@@ -8,10 +8,10 @@ import (
 
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	testutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	v2 "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/migrations/v2"
-	consumertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/types"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	testutil "github.com/node101-io/pulsar/chain/testutil/keeper"
+	v2 "github.com/node101-io/pulsar/chain/x/ccv/consumer/migrations/v2"
+	consumertypes "github.com/node101-io/pulsar/chain/x/ccv/consumer/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 func TestMigrateConsumerPacketData(t *testing.T) {

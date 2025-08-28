@@ -13,7 +13,7 @@ import (
 
 	abci "github.com/cometbft/cometbft/abci/types"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/types"
+	"github.com/node101-io/pulsar/chain/x/ccv/consumer/types"
 )
 
 //

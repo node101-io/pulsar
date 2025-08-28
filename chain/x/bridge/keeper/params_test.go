@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	keepertest "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
+	keepertest "github.com/node101-io/pulsar/chain/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/x/bridge/types"
 )
 
 func TestGetParams(t *testing.T) {

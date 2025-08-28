@@ -9,9 +9,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	keepertest "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/nullify"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
+	keepertest "github.com/node101-io/pulsar/chain/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/testutil/nullify"
+	"github.com/node101-io/pulsar/chain/x/minakeys/types"
 )
 
 // Prevent strconv unused error

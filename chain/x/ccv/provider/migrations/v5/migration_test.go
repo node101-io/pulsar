@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	testutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
+	testutil "github.com/node101-io/pulsar/chain/testutil/keeper"
 )
 
 func TestMigrateParams(t *testing.T) {

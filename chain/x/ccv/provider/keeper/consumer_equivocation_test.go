@@ -18,9 +18,9 @@ import (
 
 	tmtypes "github.com/cometbft/cometbft/types"
 
-	cryptotestutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/crypto"
-	testkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
+	cryptotestutil "github.com/node101-io/pulsar/chain/testutil/crypto"
+	testkeeper "github.com/node101-io/pulsar/chain/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/types"
 )
 
 func TestVerifyDoubleVotingEvidence(t *testing.T) {

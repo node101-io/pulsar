@@ -10,8 +10,8 @@ import (
 
 	abci "github.com/cometbft/cometbft/abci/types"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/crypto"
-	uthelpers "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/testutil/crypto"
+	uthelpers "github.com/node101-io/pulsar/chain/testutil/keeper"
 )
 
 func TestChangeoverToConsumer(t *testing.T) {

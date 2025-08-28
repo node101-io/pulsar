@@ -24,10 +24,10 @@ import (
 
 	// this line is used by starport scaffolding # 1
 
-	modulev1 "github.com/node101-io/pulsar/chain/interchain-security/v5/api/cosmos/minakeys/module"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/keeper"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/utils"
+	modulev1 "github.com/node101-io/pulsar/chain/api/cosmos/minakeys/module"
+	"github.com/node101-io/pulsar/chain/x/minakeys/keeper"
+	"github.com/node101-io/pulsar/chain/x/minakeys/types"
+	"github.com/node101-io/pulsar/chain/x/minakeys/utils"
 )
 
 var (

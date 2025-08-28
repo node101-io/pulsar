@@ -5,11 +5,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	appConsumer "github.com/node101-io/pulsar/chain/interchain-security/v5/app/consumer"
-	appConsumerDemocracy "github.com/node101-io/pulsar/chain/interchain-security/v5/app/consumer-democracy"
-	appProvider "github.com/node101-io/pulsar/chain/interchain-security/v5/app/provider"
-	intg "github.com/node101-io/pulsar/chain/interchain-security/v5/tests/integration"
-	icstestingutils "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/ibc_testing"
+	appConsumer "github.com/node101-io/pulsar/chain/app/consumer"
+	appConsumerDemocracy "github.com/node101-io/pulsar/chain/app/consumer-democracy"
+	appProvider "github.com/node101-io/pulsar/chain/app/provider"
+	intg "github.com/node101-io/pulsar/chain/tests/integration"
+	icstestingutils "github.com/node101-io/pulsar/chain/testutil/ibc_testing"
 )
 
 // This file can be used as an example integration testing instance for any provider/consumer applications.

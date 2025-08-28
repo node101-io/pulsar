@@ -16,9 +16,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
 
-	app "github.com/node101-io/pulsar/chain/interchain-security/v5/app/consumer"
-	consumerTypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/types"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	app "github.com/node101-io/pulsar/chain/app/consumer"
+	consumerTypes "github.com/node101-io/pulsar/chain/x/ccv/consumer/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 const (

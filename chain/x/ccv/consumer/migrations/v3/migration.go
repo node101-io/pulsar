@@ -6,8 +6,8 @@ import (
 
 	storetypes "cosmossdk.io/store/types"
 
-	consumertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/types"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	consumertypes "github.com/node101-io/pulsar/chain/x/ccv/consumer/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // MigrateLegacyParams migrates the consumers module's parameters from the x/params subspace to the

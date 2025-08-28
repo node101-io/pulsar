@@ -6,11 +6,11 @@ import (
 	"reflect"
 	"testing"
 
-	appConsumer "github.com/node101-io/pulsar/chain/interchain-security/v5/app/consumer"
-	appConsumerDemocracy "github.com/node101-io/pulsar/chain/interchain-security/v5/app/consumer-democracy"
-	appProvider "github.com/node101-io/pulsar/chain/interchain-security/v5/app/provider"
-	integr "github.com/node101-io/pulsar/chain/interchain-security/v5/tests/integration"
-	icstestingutils "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/ibc_testing"
+	appConsumer "github.com/node101-io/pulsar/chain/app/consumer"
+	appConsumerDemocracy "github.com/node101-io/pulsar/chain/app/consumer-democracy"
+	appProvider "github.com/node101-io/pulsar/chain/app/provider"
+	integr "github.com/node101-io/pulsar/chain/tests/integration"
+	icstestingutils "github.com/node101-io/pulsar/chain/testutil/ibc_testing"
 )
 
 // runCCVTestByName runs a single CCV integration test by name, using a CCVTestSuite

@@ -1,4 +1,4 @@
-module github.com/node101-io/pulsar/chain/interchain-security/v5
+module github.com/node101-io/pulsar/chain
 
 go 1.23.5
 

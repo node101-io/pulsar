@@ -6,8 +6,8 @@ import (
 	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	providerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/keeper"
-	ccv "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	providerkeeper "github.com/node101-io/pulsar/chain/x/ccv/provider/keeper"
+	ccv "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // TestUndelegationNormalOperation tests that undelegations complete after

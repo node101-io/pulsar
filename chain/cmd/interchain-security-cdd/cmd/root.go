@@ -36,8 +36,8 @@ import (
 	tmcfg "github.com/cometbft/cometbft/config"
 	dbm "github.com/cosmos/cosmos-db"
 
-	cdd "github.com/node101-io/pulsar/chain/interchain-security/v5/app/consumer-democracy"
-	appencoding "github.com/node101-io/pulsar/chain/interchain-security/v5/app/encoding"
+	cdd "github.com/node101-io/pulsar/chain/app/consumer-democracy"
+	appencoding "github.com/node101-io/pulsar/chain/app/encoding"
 )
 
 // NewRootCmd creates a new root command for simd. It is called once in the

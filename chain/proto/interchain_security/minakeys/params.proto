@@ -4,7 +4,7 @@ package interchain_security.minakeys;
 import "amino/amino.proto";
 import "gogoproto/gogo.proto";
 
-option go_package = "github.com/interchain-security/v5/x/minakeys/types";
+option go_package = "github.com/node101-io/pulsar/chain/x/minakeys/types";
 
 // Params defines the parameters for the module.
 message Params {

@@ -6,8 +6,8 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
 
-	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	providertypes "github.com/node101-io/pulsar/chain/x/ccv/provider/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // Pending packet data type enum, used to encode the type of packet data stored at each entry in the mutual queue.

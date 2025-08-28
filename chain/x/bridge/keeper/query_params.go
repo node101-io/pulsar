@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
+	"github.com/node101-io/pulsar/chain/x/bridge/types"
 )
 
 func (k Keeper) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {

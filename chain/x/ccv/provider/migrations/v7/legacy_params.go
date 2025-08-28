@@ -5,9 +5,9 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ibctmtypes "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
+	"github.com/node101-io/pulsar/chain/x/ccv/provider/types"
 
-	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/x/ccv/types"
 )
 
 // getTemplateClient returns the template client for provider proposals

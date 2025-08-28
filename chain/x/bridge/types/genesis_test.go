@@ -3,7 +3,7 @@ package types_test
 import (
 	"testing"
 
-	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
+	"github.com/node101-io/pulsar/chain/x/bridge/types"
 	"github.com/stretchr/testify/require"
 )
 

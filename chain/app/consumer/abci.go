@@ -1,7 +1,7 @@
 package app
 
 import (
-	minakeys "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/keeper"
+	minakeys "github.com/node101-io/pulsar/chain/x/minakeys/keeper"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
