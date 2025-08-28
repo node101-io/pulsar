@@ -21,10 +21,24 @@ const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 createWorker<SubmitJob, void>({
     queueName: "submit",
     maxJobsPerWorker: 40,
-    jobHandler: async ({ data }) => {
+    jobHandler: async ({ data, id }) => {
         const { rangeLow, rangeHigh } = data;
 
         try {
+            logger.jobStarted(id, "submit", {
+                rangeLow,
+                rangeHigh,
+                blockRange: `${rangeLow}-${rangeHigh}`,
+                workerId: "submitWorker",
+            });
+
+            logger.debug("Fetching merged proof for submission", {
+                jobId: id,
+                rangeLow,
+                rangeHigh,
+                event: "fetching_merged_proof",
+            });
+
             const mergedProof = (await fetchProof(
                 "settlement",
                 rangeLow,
@@ -35,10 +49,18 @@ createWorker<SubmitJob, void>({
                 mergedProof.publicOutput.numberOfSettlementProofs.toBigInt() !==
                 BigInt(AGGREGATE_THRESHOLD)
             ) {
-                logger.warn(
-                    `Proof for blocks ${rangeLow}-${rangeHigh} is not fully merged (${mergedProof.publicOutput.numberOfSettlementProofs.toBigInt()}/${AGGREGATE_THRESHOLD})`
-                );
-                throw new Error("Proof is not fully merged");
+                const error = new Error("Proof is not fully merged");
+                logger.warn("Proof is not fully merged", {
+                    jobId: id,
+                    rangeLow,
+                    rangeHigh,
+                    currentProofs: mergedProof.publicOutput.numberOfSettlementProofs
+                        .toBigInt()
+                        .toString(),
+                    requiredProofs: AGGREGATE_THRESHOLD,
+                    event: "proof_not_fully_merged",
+                });
+                throw error;
             }
 
             let contractReady = false;
@@ -54,18 +76,20 @@ createWorker<SubmitJob, void>({
                 const proofInitialMerkleRoot = mergedProof.publicInput.InitialMerkleListRoot;
                 const proofInitialStateRoot = mergedProof.publicInput.InitialStateRoot;
 
-                logger.info(
-                    `On-chain: height=${onChainBlockHeight.toString()}, merkleRoot=${onChainMerkleRoot
-                        .toString()
-                        .slice(0, 10)}, stateRoot=${onChainStateRoot
-                        .toString()
-                        .slice(
-                            0,
-                            10
-                        )}, Proof: height=${proofInitialHeight.toString()}, merkleRoot=${proofInitialMerkleRoot
-                        .toString()
-                        .slice(0, 10)}, stateRoot=${proofInitialStateRoot.toString().slice(0, 10)}`
-                );
+                logger.debug("Comparing on-chain state with proof requirements", {
+                    jobId: id,
+                    onChain: {
+                        height: onChainBlockHeight.toString(),
+                        merkleRoot: onChainMerkleRoot.toString().slice(0, 10),
+                        stateRoot: onChainStateRoot.toString().slice(0, 10),
+                    },
+                    proof: {
+                        height: proofInitialHeight.toString(),
+                        merkleRoot: proofInitialMerkleRoot.toString().slice(0, 10),
+                        stateRoot: proofInitialStateRoot.toString().slice(0, 10),
+                    },
+                    event: "state_comparison",
+                });
 
                 if (
                     onChainBlockHeight.equals(proofInitialHeight).toBoolean() &&
@@ -73,29 +97,44 @@ createWorker<SubmitJob, void>({
                     onChainStateRoot.equals(proofInitialStateRoot).toBoolean()
                 ) {
                     contractReady = true;
-                    logger.info(`Contract is ready for settlement submission`);
+                    logger.info("Contract is ready for settlement submission", {
+                        jobId: id,
+                        rangeLow,
+                        rangeHigh,
+                        event: "contract_ready",
+                    });
                 } else if (onChainBlockHeight.greaterThan(proofInitialHeight).toBoolean()) {
-                    logger.warn(
-                        `Contract block height (${onChainBlockHeight.toString()}) is past proof initial height (${proofInitialHeight.toString()}). Proof may be stale.`
-                    );
+                    logger.warn("Contract block height is past proof initial height", {
+                        jobId: id,
+                        onChainBlockHeight: onChainBlockHeight.toString(),
+                        proofInitialHeight: proofInitialHeight.toString(),
+                        event: "proof_potentially_stale",
+                    });
 
                     if (
                         onChainBlockHeight
                             .equals(mergedProof.publicInput.NewBlockHeight)
                             .toBoolean()
                     ) {
-                        logger.info(
-                            `Settlement already applied for blocks ${rangeLow}-${rangeHigh}`
-                        );
+                        logger.info("Settlement already applied, cleaning up proof", {
+                            jobId: id,
+                            rangeLow,
+                            rangeHigh,
+                            event: "settlement_already_applied",
+                        });
                         await deleteProof("settlement", rangeLow, rangeHigh);
                         return;
                     }
 
                     throw new Error("Proof is stale - contract has moved past this block height");
                 } else {
-                    logger.info(
-                        `Waiting for contract to reach block height ${proofInitialHeight.toString()} (currently at ${onChainBlockHeight.toString()})`
-                    );
+                    logger.debug("Waiting for contract to reach required block height", {
+                        jobId: id,
+                        requiredHeight: proofInitialHeight.toString(),
+                        currentHeight: onChainBlockHeight.toString(),
+                        waitTimeMs: 10000,
+                        event: "waiting_for_contract_height",
+                    });
                     await new Promise((resolve) => setTimeout(resolve, 10000));
                 }
             }
@@ -106,7 +145,12 @@ createWorker<SubmitJob, void>({
                 );
             }
 
-            logger.info(`Submitting settlement transaction for blocks ${rangeLow}-${rangeHigh}`);
+            logger.info("Submitting settlement transaction", {
+                jobId: id,
+                rangeLow,
+                rangeHigh,
+                event: "submitting_settlement_transaction",
+            });
 
             const tx = await Mina.transaction(
                 { sender: senderKey.toPublicKey(), fee },
@@ -118,23 +162,43 @@ createWorker<SubmitJob, void>({
             await tx.prove();
             const pendingTransaction = await tx.sign([senderKey]).send();
 
-            logger.info(
-                `Settlement transaction sent for blocks ${rangeLow}-${rangeHigh}: ${pendingTransaction.hash}`
-            );
+            logger.contractInteraction("settle", pendingTransaction.hash, {
+                jobId: id,
+                rangeLow,
+                rangeHigh,
+                event: "settlement_transaction_sent",
+            });
 
             await pendingTransaction.wait();
 
-            logger.info(`Settlement transaction confirmed for blocks ${rangeLow}-${rangeHigh}`);
+            logger.contractInteraction("settle_confirmed", pendingTransaction.hash, {
+                jobId: id,
+                rangeLow,
+                rangeHigh,
+                event: "settlement_transaction_confirmed",
+            });
 
             await deleteProof("settlement", rangeLow, rangeHigh);
 
-            logger.info(
-                `Deleted proof for blocks ${rangeLow}-${rangeHigh} after successful settlement`
-            );
+            logger.dbOperation("proof_cleanup", "settlement", undefined, {
+                jobId: id,
+                rangeLow,
+                rangeHigh,
+                event: "proof_deleted_after_settlement",
+            });
+
+            logger.jobCompleted(id, "submit", 0, {
+                rangeLow,
+                rangeHigh,
+                txHash: pendingTransaction.hash,
+                workerId: "submitWorker",
+            });
         } catch (error) {
-            logger.error(
-                `Failed to submit settlement for blocks ${rangeLow}-${rangeHigh}: ${error}`
-            );
+            logger.jobFailed(id, "submit", error as Error, {
+                rangeLow,
+                rangeHigh,
+                workerId: "submitWorker",
+            });
             throw error;
         }
     },
