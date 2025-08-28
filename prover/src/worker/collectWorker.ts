@@ -19,7 +19,12 @@ createWorker<CollectSignatureJob, void>({
         const { blockHeight, actions } = data;
 
         if (actions.length === 0) {
-            logger.warn(`[Job ${id}] No actions found for block height: ${blockHeight}`);
+            logger.warn("No actions found for block height", {
+                jobId: id,
+                blockHeight,
+                event: "no_actions_found",
+                workerId: "collectWorker",
+            });
             return;
         }
 
@@ -28,6 +33,7 @@ createWorker<CollectSignatureJob, void>({
 
             if (!isNew) {
                 logger.debug("Action batch already exists", {
+                    jobId: id,
                     batchId: batch?.id,
                     status: batch?.status,
                     blockHeight,
@@ -35,16 +41,23 @@ createWorker<CollectSignatureJob, void>({
                     event: "existing_action_batch",
                 });
                 if (batch?.status === "settled") {
-                    logger.info(
-                        `[Job ${id}] Actions for block ${blockHeight} already settled, skipping`
-                    );
+                    logger.info("Actions already settled, skipping", {
+                        jobId: id,
+                        blockHeight,
+                        batchId: batch?.id,
+                        event: "actions_already_settled",
+                    });
                     return;
                 }
 
                 if (batch?.status === "reducing" || batch?.status === "reduced") {
-                    logger.info(
-                        `[Job ${id}] Actions for block ${blockHeight} already being processed (status: ${batch.status}), skipping`
-                    );
+                    logger.info("Actions already being processed, skipping", {
+                        jobId: id,
+                        blockHeight,
+                        batchId: batch?.id,
+                        status: batch.status,
+                        event: "actions_already_processing",
+                    });
                     return;
                 }
 
@@ -55,16 +68,30 @@ createWorker<CollectSignatureJob, void>({
                     Date.now() - batch.updatedAt.getTime() > stuckThreshold;
 
                 if (!isStuck) {
-                    logger.info(
-                        `[Job ${id}] Actions for block ${blockHeight} already being collected, skipping`
-                    );
+                    logger.info("Actions already being collected, skipping", {
+                        jobId: id,
+                        blockHeight,
+                        batchId: batch?.id,
+                        status: batch?.status,
+                        event: "actions_already_collecting",
+                    });
                     return;
                 }
 
-                logger.warn(`[Job ${id}] Retrying stuck collection for block ${blockHeight}`);
+                logger.warn("Retrying stuck collection", {
+                    jobId: id,
+                    blockHeight,
+                    batchId: batch?.id,
+                    stuckDuration: Date.now() - batch.updatedAt.getTime(),
+                    event: "retry_stuck_collection",
+                });
             }
 
-            logger.info(`[Job ${id}] Requesting signatures for block height: ${blockHeight}`);
+            logger.jobStarted(id, "collect-signature", {
+                blockHeight,
+                actionsCount: actions.length,
+                workerId: "collectWorker",
+            });
             const includedActions = await getIncludedActions(actions);
             const includedActionEntries = Array.from(includedActions.entries());
             const signatures = await collectSignatures(ENDPOINTS, includedActions, {
@@ -99,11 +126,20 @@ createWorker<CollectSignatureJob, void>({
                 reduceJobId: jobId,
             });
 
-            logger.info(`[Job ${id}] Added reduce job for block height: ${blockHeight}`);
+            logger.info("Added reduce job for block height", {
+                jobId: id,
+                blockHeight,
+                reduceJobId: jobId,
+                signaturesCollected: signatures.length,
+                includedActionsCount: includedActionEntries.length,
+                event: "reduce_job_added",
+            });
         } catch (error) {
-            logger.error(
-                `[Job ${id}] Failed to collect signatures for block height ${blockHeight}: ${error}`
-            );
+            logger.jobFailed(id, "collect-signature", error as Error, {
+                blockHeight,
+                actionsCount: actions.length,
+                workerId: "collectWorker",
+            });
             throw error;
         }
     },
@@ -145,8 +181,16 @@ export async function collectSignatures(
     await fetchAccount({ publicKey: contractInstance.address });
     const { publicInput } = CalculateMax(includedActions, contractInstance, typedActions);
 
-    for (let round = 1; round <= maxRounds && got.length < minRequired; round++) {
-        // logger.info(`Round ${round}, querying ${remaining.length} validators`);
+    let round = 1;
+    for (; round <= maxRounds && got.length < minRequired; round++) {
+        logger.debug("Starting signature collection round", {
+            round,
+            validatorsQueried: remaining.length,
+            signaturesCollected: got.length,
+            signaturesRequired: minRequired,
+            blockHeight: payload.blockHeight,
+            event: "signature_collection_round",
+        });
 
         const results = await Promise.all(
             remaining.map(async (url) => {
@@ -172,7 +216,13 @@ export async function collectSignatures(
                     }
                     throw new Error("Signature verification failed");
                 } catch (err) {
-                    logger.error(`Error fetching signature from ${url}: ${err}`);
+                    logger.warn("Failed to fetch signature from validator", {
+                        validatorUrl: url,
+                        blockHeight: payload.blockHeight,
+                        round,
+                        error: err instanceof Error ? err.message : String(err),
+                        event: "signature_fetch_failed",
+                    });
                     return { url, signature: undefined };
                 }
             })
@@ -195,8 +245,26 @@ export async function collectSignatures(
     }
 
     if (got.length < minRequired) {
-        throw new Error(`Got only ${got.length} signatures (need ${minRequired})`);
+        const error = new Error(`Got only ${got.length} signatures (need ${minRequired})`);
+        logger.error("Insufficient signatures collected", error, {
+            signaturesCollected: got.length,
+            signaturesRequired: minRequired,
+            blockHeight: payload.blockHeight,
+            totalRounds: round - 1,
+            validatorsQueried: endpoints.length,
+            event: "insufficient_signatures",
+        });
+        throw error;
     }
+
+    logger.info("Successfully collected signatures", {
+        signaturesCollected: got.length,
+        signaturesRequired: minRequired,
+        blockHeight: payload.blockHeight,
+        totalRounds: round - 1,
+        validatorsQueried: endpoints.length,
+        event: "signatures_collected_successfully",
+    });
 
     return got;
 }
