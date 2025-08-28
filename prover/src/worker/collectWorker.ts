@@ -13,7 +13,7 @@ const contractInstance = new SettlementContract(
     PublicKey.fromBase58(process.env.CONTRACT_ADDRESS || "")
 );
 
-createWorker<CollectSignatureJob, void>({
+await createWorker<CollectSignatureJob, void>({
     queueName: "collect-signature",
     jobHandler: async ({ data, id }) => {
         const { blockHeight, actions } = data;

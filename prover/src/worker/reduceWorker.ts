@@ -20,7 +20,7 @@ if (!settlementContractAddress || !minaPrivateKey) {
 const settlementContract = new SettlementContract(PublicKey.fromBase58(settlementContractAddress));
 const senderKey = PrivateKey.fromBase58(minaPrivateKey);
 
-createWorker<ReducerJob, void>({
+await createWorker<ReducerJob, void>({
     queueName: "reduce",
     maxJobsPerWorker: 5,
     jobHandler: async ({ data, id }) => {

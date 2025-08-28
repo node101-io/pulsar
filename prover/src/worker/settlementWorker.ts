@@ -21,7 +21,7 @@ await initMongo();
  * Invalid signatures
  * No vote extensions for some validators
  */
-createWorker<SettlementJob, void>({
+await createWorker<SettlementJob, void>({
     queueName: "settlement",
     maxJobsPerWorker: 160,
     jobHandler: async ({ data, id }) => {

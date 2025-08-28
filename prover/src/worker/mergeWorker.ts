@@ -6,7 +6,7 @@ import logger from "../logger.js";
 import dotenv from "dotenv";
 dotenv.config();
 
-createWorker<MergeJob, void>({
+await createWorker<MergeJob, void>({
     queueName: "merge",
     maxJobsPerWorker: 10,
     jobHandler: async ({ data, id }) => {
