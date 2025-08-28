@@ -30,17 +30,20 @@ func (k msgServer) ResolveActions(goCtx context.Context, msg *types.MsgResolveAc
 		"next_height", msg.NextBlockHeight)
 
 	// Verify action list with signer node
-	isValid, err := k.Keeper.VerifyActionList(ctx, settledHeight, msg.Actions, msg.NextBlockHeight, msg.MerkleWitness)
+	isValidList, err := k.Keeper.VerifyActionList(ctx, settledHeight, msg.Actions, msg.NextBlockHeight, msg.MerkleWitness)
 	if err != nil {
 		ctx.Logger().Error("Signer verification failed", "error", err)
 		return nil, err
 	}
-	if !isValid {
-		ctx.Logger().Error("Action list verification failed")
-		return nil, types.ErrInvalidActionList
-	}
-
 	ctx.Logger().Info("Action list verified successfully")
+
+	for index, isValid := range isValidList {
+		if !isValid {
+			ctx.Logger().Warn("The action with this index is invalid", "index", index, "action", msg.Actions[index])
+			// Remove the action from the list
+			msg.Actions = append(msg.Actions[:index], msg.Actions[index+1:]...)
+		}
+	}
 
 	// Process actions
 	result, err := k.Keeper.ProcessActions(ctx, msg.Actions, msg.NextBlockHeight)

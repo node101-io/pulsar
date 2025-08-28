@@ -1,25 +1,39 @@
 package keeper
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/interchain-security/v5/x/bridge/types"
 )
 
-// SignerClient interface defines the methods for communicating with signer nodes
-type SignerClient interface {
-	VerifyActionList(settledHeight uint64, actions []types.PulsarAction, nextHeight uint64, witness string) (bool, error)
+const signerVerifyURL = "http://localhost:9101/verify-actions"
+
+type VerifyActionListRequest struct {
+	Actions       []types.PulsarAction `json:"actions"`
+	Balances      map[string]string    `json:"balances"`
+	Witness       string               `json:"witness"`
+	SettledHeight uint64               `json:"settled_height"`
+	NextHeight    uint64               `json:"next_height"`
 }
 
 // VerifyActionList verifies the integrity of an action list with the signer node
-func (k Keeper) VerifyActionList(ctx sdk.Context, settledHeight uint64, actions []types.PulsarAction, nextHeight uint64, witness string) (bool, error) {
+func (k Keeper) VerifyActionList(ctx sdk.Context, settledHeight uint64, actions []types.PulsarAction, nextHeight uint64, witness string) ([]bool, error) {
 	// Basic validations first
 	if nextHeight <= settledHeight {
-		return false, types.ErrInvalidBlockHeight
+		return nil, types.ErrInvalidBlockHeight
 	}
 
 	if len(actions) == 0 {
-		return false, types.ErrEmptyActionList
+		return nil, types.ErrEmptyActionList
 	}
+
+	var balancesMap = make(map[string]string)
 
 	// Validate each action
 	for i, action := range actions {
@@ -28,13 +42,14 @@ func (k Keeper) VerifyActionList(ctx sdk.Context, settledHeight uint64, actions 
 				"index", i,
 				"action", action,
 				"error", err)
-			return false, err
+			continue
 		}
-	}
 
-	// TODO: Implement actual signer node communication
-	// For now, we'll implement a placeholder that performs basic validation
-	// In production, this should make an HTTP/gRPC call to the signer node
+		balance := k.GetWithdrawalBalance(ctx, action.PublicKey)
+
+		balancesMap[action.PublicKey] = balance.String()
+
+	}
 
 	// Log the verification attempt
 	ctx.Logger().Info("Verifying action list with signer node",
@@ -43,13 +58,50 @@ func (k Keeper) VerifyActionList(ctx sdk.Context, settledHeight uint64, actions 
 		"actions_count", len(actions),
 		"merkle_witness", witness)
 
-	// Placeholder implementation - in production this would:
-	// 1. Connect to signer node via HTTP/gRPC
-	// 2. Send verification request with all parameters
-	// 3. Receive and validate response
-	// 4. Handle any network/communication errors
+	payload := VerifyActionListRequest{
+		Actions:       actions,
+		Balances:      balancesMap,
+		Witness:       witness,
+		SettledHeight: settledHeight,
+		NextHeight:    nextHeight,
+	}
 
-	return true, nil
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal verify request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, signerVerifyURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("build verify request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("post to signer: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read signer response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("signer non-200 status %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var results []bool
+	if err := json.Unmarshal(respBytes, &results); err != nil {
+		return nil, fmt.Errorf("unmarshal signer response: %w", err)
+	}
+
+	ctx.Logger().Info("Signer verification completed",
+		"results_len", len(results))
+
+	return results, nil
 }
 
 // validateAction performs basic validation on a single action
@@ -75,10 +127,4 @@ func (k Keeper) validateAction(action types.PulsarAction) error {
 	}
 
 	return nil
-}
-
-// SetSignerClient sets the signer client (for dependency injection in tests)
-func (k *Keeper) SetSignerClient(client SignerClient) {
-	// This would be used for testing or different signer implementations
-	// For now, we'll keep the verification logic inside the keeper
 }
