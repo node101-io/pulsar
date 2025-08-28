@@ -13,8 +13,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
-	providertypes "github.com/cosmos/interchain-security/v5/x/ccv/provider/types"
-	ccv "github.com/cosmos/interchain-security/v5/x/ccv/types"
+	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
+	ccv "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
 )
 
 // OnRecvVSCMaturedPacket handles a VSCMatured packet and returns a no-op result ack.

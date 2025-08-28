@@ -3,7 +3,7 @@ package keeper
 import (
 	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/interchain-security/v5/x/bridge/types"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
 )
 
 // MintPMina mints pMINA tokens to a user account

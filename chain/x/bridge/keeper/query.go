@@ -3,7 +3,7 @@ package keeper
 import (
 	"context"
 
-	"github.com/cosmos/interchain-security/v5/x/bridge/types"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

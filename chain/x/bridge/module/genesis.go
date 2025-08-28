@@ -3,8 +3,8 @@ package bridge
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/cosmos/interchain-security/v5/x/bridge/keeper"
-	"github.com/cosmos/interchain-security/v5/x/bridge/types"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/keeper"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
 )
 
 // InitGenesis initializes the module's state from a provided genesis state.

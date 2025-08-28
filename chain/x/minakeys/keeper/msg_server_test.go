@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	keepertest "github.com/cosmos/interchain-security/v5/testutil/keeper"
-	"github.com/cosmos/interchain-security/v5/x/minakeys/keeper"
-	"github.com/cosmos/interchain-security/v5/x/minakeys/types"
+	keepertest "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/keeper"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
 )
 
 func setupMsgServer(t testing.TB) (keeper.Keeper, types.MsgServer, context.Context) {

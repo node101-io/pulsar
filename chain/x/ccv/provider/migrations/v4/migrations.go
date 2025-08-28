@@ -4,7 +4,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 
-	providertypes "github.com/cosmos/interchain-security/v5/x/ccv/provider/types"
+	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
 )
 
 // MigrateParams adds missing provider chain params to the param store.

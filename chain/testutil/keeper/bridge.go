@@ -19,9 +19,9 @@ import (
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/interchain-security/v5/x/bridge/keeper"
-	"github.com/cosmos/interchain-security/v5/x/bridge/types"
-	minakeys "github.com/cosmos/interchain-security/v5/x/minakeys/types"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/keeper"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
+	minakeys "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
 )
 
 // mockBankKeeper is a simple mock for BankKeeper in tests

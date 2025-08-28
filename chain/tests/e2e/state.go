@@ -11,7 +11,7 @@ import (
 	"time"
 
 	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
-	e2e "github.com/cosmos/interchain-security/v5/tests/e2e/testlib"
+	e2e "github.com/node101-io/pulsar/chain/interchain-security/v5/tests/e2e/testlib"
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/tidwall/gjson"
 	"gopkg.in/yaml.v2"

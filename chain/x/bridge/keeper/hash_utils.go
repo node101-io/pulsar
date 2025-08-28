@@ -10,7 +10,7 @@ import (
 	"github.com/node101-io/mina-signer-go/hashgeneric"
 	"github.com/node101-io/mina-signer-go/poseidon"
 
-	"github.com/cosmos/interchain-security/v5/x/bridge/types"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
 )
 
 // UpdateHash updates a hash by combining it with an action

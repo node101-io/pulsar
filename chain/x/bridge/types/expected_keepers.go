@@ -4,7 +4,7 @@ import (
 	"context"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	minakeys "github.com/cosmos/interchain-security/v5/x/minakeys/types"
+	minakeys "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
 )
 
 // AccountKeeper defines the expected interface for the Account module.

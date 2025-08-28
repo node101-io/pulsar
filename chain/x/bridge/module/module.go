@@ -15,8 +15,8 @@ import (
 
 	// this line is used by starport scaffolding # 1
 
-	"github.com/cosmos/interchain-security/v5/x/bridge/keeper"
-	"github.com/cosmos/interchain-security/v5/x/bridge/types"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/keeper"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
 )
 
 var (

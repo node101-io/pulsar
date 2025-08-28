@@ -12,7 +12,7 @@ import (
 	commitmenttypes "github.com/cosmos/ibc-go/v8/modules/core/23-commitment/types"
 	ibctmtypes "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
 	ibctesting "github.com/cosmos/ibc-go/v8/testing"
-	providertypes "github.com/cosmos/interchain-security/v5/x/ccv/provider/types"
+	providertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/types"
 	"github.com/stretchr/testify/require"
 
 	"cosmossdk.io/math"
@@ -31,11 +31,11 @@ import (
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 
-	icstestingutils "github.com/cosmos/interchain-security/v5/testutil/ibc_testing"
-	"github.com/cosmos/interchain-security/v5/testutil/integration"
-	simibc "github.com/cosmos/interchain-security/v5/testutil/simibc"
-	consumertypes "github.com/cosmos/interchain-security/v5/x/ccv/consumer/types"
-	ccvtypes "github.com/cosmos/interchain-security/v5/x/ccv/types"
+	icstestingutils "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/ibc_testing"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/integration"
+	simibc "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/simibc"
+	consumertypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
 )
 
 const (

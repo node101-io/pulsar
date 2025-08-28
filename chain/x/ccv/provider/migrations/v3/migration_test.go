@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	testutil "github.com/cosmos/interchain-security/v5/testutil/keeper"
+	testutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
 )
 
 func TestMigrate2To3(t *testing.T) {

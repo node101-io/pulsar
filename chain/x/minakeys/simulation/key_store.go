@@ -9,8 +9,8 @@ import (
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	"github.com/cosmos/cosmos-sdk/x/simulation"
-	"github.com/cosmos/interchain-security/v5/x/minakeys/keeper"
-	"github.com/cosmos/interchain-security/v5/x/minakeys/types"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/keeper"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
 )
 
 // Prevent strconv unused error

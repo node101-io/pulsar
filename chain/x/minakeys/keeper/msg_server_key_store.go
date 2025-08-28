@@ -9,8 +9,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	"github.com/cosmos/interchain-security/v5/x/minakeys/types"
-	"github.com/cosmos/interchain-security/v5/x/minakeys/utils"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/utils"
 )
 
 func (k msgServer) CreateKeyStore(goCtx context.Context, msg *types.MsgCreateKeyStore) (*types.MsgCreateKeyStoreResponse, error) {

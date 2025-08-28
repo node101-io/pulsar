@@ -3,10 +3,10 @@ package minakeys_test
 import (
 	"testing"
 
-	keepertest "github.com/cosmos/interchain-security/v5/testutil/keeper"
-	"github.com/cosmos/interchain-security/v5/testutil/nullify"
-	minakeys "github.com/cosmos/interchain-security/v5/x/minakeys/module"
-	"github.com/cosmos/interchain-security/v5/x/minakeys/types"
+	keepertest "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/nullify"
+	minakeys "github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/module"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
 	"github.com/stretchr/testify/require"
 )
 

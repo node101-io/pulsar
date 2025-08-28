@@ -8,7 +8,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 
-	"github.com/cosmos/interchain-security/v5/x/ccv/consumer/types"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/types"
 )
 
 type msgServer struct {

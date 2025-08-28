@@ -6,7 +6,7 @@ import (
 	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	"github.com/cosmos/interchain-security/v5/x/minakeys/types"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
 )
 
 // SetKeyStore set a specific keyStore in the store from its index

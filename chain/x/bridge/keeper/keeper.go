@@ -8,7 +8,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	types "github.com/cosmos/interchain-security/v5/x/bridge/types"
+	types "github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
 )
 
 type (

@@ -11,9 +11,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authTypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
-	testkeeper "github.com/cosmos/interchain-security/v5/testutil/keeper"
-	"github.com/cosmos/interchain-security/v5/x/ccv/consumer/types"
-	ccvtypes "github.com/cosmos/interchain-security/v5/x/ccv/types"
+	testkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/types"
+	ccvtypes "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/types"
 )
 
 // TestGetEstimatedNextFeeDistribution tests next fee distribution parameters.

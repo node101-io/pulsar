@@ -10,7 +10,7 @@ import (
 	v1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	"github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 
-	testkeeper "github.com/cosmos/interchain-security/v5/testutil/keeper"
+	testkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
 )
 
 // tests AfterProposalSubmission and AfterProposalVotingPeriodEnded hooks

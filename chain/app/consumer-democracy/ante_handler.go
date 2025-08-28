@@ -10,9 +10,9 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 
-	democracyante "github.com/cosmos/interchain-security/v5/app/consumer-democracy/ante"
-	consumerante "github.com/cosmos/interchain-security/v5/app/consumer/ante"
-	ibcconsumerkeeper "github.com/cosmos/interchain-security/v5/x/ccv/consumer/keeper"
+	democracyante "github.com/node101-io/pulsar/chain/interchain-security/v5/app/consumer-democracy/ante"
+	consumerante "github.com/node101-io/pulsar/chain/interchain-security/v5/app/consumer/ante"
+	ibcconsumerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/consumer/keeper"
 )
 
 // HandlerOptions extend the SDK's AnteHandler options by requiring the IBC

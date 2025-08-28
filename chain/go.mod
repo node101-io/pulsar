@@ -1,4 +1,4 @@
-module github.com/cosmos/interchain-security/v5
+module github.com/node101-io/pulsar/chain/interchain-security/v5
 
 go 1.23.5
 

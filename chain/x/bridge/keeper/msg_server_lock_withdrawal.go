@@ -5,7 +5,7 @@ import (
 
 	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/interchain-security/v5/x/bridge/types"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
 )
 
 func (k msgServer) LockForWithdrawal(goCtx context.Context, msg *types.MsgLockForWithdrawal) (*types.MsgLockForWithdrawalResponse, error) {

@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"testing"
 
-	keepertest "github.com/cosmos/interchain-security/v5/testutil/keeper"
-	"github.com/cosmos/interchain-security/v5/testutil/nullify"
-	"github.com/cosmos/interchain-security/v5/x/minakeys/keeper"
-	"github.com/cosmos/interchain-security/v5/x/minakeys/types"
+	keepertest "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/nullify"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/keeper"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
 	"github.com/stretchr/testify/require"
 )
 

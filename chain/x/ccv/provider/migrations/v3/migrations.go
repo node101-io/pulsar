@@ -5,7 +5,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	providerkeeper "github.com/cosmos/interchain-security/v5/x/ccv/provider/keeper"
+	providerkeeper "github.com/node101-io/pulsar/chain/interchain-security/v5/x/ccv/provider/keeper"
 )
 
 // MigrateQueuedPackets processes all queued packet data for all consumer chains that were stored

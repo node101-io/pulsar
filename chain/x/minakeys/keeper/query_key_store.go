@@ -6,7 +6,7 @@ import (
 	"cosmossdk.io/store/prefix"
 	"github.com/cosmos/cosmos-sdk/runtime"
 	"github.com/cosmos/cosmos-sdk/types/query"
-	"github.com/cosmos/interchain-security/v5/x/minakeys/types"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/minakeys/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

@@ -109,8 +109,8 @@ import (
 	tmos "github.com/cometbft/cometbft/libs/os"
 	dbm "github.com/cosmos/cosmos-db"
 
-	appencoding "github.com/cosmos/interchain-security/v5/app/encoding"
-	testutil "github.com/cosmos/interchain-security/v5/testutil/integration"
+	appencoding "github.com/node101-io/pulsar/chain/interchain-security/v5/app/encoding"
+	testutil "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/integration"
 )
 
 const (

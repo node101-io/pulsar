@@ -3,7 +3,7 @@ package minakeys
 import (
 	autocliv1 "cosmossdk.io/api/cosmos/autocli/v1"
 
-	modulev1 "github.com/cosmos/interchain-security/v5/api/cosmos/minakeys"
+	modulev1 "github.com/node101-io/pulsar/chain/interchain-security/v5/api/cosmos/minakeys"
 )
 
 // AutoCLIOptions implements the autocli.HasAutoCLIConfig interface.

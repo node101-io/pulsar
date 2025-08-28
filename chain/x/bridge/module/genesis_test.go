@@ -3,10 +3,10 @@ package bridge_test
 import (
 	"testing"
 
-	keepertest "github.com/cosmos/interchain-security/v5/testutil/keeper"
-	"github.com/cosmos/interchain-security/v5/testutil/nullify"
-	bridge "github.com/cosmos/interchain-security/v5/x/bridge/module"
-	"github.com/cosmos/interchain-security/v5/x/bridge/types"
+	keepertest "github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/keeper"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/testutil/nullify"
+	bridge "github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/module"
+	"github.com/node101-io/pulsar/chain/interchain-security/v5/x/bridge/types"
 	"github.com/stretchr/testify/require"
 )
 
