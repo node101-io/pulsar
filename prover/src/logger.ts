@@ -139,7 +139,7 @@ class StructuredLogger {
         this.log("error", message, errorContext);
     }
 
-    jobStarted(jobId: string, jobType: string, context: LogContext = {}) {
+    jobStarted(jobId: string | undefined, jobType: string, context: LogContext = {}) {
         this.info(`Job started: ${jobType}`, {
             ...context,
             jobId,
@@ -148,7 +148,12 @@ class StructuredLogger {
         });
     }
 
-    jobCompleted(jobId: string, jobType: string, duration: number, context: LogContext = {}) {
+    jobCompleted(
+        jobId: string | undefined,
+        jobType: string,
+        duration: number,
+        context: LogContext = {}
+    ) {
         this.info(`Job completed: ${jobType}`, {
             ...context,
             jobId,
@@ -158,7 +163,7 @@ class StructuredLogger {
         });
     }
 
-    jobFailed(jobId: string, jobType: string, error: Error, context: LogContext = {}) {
+    jobFailed(jobId: string | undefined, jobType: string, error: Error, context: LogContext = {}) {
         this.error(`Job failed: ${jobType}`, error, {
             ...context,
             jobId,
