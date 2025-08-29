@@ -28,6 +28,18 @@ class ValidateReducePublicInput extends Struct({
     ]);
   }
 
+  static fromJSON(json: {
+    merkleListRoot: string;
+    depositListHash: string;
+    withdrawalListHash: string;
+  }) {
+    return new ValidateReducePublicInput({
+      merkleListRoot: Field(json.merkleListRoot),
+      depositListHash: Field(json.depositListHash),
+      withdrawalListHash: Field(json.withdrawalListHash),
+    });
+  }
+
   toJSON() {
     return {
       merkleListRoot: this.merkleListRoot.toString(),
