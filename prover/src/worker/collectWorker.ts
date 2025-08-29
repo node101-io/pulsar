@@ -290,5 +290,57 @@ function getIncludedActions(pulsarActions: PulsarAction[], mask: boolean[]): Map
 }
 
 async function sendResolveActions(actions: PulsarAction[]) {
-    // send actions to resolve endpoint on pulsar
+    const resolveEndpoint = process.env.PULSAR_RESOLVE_ENDPOINT || "http://localhost:26657";
+    
+    try {
+        logger.debug("Sending resolve actions", {
+            endpoint: resolveEndpoint,
+            actionsCount: actions.length,
+            event: "resolve_actions_start",
+        });
+
+        const actionsData = actions.map(action => ({
+            publicKey: action.account.toBase58(),
+            amount: action.amount.toBigInt().toString(),
+            actionType: action.type.toString(),
+            blockHeight: action.blockHeight.toBigInt().toString(),
+        }));
+
+        const requestBody = {
+            actions: actionsData,
+            nextBlockHeight: (actions[0]?.blockHeight.toBigInt() + 1n).toString(),
+            merkleWitness: process.env.MERKLE_WITNESS || "node101",
+            creator: process.env.COSMOS_CREATOR_ADDRESS || "",
+        };
+
+        const response = await fetch(`${resolveEndpoint}/resolve_actions`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        }
+
+        const result = await response.json() as { txHash?: string };
+        
+        logger.info("Resolve actions sent successfully", {
+            endpoint: resolveEndpoint,
+            actionsCount: actions.length,
+            transactionHash: result.txHash,
+            event: "resolve_actions_success",
+        });
+
+        return result;
+    } catch (error) {
+        logger.error("Failed to send resolve actions", error as Error, {
+            endpoint: resolveEndpoint,
+            actionsCount: actions.length,
+            event: "resolve_actions_failed",
+        });
+        throw error;
+    }
 }
