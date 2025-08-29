@@ -10,22 +10,35 @@ import (
 // processDepositAction processes a deposit action
 // Returns true if action was approved and processed, false if ignored
 func (k Keeper) processDepositAction(ctx sdk.Context, action types.PulsarAction, approvedActions *[]types.PulsarAction, approvedHash *string) bool {
+
+	allKeyStoresWithSDKCtx, found := k.minakeysKeeper.GetKeyStore(ctx, action.PublicKey)
+	if !found {
+		ctx.Logger().Error("processDepositAction: Failed to get key store", "error", "key not found")
+	}
+	ctx.Logger().Info("processDepositAction:Key store found",
+		"key_store", allKeyStoresWithSDKCtx.Creator)
+
 	// Check if Mina public key is registered
-	if !k.IsMinaPublicKeyRegistered(action.PublicKey) {
+	if !k.IsMinaPublicKeyRegistered(ctx, action.PublicKey) {
 		ctx.Logger().Info("Ignoring deposit: Mina public key not registered",
 			"mina_public_key", action.PublicKey,
 			"amount", action.Amount.String())
 		return false
 	}
+	ctx.Logger().Info("processDepositAction: Mina public key is registered",
+		"mina_public_key", action.PublicKey)
 
 	// Convert Mina public key to Cosmos address for minting
-	cosmosAddr, err := k.MinaPublicKeyToCosmosAddress(action.PublicKey)
+	cosmosAddr, err := k.MinaPublicKeyToCosmosAddress(ctx, action.PublicKey)
 	if err != nil {
 		ctx.Logger().Error("Failed to convert Mina public key to Cosmos address",
 			"mina_public_key", action.PublicKey,
 			"error", err)
 		return false
 	}
+	ctx.Logger().Info("Mina public key converted to Cosmos address",
+		"mina_public_key", action.PublicKey,
+		"cosmos_address", cosmosAddr.String())
 
 	// Mint pMINA to the account
 	if err := k.MintPMina(ctx, cosmosAddr, action.Amount); err != nil {

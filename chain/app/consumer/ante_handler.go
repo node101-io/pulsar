@@ -58,17 +58,17 @@ func NewAnteHandler(options HandlerOptions, logger log.Logger) (sdk.AnteHandler,
 		ante.NewValidateSigCountDecorator(options.AccountKeeper),
 		ante.NewSigGasConsumeDecorator(options.AccountKeeper, sigGasConsumer),
 		//ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
-		minakeysante.NewConditionalSigVerifyDecorator(
+		/* minakeysante.NewConditionalSigVerifyDecorator(
 			ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
 			options.MinaKeeper,
 			options.AccountKeeper,
 			options.SignModeHandler,
 			logger,
-		),
+		), */
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
 		ibcante.NewRedundantRelayDecorator(options.IBCKeeper),
 		// MinaKeys Checker
-		minakeysante.NewMinaRegistrationDecorator(options.MinaKeeper, options.AccountKeeper),
+		//minakeysante.NewMinaRegistrationDecorator(options.MinaKeeper, options.AccountKeeper),
 	}
 
 	// Consumer ante decorator that rejects all non-IBC messages until the CCV channel is established

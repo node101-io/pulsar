@@ -8,14 +8,14 @@ import (
 )
 
 // MinaPublicKeyToCosmosAddress converts a Mina public key to registered Cosmos address
-func (k Keeper) MinaPublicKeyToCosmosAddress(minaPublicKey string) (sdk.AccAddress, error) {
+func (k Keeper) MinaPublicKeyToCosmosAddress(ctx context.Context, minaPublicKey string) (sdk.AccAddress, error) {
 	// Validate Mina public key format (basic validation)
 	if len(minaPublicKey) == 0 {
 		return nil, types.ErrInvalidPublicKey
 	}
 
 	// Get key store entry for this Mina public key
-	keyStore, found := k.minakeysKeeper.GetKeyStore(context.Background(), minaPublicKey)
+	keyStore, found := k.minakeysKeeper.GetKeyStore(ctx, minaPublicKey)
 	if !found {
 		return nil, types.ErrPublicKeyNotRegistered
 	}
@@ -25,14 +25,14 @@ func (k Keeper) MinaPublicKeyToCosmosAddress(minaPublicKey string) (sdk.AccAddre
 }
 
 // IsMinaPublicKeyRegistered checks if a Mina public key is registered in minakeys module
-func (k Keeper) IsMinaPublicKeyRegistered(minaPublicKey string) bool {
+func (k Keeper) IsMinaPublicKeyRegistered(ctx context.Context, minaPublicKey string) bool {
 	// Basic validation
 	if len(minaPublicKey) == 0 {
 		return false
 	}
 
 	// Check if this Mina public key exists in minakeys module
-	_, found := k.minakeysKeeper.GetKeyStore(context.Background(), minaPublicKey)
+	_, found := k.minakeysKeeper.GetKeyStore(ctx, minaPublicKey)
 	return found
 }
 
@@ -52,8 +52,8 @@ func (k Keeper) ValidateMinaPublicKey(minaPublicKey string) error {
 }
 
 // GetCosmosAddressString converts Mina public key to cosmos address string
-func (k Keeper) GetCosmosAddressString(minaPublicKey string) (string, error) {
-	addr, err := k.MinaPublicKeyToCosmosAddress(minaPublicKey)
+func (k Keeper) GetCosmosAddressString(ctx context.Context, minaPublicKey string) (string, error) {
+	addr, err := k.MinaPublicKeyToCosmosAddress(ctx, minaPublicKey)
 	if err != nil {
 		return "", err
 	}

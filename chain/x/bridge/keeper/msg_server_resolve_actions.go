@@ -12,6 +12,22 @@ import (
 func (k msgServer) ResolveActions(goCtx context.Context, msg *types.MsgResolveActions) (*types.MsgResolveActionsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
+	allKeyStoresWithSDKCtx, found := k.minakeysKeeper.GetKeyStore(ctx, msg.Actions[0].PublicKey)
+	if !found {
+		ctx.Logger().Error("ResolveActions: Failed to get key store", "error", "key not found")
+	}
+	ctx.Logger().Info("ResolveActions:Key store found",
+		"key_store", allKeyStoresWithSDKCtx.Creator)
+
+	ctx.Logger().Info("ResolveActions: All key stores with SDK context",
+		"all_key_stores", allKeyStoresWithSDKCtx.Creator)
+
+	ctx.Logger().Info("ResolveActions transaction started",
+		"creator", msg.Creator,
+		"actions_count", len(msg.Actions),
+		"next_block_height", msg.NextBlockHeight,
+		"minakeys_keeper", k.Keeper.minakeysKeeper)
+
 	// Validate input parameters
 	if err := msg.ValidateBasic(); err != nil {
 		return nil, err

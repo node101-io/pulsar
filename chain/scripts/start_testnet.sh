@@ -9,7 +9,7 @@
 set -e
 
 # Configuration
-BINARY="cosmosd"
+BINARY="interchain-security-cd"
 BASE_DIR="./.testnet"
 
 # Get node count from argument or default to 4
