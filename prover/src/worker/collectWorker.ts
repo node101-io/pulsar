@@ -3,11 +3,32 @@ import { CollectSignatureJob, reduceQ } from "../workerConnection.js";
 import logger from "../logger.js";
 import fetch from "node-fetch";
 import { fetchAccount, PublicKey, Signature } from "o1js";
-import { CalculateMax, PulsarAction, SettlementContract, VALIDATOR_NUMBER } from "pulsar-contracts";
+import {
+    CalculateMax,
+    PulsarAction,
+    SettlementContract,
+    ValidateReducePublicInput,
+    VALIDATOR_NUMBER,
+} from "pulsar-contracts";
 import { ENDPOINTS } from "../mock/mockEndpoints.js";
 import dotenv from "dotenv";
 import { getOrCreateActionBatch, updateActionBatchStatus } from "../db.js";
 dotenv.config();
+
+interface CollectOptions {
+    minRequired?: number;
+    maxRounds?: number;
+    backoffMs?: number;
+}
+
+interface GetSignatureResponse {
+    validatorPublicKey: string;
+    signature: string;
+    publicInput: string;
+    mask: boolean[];
+    isValid?: boolean;
+    cached: boolean;
+}
 
 const contractInstance = new SettlementContract(
     PublicKey.fromBase58(process.env.CONTRACT_ADDRESS || "")
@@ -92,12 +113,22 @@ await createWorker<CollectSignatureJob, void>({
                 actionsCount: actions.length,
                 workerId: "collectWorker",
             });
-            const includedActions = await getIncludedActions(actions);
-            const includedActionEntries = Array.from(includedActions.entries());
-            const signatures = await collectSignatures(ENDPOINTS, includedActions, {
-                blockHeight,
-                actions,
-            });
+
+            const pulsarActions = actions.map((a) => PulsarAction.fromRawAction(a.actions[0]));
+
+            await sendResolveActions(pulsarActions);
+
+            const finalActionState = actions[actions.length - 1].hash;
+
+            const signatureResponses = await collectSignatures(ENDPOINTS, finalActionState);
+
+            const includedActionEntries = Array.from(
+                getIncludedActions(pulsarActions, signatureResponses[0].mask).entries()
+            );
+            const signatures = signatureResponses.map((r) => [
+                Signature.fromJSON(JSON.parse(r.signature)),
+                PublicKey.fromBase58(r.validatorPublicKey),
+            ]);
 
             await updateActionBatchStatus(actions, "reducing");
 
@@ -145,41 +176,20 @@ await createWorker<CollectSignatureJob, void>({
     },
 });
 
-interface CollectOptions {
-    minRequired?: number;
-    maxRounds?: number;
-    backoffMs?: number;
-}
-
 export async function collectSignatures(
     endpoints: string[],
-    includedActions: Map<string, number>,
-    payload: {
-        blockHeight: number;
-        actions: {
-            actions: string[][];
-            hash: string;
-        }[];
-    },
+    finalActionState: string,
     {
         minRequired = Math.ceil((VALIDATOR_NUMBER * 2) / 3),
         maxRounds = Infinity,
         backoffMs = 2_000,
     }: CollectOptions = {}
-): Promise<Array<[Signature, PublicKey]>> {
-    const got: Array<[Signature, PublicKey]> = [];
+): Promise<GetSignatureResponse[]> {
+    const got: Array<GetSignatureResponse> = [];
     const seen = new Set<string>();
     let remaining = endpoints;
 
-    const typedActions = payload.actions.map((action: { actions: string[][]; hash: string }) => {
-        return {
-            action: PulsarAction.fromRawAction(action.actions[0]),
-            hash: BigInt(action.hash),
-        };
-    });
-
     await fetchAccount({ publicKey: contractInstance.address });
-    const { publicInput } = CalculateMax(includedActions, contractInstance, typedActions);
 
     let round = 1;
     for (; round <= maxRounds && got.length < minRequired; round++) {
@@ -188,7 +198,6 @@ export async function collectSignatures(
             validatorsQueried: remaining.length,
             signaturesCollected: got.length,
             signaturesRequired: minRequired,
-            blockHeight: payload.blockHeight,
             event: "signature_collection_round",
         });
 
@@ -198,46 +207,48 @@ export async function collectSignatures(
                     const r = await fetch(url + "/sign", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(payload),
+                        body: JSON.stringify({
+                            initialActionState: contractInstance.actionState.get().toString(),
+                            finalActionState,
+                        }),
                     });
                     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                    const data = (await r.json()) as {
-                        blockHeight: number;
-                        validatorPubKey: string;
-                        signature: string;
-                    };
-                    if (!data.signature || !data.validatorPubKey) {
+                    const data = (await r.json()) as GetSignatureResponse;
+
+                    if (!data.signature || !data.validatorPublicKey) {
                         throw new Error("Invalid response format");
                     }
-                    const validatorPubKey = PublicKey.fromBase58(data.validatorPubKey);
+                    const validatorPublicKey = PublicKey.fromBase58(data.validatorPublicKey);
                     const signature = Signature.fromJSON(JSON.parse(data.signature));
-                    if (signature.verify(validatorPubKey, publicInput.hash().toFields())) {
-                        return { url, validatorPubKey, signature };
+                    const publicInput = ValidateReducePublicInput.fromJSON(
+                        JSON.parse(data.publicInput || "{}")
+                    );
+                    if (signature.verify(validatorPublicKey, publicInput.hash().toFields())) {
+                        return { url, data };
                     }
                     throw new Error("Signature verification failed");
                 } catch (err) {
                     logger.warn("Failed to fetch signature from validator", {
                         validatorUrl: url,
-                        blockHeight: payload.blockHeight,
                         round,
                         error: err instanceof Error ? err.message : String(err),
                         event: "signature_fetch_failed",
                     });
-                    return { url, signature: undefined };
+                    return { url, data: undefined };
                 }
             })
         );
 
         results
-            .filter((r) => r.signature && !seen.has(r.url))
+            .filter((r) => r.data && !seen.has(r.url))
             .forEach((r) => {
                 seen.add(r.url);
-                got.push([r.signature!, r.validatorPubKey!]);
+                got.push(r.data!);
             });
 
         if (got.length >= minRequired) break;
 
-        remaining = results.filter((r) => !r.signature).map((r) => r.url);
+        remaining = results.filter((r) => !r.data).map((r) => r.url);
 
         if (remaining.length && round < maxRounds) {
             await new Promise((res) => setTimeout(res, backoffMs * round));
@@ -249,7 +260,6 @@ export async function collectSignatures(
         logger.error("Insufficient signatures collected", error, {
             signaturesCollected: got.length,
             signaturesRequired: minRequired,
-            blockHeight: payload.blockHeight,
             totalRounds: round - 1,
             validatorsQueried: endpoints.length,
             event: "insufficient_signatures",
@@ -260,7 +270,6 @@ export async function collectSignatures(
     logger.info("Successfully collected signatures", {
         signaturesCollected: got.length,
         signaturesRequired: minRequired,
-        blockHeight: payload.blockHeight,
         totalRounds: round - 1,
         validatorsQueried: endpoints.length,
         event: "signatures_collected_successfully",
@@ -269,20 +278,17 @@ export async function collectSignatures(
     return got;
 }
 
-async function getIncludedActions(
-    actions: { actions: string[][]; hash: string }[]
-): Promise<Map<string, number>> {
-    const typedActions = actions.map((action: { actions: string[][]; hash: string }) => {
-        return {
-            action: PulsarAction.fromRawAction(action.actions[0]),
-            hash: BigInt(action.hash),
-        };
-    });
-
+function getIncludedActions(pulsarActions: PulsarAction[], mask: boolean[]): Map<string, number> {
     const actionHashMap: Map<string, number> = new Map();
-    for (const action of typedActions) {
-        const key = action.action.unconstrainedHash().toString();
+    for (let i = 0; i < pulsarActions.length; i++) {
+        if (!mask[i]) continue;
+        const action = pulsarActions[i];
+        const key = action.unconstrainedHash().toString();
         actionHashMap.set(key, (actionHashMap.get(key) ?? 0) + 1);
     }
     return actionHashMap;
+}
+
+async function sendResolveActions(actions: PulsarAction[]) {
+    // send actions to resolve endpoint on pulsar
 }

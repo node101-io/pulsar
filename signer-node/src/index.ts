@@ -54,12 +54,12 @@ interface GetSignatureRequest {
 }
 
 interface GetSignatureResponse {
+    validatorPublicKey?: string;
     signature?: string;
     publicInput?: string;
     mask?: boolean[];
     isValid?: boolean;
     cached: boolean;
-    timestamp?: string;
 }
 
 interface CachedSignature {
@@ -143,6 +143,7 @@ if (!minaPrivateKey) {
     throw new Error("Mina private key is not specified in environment variables");
 }
 const privateKey: PrivateKey = PrivateKey.fromBigInt(BigInt("0x" + minaPrivateKey));
+const publicKey: PublicKey = privateKey.toPublicKey();
 
 const contractAddress: string = process.env.CONTRACT_ADDRESS || "";
 if (!contractAddress) {
@@ -309,12 +310,12 @@ app.post(
                 if (cachedSignature) {
                     logger.info("Found cached signature");
                     const response: GetSignatureResponse = {
+                        validatorPublicKey: publicKey.toBase58(),
                         signature: cachedSignature.signature,
                         publicInput: cachedSignature.publicInput,
                         mask: cachedSignature.mask,
                         isValid: cachedSignature.isValid,
                         cached: true,
-                        timestamp: cachedSignature.timestamp.toISOString(),
                     };
 
                     await resetInvalidAttempts(clientIp);
