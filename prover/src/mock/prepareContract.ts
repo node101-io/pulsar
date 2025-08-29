@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import { AccountUpdate, fetchAccount, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
 import { cacheCompile } from "../cache.js";
 import logger from "../logger.js";
+import { PulsarAuth } from "pulsar-contracts/build/src/types/PulsarAction.js";
 dotenv.config();
 
 if (
@@ -27,8 +28,8 @@ setMinaNetwork((process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet") ?
 await cacheCompile("reduce");
 
 const contractInstance = new SettlementContract(contractPrivateKey.toPublicKey());
-
-async function retryUntilSuccess(delayMs = 5000) {
+const delayMs = 5000;
+async function retryUntilSuccess() {
     while (true) {
         try {
             if (process.env.MINA_NETWORK === "lightnet") {
@@ -108,4 +109,72 @@ async function retryUntilSuccess(delayMs = 5000) {
     }
 }
 
+async function sendDepositActions() {
+    while (true) {
+        try {
+            if (process.env.MINA_NETWORK === "lightnet") {
+                const { privateKey } = await Lightnet.acquireKeyPair({
+                    isRegularAccount: true,
+                    lightnetAccountManagerEndpoint: process.env.DOCKER
+                        ? "http://mina-local-lightnet:8181"
+                        : "http://localhost:8181",
+                });
+
+                logger.info(`Acquired account: ${privateKey.toPublicKey().toBase58()}`);
+
+                await fetchAccount({ publicKey: privateKey.toPublicKey() });
+
+                const tx = await Mina.transaction(
+                    { sender: privateKey.toPublicKey(), fee: 1e9 },
+                    async () => {
+                        await contractInstance.deposit(
+                            UInt64.from(1e9),
+                            PulsarAuth.from(Field(0), [Field(0), Field(0)])
+                        );
+                    }
+                );
+                logger.info("Waiting for transaction to be processed...");
+                await DeployScripts.waitTransactionAndFetchAccount(
+                    tx,
+                    [privateKey, contractPrivateKey],
+                    [
+                        contractInstance.address,
+                        signerPrivateKey.toPublicKey(),
+                        privateKey.toPublicKey(),
+                    ]
+                );
+                logger.info("Deposit successful!");
+            } else {
+                const privateKey = PrivateKey.fromBase58(process.env.MINA_PRIVATE_KEY!);
+                const tx = await Mina.transaction(
+                    { sender: privateKey.toPublicKey(), fee: 1e10 },
+                    async () => {
+                        await contractInstance.deposit(
+                            UInt64.from(1e9),
+                            PulsarAuth.from(Field(0), [Field(0), Field(0)])
+                        );
+                    }
+                );
+                logger.info("Waiting for transaction to be processed...");
+                await DeployScripts.waitTransactionAndFetchAccount(
+                    tx,
+                    [privateKey, contractPrivateKey],
+                    [
+                        contractInstance.address,
+                        signerPrivateKey.toPublicKey(),
+                        privateKey.toPublicKey(),
+                    ]
+                );
+                logger.info("Deposit successful!");
+            }
+        } catch (e) {
+            console.error(e);
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 60000));
+    }
+}
+
 await retryUntilSuccess();
+await sendDepositActions();
