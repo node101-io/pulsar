@@ -17,19 +17,31 @@ async function compileContracts(mode: QueueName) {
         logger.info("Compiling contracts...");
         let time = performance.now();
         await MultisigVerifierProgram.compile();
-        console.log(`MultisigVerifierProgram compiled in ${performance.now() - time} ms`);
+        logger.performance("MultisigVerifierProgram compilation", performance.now() - time, {
+            mode,
+            event: "contract_compilation"
+        });
         if (mode === "reduce") {
             time = performance.now();
             await ValidateReduceProgram.compile();
-            console.log(`ValidateReduceProgram compiled in ${performance.now() - time} ms`);
+            logger.performance("ValidateReduceProgram compilation", performance.now() - time, {
+                mode,
+                event: "contract_compilation"
+            });
 
             time = performance.now();
             await ActionStackProgram.compile();
-            console.log(`ActionStackProgram compiled in ${performance.now() - time} ms`);
+            logger.performance("ActionStackProgram compilation", performance.now() - time, {
+                mode,
+                event: "contract_compilation"
+            });
 
             time = performance.now();
             await SettlementContract.compile();
-            console.log(`SettlementContract compiled in ${performance.now() - time} ms`);
+            logger.performance("SettlementContract compilation", performance.now() - time, {
+                mode,
+                event: "contract_compilation"
+            });
         }
     } catch (err) {
         throw new Error(`Failed to compile contracts: ${err}`);

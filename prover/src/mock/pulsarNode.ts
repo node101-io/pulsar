@@ -5,6 +5,7 @@ import path from "path";
 import { GeneratePulsarBlock, TestUtils, VALIDATOR_NUMBER, validatorSet } from "pulsar-contracts";
 import { fileURLToPath } from "url";
 import { VoteExt } from "../interfaces.js";
+import logger from "../logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,7 +37,6 @@ function createVoteExt(height: number): VoteExt[] {
         Field(height),
         Field(height)
     );
-    // console.log(JSON.stringify(block.toJSON()));
 
     const signaturePubKeyList = TestUtils.GenerateSignaturePubKeyList(
         block.hash().toFields(),
@@ -87,7 +87,10 @@ setInterval(() => {
         voteExt: createVoteExt(currentHeight),
     };
     blockHistory[currentHeight] = block;
-    console.log(`Block produced: ${currentHeight}`);
+    logger.info(`Block produced: ${currentHeight}`, {
+        blockHeight: currentHeight,
+        event: "mock_block_produced",
+    });
 }, 10_000);
 
 function main() {
@@ -97,7 +100,10 @@ function main() {
     const bindAddr = "0.0.0.0:50051";
     server.bindAsync(bindAddr, grpc.ServerCredentials.createInsecure(), (err, port) => {
         if (err) throw err;
-        console.log(`Mock VoteExt gRPC server running at ${bindAddr}`);
+        logger.info(`Mock VoteExt gRPC server running at ${bindAddr}`, {
+            serverAddress: bindAddr,
+            event: "mock_server_started",
+        });
     });
 }
 

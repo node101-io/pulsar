@@ -3,6 +3,7 @@ import * as grpc from "@grpc/grpc-js";
 import { BlockData, BlockParserResult, VoteExt } from "./interfaces.js";
 import { GrpcReflection } from "grpc-js-reflection-client";
 import { PublicKey, Signature } from "o1js";
+import logger from "./logger.js";
 
 const POLL_INTERVAL_MS = 5_000;
 
@@ -28,7 +29,13 @@ export class PulsarClient extends EventEmitter {
         this.pollInterval = pollInterval;
         this.running = false;
         this.lastSeenHeight = initialHeight;
-        console.log(`Pulsar client initialized with RPC address: ${this.rpcAddress}`);
+        
+        logger.info("Pulsar client initialized", {
+            rpcAddress: this.rpcAddress,
+            pollInterval,
+            initialHeight,
+            event: "client_initialized"
+        });
     }
 
     private async createClient(_serviceName: string, rpcAddress: string) {
@@ -86,9 +93,12 @@ export class PulsarClient extends EventEmitter {
                         this.emit("error", error as Error)
                     );
                 } else {
-                    console.warn(
-                        `Missed blocks detected: last seen ${this.lastSeenHeight}, current ${height}, syncing...`
-                    );
+                    logger.warn("Missed blocks detected, syncing", {
+                        lastSeenHeight: this.lastSeenHeight,
+                        currentHeight: height,
+                        missedBlocks: Number(height - this.lastSeenHeight - 1),
+                        event: "missed_blocks_detected"
+                    });
                     this.syncMissedBlocks().catch((error) => this.emit("error", error as Error));
                 }
             }
@@ -101,9 +111,12 @@ export class PulsarClient extends EventEmitter {
                 if (err) return reject(err as Error);
 
                 const { height } = parseTendermintBlockResponse(res);
-                console.log(
-                    `Syncing missed blocks from ${this.lastSeenHeight + 1} to ${height - 1}`
-                );
+                logger.info("Syncing missed blocks", {
+                    fromHeight: Number(this.lastSeenHeight) + 1,
+                    toHeight: Number(height) - 1,
+                    blocksToSync: Number(height) - 1 - Number(this.lastSeenHeight),
+                    event: "block_sync_started"
+                });
 
                 for (let h = this.lastSeenHeight + 1; h < height; ++h) {
                     await this.getBlockAndEmit(h);
@@ -159,7 +172,10 @@ export class PulsarClient extends EventEmitter {
                         .then((pubkey) => resolve(pubkey))
                         .catch((error) => reject(error));
                 } catch (error) {
-                    console.error("Error parsing response:", error);
+                    logger.error("Failed to parse block response", error, {
+                        event: "parse_error",
+                        blockHeight: res?.block?.header?.height
+                    });
                     reject(new Error("Failed to parse Mina public key from response"));
                 }
             });
@@ -193,15 +209,23 @@ export class PulsarClient extends EventEmitter {
                     const pubkey = await this.getMinaPubKeyFromCosmosAddress(validator);
                     minaPubKeys.push(pubkey);
                 } catch (error) {
-                    console.error(
-                        `Error retrieving Mina public key for validator ${validator}:`,
-                        error
+                    logger.error(
+                        `Error retrieving Mina public key for validator ${validator}`,
+                        error,
+                        {
+                            validator,
+                            blockHeight: height,
+                            event: "validator_key_retrieval_error"
+                        }
                     );
                 }
             }
             return minaPubKeys;
         } catch (error) {
-            console.error(`Error retrieving validator set for height ${height}:`, error);
+            logger.error(`Error retrieving validator set for height ${height}`, error, {
+                blockHeight: height,
+                event: "validator_set_retrieval_error"
+            });
             throw error;
         }
     }
@@ -253,7 +277,10 @@ export class PulsarClient extends EventEmitter {
                 voteExt.push(parsedVoteExt);
             }
         } catch (error) {
-            console.error("Error parsing vote extension response:", error);
+            logger.error("Error parsing vote extension response", error, {
+                blockHeight: res?.voteExt?.[0]?.height,
+                event: "vote_extension_parse_error"
+            });
             throw error;
         }
 
@@ -265,7 +292,10 @@ export class PulsarClient extends EventEmitter {
             try {
                 this.mkClient.GetMinaPubkey({ validatorAddr: encoded }, (err: any, res: any) => {
                     if (err) {
-                        console.error("Error retrieving Mina public key:", err);
+                        logger.error("Error retrieving Mina public key", err, {
+                            encodedAddress: encoded,
+                            event: "mina_pubkey_retrieval_error"
+                        });
                         reject(err);
                         return;
                     }
@@ -277,13 +307,19 @@ export class PulsarClient extends EventEmitter {
                         }).toBase58();
                         resolve(publicKey);
                     } catch (parseError) {
-                        console.error("Error parsing public key:", parseError);
-                        console.log("Response data:", res);
+                        logger.error("Error parsing public key", parseError, {
+                            encodedAddress: encoded,
+                            responseData: res,
+                            event: "pubkey_parse_error"
+                        });
                         reject(parseError);
                     }
                 });
             } catch (error) {
-                console.error("Error recovering public key:", error);
+                logger.error("Error recovering public key", error, {
+                    encodedAddress: encoded,
+                    event: "pubkey_recovery_error"
+                });
                 reject(error);
             }
         });

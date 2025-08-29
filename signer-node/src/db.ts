@@ -1,10 +1,13 @@
 import { MongoClient, Collection, Document } from "mongodb";
 import logger from "./logger.js";
 
-interface SignatureDoc extends Document {
-    blockHeight: number;
-    actionState: string;
+interface CachedSignatureDoc extends Document {
+    initialActionState: string;
+    finalActionState: string;
     signature: string;
+    publicInput: string;
+    mask: boolean[];
+    timestamp: Date;
 }
 
 interface InvalidAttemptDoc extends Document {
@@ -14,7 +17,7 @@ interface InvalidAttemptDoc extends Document {
 }
 
 let client: MongoClient;
-let signaturesCol: Collection<SignatureDoc>;
+let cachedSignaturesCol: Collection<CachedSignatureDoc>;
 let invalidAttemptsCol: Collection<InvalidAttemptDoc>;
 
 export async function initMongo() {
@@ -26,25 +29,44 @@ export async function initMongo() {
     client = new MongoClient(uri);
     await client.connect();
 
-    signaturesCol = client.db(db).collection<SignatureDoc>("signatures");
+    cachedSignaturesCol = client.db(db).collection<CachedSignatureDoc>("cached_signatures");
     invalidAttemptsCol = client.db(db).collection<InvalidAttemptDoc>("invalid_attempts");
 
     await invalidAttemptsCol.createIndex({ ip: 1 }, { unique: true });
-    await signaturesCol.createIndex({ blockHeight: 1, actionState: 1 }, { unique: true });
+    await cachedSignaturesCol.createIndex(
+        { initialActionState: 1, finalActionState: 1 },
+        { unique: true }
+    );
+    await cachedSignaturesCol.createIndex(
+        { timestamp: 1 },
+        { expireAfterSeconds: 30 * 24 * 60 * 60 }
+    );
 
     logger.info(`MongoDB connected at ${uri}, using database "${db}"`);
 }
 
 export async function saveSignature(
-    blockHeight: number,
-    actionState: string,
-    signature: string
+    initialActionState: string,
+    finalActionState: string,
+    cachedSignature: Omit<CachedSignatureDoc, "_id" | "initialActionState" | "finalActionState">
 ): Promise<void> {
-    const doc: SignatureDoc = { blockHeight, actionState, signature };
-
     try {
-        await signaturesCol.insertOne(doc);
-        logger.info(`Signature saved for block ${blockHeight}, state ${actionState}`);
+        const doc = {
+            initialActionState,
+            finalActionState,
+            ...cachedSignature,
+        };
+        await cachedSignaturesCol.replaceOne(
+            {
+                initialActionState,
+                finalActionState,
+            },
+            doc,
+            { upsert: true }
+        );
+        logger.info(
+            `Cached signature saved for states ${initialActionState} -> ${finalActionState}`
+        );
     } catch (error) {
         logger.error(`Failed to save signature: ${error}`);
         throw error;
@@ -52,17 +74,20 @@ export async function saveSignature(
 }
 
 export async function getSignature(
-    blockHeight: number,
-    actionState: string
-): Promise<string | null> {
-    const doc = await signaturesCol.findOne({ blockHeight, actionState });
-
+    initialActionState: string,
+    finalActionState: string
+): Promise<CachedSignatureDoc | null> {
+    const doc = await cachedSignaturesCol.findOne({
+        initialActionState,
+        finalActionState,
+    });
     if (!doc) {
-        logger.warn(`No signature found for block ${blockHeight}, state ${actionState}`);
+        logger.info(
+            `No cached signature found for states ${initialActionState} -> ${finalActionState}`
+        );
         return null;
     }
-
-    return doc.signature;
+    return doc;
 }
 
 const MAX_INVALID_ATTEMPTS = 2;

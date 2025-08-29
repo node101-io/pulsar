@@ -1,13 +1,4 @@
-import {
-  Field,
-  Poseidon,
-  Provable,
-  PublicKey,
-  SelfProof,
-  Struct,
-  ZkProgram,
-} from 'o1js';
-import { ProofGenerators } from './types/proofGenerators.js';
+import { Field, Poseidon, Provable, SelfProof, Struct, ZkProgram } from 'o1js';
 import {
   AGGREGATE_THRESHOLD,
   SETTLEMENT_MATRIX_SIZE,
@@ -29,12 +20,9 @@ class SettlementPublicInputs extends Struct({
   InitialMerkleListRoot: Field,
   InitialStateRoot: Field,
   InitialBlockHeight: Field,
-
   NewMerkleListRoot: Field,
   NewStateRoot: Field,
   NewBlockHeight: Field,
-
-  ProofGeneratorsList: ProofGenerators,
 }) {
   static default = new this({
     InitialMerkleListRoot: Field(0),
@@ -43,7 +31,6 @@ class SettlementPublicInputs extends Struct({
     NewMerkleListRoot: Field(0),
     NewStateRoot: Field(0),
     NewBlockHeight: Field(0),
-    ProofGeneratorsList: ProofGenerators.empty(),
   });
 
   isEmpty() {
@@ -52,9 +39,7 @@ class SettlementPublicInputs extends Struct({
         this.InitialBlockHeight.equals(Field.from(0)).and(
           this.NewBlockHeight.equals(Field(0)).and(
             this.NewMerkleListRoot.equals(Field(0)).and(
-              this.NewStateRoot.equals(Field(0)).and(
-                this.ProofGeneratorsList.isEmpty()
-              )
+              this.NewStateRoot.equals(Field(0))
             )
           )
         )
@@ -82,7 +67,6 @@ class SettlementPublicInputs extends Struct({
       this.NewMerkleListRoot,
       this.InitialBlockHeight,
       this.NewBlockHeight,
-      Poseidon.hash(this.ProofGeneratorsList.toFields()),
     ]);
   }
 
@@ -94,7 +78,6 @@ class SettlementPublicInputs extends Struct({
       NewMerkleListRoot: this.NewMerkleListRoot.toString(),
       NewStateRoot: this.NewStateRoot.toString(),
       NewBlockHeight: this.NewBlockHeight.toString(),
-      ProofGeneratorsList: this.ProofGeneratorsList.toJSON(),
     };
   }
 }
@@ -103,7 +86,6 @@ class Block extends Struct({
   InitialMerkleListRoot: Field,
   InitialStateRoot: Field,
   InitialBlockHeight: Field,
-
   NewMerkleListRoot: Field,
   NewStateRoot: Field,
   NewBlockHeight: Field,
@@ -162,11 +144,10 @@ const MultisigVerifierProgram = ZkProgram({
 
   methods: {
     verifySignatures: {
-      privateInputs: [SignaturePublicKeyMatrix, PublicKey, BlockList],
+      privateInputs: [SignaturePublicKeyMatrix, BlockList],
       async method(
         publicInputs: SettlementPublicInputs,
         signaturePublicKeyMatrix: SignaturePublicKeyMatrix,
-        proofGenerator: PublicKey,
         pulsarBlocks: BlockList
       ) {
         pulsarBlocks.list[0].InitialMerkleListRoot.assertEquals(
@@ -245,12 +226,6 @@ const MultisigVerifierProgram = ZkProgram({
           );
         }
 
-        let proofGeneratorsList = ProofGenerators.empty().insertAt(
-          Field(0),
-          proofGenerator
-        );
-        publicInputs.ProofGeneratorsList.assertEquals(proofGeneratorsList);
-
         return {
           publicOutput: new SettlementPublicOutputs({
             numberOfSettlementProofs: Field(SETTLEMENT_MATRIX_SIZE),
@@ -328,15 +303,6 @@ const MultisigVerifierProgram = ZkProgram({
         publicInputs.NewBlockHeight.assertEquals(
           afterPublicInput.NewBlockHeight,
           'New block height mismatch'
-        );
-
-        publicInputs.ProofGeneratorsList.assertEquals(
-          previousPublicInput.ProofGeneratorsList.appendList(
-            previousProof.publicOutput.numberOfSettlementProofs.div(
-              Field(SETTLEMENT_MATRIX_SIZE)
-            ),
-            afterPublicInput.ProofGeneratorsList
-          )
         );
 
         return {

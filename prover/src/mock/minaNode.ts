@@ -1,6 +1,7 @@
 import express from "express";
 import { Signature } from "o1js";
 import { PulsarAction, TestUtils, ValidateReducePublicInput, validatorSet } from "pulsar-contracts";
+import logger from "../logger.js";
 
 const index = Number(process.env.VALIDATOR_INDEX ?? 0);
 const [priv, pub] = validatorSet[index];
@@ -33,9 +34,18 @@ app.post("/sign", (req, res) => {
             signature: JSON.stringify(signature.toJSON()),
         });
     } catch (error) {
-        console.error("Error signing:", error);
+        logger.error("Error signing request", error, {
+            blockHeight,
+            validatorIndex: index,
+            event: "mock_signing_error"
+        });
         res.status(500).json({ error: "Failed to sign the request" });
     }
 });
 
-app.listen(port, () => console.log(`Validator ${index} up on http://localhost:${port}/sign`));
+app.listen(port, () => logger.info(`Mock validator ${index} up on http://localhost:${port}/sign`, {
+    validatorIndex: index,
+    port,
+    publicKey: pub.toBase58(),
+    event: "mock_validator_started"
+}));
