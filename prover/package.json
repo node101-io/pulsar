@@ -21,6 +21,10 @@
     "license": "MIT",
     "description": "",
     "dependencies": {
+        "@cosmjs/crypto": "^0.36.0",
+        "@cosmjs/encoding": "^0.36.0",
+        "@cosmjs/proto-signing": "^0.36.0",
+        "@cosmjs/stargate": "^0.36.0",
         "@grpc/grpc-js": "^1.13.4",
         "@grpc/proto-loader": "^0.7.15",
         "@types/google-protobuf": "^3.15.12",
