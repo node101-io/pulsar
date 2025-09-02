@@ -5,6 +5,7 @@
     "scripts": {
         "test": "npm run test",
         "build": "tsc",
+        "proto:gen": "buf generate ../chain/proto",
         "start-mock": "npm run build && node dist/src/mock/pulsarNode.js",
         "worker:settlement": "npm run build && node --experimental-vm-modules dist/src/worker/settlementWorker.js",
         "worker:merge": "npm run build && node --experimental-vm-modules dist/src/worker/mergeWorker.js",
@@ -21,6 +22,7 @@
     "license": "MIT",
     "description": "",
     "dependencies": {
+        "@bufbuild/protobuf": "^2.7.0",
         "@cosmjs/crypto": "^0.36.0",
         "@cosmjs/encoding": "^0.36.0",
         "@cosmjs/proto-signing": "^0.36.0",
@@ -30,6 +32,7 @@
         "@types/google-protobuf": "^3.15.12",
         "bullmq": "^5.56.0",
         "cosmjs-types": "^0.10.1",
+        "cosmwasm": "^1.1.1",
         "dotenv": "^16.5.0",
         "google-protobuf": "^3.21.4",
         "grpc-js-reflection-client": "^1.3.0",
@@ -41,6 +44,7 @@
         "winston": "^3.17.0"
     },
     "devDependencies": {
+        "@bufbuild/buf": "^1.47.2",
         "@types/express": "^5.0.2",
         "@types/node": "^24.0.10",
         "typescript": "^5.8.3"

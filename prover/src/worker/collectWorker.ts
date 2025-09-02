@@ -14,9 +14,20 @@ import {
 import { ENDPOINTS } from "../mock/mockEndpoints.js";
 import dotenv from "dotenv";
 import { getOrCreateActionBatch, updateActionBatchStatus } from "../db.js";
-import { DirectSecp256k1Wallet, Registry } from "@cosmjs/proto-signing";
-import { fromHex } from "@cosmjs/encoding";
-import { GasPrice, SigningStargateClient } from "@cosmjs/stargate";
+import {
+    DirectSecp256k1Wallet,
+    encodePubkey,
+    makeAuthInfoBytes,
+    makeSignDoc,
+} from "@cosmjs/proto-signing";
+import { fromBase64, fromHex } from "@cosmjs/encoding";
+import { StargateClient } from "@cosmjs/stargate";
+import { MsgResolveActions, protobufPackage } from "../generated/interchain_security/bridge/tx.js";
+import { PulsarAction as CosmosPulsarAction } from "../generated/interchain_security/bridge/state.js";
+import { TxBody, TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx.js";
+import { Any } from "cosmjs-types/google/protobuf/any.js";
+import { encodeSecp256k1Pubkey } from "cosmwasm";
+
 dotenv.config();
 
 interface CollectOptions {
@@ -293,24 +304,9 @@ function getIncludedActions(pulsarActions: PulsarAction[], mask: boolean[]): Map
     return actionHashMap;
 }
 
-interface CosmosAction {
-    publicKey: string;
-    amount: string;
-    actionType: string;
-    blockHeight: string;
-}
+const TYPE_URL = `/${protobufPackage}.MsgResolveActions`;
 
-async function deriveAddressFromWallet(
-    privateKeyHex: string,
-    prefix: string = "consumer"
-): Promise<string> {
-    const privateKeyBytes = fromHex(privateKeyHex);
-    const wallet = await DirectSecp256k1Wallet.fromKey(privateKeyBytes, prefix);
-    const [account] = await wallet.getAccounts();
-    return account.address;
-}
-
-async function sendResolveActions(actions: PulsarAction[]) {
+async function sendResolveActions(pulsarActions: PulsarAction[]) {
     try {
         const rpcEndpoint = process.env.PULSAR_RPC_ENDPOINT;
         const privateKeyHex = process.env.PULSAR_PRIVATE_KEY_HEX;
@@ -340,14 +336,106 @@ async function sendResolveActions(actions: PulsarAction[]) {
             );
             throw new Error("Missing Cosmos configuration in environment variables");
         }
+
+        const privateKeyBytes = fromHex(privateKeyHex);
+        const wallet = await DirectSecp256k1Wallet.fromKey(privateKeyBytes, "consumer");
+        const [account] = await wallet.getAccounts();
+
+        const actions: CosmosPulsarAction[] = pulsarActions.map((action) => {
+            let actionType = "";
+            if (PulsarAction.isDeposit(action).toBoolean()) {
+                actionType = "deposit";
+            } else {
+                actionType = "withdrawal";
+            }
+
+            return {
+                publicKey: action.account.toBase58(),
+                amount: action.amount.toString(),
+                actionType: actionType,
+                blockHeight: action.blockHeight.toString(),
+            };
+        });
+
+        console.log("Preparing to send actions:", actions);
+
+        const nextBlockHeight =
+            actions.length > 0 ? (BigInt(actions[0].blockHeight.toString()) + 1n).toString() : "1";
+
+        const msgValue = MsgResolveActions.fromPartial({
+            creator: account.address,
+            merkleWitness,
+            actions,
+            nextBlockHeight: nextBlockHeight,
+        });
+
+        const msgBytes = MsgResolveActions.encode(msgValue).finish();
+
+        const anyMsg = Any.fromPartial({
+            typeUrl: TYPE_URL,
+            value: msgBytes,
+        });
+        const txBody = TxBody.fromPartial({
+            messages: [anyMsg],
+            memo: "ResolveActions",
+        });
+
+        const bodyBytes = TxBody.encode(txBody).finish();
+
+        const qc = await StargateClient.connect(rpcEndpoint);
+        const onChain = await qc.getAccount(account.address);
+        if (!onChain) throw new Error(`Account ${account.address} not found on chain`);
+        const { accountNumber, sequence } = onChain;
+
+        const pubkeyAny = encodePubkey(encodeSecp256k1Pubkey(account.pubkey));
+        const fee = [{ denom: feeDenom, amount: feeAmount }];
+        const authInfoBytes = makeAuthInfoBytes(
+            [{ pubkey: pubkeyAny, sequence }],
+            fee,
+            Number(gasLimit),
+            undefined,
+            account.address
+        );
+
+        const signDoc = makeSignDoc(bodyBytes, authInfoBytes, chainId, accountNumber);
+        const signed = await wallet.signDirect(account.address, signDoc);
+
+        const sigBytes =
+            typeof (signed.signature.signature as any) === "string"
+                ? fromBase64(signed.signature.signature as any)
+                : (signed.signature.signature as unknown as Uint8Array);
+
+        const txRaw = TxRaw.fromPartial({
+            bodyBytes: signed.signed.bodyBytes,
+            authInfoBytes: signed.signed.authInfoBytes,
+            signatures: [sigBytes],
+        });
+
+        const txBytes = TxRaw.encode(txRaw).finish();
+
+        const result = await qc.broadcastTx(txBytes);
+        if (result.code !== 0) {
+            throw new Error(`Broadcast failed with code ${result.code}: ${result.rawLog}`);
+        }
+
+        logger.info("Resolve actions sent successfully to Cosmos", {
+            txHash: result.transactionHash,
+            code: result.code,
+            height: result.height,
+            actionsCount: actions.length,
+            creator: account.address,
+            nextBlockHeight,
+            event: "pulsar_resolve_actions_success",
+        });
+
+        console.log(result);
+        return result;
     } catch (error) {
         logger.error("Failed to send resolve actions to Cosmos", error as Error, {
             url: process.env.PULSAR_RPC_ENDPOINT,
-            actionsCount: actions.length,
+            actionsCount: pulsarActions.length,
             event: "pulsar_resolve_actions_failed",
         });
         throw error;
     }
 }
-
-await sendResolveActions(TestUtils.GenerateTestActions(5, 1));
