@@ -7,6 +7,7 @@ import {
     CalculateMax,
     PulsarAction,
     SettlementContract,
+    TestUtils,
     ValidateReducePublicInput,
     VALIDATOR_NUMBER,
 } from "pulsar-contracts";
@@ -14,9 +15,8 @@ import { ENDPOINTS } from "../mock/mockEndpoints.js";
 import dotenv from "dotenv";
 import { getOrCreateActionBatch, updateActionBatchStatus } from "../db.js";
 import { DirectSecp256k1Wallet, Registry } from "@cosmjs/proto-signing";
-import { fromHex, toBech32 } from "@cosmjs/encoding";
+import { fromHex } from "@cosmjs/encoding";
 import { GasPrice, SigningStargateClient } from "@cosmjs/stargate";
-import { ripemd160, Secp256k1, sha256 } from "@cosmjs/crypto";
 dotenv.config();
 
 interface CollectOptions {
@@ -37,11 +37,6 @@ interface GetSignatureResponse {
 const contractInstance = new SettlementContract(
     PublicKey.fromBase58(process.env.CONTRACT_ADDRESS || "")
 );
-
-const resolveEndpoint = process.env.PULSAR_RESOLVE_ENDPOINT;
-if (!resolveEndpoint) {
-    throw new Error("PULSAR_RESOLVE_ENDPOINT is not set in environment variables");
-}
 
 await createWorker<CollectSignatureJob, void>({
     queueName: "collect-signature",
@@ -298,29 +293,12 @@ function getIncludedActions(pulsarActions: PulsarAction[], mask: boolean[]): Map
     return actionHashMap;
 }
 
-interface MsgResolveActions {
-    creator: string;
-    actions: CosmosAction[];
-    nextBlockHeight: string;
-    merkleWitness: string;
-}
-
 interface CosmosAction {
     publicKey: string;
     amount: string;
     actionType: string;
     blockHeight: string;
 }
-
-const createMsgResolveActions = (data: MsgResolveActions) => ({
-    typeUrl: "/cosmos.bridge.MsgResolveActions",
-    value: {
-        creator: data.creator,
-        actions: data.actions,
-        nextBlockHeight: data.nextBlockHeight,
-        merkleWitness: data.merkleWitness,
-    },
-});
 
 async function deriveAddressFromWallet(
     privateKeyHex: string,
@@ -334,13 +312,13 @@ async function deriveAddressFromWallet(
 
 async function sendResolveActions(actions: PulsarAction[]) {
     try {
-        const rpcEndpoint = process.env.COSMOS_RPC_ENDPOINT;
-        const privateKeyHex = process.env.COSMOS_PRIVATE_KEY_HEX;
-        const chainId = process.env.COSMOS_CHAIN_ID;
+        const rpcEndpoint = process.env.PULSAR_RPC_ENDPOINT;
+        const privateKeyHex = process.env.PULSAR_PRIVATE_KEY_HEX;
+        const chainId = process.env.PULSAR_CHAIN_ID;
         const merkleWitness = process.env.MERKLE_WITNESS;
-        const feeAmount = process.env.COSMOS_FEE_AMOUNT;
-        const feeDenom = process.env.COSMOS_FEE_DENOM;
-        const gasLimit = process.env.COSMOS_GAS_LIMIT;
+        const feeAmount = process.env.PULSAR_FEE_AMOUNT;
+        const feeDenom = process.env.PULSAR_FEE_DENOM;
+        const gasLimit = process.env.PULSAR_GAS_LIMIT;
 
         if (
             !privateKeyHex ||
@@ -351,6 +329,15 @@ async function sendResolveActions(actions: PulsarAction[]) {
             !feeDenom ||
             !gasLimit
         ) {
+            console.error(
+                privateKeyHex,
+                rpcEndpoint,
+                chainId,
+                merkleWitness,
+                feeAmount,
+                feeDenom,
+                gasLimit
+            );
             throw new Error("Missing Cosmos configuration in environment variables");
         }
 
@@ -360,7 +347,7 @@ async function sendResolveActions(actions: PulsarAction[]) {
             endpoint: rpcEndpoint,
             actionsCount: actions.length,
             chainId,
-            event: "cosmos_resolve_actions_start",
+            event: "pulsar_resolve_actions_start",
         });
 
         const privateKeyBytes = fromHex(privateKeyHex);
@@ -388,16 +375,19 @@ async function sendResolveActions(actions: PulsarAction[]) {
         const nextBlockHeight =
             actions.length > 0 ? (BigInt(actions[0].blockHeight.toString()) + 1n).toString() : "0";
 
-        const msg = createMsgResolveActions({
-            creator: creatorAddress || account.address,
-            actions: cosmosActions,
-            nextBlockHeight,
-            merkleWitness,
-        });
-
         const result = await client.signAndBroadcast(
             account.address,
-            [msg],
+            [
+                {
+                    typeUrl: "/interchain_security.bridge.MsgResolveActions",
+                    value: {
+                        creator: creatorAddress,
+                        actions: cosmosActions,
+                        nextBlockHeight,
+                        merkleWitness,
+                    },
+                },
+            ],
             {
                 amount: [{ amount: feeAmount, denom: feeDenom }],
                 gas: gasLimit,
@@ -410,7 +400,7 @@ async function sendResolveActions(actions: PulsarAction[]) {
             height: result.height,
             code: result.code,
             actionsCount: actions.length,
-            event: "cosmos_resolve_actions_success",
+            event: "pulsar_resolve_actions_success",
         });
 
         return {
@@ -420,9 +410,12 @@ async function sendResolveActions(actions: PulsarAction[]) {
         };
     } catch (error) {
         logger.error("Failed to send resolve actions to Cosmos", error as Error, {
+            url: process.env.PULSAR_RPC_ENDPOINT,
             actionsCount: actions.length,
-            event: "cosmos_resolve_actions_failed",
+            event: "pulsar_resolve_actions_failed",
         });
         throw error;
     }
 }
+
+await sendResolveActions(TestUtils.GenerateTestActions(5, 1));

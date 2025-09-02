@@ -40,7 +40,7 @@ services:
             MINA_NETWORK: ${MINA_NETWORK}
             FEE: ${FEE}
             CONTRACT_ADDRESS: ${CONTRACT_ADDRESS}
-            PULSAR_RPC_ADDRESS: ${PULSAR_RPC_ADDRESS}
+            PULSAR_GRPC_ENDPOINT: ${PULSAR_GRPC_ENDPOINT}
             REDIS_HOST: redis
             REDIS_PORT: 6379
             REDIS_PASSWORD: ${REDIS_PASSWORD}
