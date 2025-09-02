@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package interchain_security.bridge;
+
+import "amino/amino.proto";
+import "cosmos/msg/v1/msg.proto";
+import "cosmos_proto/cosmos.proto";
+import "gogoproto/gogo.proto";
+import "interchain_security/bridge/params.proto";
+import "interchain_security/bridge/state.proto";
+
+option go_package = "github.com/node101-io/pulsar/chain/x/bridge/types";
+
+// Msg defines the Msg service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+  
+  // UpdateParams defines a (governance) operation for updating the module
+  // parameters. The authority defaults to the x/gov module account.
+  rpc UpdateParams   (MsgUpdateParams  ) returns (MsgUpdateParamsResponse);
+
+  rpc LockForWithdrawal(MsgLockForWithdrawal) returns (MsgLockForWithdrawalResponse);
+  rpc ResolveActions(MsgResolveActions) returns (MsgResolveActionsResponse);
+}
+// MsgUpdateParams is the Msg/UpdateParams request type.
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) =                         "authority";
+  option           (amino.name) = "interchain_security/x/bridge/MsgUpdateParams";
+  
+  // authority is the address that controls the module (defaults to x/gov unless overwritten).
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  
+  // params defines the module parameters to update.
+  
+  // NOTE: All parameters must be supplied.
+  Params params = 2 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
+}
+
+// MsgUpdateParamsResponse defines the response structure for executing a
+// MsgUpdateParams message.
+message MsgUpdateParamsResponse {}
+
+
+
+message MsgLockForWithdrawal {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1;
+  string mina_public_key = 2;
+  string amount = 3 [
+    (gogoproto.customtype) = "cosmossdk.io/math.Int",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message MsgLockForWithdrawalResponse {}
+
+message MsgResolveActions {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1;
+  repeated PulsarAction actions = 2 [(gogoproto.nullable) = false];
+  uint64 next_block_height = 3;
+  string merkle_witness = 4;
+}
+
+message MsgResolveActionsResponse {
+  uint64 processed_actions_count = 1;
+  uint64 approved_actions_count = 2;
+  uint64 ignored_actions_count = 3;
+}
+

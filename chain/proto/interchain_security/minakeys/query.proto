@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package interchain_security.minakeys;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "interchain_security/minakeys/params.proto";
+import "interchain_security/minakeys/key_store.proto";
+import "interchain_security/minakeys/vote_ext.proto";
+
+option go_package = "github.com/node101-io/pulsar/chain/x/minakeys/types";
+
+// Query defines the gRPC querier service.
+service Query {
+  
+  // Parameters queries the parameters of the module.
+  rpc Params (QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/interchain_security/minakeys/params";
+  
+  }
+  
+  // Queries a list of KeyStore items.
+  rpc KeyStore    (QueryGetKeyStoreRequest) returns (QueryGetKeyStoreResponse) {
+    option (google.api.http).get = "/interchain_security/minakeys/key_store/{index}";
+  
+  }
+  rpc KeyStoreAll (QueryAllKeyStoreRequest) returns (QueryAllKeyStoreResponse) {
+    option (google.api.http).get = "/interchain_security/minakeys/key_store";
+  
+  }
+  
+  // Queries a list of VoteExt items.
+  rpc VoteExt    (QueryGetVoteExtRequest) returns (QueryGetVoteExtResponse) {
+    option (google.api.http).get = "/interchain_security/minakeys/vote_ext/{index}";
+  
+  }
+  rpc VoteExtAll (QueryAllVoteExtRequest) returns (QueryAllVoteExtResponse) {
+    option (google.api.http).get = "/interchain_security/minakeys/vote_ext";
+  
+  }
+  
+  // Queries VoteExt items by height.
+  rpc VoteExtByHeight (QueryVoteExtByHeightRequest) returns (QueryVoteExtByHeightResponse) {
+    option (google.api.http).get = "/interchain_security/minakeys/vote_ext/height/{block_height}";
+  
+  }
+
+  rpc GetMinaPubkey(QueryGetMinaPubkeyRequest) returns (QueryGetMinaPubkeyResponse){
+    option (google.api.http).get = "/interchain_security/minakeys/mina_pubkey/{validatorAddr}";
+  }
+
+}
+// QueryParamsRequest is request type for the Query/Params RPC method.
+message QueryParamsRequest {}
+
+// QueryParamsResponse is response type for the Query/Params RPC method.
+message QueryParamsResponse {
+  
+  // params holds all the parameters of this module.
+  Params params = 1 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
+}
+
+message QueryGetKeyStoreRequest {
+  string index = 1;
+}
+
+message QueryGetKeyStoreResponse {
+  KeyStore keyStore = 1 [(gogoproto.nullable) = false];
+}
+
+message QueryAllKeyStoreRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+message QueryAllKeyStoreResponse {
+  repeated KeyStore                               keyStore   = 1 [(gogoproto.nullable) = false];
+           cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+message QueryGetVoteExtRequest {
+  string index = 1;
+}
+
+message QueryGetVoteExtResponse {
+  VoteExt voteExt = 1 [(gogoproto.nullable) = false];
+}
+
+message QueryAllVoteExtRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+message QueryAllVoteExtResponse {
+  repeated VoteExt                                voteExt    = 1 [(gogoproto.nullable) = false];
+           cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+message QueryVoteExtByHeightRequest {
+  uint64 block_height = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+message QueryVoteExtByHeightResponse {
+  repeated VoteExt                                voteExt    = 1 [(gogoproto.nullable) = false];
+           cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+message QueryGetMinaPubkeyRequest {
+  string validatorAddr = 1;
+}
+message QueryGetMinaPubkeyResponse {
+  string x = 1;
+  string is_odd = 2;
+}
+

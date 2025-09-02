@@ -1,0 +1,15 @@
+syntax = "proto3";
+package interchain_security.minakeys;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/node101-io/pulsar/chain/x/minakeys/types";
+
+// Params defines the parameters for the module.
+message Params {
+  option (amino.name) = "interchain_security/x/minakeys/Params";
+  option (gogoproto.equal) = true;
+
+  
+}

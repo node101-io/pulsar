@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package interchain_security.bridge;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "interchain_security/bridge/params.proto";
+
+import "interchain_security/bridge/state.proto";
+
+option go_package = "github.com/node101-io/pulsar/chain/x/bridge/types";
+
+// Query defines the gRPC querier service.
+service Query {
+  
+  // Parameters queries the parameters of the module.
+  rpc Params (QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/interchain_security/bridge/params";
+  
+  }
+
+  // TestQuery returns a test string "node101"
+  rpc TestQuery (QueryTestRequest) returns (QueryTestResponse) {
+    option (google.api.http).get = "/interchain_security/bridge/test";
+  }
+
+
+
+  // Queries withdrawal balance by public key.
+  rpc WithdrawalBalance (QueryWithdrawalBalanceRequest) returns (QueryWithdrawalBalanceResponse) {
+    option (google.api.http).get = "/interchain_security/bridge/withdrawal_balance/{public_key}";
+  }
+
+  // Queries all withdrawal balances.
+  rpc WithdrawalBalances (QueryWithdrawalBalancesRequest) returns (QueryWithdrawalBalancesResponse) {
+    option (google.api.http).get = "/interchain_security/bridge/withdrawal_balances";
+  }
+
+  // Queries reward balance by public key.
+  rpc RewardBalance (QueryRewardBalanceRequest) returns (QueryRewardBalanceResponse) {
+    option (google.api.http).get = "/interchain_security/bridge/reward_balance/{public_key}";
+  }
+
+  // Queries all reward balances.
+  rpc RewardBalances (QueryRewardBalancesRequest) returns (QueryRewardBalancesResponse) {
+    option (google.api.http).get = "/interchain_security/bridge/reward_balances";
+  }
+
+  // Queries approved actions.
+  rpc ApprovedActions (QueryApprovedActionsRequest) returns (QueryApprovedActionsResponse) {
+    option (google.api.http).get = "/interchain_security/bridge/approved_actions";
+  }
+
+  // Queries bridge state.
+  rpc BridgeState (QueryBridgeStateRequest) returns (QueryBridgeStateResponse) {
+    option (google.api.http).get = "/interchain_security/bridge/state";
+  }
+  
+}
+// QueryParamsRequest is request type for the Query/Params RPC method.
+message QueryParamsRequest {}
+
+// QueryParamsResponse is response type for the Query/Params RPC method.
+message QueryParamsResponse {
+  
+  // params holds all the parameters of this module.
+  Params params = 1 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
+}
+
+// QueryTestRequest is request type for the Query/TestQuery RPC method.
+message QueryTestRequest {}
+
+// QueryTestResponse is response type for the Query/TestQuery RPC method.
+message QueryTestResponse {
+  // result holds the test string
+  string result = 1;
+}
+
+
+
+// Query messages for new state variables
+
+message QueryWithdrawalBalanceRequest {
+  string public_key = 1;
+}
+
+message QueryWithdrawalBalanceResponse {
+  string amount = 1 [
+    (gogoproto.customtype) = "cosmossdk.io/math.Int",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message QueryWithdrawalBalancesRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+message QueryWithdrawalBalancesResponse {
+  repeated WithdrawalBalance withdrawal_balances = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+message QueryRewardBalanceRequest {
+  string public_key = 1;
+}
+
+message QueryRewardBalanceResponse {
+  string amount = 1 [
+    (gogoproto.customtype) = "cosmossdk.io/math.Int",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message QueryRewardBalancesRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+message QueryRewardBalancesResponse {
+  repeated RewardBalance reward_balances = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+message QueryApprovedActionsRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+message QueryApprovedActionsResponse {
+  repeated PulsarAction approved_actions = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+message QueryBridgeStateRequest {}
+
+message QueryBridgeStateResponse {
+  BridgeState bridge_state = 1 [(gogoproto.nullable) = false];
+}

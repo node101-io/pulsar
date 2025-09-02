@@ -1,0 +1,18 @@
+syntax = "proto3";
+package interchain_security.minakeys;
+
+option go_package = "github.com/node101-io/pulsar/chain/x/minakeys/types";
+
+message VoteExt {
+  string index = 1; 
+  uint64 height = 2; 
+  string validatorAddr = 3; 
+  string signature = 4; 
+}
+
+// Height-based index mapping
+message VoteExtIndex {
+  uint64 height = 1;
+  repeated string indexes = 2; // Array of VoteExt indexes for this height
+}
+

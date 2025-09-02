@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package interchain_security.minakeys;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "interchain_security/minakeys/params.proto";
+import "interchain_security/minakeys/key_store.proto";
+import "interchain_security/minakeys/vote_ext.proto";
+
+option go_package = "github.com/node101-io/pulsar/chain/x/minakeys/types";
+
+// GenesisState defines the minakeys module's genesis state.
+message GenesisState {
+  
+  // params defines all the parameters of the module.
+           Params   params       = 1 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
+  repeated KeyStore keyStoreList = 2 [(gogoproto.nullable) = false] ;
+  repeated VoteExt  voteExtList  = 3 [(gogoproto.nullable) = false] ;
+}
+

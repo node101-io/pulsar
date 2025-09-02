@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package interchain_security.bridge;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/node101-io/pulsar/chain/x/bridge/types";
+
+// WithdrawalBalance represents a withdrawal balance for a public key
+message WithdrawalBalance {
+  string public_key = 1;
+  string amount = 2 [
+    (gogoproto.customtype) = "cosmossdk.io/math.Int",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// RewardBalance represents a reward balance for a public key  
+message RewardBalance {
+  string public_key = 1;
+  string amount = 2 [
+    (gogoproto.customtype) = "cosmossdk.io/math.Int",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// PulsarAction represents an action in the Pulsar system
+message PulsarAction {
+  string public_key = 1;
+  string amount = 2 [
+    (gogoproto.customtype) = "cosmossdk.io/math.Int",
+    (gogoproto.nullable) = false
+  ];
+  string action_type = 3; // "deposit", "withdrawal", "settlement"
+  uint64 block_height = 4;
+}
+
+// PulsarActionList represents a list of actions for storage
+message PulsarActionList {
+  repeated PulsarAction actions = 1 [(gogoproto.nullable) = false];
+}
+
+// BridgeState represents the complete state of the bridge module
+message BridgeState {
+  repeated WithdrawalBalance withdrawal_balances = 1 [(gogoproto.nullable) = false];
+  repeated RewardBalance reward_balances = 2 [(gogoproto.nullable) = false];
+  repeated PulsarAction approved_actions = 3 [(gogoproto.nullable) = false];
+  string approved_action_hash = 4;
+  string all_action_hash = 5;
+  uint64 settled_block_height = 6;
+}
