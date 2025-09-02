@@ -61,7 +61,7 @@ async function main() {
     });
 
     const pulsarClient = new PulsarClient(
-        process.env.PULSAR_RPC_ADDRESS || "localhost:50051",
+        process.env.PULSAR_GRPC_ENDPOINT || "localhost:50051",
         0,
         10000
     );

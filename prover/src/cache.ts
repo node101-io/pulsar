@@ -21,17 +21,20 @@ export const cacheCompile = async (mode: QueueName) => {
 
         let time = performance.now();
         await MultisigVerifierProgram.compile({ cache: multisigVerifierProgram });
-        console.log(`MultisigVerifierProgram compiled in ${performance.now() - time} ms`);
+        logger.performance("MultisigVerifierProgram compilation", performance.now() - time, { mode });
+        
         if (mode === "reduce" || mode === "submit") {
             time = performance.now();
             await ValidateReduceProgram.compile({ cache: validateReduceProgram });
-            console.log(`ValidateReduceProgram compiled in ${performance.now() - time} ms`);
+            logger.performance("ValidateReduceProgram compilation", performance.now() - time, { mode });
+            
             time = performance.now();
             await ActionStackProgram.compile({ cache: actionStackProgram });
-            console.log(`ActionStackProgram compiled in ${performance.now() - time} ms`);
+            logger.performance("ActionStackProgram compilation", performance.now() - time, { mode });
+            
             time = performance.now();
             await SettlementContract.compile({ cache: settlementContract });
-            console.log(`SettlementContract compiled in ${performance.now() - time} ms`);
+            logger.performance("SettlementContract compilation", performance.now() - time, { mode });
         }
     } catch (err) {
         throw new Error(`Failed to compile contracts: ${err}`);

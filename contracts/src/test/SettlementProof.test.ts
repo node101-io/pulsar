@@ -7,7 +7,6 @@ import {
   BlockList,
 } from '../SettlementProof';
 import { SETTLEMENT_MATRIX_SIZE, VALIDATOR_NUMBER } from '../utils/constants';
-import { ProofGenerators } from '../types/proofGenerators';
 import { validatorSet } from './mock';
 import {
   GenerateSettlementPublicInput,
@@ -57,8 +56,7 @@ describe('SettlementProof tests', () => {
         blocks[0].InitialBlockHeight,
         blocks[blocks.length - 1].NewMerkleListRoot,
         blocks[blocks.length - 1].NewStateRoot,
-        blocks[blocks.length - 1].NewBlockHeight,
-        [validatorSet[0][1]]
+        blocks[blocks.length - 1].NewBlockHeight
       );
 
       expect(publicInput.InitialMerkleListRoot).toEqual(merkleList.hash);
@@ -70,9 +68,6 @@ describe('SettlementProof tests', () => {
       );
       expect(publicInput.NewBlockHeight).toEqual(
         Field.from(SETTLEMENT_MATRIX_SIZE + 1)
-      );
-      expect(publicInput.ProofGeneratorsList).toEqual(
-        ProofGenerators.empty().insertAt(Field.from(0), validatorSet[0][1])
       );
 
       settlementPublicInputs.push(publicInput);
@@ -91,7 +86,6 @@ describe('SettlementProof tests', () => {
           await MultisigVerifierProgram.verifySignatures(
             settlementPublicInputs[0],
             signerMatrix,
-            validatorSet[0][1],
             BlockList.fromArray(blocks)
           )
         ).proof
@@ -129,8 +123,7 @@ describe('SettlementProof tests', () => {
           .NewBlockHeight,
         blocks[blocks.length - 1].NewMerkleListRoot,
         blocks[blocks.length - 1].NewStateRoot,
-        blocks[blocks.length - 1].NewBlockHeight,
-        [validatorSet[1][1]]
+        blocks[blocks.length - 1].NewBlockHeight
       );
 
       settlementPublicInputs.push(publicInput);
@@ -145,7 +138,6 @@ describe('SettlementProof tests', () => {
           await MultisigVerifierProgram.verifySignatures(
             settlementPublicInputs[settlementPublicInputs.length - 1],
             signerMatrix,
-            validatorSet[1][1],
             BlockList.fromArray(blocks)
           )
         ).proof
@@ -183,8 +175,7 @@ describe('SettlementProof tests', () => {
           .NewBlockHeight,
         blocks[blocks.length - 1].NewMerkleListRoot,
         blocks[blocks.length - 1].NewStateRoot,
-        blocks[blocks.length - 1].NewBlockHeight,
-        [validatorSet[2][1]]
+        blocks[blocks.length - 1].NewBlockHeight
       );
 
       settlementPublicInputs.push(publicInput);
@@ -199,7 +190,6 @@ describe('SettlementProof tests', () => {
           await MultisigVerifierProgram.verifySignatures(
             settlementPublicInputs[settlementPublicInputs.length - 1],
             signerMatrix,
-            validatorSet[2][1],
             BlockList.fromArray(blocks)
           )
         ).proof
@@ -237,8 +227,7 @@ describe('SettlementProof tests', () => {
           .NewBlockHeight,
         blocks[blocks.length - 1].NewMerkleListRoot,
         blocks[blocks.length - 1].NewStateRoot,
-        blocks[blocks.length - 1].NewBlockHeight,
-        [validatorSet[3][1]]
+        blocks[blocks.length - 1].NewBlockHeight
       );
 
       settlementPublicInputs.push(publicInput);
@@ -253,7 +242,6 @@ describe('SettlementProof tests', () => {
           await MultisigVerifierProgram.verifySignatures(
             settlementPublicInputs[settlementPublicInputs.length - 1],
             signerMatrix,
-            validatorSet[3][1],
             BlockList.fromArray(blocks)
           )
         ).proof
@@ -272,13 +260,6 @@ describe('SettlementProof tests', () => {
       );
       expect(mergedProof.publicInput.NewStateRoot).toEqual(
         settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot
-      );
-      expect(mergedProof.publicInput.ProofGeneratorsList).toEqual(
-        ProofGenerators.empty()
-          .insertAt(Field.from(0), validatorSet[0][1])
-          .insertAt(Field.from(1), validatorSet[1][1])
-          .insertAt(Field.from(2), validatorSet[2][1])
-          .insertAt(Field.from(3), validatorSet[3][1])
       );
       expect(mergedProof.publicInput.InitialMerkleListRoot).toEqual(
         settlementPublicInputs[0].InitialMerkleListRoot

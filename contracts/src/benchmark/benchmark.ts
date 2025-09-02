@@ -56,6 +56,7 @@ import {
   AGGREGATE_THRESHOLD,
   SETTLEMENT_MATRIX_SIZE,
 } from '../utils/constants.js';
+import { PulsarAuth } from '../types/PulsarAction.js';
 
 // function logMem(label = '') {
 //   if (!logsEnabled) return;
@@ -445,8 +446,7 @@ async function settlementProofBenchmark(
         blocks[blocks.length - SETTLEMENT_MATRIX_SIZE].InitialBlockHeight,
         blocks[blocks.length - 1].NewMerkleListRoot,
         blocks[blocks.length - 1].NewStateRoot,
-        blocks[blocks.length - 1].NewBlockHeight,
-        [validatorSet[0][1]]
+        blocks[blocks.length - 1].NewBlockHeight
       );
 
       const signatureMatrix = TestUtils.GenerateSignaturePubKeyMatrix(
@@ -458,7 +458,6 @@ async function settlementProofBenchmark(
         await MultisigVerifierProgram.verifySignatures(
           publicInput,
           signatureMatrix,
-          validatorSet[0][1],
           BlockList.fromArray(blocks.slice(-SETTLEMENT_MATRIX_SIZE))
         )
       ).proof;
@@ -483,11 +482,6 @@ async function settlementProofBenchmark(
       NewBlockHeight: proof.publicInput.NewBlockHeight,
       NewMerkleListRoot: proof.publicInput.NewMerkleListRoot,
       NewStateRoot: proof.publicInput.NewStateRoot,
-      ProofGeneratorsList:
-        mergedProof.publicInput.ProofGeneratorsList.appendList(
-          Field(i),
-          proof.publicInput.ProofGeneratorsList
-        ),
     });
 
     mergedProof = (
@@ -527,7 +521,10 @@ async function deposit(
   await fetchAccounts([senderKey.toPublicKey()]);
   const tx = await bench('Deposit transaction', () =>
     Mina.transaction({ sender: senderKey.toPublicKey(), fee }, async () => {
-      await zkapp.deposit(amount);
+      await zkapp.deposit(
+        amount,
+        PulsarAuth.from(Field(0), [Field(0), Field(0)])
+      );
     })
   );
 
@@ -693,7 +690,10 @@ async function settleDepositWithdraw(
 }
 
 async function BenchActionStackProgram(numActions: number) {
-  const actions = TestUtils.GenerateTestActions(numActions, merkleList.hash);
+  const actions = TestUtils.GenerateTestActions(
+    numActions,
+    Number(Mina.getNetworkState().blockchainLength.value.toString())
+  );
   await bench('Generate Action Stack Proof', () =>
     GenerateActionStackProof(Field.from(0), actions)
   );

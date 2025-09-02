@@ -1,4 +1,4 @@
-import { Bool, Field, PublicKey } from 'o1js';
+import { Bool, Field } from 'o1js';
 import {
   Block,
   BlockList,
@@ -6,7 +6,6 @@ import {
   SettlementProof,
   SettlementPublicInputs,
 } from '../SettlementProof.js';
-import { ProofGenerators } from '../types/proofGenerators.js';
 import {
   ValidateReducePublicInput,
   ValidateReduceProgram,
@@ -32,8 +31,7 @@ export {
 
 async function GenerateSettlementProof(
   blocks: Array<Block>,
-  signaturePublicKeyLists: Array<SignaturePublicKeyList>,
-  proofGenerator: PublicKey
+  signaturePublicKeyLists: Array<SignaturePublicKeyList>
 ) {
   let proof: SettlementProof;
   if (blocks.length !== SETTLEMENT_MATRIX_SIZE) {
@@ -55,10 +53,6 @@ async function GenerateSettlementProof(
     NewBlockHeight: blocks[SETTLEMENT_MATRIX_SIZE - 1].NewBlockHeight,
     NewMerkleListRoot: blocks[SETTLEMENT_MATRIX_SIZE - 1].NewMerkleListRoot,
     NewStateRoot: blocks[SETTLEMENT_MATRIX_SIZE - 1].NewStateRoot,
-    ProofGeneratorsList: ProofGenerators.empty().insertAt(
-      Field(0),
-      proofGenerator
-    ),
   });
 
   try {
@@ -68,7 +62,6 @@ async function GenerateSettlementProof(
         SignaturePublicKeyMatrix.fromSignaturePublicKeyLists(
           signaturePublicKeyLists
         ),
-        proofGenerator,
         BlockList.fromArray(blocks)
       )
     ).proof;
@@ -146,13 +139,6 @@ async function MergeSettlementProofs(proofs: Array<SettlementProof>) {
         NewBlockHeight: proof.publicInput.NewBlockHeight,
         NewMerkleListRoot: proof.publicInput.NewMerkleListRoot,
         NewStateRoot: proof.publicInput.NewStateRoot,
-        ProofGeneratorsList:
-          mergedProof.publicInput.ProofGeneratorsList.appendList(
-            mergedProof.publicOutput.numberOfSettlementProofs.div(
-              Field(SETTLEMENT_MATRIX_SIZE)
-            ),
-            proof.publicInput.ProofGeneratorsList
-          ),
       });
 
       mergedProof = (
@@ -176,14 +162,8 @@ function GenerateSettlementPublicInput(
   initialBlockHeight: Field,
   newMerkleListRoot: Field,
   newStateRoot: Field,
-  newBlockHeight: Field,
-  proofGeneratorsList: Array<PublicKey>
+  newBlockHeight: Field
 ) {
-  let proofGenerators = ProofGenerators.empty();
-  for (let i = 0; i < proofGeneratorsList.length; i++) {
-    proofGenerators.insertAt(Field(i), proofGeneratorsList[i]);
-  }
-
   return new SettlementPublicInputs({
     InitialMerkleListRoot: initialMerkleListRoot,
     InitialStateRoot: initialStateRoot,
@@ -191,7 +171,6 @@ function GenerateSettlementPublicInput(
     NewBlockHeight: newBlockHeight,
     NewMerkleListRoot: newMerkleListRoot,
     NewStateRoot: newStateRoot,
-    ProofGeneratorsList: proofGenerators,
   });
 }
 
@@ -251,7 +230,7 @@ async function GenerateActionStackProof(
   }
 
   try {
-    for (let i = 0; i < Math.ceil(actions.length / ACTION_QUEUE_SIZE); i++) {
+    for (let i = 1; i < Math.ceil(actions.length / ACTION_QUEUE_SIZE); i++) {
       proof = (
         await ActionStackProgram.proveRecursive(
           proof.publicOutput,

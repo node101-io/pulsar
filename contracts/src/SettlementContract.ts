@@ -22,7 +22,7 @@ import {
   WITHDRAW_DOWN_PAYMENT,
 } from './utils/constants.js';
 import { ValidateReduceProof } from './ValidateReduce.js';
-import { Batch, PulsarAction } from './types/PulsarAction.js';
+import { Batch, PulsarAction, PulsarAuth } from './types/PulsarAction.js';
 import { ReduceMask } from './types/common.js';
 import { ActionStackProof } from './ActionStack.js';
 import {
@@ -48,7 +48,6 @@ class SettlementContract extends SmartContract {
 
   @state(Field) depositListHash = State<Field>();
   @state(Field) withdrawalListHash = State<Field>();
-  @state(Field) rewardListHash = State<Field>();
 
   reducer = Reducer({ actionType: PulsarAction });
 
@@ -85,7 +84,6 @@ class SettlementContract extends SmartContract {
       NewBlockHeight,
       NewMerkleListRoot,
       NewStateRoot,
-      ProofGeneratorsList,
     } = settlementProof.publicInput;
 
     InitialBlockHeight.assertEquals(
@@ -106,21 +104,13 @@ class SettlementContract extends SmartContract {
       'New block height must be equal to initial block height + AGGREGATE_THRESHOLD'
     );
 
-    this.reducer.dispatch(
-      PulsarAction.settlement(
-        InitialStateRoot,
-        NewStateRoot,
-        InitialMerkleListRoot,
-        NewMerkleListRoot,
-        InitialBlockHeight,
-        NewBlockHeight,
-        ProofGeneratorsList
-      )
-    );
+    this.blockHeight.set(NewBlockHeight);
+    this.merkleListRoot.set(NewMerkleListRoot);
+    this.stateRoot.set(NewStateRoot);
   }
 
   @method
-  async deposit(amount: UInt64) {
+  async deposit(amount: UInt64, pulsarAuth: PulsarAuth) {
     amount.assertGreaterThanOrEqual(
       UInt64.from(MINIMUM_DEPOSIT_AMOUNT),
       `At least ${Number(MINIMUM_DEPOSIT_AMOUNT / 1e9)} MINA is required`
@@ -129,7 +119,14 @@ class SettlementContract extends SmartContract {
     const depositAccountUpdate = AccountUpdate.createSigned(sender);
     depositAccountUpdate.send({ to: this.address, amount });
 
-    this.reducer.dispatch(PulsarAction.deposit(sender, amount.value));
+    this.reducer.dispatch(
+      PulsarAction.deposit(
+        sender,
+        amount.value,
+        this.network.blockchainLength.getAndRequireEquals().value,
+        pulsarAuth
+      )
+    );
   }
 
   @method
@@ -142,7 +139,13 @@ class SettlementContract extends SmartContract {
       amount: amount.add(UInt64.from(WITHDRAW_DOWN_PAYMENT)),
     });
 
-    this.reducer.dispatch(PulsarAction.withdrawal(account, amount.value));
+    this.reducer.dispatch(
+      PulsarAction.withdrawal(
+        account,
+        amount.value,
+        this.network.blockchainLength.getAndRequireEquals().value
+      )
+    );
   }
 
   @method
@@ -153,13 +156,9 @@ class SettlementContract extends SmartContract {
     mask: ReduceMask,
     validateReduceProof: ValidateReduceProof
   ) {
-    let stateRoot = this.stateRoot.getAndRequireEquals();
     let merkleListRoot = this.merkleListRoot.getAndRequireEquals();
-    let blockHeight = this.blockHeight.getAndRequireEquals();
-
     let depositListHash = this.depositListHash.getAndRequireEquals();
     let withdrawalListHash = this.withdrawalListHash.getAndRequireEquals();
-    let rewardListHash = this.rewardListHash.getAndRequireEquals();
 
     let initialActionState = this.actionState.getAndRequireEquals();
     let actionState = initialActionState;
@@ -177,13 +176,6 @@ class SettlementContract extends SmartContract {
         )
       );
 
-      const shouldSettle = PulsarAction.isSettlement(action)
-        .and(action.initialState.equals(stateRoot))
-        .and(action.initialMerkleListRoot.equals(merkleListRoot))
-        .and(action.initialBlockHeight.equals(blockHeight))
-        .and(isDummy.not())
-        .and(mask.list[i]);
-
       const shouldDeposit = PulsarAction.isDeposit(action)
         .and(isDummy.not())
         .and(mask.list[i]);
@@ -192,26 +184,14 @@ class SettlementContract extends SmartContract {
         .and(isDummy.not())
         .and(mask.list[i]);
 
-      stateRoot = Provable.if(shouldSettle, action.newState, stateRoot);
-
-      merkleListRoot = Provable.if(
-        shouldSettle,
-        action.newMerkleListRoot,
-        merkleListRoot
-      );
-
-      blockHeight = Provable.if(
-        shouldSettle,
-        action.newBlockHeight,
-        blockHeight
-      );
-
       depositListHash = Provable.if(
         shouldDeposit,
         Poseidon.hash([
           depositListHash,
           ...action.account.toFields(),
           action.amount,
+          action.blockHeight,
+          ...action.pulsarAuth.toFields(),
         ]),
         depositListHash
       );
@@ -222,6 +202,7 @@ class SettlementContract extends SmartContract {
           withdrawalListHash,
           ...action.account.toFields(),
           action.amount,
+          action.blockHeight,
         ]),
         withdrawalListHash
       );
@@ -240,26 +221,17 @@ class SettlementContract extends SmartContract {
           UInt64.from(0)
         ),
       });
-
-      rewardListHash = Provable.if(
-        shouldSettle,
-        Poseidon.hash([rewardListHash, action.rewardListUpdateHash]),
-        rewardListHash
-      );
     }
 
     validateReduceProof.verify();
 
-    stateRoot.assertEquals(validateReduceProof.publicInput.stateRoot);
     merkleListRoot.assertEquals(validateReduceProof.publicInput.merkleListRoot);
-    blockHeight.assertEquals(validateReduceProof.publicInput.blockHeight);
     depositListHash.assertEquals(
       validateReduceProof.publicInput.depositListHash
     );
     withdrawalListHash.assertEquals(
       validateReduceProof.publicInput.withdrawalListHash
     );
-    rewardListHash.assertEquals(validateReduceProof.publicInput.rewardListHash);
 
     actionStackProof.verifyIf(useActionStack);
     Provable.assertEqualIf(
@@ -283,11 +255,7 @@ class SettlementContract extends SmartContract {
     );
 
     this.actionState.set(actionState);
-    this.stateRoot.set(stateRoot);
-    this.merkleListRoot.set(merkleListRoot);
-    this.blockHeight.set(blockHeight);
     this.depositListHash.set(depositListHash);
     this.withdrawalListHash.set(withdrawalListHash);
-    this.rewardListHash.set(rewardListHash);
   }
 }

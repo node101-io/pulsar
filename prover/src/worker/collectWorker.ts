@@ -3,23 +3,53 @@ import { CollectSignatureJob, reduceQ } from "../workerConnection.js";
 import logger from "../logger.js";
 import fetch from "node-fetch";
 import { fetchAccount, PublicKey, Signature } from "o1js";
-import { CalculateMax, PulsarAction, SettlementContract, VALIDATOR_NUMBER } from "pulsar-contracts";
+import {
+    CalculateMax,
+    PulsarAction,
+    SettlementContract,
+    TestUtils,
+    ValidateReducePublicInput,
+    VALIDATOR_NUMBER,
+} from "pulsar-contracts";
 import { ENDPOINTS } from "../mock/mockEndpoints.js";
 import dotenv from "dotenv";
 import { getOrCreateActionBatch, updateActionBatchStatus } from "../db.js";
+import { DirectSecp256k1Wallet, Registry } from "@cosmjs/proto-signing";
+import { fromHex } from "@cosmjs/encoding";
+import { GasPrice, SigningStargateClient } from "@cosmjs/stargate";
 dotenv.config();
+
+interface CollectOptions {
+    minRequired?: number;
+    maxRounds?: number;
+    backoffMs?: number;
+}
+
+interface GetSignatureResponse {
+    validatorPublicKey: string;
+    signature: string;
+    publicInput: string;
+    mask: boolean[];
+    isValid?: boolean;
+    cached: boolean;
+}
 
 const contractInstance = new SettlementContract(
     PublicKey.fromBase58(process.env.CONTRACT_ADDRESS || "")
 );
 
-createWorker<CollectSignatureJob, void>({
+await createWorker<CollectSignatureJob, void>({
     queueName: "collect-signature",
     jobHandler: async ({ data, id }) => {
         const { blockHeight, actions } = data;
 
         if (actions.length === 0) {
-            logger.warn(`[Job ${id}] No actions found for block height: ${blockHeight}`);
+            logger.warn("No actions found for block height", {
+                jobId: id,
+                blockHeight,
+                event: "no_actions_found",
+                workerId: "collectWorker",
+            });
             return;
         }
 
@@ -27,18 +57,32 @@ createWorker<CollectSignatureJob, void>({
             const { isNew, batch } = await getOrCreateActionBatch(actions);
 
             if (!isNew) {
-                console.log(batch);
+                logger.debug("Action batch already exists", {
+                    jobId: id,
+                    batchId: batch?.id,
+                    status: batch?.status,
+                    blockHeight,
+                    actionsCount: actions.length,
+                    event: "existing_action_batch",
+                });
                 if (batch?.status === "settled") {
-                    logger.info(
-                        `[Job ${id}] Actions for block ${blockHeight} already settled, skipping`
-                    );
+                    logger.info("Actions already settled, skipping", {
+                        jobId: id,
+                        blockHeight,
+                        batchId: batch?.id,
+                        event: "actions_already_settled",
+                    });
                     return;
                 }
 
                 if (batch?.status === "reducing" || batch?.status === "reduced") {
-                    logger.info(
-                        `[Job ${id}] Actions for block ${blockHeight} already being processed (status: ${batch.status}), skipping`
-                    );
+                    logger.info("Actions already being processed, skipping", {
+                        jobId: id,
+                        blockHeight,
+                        batchId: batch?.id,
+                        status: batch.status,
+                        event: "actions_already_processing",
+                    });
                     return;
                 }
 
@@ -49,26 +93,46 @@ createWorker<CollectSignatureJob, void>({
                     Date.now() - batch.updatedAt.getTime() > stuckThreshold;
 
                 if (!isStuck) {
-                    logger.info(
-                        `[Job ${id}] Actions for block ${blockHeight} already being collected, skipping`
-                    );
+                    logger.info("Actions already being collected, skipping", {
+                        jobId: id,
+                        blockHeight,
+                        batchId: batch?.id,
+                        status: batch?.status,
+                        event: "actions_already_collecting",
+                    });
                     return;
                 }
 
-                logger.warn(`[Job ${id}] Retrying stuck collection for block ${blockHeight}`);
+                logger.warn("Retrying stuck collection", {
+                    jobId: id,
+                    blockHeight,
+                    batchId: batch?.id,
+                    stuckDuration: Date.now() - batch.updatedAt.getTime(),
+                    event: "retry_stuck_collection",
+                });
             }
 
-            logger.info(`[Job ${id}] Requesting signatures for block height: ${blockHeight}`);
-            // console.log(`Actions: ${JSON.stringify(actions)}`);
-            const includedActions = await getIncludedActions(actions);
-            // console.log(
-            //     `Included Actions: ${JSON.stringify(Array.from(includedActions.entries()))}`
-            // );
-            const includedActionEntries = Array.from(includedActions.entries());
-            const signatures = await collectSignatures(ENDPOINTS, includedActions, {
+            logger.jobStarted(id, "collect-signature", {
                 blockHeight,
-                actions,
+                actionsCount: actions.length,
+                workerId: "collectWorker",
             });
+
+            const pulsarActions = actions.map((a) => PulsarAction.fromRawAction(a.actions[0]));
+
+            await sendResolveActions(pulsarActions);
+
+            const finalActionState = actions[actions.length - 1].hash;
+
+            const signatureResponses = await collectSignatures(ENDPOINTS, finalActionState);
+
+            const includedActionEntries = Array.from(
+                getIncludedActions(pulsarActions, signatureResponses[0].mask).entries()
+            );
+            const signatures = signatureResponses.map((r) => [
+                Signature.fromJSON(JSON.parse(r.signature)),
+                PublicKey.fromBase58(r.validatorPublicKey),
+            ]);
 
             await updateActionBatchStatus(actions, "reducing");
 
@@ -97,54 +161,49 @@ createWorker<CollectSignatureJob, void>({
                 reduceJobId: jobId,
             });
 
-            logger.info(`[Job ${id}] Added reduce job for block height: ${blockHeight}`);
+            logger.info("Added reduce job for block height", {
+                jobId: id,
+                blockHeight,
+                reduceJobId: jobId,
+                signaturesCollected: signatures.length,
+                includedActionsCount: includedActionEntries.length,
+                event: "reduce_job_added",
+            });
         } catch (error) {
-            logger.error(
-                `[Job ${id}] Failed to collect signatures for block height ${blockHeight}: ${error}`
-            );
+            logger.jobFailed(id, "collect-signature", error as Error, {
+                blockHeight,
+                actionsCount: actions.length,
+                workerId: "collectWorker",
+            });
             throw error;
         }
     },
 });
 
-interface CollectOptions {
-    minRequired?: number;
-    maxRounds?: number;
-    backoffMs?: number;
-}
-
 export async function collectSignatures(
     endpoints: string[],
-    includedActions: Map<string, number>,
-    payload: {
-        blockHeight: number;
-        actions: {
-            actions: string[][];
-            hash: string;
-        }[];
-    },
+    finalActionState: string,
     {
         minRequired = Math.ceil((VALIDATOR_NUMBER * 2) / 3),
         maxRounds = Infinity,
         backoffMs = 2_000,
     }: CollectOptions = {}
-): Promise<Array<[Signature, PublicKey]>> {
-    const got: Array<[Signature, PublicKey]> = [];
+): Promise<GetSignatureResponse[]> {
+    const got: Array<GetSignatureResponse> = [];
     const seen = new Set<string>();
     let remaining = endpoints;
 
-    const typedActions = payload.actions.map((action: { actions: string[][]; hash: string }) => {
-        return {
-            action: PulsarAction.fromRawAction(action.actions[0]),
-            hash: BigInt(action.hash),
-        };
-    });
-
     await fetchAccount({ publicKey: contractInstance.address });
-    const { publicInput } = CalculateMax(includedActions, contractInstance, typedActions);
 
-    for (let round = 1; round <= maxRounds && got.length < minRequired; round++) {
-        // logger.info(`Round ${round}, querying ${remaining.length} validators`);
+    let round = 1;
+    for (; round <= maxRounds && got.length < minRequired; round++) {
+        logger.debug("Starting signature collection round", {
+            round,
+            validatorsQueried: remaining.length,
+            signaturesCollected: got.length,
+            signaturesRequired: minRequired,
+            event: "signature_collection_round",
+        });
 
         const results = await Promise.all(
             remaining.map(async (url) => {
@@ -152,40 +211,48 @@ export async function collectSignatures(
                     const r = await fetch(url + "/sign", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(payload),
+                        body: JSON.stringify({
+                            initialActionState: contractInstance.actionState.get().toString(),
+                            finalActionState,
+                        }),
                     });
                     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                    const data = (await r.json()) as {
-                        blockHeight: number;
-                        validatorPubKey: string;
-                        signature: string;
-                    };
-                    if (!data.signature || !data.validatorPubKey) {
+                    const data = (await r.json()) as GetSignatureResponse;
+
+                    if (!data.signature || !data.validatorPublicKey) {
                         throw new Error("Invalid response format");
                     }
-                    const validatorPubKey = PublicKey.fromBase58(data.validatorPubKey);
+                    const validatorPublicKey = PublicKey.fromBase58(data.validatorPublicKey);
                     const signature = Signature.fromJSON(JSON.parse(data.signature));
-                    if (signature.verify(validatorPubKey, publicInput.hash().toFields())) {
-                        return { url, validatorPubKey, signature };
+                    const publicInput = ValidateReducePublicInput.fromJSON(
+                        JSON.parse(data.publicInput || "{}")
+                    );
+                    if (signature.verify(validatorPublicKey, publicInput.hash().toFields())) {
+                        return { url, data };
                     }
                     throw new Error("Signature verification failed");
                 } catch (err) {
-                    logger.error(`Error fetching signature from ${url}: ${err}`);
-                    return { url, signature: undefined };
+                    logger.warn("Failed to fetch signature from validator", {
+                        validatorUrl: url,
+                        round,
+                        error: err instanceof Error ? err.message : String(err),
+                        event: "signature_fetch_failed",
+                    });
+                    return { url, data: undefined };
                 }
             })
         );
 
         results
-            .filter((r) => r.signature && !seen.has(r.url))
+            .filter((r) => r.data && !seen.has(r.url))
             .forEach((r) => {
                 seen.add(r.url);
-                got.push([r.signature!, r.validatorPubKey!]);
+                got.push(r.data!);
             });
 
         if (got.length >= minRequired) break;
 
-        remaining = results.filter((r) => !r.signature).map((r) => r.url);
+        remaining = results.filter((r) => !r.data).map((r) => r.url);
 
         if (remaining.length && round < maxRounds) {
             await new Promise((res) => setTimeout(res, backoffMs * round));
@@ -193,26 +260,94 @@ export async function collectSignatures(
     }
 
     if (got.length < minRequired) {
-        throw new Error(`Got only ${got.length} signatures (need ${minRequired})`);
+        const error = new Error(`Got only ${got.length} signatures (need ${minRequired})`);
+        logger.error("Insufficient signatures collected", error, {
+            signaturesCollected: got.length,
+            signaturesRequired: minRequired,
+            totalRounds: round - 1,
+            validatorsQueried: endpoints.length,
+            event: "insufficient_signatures",
+        });
+        throw error;
     }
+
+    logger.info("Successfully collected signatures", {
+        signaturesCollected: got.length,
+        signaturesRequired: minRequired,
+        totalRounds: round - 1,
+        validatorsQueried: endpoints.length,
+        event: "signatures_collected_successfully",
+    });
 
     return got;
 }
 
-async function getIncludedActions(
-    actions: { actions: string[][]; hash: string }[]
-): Promise<Map<string, number>> {
-    const typedActions = actions.map((action: { actions: string[][]; hash: string }) => {
-        return {
-            action: PulsarAction.fromRawAction(action.actions[0]),
-            hash: BigInt(action.hash),
-        };
-    });
-
+function getIncludedActions(pulsarActions: PulsarAction[], mask: boolean[]): Map<string, number> {
     const actionHashMap: Map<string, number> = new Map();
-    for (const action of typedActions) {
-        const key = action.action.unconstrainedHash().toString();
+    for (let i = 0; i < pulsarActions.length; i++) {
+        if (!mask[i]) continue;
+        const action = pulsarActions[i];
+        const key = action.unconstrainedHash().toString();
         actionHashMap.set(key, (actionHashMap.get(key) ?? 0) + 1);
     }
     return actionHashMap;
 }
+
+interface CosmosAction {
+    publicKey: string;
+    amount: string;
+    actionType: string;
+    blockHeight: string;
+}
+
+async function deriveAddressFromWallet(
+    privateKeyHex: string,
+    prefix: string = "consumer"
+): Promise<string> {
+    const privateKeyBytes = fromHex(privateKeyHex);
+    const wallet = await DirectSecp256k1Wallet.fromKey(privateKeyBytes, prefix);
+    const [account] = await wallet.getAccounts();
+    return account.address;
+}
+
+async function sendResolveActions(actions: PulsarAction[]) {
+    try {
+        const rpcEndpoint = process.env.PULSAR_RPC_ENDPOINT;
+        const privateKeyHex = process.env.PULSAR_PRIVATE_KEY_HEX;
+        const chainId = process.env.PULSAR_CHAIN_ID;
+        const merkleWitness = process.env.MERKLE_WITNESS;
+        const feeAmount = process.env.PULSAR_FEE_AMOUNT;
+        const feeDenom = process.env.PULSAR_FEE_DENOM;
+        const gasLimit = process.env.PULSAR_GAS_LIMIT;
+
+        if (
+            !privateKeyHex ||
+            !rpcEndpoint ||
+            !chainId ||
+            !merkleWitness ||
+            !feeAmount ||
+            !feeDenom ||
+            !gasLimit
+        ) {
+            console.error(
+                privateKeyHex,
+                rpcEndpoint,
+                chainId,
+                merkleWitness,
+                feeAmount,
+                feeDenom,
+                gasLimit
+            );
+            throw new Error("Missing Cosmos configuration in environment variables");
+        }
+    } catch (error) {
+        logger.error("Failed to send resolve actions to Cosmos", error as Error, {
+            url: process.env.PULSAR_RPC_ENDPOINT,
+            actionsCount: actions.length,
+            event: "pulsar_resolve_actions_failed",
+        });
+        throw error;
+    }
+}
+
+await sendResolveActions(TestUtils.GenerateTestActions(5, 1));

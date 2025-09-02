@@ -40,7 +40,7 @@ services:
             MINA_NETWORK: ${MINA_NETWORK}
             FEE: ${FEE}
             CONTRACT_ADDRESS: ${CONTRACT_ADDRESS}
-            PULSAR_RPC_ADDRESS: ${PULSAR_RPC_ADDRESS}
+            PULSAR_GRPC_ENDPOINT: ${PULSAR_GRPC_ENDPOINT}
             REDIS_HOST: redis
             REDIS_PORT: 6379
             REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -158,9 +158,48 @@ services:
                 condition: service_healthy
         profiles: ["mock-pulsar", "full-mock", "prod"]
 
+    loki:
+        image: grafana/loki:2.9.0
+        ports:
+            - "3100:3100"
+        command: -config.file=/etc/loki/local-config.yaml
+        networks: [pulsar-net]
+        volumes:
+            - loki-data:/loki
+        profiles: ["prod"]
+
+    promtail:
+        image: grafana/promtail:2.9.0
+        volumes:
+            - /var/log:/var/log:ro
+            - /var/lib/docker/containers:/var/lib/docker/containers:ro
+            - /var/run/docker.sock:/var/run/docker.sock
+            - ./config/promtail-config.yml:/etc/promtail/config.yml
+        command: -config.file=/etc/promtail/config.yml
+        networks: [pulsar-net]
+        depends_on:
+            - loki
+        profiles: ["prod"]
+
+    grafana:
+        image: grafana/grafana:10.1.0
+        ports:
+            - "3000:3000"
+        environment:
+            - GF_SECURITY_ADMIN_PASSWORD=admin
+        volumes:
+            - grafana-data:/var/lib/grafana
+            - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+        networks: [pulsar-net]
+        depends_on:
+            - loki
+        profiles: ["prod"]
+
 volumes:
     redis-data:
     mongo-data:
+    loki-data:
+    grafana-data:
 
 networks:
     pulsar-net:

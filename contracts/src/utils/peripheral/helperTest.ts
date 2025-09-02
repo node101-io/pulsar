@@ -1,5 +1,5 @@
 import { Bool, Field, PublicKey, Reducer } from 'o1js';
-import { PulsarAction } from '../../types/PulsarAction.js';
+import { PulsarAction, PulsarAuth } from '../../types/PulsarAction.js';
 import {
   ActionList,
   actionListAdd,
@@ -208,19 +208,8 @@ const actions = [
     hash: '26571710784269107345182238424422549657159204297563013465882485878649417789319',
   },
 ].map((rawAction) => {
-  const [
-    type,
-    account,
-    isOdd,
-    amount,
-    initialState,
-    newState,
-    initialMerkleListRoot,
-    newMerkleListRoot,
-    initialBlockHeight,
-    newBlockHeight,
-    rewardListUpdateHash,
-  ] = rawAction.actions[0];
+  const [type, account, isOdd, amount, blockHeight, cosmosAddress, sig1, sig2] =
+    rawAction.actions[0];
 
   return new PulsarAction({
     type: Field.from(type),
@@ -229,13 +218,11 @@ const actions = [
       isOdd: Bool.fromFields([Field.from(isOdd)]),
     }),
     amount: Field.from(amount),
-    initialState: Field.from(initialState),
-    newState: Field.from(newState),
-    initialMerkleListRoot: Field.from(initialMerkleListRoot),
-    newMerkleListRoot: Field.from(newMerkleListRoot),
-    initialBlockHeight: Field.from(initialBlockHeight),
-    newBlockHeight: Field.from(newBlockHeight),
-    rewardListUpdateHash: Field.from(rewardListUpdateHash),
+    blockHeight: Field.from(blockHeight || '0'),
+    pulsarAuth: PulsarAuth.from(Field.from(cosmosAddress || '0'), [
+      Field.from(sig1 || '0'),
+      Field.from(sig2 || '0'),
+    ]),
   });
 });
 

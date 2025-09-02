@@ -240,11 +240,15 @@ export async function getOrCreateActionBatch(
     await initMongo();
 
     const actionHash = getActionsHash(actions);
-    console.log(`Action hash: ${actionHash}`);
+    logger.dbOperation("action_hash_generated", "actionBatch", undefined, { actionHash });
 
     try {
         const existing = await actionBatchCol.findOne({ actionHash });
-        console.log(existing);
+        logger.dbOperation("action_batch_lookup", "actionBatch", undefined, { 
+            actionHash, 
+            found: !!existing,
+            existing: existing ? { id: existing._id } : null
+        });
 
         if (existing !== null) {
             return { isNew: false, batch: existing };

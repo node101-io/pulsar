@@ -39,23 +39,17 @@ describe('ValidateReduceProof tests', () => {
     it('should create a valid ValidateReducePublicInput', () => {
       publicInputs.push(
         new ValidateReducePublicInput({
-          stateRoot: Field(0),
           merkleListRoot: merkleList.hash,
-          blockHeight: Field(0),
           depositListHash: Field(0),
           withdrawalListHash: Field(0),
-          rewardListHash: Field(0),
         })
       );
 
       expect(publicInputs[0].hash()).toEqual(
         Poseidon.hash([
-          publicInputs[0].stateRoot,
           publicInputs[0].merkleListRoot,
-          publicInputs[0].blockHeight,
           publicInputs[0].depositListHash,
           publicInputs[0].withdrawalListHash,
-          publicInputs[0].rewardListHash,
         ])
       );
     });
@@ -99,12 +93,9 @@ describe('ValidateReduceProof tests', () => {
     it('should create another valid ValidateReduceProof', async () => {
       publicInputs.push(
         new ValidateReducePublicInput({
-          stateRoot: Field(1),
           merkleListRoot: merkleList.hash,
-          blockHeight: Field(1),
           depositListHash: Field(1),
           withdrawalListHash: Field(1),
-          rewardListHash: Field(1),
         })
       );
 
@@ -144,12 +135,9 @@ describe('ValidateReduceProof tests', () => {
     it('should create a third valid ValidateReduceProof', async () => {
       publicInputs.push(
         new ValidateReducePublicInput({
-          stateRoot: Field(2),
           merkleListRoot: merkleList.hash,
-          blockHeight: Field(2),
           depositListHash: Field(2),
           withdrawalListHash: Field(2),
-          rewardListHash: Field(2),
         })
       );
 

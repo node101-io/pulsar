@@ -24,8 +24,7 @@ import {
   SignaturePublicKeyMatrix,
 } from '../types/signaturePubKeyList.js';
 import { List } from '../types/common.js';
-import { PulsarAction } from '../types/PulsarAction.js';
-import { ProofGenerators } from '../types/proofGenerators.js';
+import { PulsarAction, PulsarAuth } from '../types/PulsarAction.js';
 import {
   actionListAdd,
   emptyActionListHash,
@@ -34,7 +33,6 @@ import {
 import {
   BATCH_SIZE,
   MAX_DEPOSIT_PER_BATCH,
-  MAX_SETTLEMENT_PER_BATCH,
   MAX_WITHDRAWAL_PER_BATCH,
   SETTLEMENT_MATRIX_SIZE,
 } from './constants.js';
@@ -159,8 +157,7 @@ async function GenerateTestSettlementProof(
         blocks[blocks.length - SETTLEMENT_MATRIX_SIZE].InitialBlockHeight,
         blocks[blocks.length - 1].NewMerkleListRoot,
         blocks[blocks.length - 1].NewStateRoot,
-        blocks[blocks.length - 1].NewBlockHeight,
-        [validatorSet[0][1]]
+        blocks[blocks.length - 1].NewBlockHeight
       );
 
       const signatureMatrix = GenerateSignaturePubKeyMatrix(
@@ -172,7 +169,6 @@ async function GenerateTestSettlementProof(
         await MultisigVerifierProgram.verifySignatures(
           publicInput,
           signatureMatrix,
-          validatorSet[0][1],
           BlockList.fromArray(blocks.slice(-SETTLEMENT_MATRIX_SIZE))
         )
       ).proof;
@@ -202,40 +198,26 @@ async function MockReducerVerifierProof(
 
 function GenerateTestActions(
   numActions: number,
-  merkleListRoot: Field,
-  initialStateRoot: Field = Field(0)
+  blockHeight: number
 ): PulsarAction[] {
   const actions: PulsarAction[] = [];
-  let blockHeight = 1;
   for (let i = 0; i < numActions; i++) {
-    const randomType = Math.ceil(Math.random() * 3);
+    const randomType = Math.ceil(Math.random() * 2);
     if (randomType === 1) {
       actions.push(
-        PulsarAction.settlement(
-          i == 0 ? initialStateRoot : Field.random(),
-          Field.random(),
-          merkleListRoot,
-          merkleListRoot,
-          Field.from(blockHeight++),
-          Field.from(blockHeight++),
-          ProofGenerators.empty().insertAt(
-            Field.from(0),
-            PrivateKey.random().toPublicKey()
-          )
+        PulsarAction.deposit(
+          PrivateKey.random().toPublicKey(),
+          UInt64.from(Math.floor(Math.random() * 2 ** 32)).value,
+          Field(blockHeight),
+          PulsarAuth.from(Field(0), [Field(0), Field(0)])
         )
       );
     } else if (randomType === 2) {
       actions.push(
-        PulsarAction.deposit(
-          PrivateKey.random().toPublicKey(),
-          UInt64.from(Math.floor(Math.random() * 2 ** 32)).value
-        )
-      );
-    } else if (randomType === 3) {
-      actions.push(
         PulsarAction.withdrawal(
           PrivateKey.random().toPublicKey(),
-          UInt64.from(Math.floor(Math.random() * 2 ** 32)).value
+          UInt64.from(Math.floor(Math.random() * 2 ** 32)).value,
+          Field(blockHeight)
         )
       );
     }
@@ -284,7 +266,6 @@ function CalculateFromMockActions(
 ) {
   let withdrawals = 0;
   let deposits = 0;
-  let settlements = 0;
 
   const batchActions: Array<PulsarAction> = [];
   let endActionState = 0n;
@@ -296,24 +277,7 @@ function CalculateFromMockActions(
       break;
     }
 
-    if (PulsarAction.isSettlement(pack.action).toBoolean()) {
-      if (settlements === MAX_SETTLEMENT_PER_BATCH) {
-        break;
-      }
-
-      settlements++;
-
-      publicInput = new ValidateReducePublicInput({
-        ...publicInput,
-        stateRoot: pack.action.newState,
-        merkleListRoot: pack.action.newMerkleListRoot,
-        blockHeight: pack.action.newBlockHeight,
-        rewardListHash: Poseidon.hash([
-          publicInput.rewardListHash,
-          pack.action.rewardListUpdateHash,
-        ]),
-      });
-    } else if (PulsarAction.isDeposit(pack.action).toBoolean()) {
+    if (PulsarAction.isDeposit(pack.action).toBoolean()) {
       if (deposits === MAX_DEPOSIT_PER_BATCH) {
         break;
       }
