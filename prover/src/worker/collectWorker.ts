@@ -428,7 +428,6 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
             event: "pulsar_resolve_actions_success",
         });
 
-        console.log(result);
         return result;
     } catch (error) {
         logger.error("Failed to send resolve actions to Cosmos", error as Error, {
