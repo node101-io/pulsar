@@ -125,12 +125,14 @@ services:
         networks: [pulsar-net]
         ports:
             - "8080:8080"
+            - "8282:8282"
+            - "8181:8181"
         expose:
             # - 8080
-            - 8282
+            # - 8282
             - 3085
             - 5432
-            - 8181
+            # - 8181
         profiles: ["prod"]
         healthcheck:
             test:

@@ -1,7 +1,7 @@
 import inquirer from "inquirer";
 import { DeployScripts, setMinaNetwork, SettlementContract } from "pulsar-contracts";
 import dotenv from "dotenv";
-import { fetchAccount, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
+import { AccountUpdate, fetchAccount, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
 import { cacheCompile } from "./cache.js";
 import { PulsarAuth } from "pulsar-contracts/build/src/types/PulsarAction.js";
 
@@ -11,7 +11,6 @@ function printHeader() {
     console.clear();
     console.log("\n╭─────────────────────────────────╮");
     console.log("│      Pulsar Actions CLI         │");
-    console.log("│     🚀 Enhanced Interface       │");
     console.log("╰─────────────────────────────────╯\n");
 }
 
@@ -77,6 +76,33 @@ async function initializeContract() {
 
     stopSpinner();
 
+    const { privateKey } = await Lightnet.acquireKeyPair({
+        isRegularAccount: true,
+        lightnetAccountManagerEndpoint: process.env.DOCKER
+            ? "http://mina-local-lightnet:8181"
+            : `${process.env.REMOTE_SERVER_URL}:8181`,
+    });
+
+    stopSpinner();
+    console.log(
+        `🔑 Acquired lightnet account: ${privateKey.toPublicKey().toBase58().slice(0, 12)}...`
+    );
+
+    const tx = await Mina.transaction({ sender: privateKey.toPublicKey(), fee: 1e9 }, async () => {
+        const senderAccount = AccountUpdate.createSigned(privateKey.toPublicKey());
+        AccountUpdate.fundNewAccount(privateKey.toPublicKey());
+        senderAccount.send({
+            to: signerPrivateKey.toPublicKey(),
+            amount: UInt64.from(1e10),
+        });
+        AccountUpdate.fundNewAccount(privateKey.toPublicKey());
+    });
+    await DeployScripts.waitTransactionAndFetchAccount(
+        tx,
+        [privateKey],
+        [signerPrivateKey.toPublicKey(), privateKey.toPublicKey()]
+    );
+
     console.log(`🔑 Signer: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
     console.log(`📝 Contract: ${contractPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
     console.log(`🌐 Network: ${process.env.MINA_NETWORK}\n`);
@@ -95,66 +121,20 @@ async function performDeposit(
 ) {
     console.log("\n🔄 Starting deposit process...\n");
 
-    // const { amount } = await inquirer.prompt([
-    //     {
-    //         type: "input",
-    //         name: "amount",
-    //         message: "💰 Enter deposit amount (in MINA):",
-    //         default: "1",
-    //         validate: (input: string) => {
-    //             const num = parseFloat(input);
-    //             if (isNaN(num) || num <= 0) {
-    //                 return "Please enter a valid positive number";
-    //             }
-    //             return true;
-    //         },
-    //     },
-    // ]);
-
-    // const { confirmed } = await inquirer.prompt([
-    //     {
-    //         type: "confirm",
-    //         name: "confirmed",
-    //         message: `🚀 Proceed with depositing ${amount} MINA?`,
-    //         default: true,
-    //     },
-    // ]);
-
-    // if (!confirmed) {
-    //     console.log("❌ Transaction cancelled by user.\n");
-    //     return;
-    // }
-    const amount = "10";
-
     const stopSpinner = createLoadingSpinner("Preparing deposit transaction...");
 
     try {
         if (process.env.MINA_NETWORK === "lightnet") {
-            const { privateKey } = await Lightnet.acquireKeyPair({
-                isRegularAccount: true,
-                lightnetAccountManagerEndpoint: process.env.DOCKER
-                    ? "http://mina-local-lightnet:8181"
-                    : `${process.env.REMOTE_SERVER_URL}:8181`,
-            });
-
-            stopSpinner();
-            console.log(
-                `🔑 Acquired lightnet account: ${privateKey
-                    .toPublicKey()
-                    .toBase58()
-                    .slice(0, 12)}...`
-            );
-
             const stopFetchSpinner = createLoadingSpinner("Fetching account information...");
-            await fetchAccount({ publicKey: privateKey.toPublicKey() });
+            await fetchAccount({ publicKey: signerPrivateKey.toPublicKey() });
             stopFetchSpinner();
 
             const stopTxSpinner = createLoadingSpinner("Building transaction...");
             const tx = await Mina.transaction(
-                { sender: privateKey.toPublicKey(), fee: 1e9 },
+                { sender: signerPrivateKey.toPublicKey(), fee: 1e9 },
                 async () => {
                     await contractInstance.deposit(
-                        UInt64.from(parseFloat(amount) * 1e9),
+                        UInt64.from(1e9),
                         PulsarAuth.from(Field(0), [Field(0), Field(0)])
                     );
                 }
@@ -164,24 +144,21 @@ async function performDeposit(
             const stopSubmitSpinner = createLoadingSpinner("Submitting transaction to network...");
             await DeployScripts.waitTransactionAndFetchAccount(
                 tx,
-                [privateKey, contractPrivateKey],
-                [contractInstance.address, signerPrivateKey.toPublicKey(), privateKey.toPublicKey()]
+                [signerPrivateKey, contractPrivateKey],
+                [contractInstance.address, signerPrivateKey.toPublicKey()]
             );
             stopSubmitSpinner();
 
             printSuccess("Deposit completed successfully!");
-            console.log(`💰 Amount: ${amount} MINA`);
-            console.log(`📍 From: ${privateKey.toPublicKey().toBase58().slice(0, 12)}...`);
+            console.log(`📍 From: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
         } else {
-            const privateKey = PrivateKey.fromBase58(process.env.MINA_PRIVATE_KEY!);
-
             stopSpinner();
             const stopTxSpinner = createLoadingSpinner("Building transaction...");
             const tx = await Mina.transaction(
-                { sender: privateKey.toPublicKey(), fee: 1e10 },
+                { sender: signerPrivateKey.toPublicKey(), fee: 1e9 },
                 async () => {
                     await contractInstance.deposit(
-                        UInt64.from(parseFloat(amount) * 1e9),
+                        UInt64.from(1e9),
                         PulsarAuth.from(Field(0), [Field(0), Field(0)])
                     );
                 }
@@ -191,14 +168,13 @@ async function performDeposit(
             const stopSubmitSpinner = createLoadingSpinner("Submitting transaction to network...");
             await DeployScripts.waitTransactionAndFetchAccount(
                 tx,
-                [privateKey, contractPrivateKey],
-                [contractInstance.address, signerPrivateKey.toPublicKey(), privateKey.toPublicKey()]
+                [signerPrivateKey, contractPrivateKey],
+                [contractInstance.address, signerPrivateKey.toPublicKey()]
             );
             stopSubmitSpinner();
 
             printSuccess("Deposit completed successfully!");
-            console.log(`💰 Amount: ${amount} MINA`);
-            console.log(`📍 From: ${privateKey.toPublicKey().toBase58().slice(0, 12)}...`);
+            console.log(`📍 From: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
         }
     } catch (error) {
         stopSpinner();
@@ -215,65 +191,19 @@ async function performWithdraw(
 ) {
     console.log("\n🔄 Starting withdraw process...\n");
 
-    // const { amount } = await inquirer.prompt([
-    //     {
-    //         type: "input",
-    //         name: "amount",
-    //         message: "💸 Enter withdraw amount (in MINA):",
-    //         default: "0.5",
-    //         validate: (input: string) => {
-    //             const num = parseFloat(input);
-    //             if (isNaN(num) || num <= 0) {
-    //                 return "Please enter a valid positive number";
-    //             }
-    //             return true;
-    //         },
-    //     },
-    // ]);
-
-    // const { confirmed } = await inquirer.prompt([
-    //     {
-    //         type: "confirm",
-    //         name: "confirmed",
-    //         message: `🚀 Proceed with withdrawing ${amount} MINA?`,
-    //         default: true,
-    //     },
-    // ]);
-
-    // if (!confirmed) {
-    //     console.log("❌ Transaction cancelled by user.\n");
-    //     return;
-    // }
-    const amount = "9";
-
     const stopSpinner = createLoadingSpinner("Preparing withdraw transaction...");
 
     try {
         if (process.env.MINA_NETWORK === "lightnet") {
-            const { privateKey } = await Lightnet.acquireKeyPair({
-                isRegularAccount: true,
-                lightnetAccountManagerEndpoint: process.env.DOCKER
-                    ? "http://mina-local-lightnet:8181"
-                    : `${process.env.REMOTE_SERVER_URL}:8181`,
-            });
-
-            stopSpinner();
-            console.log(
-                `🔑 Acquired lightnet account: ${privateKey
-                    .toPublicKey()
-                    .toBase58()
-                    .slice(0, 12)}...`
-            );
-
             const stopFetchSpinner = createLoadingSpinner("Fetching account information...");
-            await fetchAccount({ publicKey: privateKey.toPublicKey() });
+            await fetchAccount({ publicKey: signerPrivateKey.toPublicKey() });
             stopFetchSpinner();
 
             const stopTxSpinner = createLoadingSpinner("Building transaction...");
             const tx = await Mina.transaction(
-                { sender: privateKey.toPublicKey(), fee: 1e9 },
+                { sender: signerPrivateKey.toPublicKey(), fee: 1e9 },
                 async () => {
-                    await contractInstance.withdraw(UInt64.from(parseFloat(amount) * 1e9));
+                    await contractInstance.withdraw(UInt64.from(1e7));
                 }
             );
             stopTxSpinner();
@@ -281,23 +211,20 @@ async function performWithdraw(
             const stopSubmitSpinner = createLoadingSpinner("Submitting transaction to network...");
             await DeployScripts.waitTransactionAndFetchAccount(
                 tx,
-                [privateKey, contractPrivateKey],
-                [contractInstance.address, signerPrivateKey.toPublicKey(), privateKey.toPublicKey()]
+                [signerPrivateKey, contractPrivateKey],
+                [contractInstance.address, signerPrivateKey.toPublicKey()]
             );
             stopSubmitSpinner();
 
             printSuccess("Withdraw completed successfully!");
-            console.log(`💰 Amount: ${amount} MINA`);
-            console.log(`📍 To: ${privateKey.toPublicKey().toBase58().slice(0, 12)}...`);
+            console.log(`📍 To: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
         } else {
-            const privateKey = PrivateKey.fromBase58(process.env.MINA_PRIVATE_KEY!);
-
             stopSpinner();
             const stopTxSpinner = createLoadingSpinner("Building transaction...");
             const tx = await Mina.transaction(
-                { sender: privateKey.toPublicKey(), fee: 1e10 },
+                { sender: signerPrivateKey.toPublicKey(), fee: 1e10 },
                 async () => {
-                    await contractInstance.withdraw(UInt64.from(parseFloat(amount) * 1e9));
+                    await contractInstance.withdraw(UInt64.from(1e9));
                 }
             );
             stopTxSpinner();
@@ -305,14 +232,13 @@ async function performWithdraw(
             const stopSubmitSpinner = createLoadingSpinner("Submitting transaction to network...");
             await DeployScripts.waitTransactionAndFetchAccount(
                 tx,
-                [privateKey, contractPrivateKey],
-                [contractInstance.address, signerPrivateKey.toPublicKey(), privateKey.toPublicKey()]
+                [signerPrivateKey, contractPrivateKey],
+                [contractInstance.address, signerPrivateKey.toPublicKey()]
             );
             stopSubmitSpinner();
 
             printSuccess("Withdraw completed successfully!");
-            console.log(`💰 Amount: ${amount} MINA`);
-            console.log(`📍 To: ${privateKey.toPublicKey().toBase58().slice(0, 12)}...`);
+            console.log(`📍 To: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
         }
     } catch (error) {
         stopSpinner();
