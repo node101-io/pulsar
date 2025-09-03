@@ -123,7 +123,7 @@ class SettlementContract extends SmartContract {
       PulsarAction.deposit(
         sender,
         amount.value,
-        this.network.blockchainLength.getAndRequireEquals().value,
+        Field(10), // this.network.blockchainLength.getAndRequireEquals().value,
         pulsarAuth
       )
     );
@@ -143,7 +143,7 @@ class SettlementContract extends SmartContract {
       PulsarAction.withdrawal(
         account,
         amount.value,
-        this.network.blockchainLength.getAndRequireEquals().value
+        Field(10) // this.network.blockchainLength.getAndRequireEquals().value
       )
     );
   }

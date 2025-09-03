@@ -90,12 +90,11 @@ async function initializeContract() {
 
     const tx = await Mina.transaction({ sender: privateKey.toPublicKey(), fee: 1e9 }, async () => {
         const senderAccount = AccountUpdate.createSigned(privateKey.toPublicKey());
-        AccountUpdate.fundNewAccount(privateKey.toPublicKey());
+        // AccountUpdate.fundNewAccount(privateKey.toPublicKey());
         senderAccount.send({
             to: signerPrivateKey.toPublicKey(),
             amount: UInt64.from(1e10),
         });
-        AccountUpdate.fundNewAccount(privateKey.toPublicKey());
     });
     await DeployScripts.waitTransactionAndFetchAccount(
         tx,
