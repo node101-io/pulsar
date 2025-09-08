@@ -81,7 +81,6 @@ function CalculateMax(
           publicInput.depositListHash,
           ...pack.action.account.toFields(),
           pack.action.amount,
-          pack.action.blockHeight,
           ...pack.action.pulsarAuth.toFields(),
         ]),
       });
@@ -104,7 +103,6 @@ function CalculateMax(
           publicInput.withdrawalListHash,
           ...pack.action.account.toFields(),
           pack.action.amount,
-          pack.action.blockHeight,
         ]),
       });
     }
@@ -159,7 +157,6 @@ function CalculateMaxWithBalances(
           publicInput.depositListHash,
           ...pack.action.account.toFields(),
           pack.action.amount,
-          pack.action.blockHeight,
           ...pack.action.pulsarAuth.toFields(),
         ]),
       });
@@ -188,7 +185,6 @@ function CalculateMaxWithBalances(
           publicInput.withdrawalListHash,
           ...pack.action.account.toFields(),
           pack.action.amount,
-          pack.action.blockHeight,
         ]),
       });
     }

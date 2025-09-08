@@ -139,13 +139,7 @@ class SettlementContract extends SmartContract {
       amount: amount.add(UInt64.from(WITHDRAW_DOWN_PAYMENT)),
     });
 
-    this.reducer.dispatch(
-      PulsarAction.withdrawal(
-        account,
-        amount.value,
-        Field(10) // this.network.blockchainLength.getAndRequireEquals().value
-      )
-    );
+    this.reducer.dispatch(PulsarAction.withdrawal(account, amount.value));
   }
 
   @method
@@ -190,7 +184,6 @@ class SettlementContract extends SmartContract {
           depositListHash,
           ...action.account.toFields(),
           action.amount,
-          action.blockHeight,
           ...action.pulsarAuth.toFields(),
         ]),
         depositListHash
@@ -202,7 +195,6 @@ class SettlementContract extends SmartContract {
           withdrawalListHash,
           ...action.account.toFields(),
           action.amount,
-          action.blockHeight,
         ]),
         withdrawalListHash
       );

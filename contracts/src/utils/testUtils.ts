@@ -216,8 +216,7 @@ function GenerateTestActions(
       actions.push(
         PulsarAction.withdrawal(
           PrivateKey.random().toPublicKey(),
-          UInt64.from(Math.floor(Math.random() * 2 ** 32)).value,
-          Field(blockHeight)
+          UInt64.from(Math.floor(Math.random() * 2 ** 32)).value
         )
       );
     }

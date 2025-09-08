@@ -37,7 +37,6 @@ type PulsarActionBase = {
   type: Field; // deposit (1), or withdrawal (2)
   account: PublicKey;
   amount: Field;
-  blockHeight: Field;
   pulsarAuth: PulsarAuth;
 };
 
@@ -45,7 +44,6 @@ class PulsarAction extends Struct({
   type: Field,
   account: PublicKey,
   amount: Field,
-  blockHeight: Field,
   pulsarAuth: PulsarAuth,
 }) {
   static deposit(
@@ -58,17 +56,15 @@ class PulsarAction extends Struct({
       type: Field(1),
       account,
       amount,
-      blockHeight,
       pulsarAuth,
     });
   }
 
-  static withdrawal(account: PublicKey, amount: Field, blockHeight: Field) {
+  static withdrawal(account: PublicKey, amount: Field) {
     return new this({
       type: Field(2),
       account,
       amount,
-      blockHeight,
       pulsarAuth: PulsarAuth.empty(),
     });
   }
@@ -91,7 +87,6 @@ class PulsarAction extends Struct({
         this.type,
         ...this.account.toFields(),
         this.amount,
-        this.blockHeight,
         ...this.pulsarAuth.toFields(),
       ]);
     } else if (PulsarAction.isWithdrawal(this).toBoolean()) {
@@ -99,7 +94,6 @@ class PulsarAction extends Struct({
         this.type,
         ...this.account.toFields(),
         this.amount,
-        this.blockHeight,
       ]);
     } else {
       return Field(0);
@@ -107,14 +101,13 @@ class PulsarAction extends Struct({
   }
 
   static fromRawAction(rawAction: string[]) {
-    const [type, x, isOdd, amount, blockHeight, cosmosAddress, sig1, sig2] =
+    const [type, x, isOdd, amount, cosmosAddress, sig1, sig2] =
       rawAction.map(Field);
 
     return new PulsarAction({
       type,
       account: PublicKey.fromValue({ x, isOdd: Bool.fromFields([isOdd]) }),
       amount,
-      blockHeight,
       pulsarAuth: new PulsarAuth({
         cosmosAddress,
         cosmosSignature: [sig1, sig2],
@@ -127,7 +120,6 @@ class PulsarAction extends Struct({
       this.type,
       ...this.account.toFields(),
       this.amount,
-      this.blockHeight,
       ...this.pulsarAuth.toFields(),
     ];
   }
@@ -137,7 +129,6 @@ class PulsarAction extends Struct({
       type: this.type.toString(),
       account: this.account.toBase58(),
       amount: this.amount.toString(),
-      blockHeight: this.blockHeight.toString(),
       pulsarAuth: this.pulsarAuth.toJSON(),
     };
   }
