@@ -9,19 +9,23 @@ import (
 	"time"
 )
 
-type Action struct {
-	Actions [][]string `json:"actions"`
-	Hash    string     `json:"hash"`
+type PulsarAction struct {
+	PublicKey   string `json:"public_key,omitempty"`
+	Amount      string `json:"amount"`
+	ActionType  string `json:"action_type,omitempty"`
+	BlockHeight uint64 `json:"block_height,omitempty"`
 }
 
-type SignRequest struct {
-	Actions         []Action           `json:"actions"`
-	WithdrawMapping map[string]any `json:"withdrawMapping"`
+type VerifyActionListRequest struct {
+	Actions       []PulsarAction    `json:"actions"`
+	Balances      map[string]string `json:"balances"`
+	Witness       string            `json:"witness"`
+	SettledHeight uint64            `json:"settled_height"`
+	NextHeight    uint64            `json:"next_height"`
 }
 
-type SignResponse struct {
-	IsValid bool `json:"isValid"`
-	Mask    any  `json:"mask"`
+type VerifyActionListResponse struct {
+	Mask []bool `json:"mask"`
 }
 
 type SignerClient struct {
@@ -38,13 +42,8 @@ func NewSignerClient(baseURL string) *SignerClient {
 	}
 }
 
-func (c *SignerClient) Sign(actions []Action, withdrawMapping map[string]any) (*SignResponse, error) {
-	signReq := SignRequest{
-		Actions:         actions,
-		WithdrawMapping: withdrawMapping,
-	}
-
-	jsonData, err := json.Marshal(signReq)
+func (c *SignerClient) Sign(request VerifyActionListRequest) (*VerifyActionListResponse, error) {
+	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
@@ -72,7 +71,7 @@ func (c *SignerClient) Sign(actions []Action, withdrawMapping map[string]any) (*
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var signResp SignResponse
+	var signResp VerifyActionListResponse
 	if err := json.Unmarshal(body, &signResp); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}

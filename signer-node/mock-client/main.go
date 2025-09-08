@@ -21,45 +21,56 @@ func main() {
 
 	fmt.Println("\n2. Testing sign request...")
 
-	actions := []Action{
-		{
-			Actions: [][]string{{"1", "26973006405062159512790757462220334501049036066062639169100994120562073048293", "1", "10000000123", "0", "0", "0", "0"}},
-			Hash:    "3151300440494715372841251656330716971989598282112888106614242778489038271481",
+	request := VerifyActionListRequest{
+		Actions: []PulsarAction{
+			{
+				PublicKey:   "B62qpKT9DUstTLhqJpXUreqiFePo8toBmFddv5xSRoAoxAVcUG3DpoY",
+				Amount:      "10000000123",
+				ActionType:  "withdraw",
+				BlockHeight: 12345,
+			},
+			{
+				PublicKey:   "B62qpKT9DUstTLhqJpXUreqiFePo8toBmFddv5xSRoAoxAVcUG3DpoY",
+				Amount:      "1000000123",
+				ActionType:  "deposit",
+				BlockHeight: 12346,
+			},
 		},
-		{
-			Actions: [][]string{{"2", "26973006405062159512790757462220334501049036066062639169100994120562073048293", "1", "1000000123", "0", "0", "0", "0"}},
-			Hash:    "24310058228986042206896921523192218206644302797295485420978811975548466572153",
+		Balances: map[string]string{
+			"B62qp1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ": "750000",
+			"B62qr9876543210zyxwvutsrqponmlkjihgfedcbaZYXWVUTSRQPONMLKJIHGFEDCB":  "250000",
 		},
+		Witness:       "someMerkleWitnessStringOrHash",
+		SettledHeight: 12000,
+		NextHeight:    13000,
 	}
 
-	withdrawMapping := map[string]any{
-		"user1": 10000000123,
-		"user2": 1000000123,
-	}
-
-	response, err := client.Sign(actions, withdrawMapping)
+	response, err := client.Sign(request)
 	if err != nil {
 		log.Printf("Sign request failed: %v", err)
 		return
 	}
 
 	fmt.Printf("✓ Sign request successful!\n")
-	fmt.Printf("  - IsValid: %t\n", response.IsValid)
 	fmt.Printf("  - Mask: %v\n", response.Mask)
 
 	fmt.Println("\n3. Testing with empty actions...")
 
-	emptyActions := []Action{}
-	emptyMapping := map[string]any{}
+	emptyRequest := VerifyActionListRequest{
+		Actions:       []PulsarAction{},
+		Balances:      map[string]string{},
+		Witness:       "",
+		SettledHeight: 0,
+		NextHeight:    0,
+	}
 
-	emptyResponse, err := client.Sign(emptyActions, emptyMapping)
+	emptyResponse, err := client.Sign(emptyRequest)
 	if err != nil {
 		log.Printf("Empty sign request failed: %v", err)
 		return
 	}
 
 	fmt.Printf("✓ Empty sign request successful!\n")
-	fmt.Printf("  - IsValid: %t\n", emptyResponse.IsValid)
 	fmt.Printf("  - Mask: %v\n", emptyResponse.Mask)
 
 	fmt.Println("\nMock client testing completed!")
