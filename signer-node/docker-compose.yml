@@ -3,37 +3,31 @@ services:
         image: mongo:7-jammy
         restart: unless-stopped
         environment:
-            MONGO_INITDB_DATABASE: pulsar
+            DOCKER: "1"
+            MONGO_INITDB_DATABASE: ${MONGO_DB}
+            MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+            MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
         volumes:
-            - mongo-data:/data/db
+            - signer-mongo-data:/data/db
         ports:
             - "27017:27017"
 
-    # signer-node:
-    #     build:
-    #         context: .
-    #         dockerfile: Dockerfile
-    #     restart: unless-stopped
-    #     networks: [pulsar-net]
-    #     env_file: .env
-    #     environment:
-    #         DOCKER: "1"
-    #         MINA_PRIVATE_KEY: ${MINA_PRIVATE_KEY}
-    #         MINA_NETWORK: ${MINA_NETWORK}
-    #         FEE: ${FEE}
-    #         CONTRACT_ADDRESS: ${CONTRACT_ADDRESS}
-    #         PULSAR_GRPC_ENDPOINT: ${PULSAR_GRPC_ENDPOINT}
-    #         REDIS_HOST: redis
-    #         REDIS_PORT: 6379
-    #         REDIS_PASSWORD: ${REDIS_PASSWORD}
-    #         MONGO_URI: ${MONGO_URI}
-    #         MONGO_INITDB_DATABASE: ${MONGO_DB}
-    #         MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
-    #         MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
-    #     entrypoint: ["node", "dist/src/index.js"]
+    signer-node:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        restart: unless-stopped
+        env_file: .env
+        environment:
+            DOCKER: "1"
+            MINA_PRIVATE_KEY: ${MINA_PRIVATE_KEY}
+            MINA_NETWORK: ${MINA_NETWORK}
+            FEE: ${FEE}
+            CONTRACT_ADDRESS: ${CONTRACT_ADDRESS}
+            MONGO_URI: ${MONGO_URI}
+            MONGO_INITDB_DATABASE: ${MONGO_DB}
+            MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+            MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+        entrypoint: ["node", "dist/src/index.js"]
 volumes:
-    mongo-data:
-# networks:
-#     pulsar-net:
-#         external: true
-#         name: prover_pulsar-net
+    signer-mongo-data:

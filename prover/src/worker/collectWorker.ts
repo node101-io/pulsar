@@ -353,20 +353,18 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
                 publicKey: action.account.toBase58(),
                 amount: action.amount.toString(),
                 actionType: actionType,
-                blockHeight: "0", //TODO fix block height issue in pulsar side
+                // todo need hex encoded string
+                cosmosAddress: action.pulsarAuth.cosmosAddress.toString(),
+                cosmosSignature: action.pulsarAuth.cosmosSignature[0].toString(),
             };
         });
 
         console.log("Preparing to send actions:", actions);
 
-        const nextBlockHeight =
-            actions.length > 0 ? (BigInt(actions[0].blockHeight.toString()) + 1n).toString() : "1";
-
         const msgValue = MsgResolveActions.fromPartial({
             creator: account.address,
             merkleWitness,
             actions,
-            nextBlockHeight: nextBlockHeight,
         });
 
         const msgBytes = MsgResolveActions.encode(msgValue).finish();
@@ -424,7 +422,6 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
             height: result.height,
             actionsCount: actions.length,
             creator: account.address,
-            nextBlockHeight,
             event: "pulsar_resolve_actions_success",
         });
 

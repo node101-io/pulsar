@@ -19,7 +19,7 @@ import {
 } from "./db.js";
 import logger from "./logger.js";
 import dotenv from "dotenv";
-import { getSignatureLimiter, localhostOnly } from "./rateLimit.js";
+import { getSignatureLimiter } from "./rateLimit.js";
 import { PulsarAuth } from "pulsar-contracts/build/src/types/PulsarAction.js";
 
 dotenv.config();
@@ -170,7 +170,6 @@ initMongo().catch((error) => {
 
 app.post(
     "/sign",
-    localhostOnly,
     async (
         req: Request<{}, VerifyActionListResponse, unknown>,
         res: Response<VerifyActionListResponse>
