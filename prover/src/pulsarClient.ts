@@ -1,9 +1,14 @@
 import { EventEmitter } from "events";
 import * as grpc from "@grpc/grpc-js";
-import { BlockData, BlockParserResult, VoteExt } from "./interfaces.js";
+import { BlockData, VoteExt } from "./interfaces.js";
 import { GrpcReflection } from "grpc-js-reflection-client";
-import { PublicKey, Signature } from "o1js";
+import { PublicKey } from "o1js";
 import logger from "./logger.js";
+import {
+    parseTendermintBlockResponse,
+    decodeMinaSignature,
+    parseValidatorSetResponse,
+} from "./utils.js";
 
 const POLL_INTERVAL_MS = 5_000;
 
@@ -29,12 +34,12 @@ export class PulsarClient extends EventEmitter {
         this.pollInterval = pollInterval;
         this.running = false;
         this.lastSeenHeight = initialHeight;
-        
+
         logger.info("Pulsar client initialized", {
             rpcAddress: this.rpcAddress,
             pollInterval,
             initialHeight,
-            event: "client_initialized"
+            event: "client_initialized",
         });
     }
 
@@ -97,7 +102,7 @@ export class PulsarClient extends EventEmitter {
                         lastSeenHeight: this.lastSeenHeight,
                         currentHeight: height,
                         missedBlocks: Number(height - this.lastSeenHeight - 1),
-                        event: "missed_blocks_detected"
+                        event: "missed_blocks_detected",
                     });
                     this.syncMissedBlocks().catch((error) => this.emit("error", error as Error));
                 }
@@ -115,7 +120,7 @@ export class PulsarClient extends EventEmitter {
                     fromHeight: Number(this.lastSeenHeight) + 1,
                     toHeight: Number(height) - 1,
                     blocksToSync: Number(height) - 1 - Number(this.lastSeenHeight),
-                    event: "block_sync_started"
+                    event: "block_sync_started",
                 });
 
                 for (let h = this.lastSeenHeight + 1; h < height; ++h) {
@@ -174,7 +179,7 @@ export class PulsarClient extends EventEmitter {
                 } catch (error) {
                     logger.error("Failed to parse block response", error, {
                         event: "parse_error",
-                        blockHeight: res?.block?.header?.height
+                        blockHeight: res?.block?.header?.height,
                     });
                     reject(new Error("Failed to parse Mina public key from response"));
                 }
@@ -215,7 +220,7 @@ export class PulsarClient extends EventEmitter {
                         {
                             validator,
                             blockHeight: height,
-                            event: "validator_key_retrieval_error"
+                            event: "validator_key_retrieval_error",
                         }
                     );
                 }
@@ -224,7 +229,7 @@ export class PulsarClient extends EventEmitter {
         } catch (error) {
             logger.error(`Error retrieving validator set for height ${height}`, error, {
                 blockHeight: height,
-                event: "validator_set_retrieval_error"
+                event: "validator_set_retrieval_error",
             });
             throw error;
         }
@@ -279,7 +284,7 @@ export class PulsarClient extends EventEmitter {
         } catch (error) {
             logger.error("Error parsing vote extension response", error, {
                 blockHeight: res?.voteExt?.[0]?.height,
-                event: "vote_extension_parse_error"
+                event: "vote_extension_parse_error",
             });
             throw error;
         }
@@ -294,7 +299,7 @@ export class PulsarClient extends EventEmitter {
                     if (err) {
                         logger.error("Error retrieving Mina public key", err, {
                             encodedAddress: encoded,
-                            event: "mina_pubkey_retrieval_error"
+                            event: "mina_pubkey_retrieval_error",
                         });
                         reject(err);
                         return;
@@ -310,7 +315,7 @@ export class PulsarClient extends EventEmitter {
                         logger.error("Error parsing public key", parseError, {
                             encodedAddress: encoded,
                             responseData: res,
-                            event: "pubkey_parse_error"
+                            event: "pubkey_parse_error",
                         });
                         reject(parseError);
                     }
@@ -318,80 +323,10 @@ export class PulsarClient extends EventEmitter {
             } catch (error) {
                 logger.error("Error recovering public key", error, {
                     encodedAddress: encoded,
-                    event: "pubkey_recovery_error"
+                    event: "pubkey_recovery_error",
                 });
                 reject(error);
             }
         });
     }
-}
-
-function parseValidatorSetResponse(res: any): string[] {
-    return res?.validators.map((v: any) => v.address);
-}
-
-function parseTendermintBlockResponse(res: any): BlockParserResult {
-    const header = res?.block?.header;
-    const blockId = res?.block_id?.hash || null;
-    const blockHash = BigInt(
-        "0x" + Buffer.from(header.app_hash, "base64").toString("hex")
-    ).toString();
-    const height = header?.height ? Number(header.height) : NaN;
-    const chainId = header?.chain_id || "";
-    const proposerAddress = header?.proposer_address || "";
-    const timeSec = Number(header?.time?.seconds || 0);
-    const timeNanos = Number(header?.time?.nanos || 0);
-    const time = new Date(timeSec * 1e3 + timeNanos / 1e6);
-
-    const txs: string[] = res?.block?.data?.txs ?? [];
-    const txsDecoded: string[] = txs.map((t: string) => {
-        try {
-            const decoded = Buffer.from(t, "base64").toString("utf-8");
-            return decoded;
-        } catch {
-            return "";
-        }
-    });
-
-    const signatures = res?.block?.last_commit?.signatures ?? [];
-    const lastCommitSignatures = signatures.map((sig: any) => ({
-        validator_address: sig?.validator_address ?? "",
-        signature: sig?.signature ?? "",
-        block_id_flag: sig?.block_id_flag ?? "",
-        timestamp: sig?.timestamp
-            ? new Date(
-                  Number(sig.timestamp.seconds || 0) * 1e3 + Number(sig.timestamp.nanos || 0) / 1e6
-              )
-            : null,
-    }));
-
-    return {
-        blockId,
-        blockHash,
-        height,
-        chainId,
-        proposerAddress,
-        time,
-        txs,
-        txsDecoded,
-        lastCommitSignatures,
-        hashes: {
-            appHash: header?.app_hash || "",
-            dataHash: header?.data_hash || "",
-            validatorsHash: header?.validators_hash || "",
-            consensusHash: header?.consensus_hash || "",
-            evidenceHash: header?.evidence_hash || "",
-            lastCommitHash: header?.last_commit_hash || "",
-            lastResultsHash: header?.last_results_hash || "",
-            nextValidatorsHash: header?.next_validators_hash || "",
-        },
-    };
-}
-
-function decodeMinaSignature(signatureHex: string): string {
-    const sigBuffer = Buffer.from(signatureHex, "hex");
-    const rHex = sigBuffer.slice(0, 32).toString("hex");
-    const sHex = sigBuffer.slice(32, 64).toString("hex");
-
-    return Signature.fromValue({ r: BigInt("0x" + rHex), s: BigInt("0x" + sHex) }).toBase58();
 }

@@ -4,10 +4,8 @@ import logger from "../logger.js";
 import fetch from "node-fetch";
 import { fetchAccount, PublicKey, Signature } from "o1js";
 import {
-    CalculateMax,
     PulsarAction,
     SettlementContract,
-    TestUtils,
     ValidateReducePublicInput,
     VALIDATOR_NUMBER,
 } from "pulsar-contracts";
@@ -133,6 +131,7 @@ await createWorker<CollectSignatureJob, void>({
 
             await sendResolveActions(pulsarActions);
 
+            // todo validate instead of assuming
             const finalActionState = actions[actions.length - 1].hash;
 
             const signatureResponses = await collectSignatures(ENDPOINTS, finalActionState);
@@ -343,6 +342,7 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
 
         const actions: CosmosPulsarAction[] = pulsarActions.map((action) => {
             let actionType = "";
+            // Todo: fix type issue in pulsar side
             if (PulsarAction.isDeposit(action).toBoolean()) {
                 actionType = "deposit";
             } else {
@@ -353,7 +353,7 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
                 publicKey: action.account.toBase58(),
                 amount: action.amount.toString(),
                 actionType: actionType,
-                blockHeight: action.blockHeight.toString(),
+                blockHeight: "0", //TODO fix block height issue in pulsar side
             };
         });
 
