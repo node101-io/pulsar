@@ -21,7 +21,12 @@ import {
 } from './types/actionHelpers.js';
 import { List, emptyHash, ReduceMask } from './types/common.js';
 import { ProofGenerators } from './types/proofGenerators.js';
-import { Batch, PulsarAction } from './types/PulsarAction.js';
+import {
+  Batch,
+  PulsarAction,
+  PulsarAuth,
+  PulsarActionBase,
+} from './types/PulsarAction.js';
 import {
   SignaturePublicKey,
   SignaturePublicKeyList,
@@ -133,6 +138,8 @@ export {
   ValidateReduceProgram,
   ValidateReducePublicInput,
   PulsarAction,
+  PulsarAuth,
+  PulsarActionBase,
   Batch,
   devnetTestAccounts,
   validatorSet,

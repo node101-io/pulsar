@@ -6,6 +6,7 @@ import {
     emptyActionListHash,
     merkleActionsAdd,
     PulsarAction,
+    PulsarAuth,
     setMinaNetwork,
     SettlementContract,
 } from "pulsar-contracts";
@@ -20,7 +21,6 @@ import {
 import logger from "./logger.js";
 import dotenv from "dotenv";
 import { getSignatureLimiter } from "./rateLimit.js";
-import { PulsarAuth } from "pulsar-contracts/build/src/types/PulsarAction.js";
 
 dotenv.config();
 
