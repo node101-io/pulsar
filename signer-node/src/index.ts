@@ -1,5 +1,5 @@
 import express, { Request, Response } from "express";
-import { fetchAccount, PrivateKey, PublicKey, Signature } from "o1js";
+import { fetchAccount, Field, Poseidon, PrivateKey, PublicKey, Signature } from "o1js";
 import {
     actionListAdd,
     CalculateMaxWithBalances,
@@ -20,12 +20,23 @@ import {
 import logger from "./logger.js";
 import dotenv from "dotenv";
 import { getSignatureLimiter, localhostOnly } from "./rateLimit.js";
+import { PulsarAuth } from "pulsar-contracts/build/src/types/PulsarAction.js";
 
 dotenv.config();
 
-interface RawAction {
-    actions: string[][];
-    hash: string;
+interface PulsarActionData {
+    public_key: string;
+    amount: string;
+    action_type: string;
+    block_height: number;
+}
+
+interface VerifyActionListRequest {
+    actions: PulsarActionData[];
+    balances: { [key: string]: string };
+    witness: string;
+    settled_height: number;
+    next_height: number;
 }
 
 interface ProcessedAction {
@@ -33,13 +44,7 @@ interface ProcessedAction {
     hash: bigint;
 }
 
-interface SignRequest {
-    actions: RawAction[];
-    withdrawMapping: Map<string, number>;
-}
-
-interface SignResponse {
-    isValid: boolean;
+interface VerifyActionListResponse {
     mask: boolean[];
 }
 
@@ -71,7 +76,21 @@ interface CachedSignature {
     timestamp: Date;
 }
 
-function isValidSignRequest(body: unknown): body is SignRequest {
+function isValidGetSignatureRequest(body: unknown): body is GetSignatureRequest {
+    if (!body || typeof body !== "object") {
+        return false;
+    }
+
+    const req = body as Record<string, unknown>;
+    return (
+        typeof req.initialActionState === "string" &&
+        req.initialActionState.length > 0 &&
+        typeof req.finalActionState === "string" &&
+        req.finalActionState.length > 0
+    );
+}
+
+function isValidVerifyActionListRequest(body: unknown): body is VerifyActionListRequest {
     if (!body || typeof body !== "object") {
         return false;
     }
@@ -87,40 +106,24 @@ function isValidSignRequest(body: unknown): body is SignRequest {
             return false;
         }
 
-        const rawAction = action as Record<string, unknown>;
-
-        if (!Array.isArray(rawAction.actions) || typeof rawAction.hash !== "string") {
+        const actionData = action as Record<string, unknown>;
+        if (
+            typeof actionData.public_key !== "string" ||
+            typeof actionData.amount !== "string" ||
+            typeof actionData.action_type !== "string" ||
+            typeof actionData.block_height !== "number"
+        ) {
             return false;
         }
-
-        for (const actionArray of rawAction.actions) {
-            if (
-                !Array.isArray(actionArray) ||
-                !actionArray.every((item) => typeof item === "string")
-            ) {
-                return false;
-            }
-        }
     }
 
-    if (!req.withdrawMapping || typeof req.withdrawMapping !== "object") {
-        return false;
-    }
-
-    return true;
-}
-
-function isValidGetSignatureRequest(body: unknown): body is GetSignatureRequest {
-    if (!body || typeof body !== "object") {
-        return false;
-    }
-
-    const req = body as Record<string, unknown>;
     return (
-        typeof req.initialActionState === "string" &&
-        req.initialActionState.length > 0 &&
-        typeof req.finalActionState === "string" &&
-        req.finalActionState.length > 0
+        req.balances != null &&
+        typeof req.balances === "object" &&
+        !Array.isArray(req.balances) &&
+        typeof req.witness === "string" &&
+        typeof req.settled_height === "number" &&
+        typeof req.next_height === "number"
     );
 }
 
@@ -168,16 +171,19 @@ initMongo().catch((error) => {
 app.post(
     "/sign",
     localhostOnly,
-    async (req: Request<{}, SignResponse, unknown>, res: Response<SignResponse>) => {
+    async (
+        req: Request<{}, VerifyActionListResponse, unknown>,
+        res: Response<VerifyActionListResponse>
+    ) => {
         try {
-            if (!isValidSignRequest(req.body)) {
+            if (!isValidVerifyActionListRequest(req.body)) {
                 throw new ValidationError(
                     "Invalid request format",
                     "Request must include 'actions' array and 'withdrawMapping' object"
                 );
             }
 
-            const { actions, withdrawMapping } = req.body;
+            const { actions, balances } = req.body;
             await fetchAccount({ publicKey: contractInstance.address });
             const initialActionState = contractInstance.actionState.get().toString();
 
@@ -191,8 +197,7 @@ app.post(
                 const cachedSignature = await getSignature(initialActionState, finalActionState);
                 if (cachedSignature) {
                     logger.info("Returning cached signature");
-                    const response: SignResponse = {
-                        isValid: true,
+                    const response: VerifyActionListResponse = {
                         mask: cachedSignature.mask,
                     };
                     return res.json(response);
@@ -206,6 +211,11 @@ app.post(
                     "Failed to validate action queue",
                     "Typed actions array is invalid"
                 );
+            }
+
+            const withdrawMapping: Map<string, number> = new Map();
+            for (const [key, value] of Object.entries(balances)) {
+                withdrawMapping.set(key, Number(value));
             }
 
             await fetchAccount({ publicKey: contractInstance.address });
@@ -235,16 +245,14 @@ app.post(
                 logger.error("Failed to cache signature:", saveError);
             }
 
-            const response: SignResponse = {
-                isValid: true,
+            const response: VerifyActionListResponse = {
                 mask: mask.toJSON(),
             };
 
             res.json(response);
         } catch (error) {
             logger.error("Error signing:", error);
-            const response: SignResponse = {
-                isValid: false,
+            const response: VerifyActionListResponse = {
                 mask: [],
             };
             res.status(400).json(response);
@@ -364,7 +372,7 @@ app.post(
 
 app.listen(port, () => console.log(`Signer up on http://localhost:${port}`));
 
-function validateActionList(rawActions: RawAction[]): {
+function validateActionList(rawActions: PulsarActionData[]): {
     actions: ProcessedAction[];
     finalActionState: string;
 } {
@@ -372,23 +380,26 @@ function validateActionList(rawActions: RawAction[]): {
         return { actions: [], finalActionState: emptyActionListHash.toString() };
     }
 
-    const actions: ProcessedAction[] = rawActions.map((action: RawAction, index: number) => {
-        try {
-            if (!action.actions[0] || !Array.isArray(action.actions[0])) {
-                throw new ValidationError(
-                    `Invalid action format at index ${index}`,
-                    "Action must contain at least one action array"
-                );
-            }
-
-            return {
-                action: PulsarAction.fromRawAction(action.actions[0]),
-                hash: BigInt(action.hash),
-            };
-        } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : "Unknown error";
-            throw new ProcessingError(`Failed to process action at index ${index}`, errorMsg);
+    const actions: ProcessedAction[] = rawActions.map((action: PulsarActionData, index: number) => {
+        let actionType: number;
+        if (action.action_type === "deposit") {
+            actionType = 1;
+        } else {
+            actionType = 2;
         }
+
+        const pulsarAction = new PulsarAction({
+            type: Field(actionType),
+            account: PublicKey.fromBase58(action.public_key),
+            amount: Field(action.amount),
+            blockHeight: Field(action.block_height),
+            pulsarAuth: PulsarAuth.empty(),
+        });
+
+        return {
+            action: pulsarAction,
+            hash: Poseidon.hash(pulsarAction.toFields()).toBigInt(),
+        };
     });
 
     let actionState = contractInstance.actionState.get();
@@ -398,18 +409,6 @@ function validateActionList(rawActions: RawAction[]): {
             actionState,
             actionListAdd(emptyActionListHash, action.action)
         );
-
-        if (actionState.toBigInt() !== action.hash) {
-            console.error(
-                `Action hash mismatch at index ${index}: expected ${
-                    action.hash
-                }, got ${actionState.toBigInt()}`
-            );
-            throw new ValidationError(
-                `Hash mismatch at action index ${index}`,
-                `Expected: ${action.hash}, Computed: ${actionState.toBigInt()}`
-            );
-        }
     }
 
     return { actions, finalActionState: actionState.toString() };
