@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { AccountUpdate, fetchAccount, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
 import { cacheCompile } from "./cache.js";
 import { PulsarAuth } from "pulsar-contracts/build/src/types/PulsarAction.js";
+import { prettierAddress } from "./utils.js";
 
 dotenv.config();
 
@@ -124,6 +125,7 @@ async function performDeposit(
 
     try {
         if (process.env.MINA_NETWORK === "lightnet") {
+            stopSpinner();
             const stopFetchSpinner = createLoadingSpinner("Fetching account information...");
             await fetchAccount({ publicKey: signerPrivateKey.toPublicKey() });
             stopFetchSpinner();
@@ -149,7 +151,9 @@ async function performDeposit(
             stopSubmitSpinner();
 
             printSuccess("Deposit completed successfully!");
-            console.log(`📍 From: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
+            console.log(
+                `📍 From: ${prettierAddress(signerPrivateKey.toPublicKey().toBase58())}...`
+            );
         } else {
             stopSpinner();
             const stopTxSpinner = createLoadingSpinner("Building transaction...");
@@ -247,7 +251,27 @@ async function performWithdraw(
     }
 }
 
-async function showMainMenu(): Promise<"deposit" | "withdraw" | "exit"> {
+async function performWarmUpCache() {
+    console.log("\n🔥 Starting cache warm-up process...\n");
+
+    const stopSpinner = createLoadingSpinner("Warming up cache for all contracts...");
+
+    try {
+        for (let i = 0; i < 5; i++) {
+            await cacheCompile("reduce");
+        }
+        stopSpinner();
+        printSuccess("Cache warm-up completed successfully!");
+        console.log("📦 All contracts have been compiled and cached for faster execution");
+    } catch (error) {
+        stopSpinner();
+        printError("Cache warm-up failed!");
+        console.log(`Details: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+    }
+}
+
+async function showMainMenu(): Promise<"deposit" | "withdraw" | "warm-up-cache" | "exit"> {
     console.log("\n");
     const { action } = await inquirer.prompt([
         {
@@ -264,6 +288,11 @@ async function showMainMenu(): Promise<"deposit" | "withdraw" | "exit"> {
                     name: "💸 Make a Withdrawal",
                     value: "withdraw",
                     short: "Withdraw",
+                },
+                {
+                    name: "🔥 Warm-up Cache",
+                    value: "warm-up-cache",
+                    short: "Warm-up Cache",
                 },
                 new inquirer.Separator(),
                 {
@@ -298,7 +327,7 @@ async function main() {
             const action = await showMainMenu();
 
             if (action === "exit") {
-                console.log("\n👋 Thanks for using Pulsar Actions CLI! Goodbye!");
+                console.log("\n Exit cli");
                 break;
             }
 
@@ -307,6 +336,8 @@ async function main() {
                     await performDeposit(signerPrivateKey, contractPrivateKey, contractInstance);
                 } else if (action === "withdraw") {
                     await performWithdraw(signerPrivateKey, contractPrivateKey, contractInstance);
+                } else if (action === "warm-up-cache") {
+                    await performWarmUpCache();
                 }
 
                 const { continueChoice } = await inquirer.prompt([
@@ -319,11 +350,11 @@ async function main() {
                 ]);
 
                 if (!continueChoice) {
-                    console.log("\n👋 Thanks for using Pulsar Actions CLI! Goodbye!");
+                    console.log("\n Exit cli");
                     break;
                 }
             } catch (error) {
-                printError("\n💥 Transaction failed!");
+                printError("\n Transaction failed!");
                 console.log(
                     `📋 Error details: ${error instanceof Error ? error.message : String(error)}\n`
                 );
@@ -332,20 +363,20 @@ async function main() {
                     {
                         type: "list",
                         name: "retryChoice",
-                        message: "❓ What would you like to do next?",
+                        message: "What next?",
                         choices: [
                             {
-                                name: "🔄 Try Again",
+                                name: "Try Again",
                                 value: "retry",
                                 short: "Retry",
                             },
                             {
-                                name: "🏠 Return to Main Menu",
+                                name: "Return to Main Menu",
                                 value: "menu",
                                 short: "Main Menu",
                             },
                             {
-                                name: "🚪 Exit Application",
+                                name: "Exit Application",
                                 value: "exit",
                                 short: "Exit",
                             },
@@ -354,7 +385,7 @@ async function main() {
                 ]);
 
                 if (retryChoice === "exit") {
-                    console.log("\n👋 Thanks for using Pulsar Actions CLI! Goodbye!");
+                    console.log("\n Exit cli");
                     break;
                 } else if (retryChoice === "retry") {
                     if (action === "deposit") {
@@ -369,6 +400,8 @@ async function main() {
                             contractPrivateKey,
                             contractInstance
                         );
+                    } else if (action === "warm-up-cache") {
+                        await performWarmUpCache();
                     }
                 }
             }
