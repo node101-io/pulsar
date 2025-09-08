@@ -179,7 +179,7 @@ app.post(
             if (!isValidVerifyActionListRequest(req.body)) {
                 throw new ValidationError(
                     "Invalid request format",
-                    "Request must include 'actions' array and 'withdrawMapping' object"
+                    "Request must include 'actions' array, 'balances' object, 'witness' string, 'settled_height' number, and 'next_height' number"
                 );
             }
 
@@ -256,28 +256,6 @@ app.post(
                 mask: [],
             };
             res.status(400).json(response);
-
-            // let errorResponse: ErrorResponse;
-
-            // if (error instanceof ValidationError) {
-            //     errorResponse = {
-            //         error: "Validation failed",
-            //         details: error.details || error.message,
-            //     };
-            //     res.status(400).json(errorResponse);
-            // } else if (error instanceof ProcessingError) {
-            //     errorResponse = {
-            //         error: "Processing failed",
-            //         details: error.details || error.message,
-            //     };
-            //     res.status(422).json(errorResponse);
-            // } else {
-            //     errorResponse = {
-            //         error: "Internal server error",
-            //         details: error instanceof Error ? error.message : "Unknown error occurred",
-            //     };
-            //     res.status(500).json(errorResponse);
-            // }
         }
     }
 );
@@ -392,7 +370,6 @@ function validateActionList(rawActions: PulsarActionData[]): {
             type: Field(actionType),
             account: PublicKey.fromBase58(action.public_key),
             amount: Field(action.amount),
-            blockHeight: Field(action.block_height),
             pulsarAuth: PulsarAuth.empty(),
         });
 
