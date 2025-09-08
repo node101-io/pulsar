@@ -46,7 +46,8 @@ func (k Keeper) ProcessActions(ctx sdk.Context, actions []types.PulsarAction, ne
 			"action_type", action.ActionType,
 			"mina_public_key", action.PublicKey,
 			"amount", action.Amount.String(),
-			"block_height", action.BlockHeight)
+			"cosmos_address", action.CosmosAddress,
+			"cosmos_signature", action.CosmosSignature)
 
 		// Process based on action type
 		var wasApproved bool

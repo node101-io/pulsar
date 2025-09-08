@@ -3,7 +3,6 @@ package keeper
 import (
 	"encoding/hex"
 	"math/big"
-	"strconv"
 
 	"github.com/node101-io/mina-signer-go/constants"
 	"github.com/node101-io/mina-signer-go/field"
@@ -25,7 +24,13 @@ func (k Keeper) UpdateHash(currentHash string, action types.PulsarAction) string
 		big.NewInt(0).SetBytes([]byte(action.PublicKey)),
 		big.NewInt(0).SetBytes([]byte(action.Amount.String())),
 		big.NewInt(0).SetBytes([]byte(action.ActionType)),
-		big.NewInt(0).SetBytes([]byte(strconv.FormatInt(int64(action.BlockHeight), 10))),
+	}
+
+	if action.CosmosAddress != "" {
+		input = append(input, big.NewInt(0).SetBytes([]byte(action.CosmosAddress)))
+	}
+	if action.CosmosSignature != "" {
+		input = append(input, big.NewInt(0).SetBytes([]byte(action.CosmosSignature)))
 	}
 
 	hashofAction := poseidon.Hash(input)

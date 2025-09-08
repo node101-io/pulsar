@@ -1,8 +1,6 @@
 package keeper
 
 import (
-	"fmt"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/node101-io/pulsar/chain/x/bridge/types"
 )
@@ -60,7 +58,8 @@ func (k Keeper) processDepositAction(ctx sdk.Context, action types.PulsarAction,
 			types.EventTypeDepositProcessed,
 			sdk.NewAttribute(types.AttributeKeyPublicKey, action.PublicKey),
 			sdk.NewAttribute(types.AttributeKeyAmount, action.Amount.String()),
-			sdk.NewAttribute(types.AttributeKeyBlockHeight, fmt.Sprintf("%d", action.BlockHeight)),
+			sdk.NewAttribute(types.AttributeKeyCosmosAddress, action.CosmosAddress),
+			sdk.NewAttribute(types.AttributeKeyCosmosSignature, action.CosmosSignature),
 		),
 	)
 
@@ -101,7 +100,8 @@ func (k Keeper) processWithdrawalAction(ctx sdk.Context, action types.PulsarActi
 			sdk.NewAttribute(types.AttributeKeyPublicKey, action.PublicKey),
 			sdk.NewAttribute(types.AttributeKeyAmount, action.Amount.String()),
 			sdk.NewAttribute(types.AttributeKeyBalance, newBalance.String()),
-			sdk.NewAttribute(types.AttributeKeyBlockHeight, fmt.Sprintf("%d", action.BlockHeight)),
+			sdk.NewAttribute(types.AttributeKeyCosmosAddress, action.CosmosAddress),
+			sdk.NewAttribute(types.AttributeKeyCosmosSignature, action.CosmosSignature),
 		),
 	)
 
@@ -126,7 +126,8 @@ func (k Keeper) processSettlementAction(ctx sdk.Context, action types.PulsarActi
 			types.EventTypeSettlementProcessed,
 			sdk.NewAttribute(types.AttributeKeyPublicKey, action.PublicKey),
 			sdk.NewAttribute(types.AttributeKeyAmount, action.Amount.String()),
-			sdk.NewAttribute(types.AttributeKeyBlockHeight, fmt.Sprintf("%d", action.BlockHeight)),
+			sdk.NewAttribute(types.AttributeKeyCosmosAddress, action.CosmosAddress),
+			sdk.NewAttribute(types.AttributeKeyCosmosSignature, action.CosmosSignature),
 		),
 	)
 

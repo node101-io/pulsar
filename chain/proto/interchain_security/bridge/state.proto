@@ -33,7 +33,8 @@ message PulsarAction {
     (gogoproto.nullable) = false
   ];
   string action_type = 3; // "deposit", "withdrawal", "settlement"
-  uint64 block_height = 4;
+  string cosmos_address = 4;
+  string cosmos_signature = 5;
 }
 
 // PulsarActionList represents a list of actions for storage

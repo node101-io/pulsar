@@ -85,8 +85,8 @@ func validatePulsarAction(action PulsarAction, index int) error {
 	}
 
 	// Validate block height
-	if action.BlockHeight == 0 {
-		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "action %d: block height cannot be zero", index)
+	if action.CosmosAddress == "" || action.CosmosSignature == "" {
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "action %d: cosmos address or cosmos signature cannot be empty", index)
 	}
 
 	return nil

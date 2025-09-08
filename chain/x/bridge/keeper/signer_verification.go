@@ -1,18 +1,19 @@
 package keeper
 
 import (
-	/* "bytes"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"time" */
+	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/node101-io/pulsar/chain/x/bridge/types"
 )
 
-const signerVerifyURL = "http://localhost:9101/verify-actions"
+const signerBaseURL = "http://localhost:6000"
+const signerSignPath = "/sign"
 
 type VerifyActionListRequest struct {
 	Actions       []types.PulsarAction `json:"actions"`
@@ -22,44 +23,43 @@ type VerifyActionListRequest struct {
 	NextHeight    uint64               `json:"next_height"`
 }
 
-// VerifyActionList verifies the integrity of an action list with the signer node
-func (k Keeper) VerifyActionList(ctx sdk.Context, settledHeight uint64, actions []types.PulsarAction, nextHeight uint64, witness string) ([]bool, error) {
-	/* // Basic validations first
+type VerifyActionListResponse struct {
+	Mask []bool `json:"mask"`
+}
+
+func (k Keeper) VerifyActionList(
+	ctx sdk.Context,
+	settledHeight uint64,
+	actions []types.PulsarAction,
+	nextHeight uint64,
+	witness string,
+) ([]bool, error) {
+
 	if nextHeight <= settledHeight {
 		return nil, types.ErrInvalidBlockHeight
 	}
-
 	if len(actions) == 0 {
 		return nil, types.ErrEmptyActionList
 	}
 
-	var balancesMap = make(map[string]string)
+	balancesMap := make(map[string]string, len(actions))
+	cleanActions := make([]types.PulsarAction, 0, len(actions))
 
-	// Validate each action
-	for i, action := range actions {
-		if err := k.validateAction(action); err != nil {
-			ctx.Logger().Error("Invalid action in list",
-				"index", i,
-				"action", action,
-				"error", err)
-			continue
-		}
+	for _, action := range actions {
+		cleanActions = append(cleanActions, action)
 
-		balance := k.GetWithdrawalBalance(ctx, action.PublicKey)
-
-		balancesMap[action.PublicKey] = balance.String()
-
+		bal := k.GetWithdrawalBalance(ctx, action.PublicKey)
+		balancesMap[action.PublicKey] = bal.String()
 	}
 
-	// Log the verification attempt
 	ctx.Logger().Info("Verifying action list with signer node",
 		"settled_height", settledHeight,
 		"next_height", nextHeight,
-		"actions_count", len(actions),
-		"merkle_witness", witness)
+		"actions_count", len(cleanActions),
+	)
 
 	payload := VerifyActionListRequest{
-		Actions:       actions,
+		Actions:       cleanActions,
 		Balances:      balancesMap,
 		Witness:       witness,
 		SettledHeight: settledHeight,
@@ -71,13 +71,13 @@ func (k Keeper) VerifyActionList(ctx sdk.Context, settledHeight uint64, actions 
 		return nil, fmt.Errorf("marshal verify request: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, signerVerifyURL, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, signerBaseURL+signerSignPath, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("build verify request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	httpClient := &http.Client{Timeout: 5 * time.Second}
+	httpClient := &http.Client{Timeout: 3 * time.Second}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("post to signer: %w", err)
@@ -88,50 +88,15 @@ func (k Keeper) VerifyActionList(ctx sdk.Context, settledHeight uint64, actions 
 	if err != nil {
 		return nil, fmt.Errorf("read signer response: %w", err)
 	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("signer non-200 status %d: %s", resp.StatusCode, string(respBytes))
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("signer status %d: %s", resp.StatusCode, string(respBytes))
 	}
 
-	var results []bool
-	if err := json.Unmarshal(respBytes, &results); err != nil {
+	var vr VerifyActionListResponse
+	if err := json.Unmarshal(respBytes, &vr); err != nil {
 		return nil, fmt.Errorf("unmarshal signer response: %w", err)
 	}
 
-	ctx.Logger().Info("Signer verification completed",
-		"results_len", len(results))
-
-	return results, nil */
-
-	var results []bool
-	for range actions {
-		results = append(results, true)
-	}
-
-	return results, nil
-}
-
-// validateAction performs basic validation on a single action
-func (k Keeper) validateAction(action types.PulsarAction) error {
-	// Validate public key
-	if err := k.ValidateMinaPublicKey(action.PublicKey); err != nil {
-		return err
-	}
-
-	// Validate amount
-	if action.Amount.IsZero() || action.Amount.IsNegative() {
-		return types.ErrInvalidAmount
-	}
-
-	// Validate action type
-	if action.ActionType != "deposit" && action.ActionType != "withdrawal" && action.ActionType != "settlement" {
-		return types.ErrInvalidActionType
-	}
-
-	// Validate block height
-	if action.BlockHeight == 0 {
-		return types.ErrInvalidBlockHeight
-	}
-
-	return nil
+	ctx.Logger().Info("Signer verification completed", "results_len", len(vr.Mask))
+	return vr.Mask, nil
 }

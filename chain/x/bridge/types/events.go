@@ -11,15 +11,17 @@ const (
 
 // Event attributes
 const (
-	AttributeKeyCreator        = "creator"
-	AttributeKeyPublicKey      = "public_key"
-	AttributeKeyAmount         = "amount"
-	AttributeKeyActionType     = "action_type"
-	AttributeKeyProver         = "prover"
-	AttributeKeyProcessedCount = "processed_count"
-	AttributeKeyApprovedCount  = "approved_count"
-	AttributeKeyIgnoredCount   = "ignored_count"
-	AttributeKeyBlockHeight    = "block_height"
-	AttributeKeyNewHash        = "new_hash"
-	AttributeKeyBalance        = "balance"
+	AttributeKeyCreator         = "creator"
+	AttributeKeyPublicKey       = "public_key"
+	AttributeKeyAmount          = "amount"
+	AttributeKeyActionType      = "action_type"
+	AttributeKeyProver          = "prover"
+	AttributeKeyProcessedCount  = "processed_count"
+	AttributeKeyApprovedCount   = "approved_count"
+	AttributeKeyIgnoredCount    = "ignored_count"
+	AttributeKeyBlockHeight     = "block_height"
+	AttributeKeyCosmosAddress   = "cosmos_address"
+	AttributeKeyCosmosSignature = "cosmos_signature"
+	AttributeKeyNewHash         = "new_hash"
+	AttributeKeyBalance         = "balance"
 )
