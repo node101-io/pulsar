@@ -366,8 +366,9 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
 
         const msgValue = MsgResolveActions.fromPartial({
             creator: account.address,
-            merkleWitness,
             actions,
+            nextBlockHeight: "123123",
+            merkleWitness,
         });
 
         const msgBytes = MsgResolveActions.encode(msgValue).finish();

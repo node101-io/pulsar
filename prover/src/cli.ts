@@ -90,19 +90,33 @@ async function initializeContract() {
         `🔑 Acquired lightnet account: ${privateKey.toPublicKey().toBase58().slice(0, 12)}...`
     );
 
-    const tx = await Mina.transaction({ sender: privateKey.toPublicKey(), fee: 1e9 }, async () => {
-        const senderAccount = AccountUpdate.createSigned(privateKey.toPublicKey());
-        // AccountUpdate.fundNewAccount(privateKey.toPublicKey());
-        senderAccount.send({
-            to: signerPrivateKey.toPublicKey(),
-            amount: UInt64.from(1e10),
-        });
-    });
-    await DeployScripts.waitTransactionAndFetchAccount(
-        tx,
-        [privateKey],
-        [signerPrivateKey.toPublicKey(), privateKey.toPublicKey()]
-    );
+    const shouldDeploy = await inquirer.prompt([
+        {
+            type: "confirm",
+            name: "deployChoice",
+            message: `Do you want to deploy the contract to the ${process.env.MINA_NETWORK} network?`,
+            default: false,
+        },
+    ]);
+
+    if (shouldDeploy.deployChoice) {
+        const tx = await Mina.transaction(
+            { sender: privateKey.toPublicKey(), fee: 1e9 },
+            async () => {
+                const senderAccount = AccountUpdate.createSigned(privateKey.toPublicKey());
+                // AccountUpdate.fundNewAccount(privateKey.toPublicKey());
+                senderAccount.send({
+                    to: signerPrivateKey.toPublicKey(),
+                    amount: UInt64.from(1e10),
+                });
+            }
+        );
+        await DeployScripts.waitTransactionAndFetchAccount(
+            tx,
+            [privateKey],
+            [signerPrivateKey.toPublicKey(), privateKey.toPublicKey()]
+        );
+    }
 
     console.log(`🔑 Signer: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
     console.log(`📝 Contract: ${contractPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
