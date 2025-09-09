@@ -5,6 +5,7 @@ import { AccountUpdate, fetchAccount, Field, Lightnet, Mina, PrivateKey, UInt64 
 import { cacheCompile } from "./cache.js";
 import { PulsarAuth } from "pulsar-contracts/build/src/types/PulsarAction.js";
 import { prettierAddress } from "./utils.js";
+import fs from "fs";
 
 dotenv.config();
 
@@ -257,6 +258,8 @@ async function performWarmUpCache() {
     const stopSpinner = createLoadingSpinner("Warming up cache for all contracts...");
 
     try {
+        fs.rmSync("../../cache", { recursive: true, force: true });
+
         for (let i = 0; i < 5; i++) {
             await cacheCompile("reduce");
         }
