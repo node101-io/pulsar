@@ -13,7 +13,7 @@ import {
 const POLL_INTERVAL_MS = 5_000;
 
 const TENDERMINT_SERVICE_NAME = "cosmos.base.tendermint.v1beta1.Service";
-const MINA_KEYS_SERVICE_NAME = "cosmos.minakeys.Query";
+const MINA_KEYS_SERVICE_NAME = "interchain_security.minakeys.Query";
 
 export class PulsarClient extends EventEmitter {
     rpcAddress: string;
