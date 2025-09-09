@@ -18,8 +18,8 @@ import {
   type ServiceError,
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
-import { Params } from "./params";
-import { PulsarAction } from "./state";
+import { Params } from "./params.js";
+import { PulsarAction } from "./state.js";
 
 export const protobufPackage = "interchain_security.bridge";
 

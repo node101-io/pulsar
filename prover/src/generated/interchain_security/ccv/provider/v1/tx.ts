@@ -18,12 +18,12 @@ import {
   type ServiceError,
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
-import { Duration } from "../../../../google/protobuf/duration";
-import { Timestamp } from "../../../../google/protobuf/timestamp";
-import { Height } from "../../../../ibc/core/client/v1/client";
-import { Header, Misbehaviour } from "../../../../ibc/lightclients/tendermint/v1/tendermint";
-import { DuplicateVoteEvidence } from "../../../../tendermint/types/evidence";
-import { Params } from "./provider";
+import { Duration } from "../../../../google/protobuf/duration.js";
+import { Timestamp } from "../../../../google/protobuf/timestamp.js";
+import { Height } from "../../../../ibc/core/client/v1/client.js";
+import { Header, Misbehaviour } from "../../../../ibc/lightclients/tendermint/v1/tendermint.js";
+import { DuplicateVoteEvidence } from "../../../../tendermint/types/evidence.js";
+import { Params } from "./provider.js";
 
 export const protobufPackage = "interchain_security.ccv.provider.v1";
 

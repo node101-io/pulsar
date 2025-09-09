@@ -18,9 +18,9 @@ import {
   type ServiceError,
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
-import { ConsumerParams } from "../../v1/shared_consumer";
-import { ConsumerPacketData } from "../../v1/wire";
-import { SlashRecord } from "./consumer";
+import { ConsumerParams } from "../../v1/shared_consumer.js";
+import { ConsumerPacketData } from "../../v1/wire.js";
+import { SlashRecord } from "./consumer.js";
 
 export const protobufPackage = "interchain_security.ccv.consumer.v1";
 

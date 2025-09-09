@@ -6,8 +6,8 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { ConsumerGenesisState } from "../../v1/shared_consumer";
-import { ValidatorSetChangePacketData } from "../../v1/wire";
+import { ConsumerGenesisState } from "../../v1/shared_consumer.js";
+import { ValidatorSetChangePacketData } from "../../v1/wire.js";
 import {
   ConsumerAdditionProposal,
   ConsumerAddrsToPrune,
@@ -20,7 +20,7 @@ import {
   ValidatorByConsumerAddr,
   ValidatorConsumerPubKey,
   VscUnbondingOps,
-} from "./provider";
+} from "./provider.js";
 
 export const protobufPackage = "interchain_security.ccv.provider.v1";
 

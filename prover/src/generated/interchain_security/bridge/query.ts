@@ -18,9 +18,9 @@ import {
   type ServiceError,
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
-import { PageRequest, PageResponse } from "../../cosmos/base/query/v1beta1/pagination";
-import { Params } from "./params";
-import { BridgeState, PulsarAction, RewardBalance, WithdrawalBalance } from "./state";
+import { PageRequest, PageResponse } from "../../cosmos/base/query/v1beta1/pagination.js";
+import { Params } from "./params.js";
+import { BridgeState, PulsarAction, RewardBalance, WithdrawalBalance } from "./state.js";
 
 export const protobufPackage = "interchain_security.bridge";
 

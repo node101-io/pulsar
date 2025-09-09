@@ -6,8 +6,8 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Infraction, infractionFromJSON, infractionToJSON } from "../../../cosmos/staking/v1beta1/staking";
-import { Validator, ValidatorUpdate } from "../../../tendermint/abci/types";
+import { Infraction, infractionFromJSON, infractionToJSON } from "../../../cosmos/staking/v1beta1/staking.js";
+import { Validator, ValidatorUpdate } from "../../../tendermint/abci/types.js";
 
 export const protobufPackage = "interchain_security.ccv.v1";
 

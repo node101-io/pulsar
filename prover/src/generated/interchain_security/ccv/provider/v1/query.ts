@@ -18,10 +18,10 @@ import {
   type ServiceError,
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
-import { Timestamp } from "../../../../google/protobuf/timestamp";
-import { PublicKey } from "../../../../tendermint/crypto/keys";
-import { ConsumerGenesisState } from "../../v1/shared_consumer";
-import { ConsumerAdditionProposals, ConsumerRemovalProposals, Params, VscSendTimestamp } from "./provider";
+import { Timestamp } from "../../../../google/protobuf/timestamp.js";
+import { PublicKey } from "../../../../tendermint/crypto/keys.js";
+import { ConsumerGenesisState } from "../../v1/shared_consumer.js";
+import { ConsumerAdditionProposals, ConsumerRemovalProposals, Params, VscSendTimestamp } from "./provider.js";
 
 export const protobufPackage = "interchain_security.ccv.provider.v1";
 

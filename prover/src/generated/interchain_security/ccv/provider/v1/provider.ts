@@ -6,14 +6,14 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Coin, DecCoin } from "../../../../cosmos/base/v1beta1/coin";
-import { Equivocation } from "../../../../cosmos/evidence/v1beta1/evidence";
-import { Duration } from "../../../../google/protobuf/duration";
-import { Timestamp } from "../../../../google/protobuf/timestamp";
-import { Height } from "../../../../ibc/core/client/v1/client";
-import { ClientState } from "../../../../ibc/lightclients/tendermint/v1/tendermint";
-import { PublicKey } from "../../../../tendermint/crypto/keys";
-import { ValidatorSetChangePacketData } from "../../v1/wire";
+import { Coin, DecCoin } from "../../../../cosmos/base/v1beta1/coin.js";
+import { Equivocation } from "../../../../cosmos/evidence/v1beta1/evidence.js";
+import { Duration } from "../../../../google/protobuf/duration.js";
+import { Timestamp } from "../../../../google/protobuf/timestamp.js";
+import { Height } from "../../../../ibc/core/client/v1/client.js";
+import { ClientState } from "../../../../ibc/lightclients/tendermint/v1/tendermint.js";
+import { PublicKey } from "../../../../tendermint/crypto/keys.js";
+import { ValidatorSetChangePacketData } from "../../v1/wire.js";
 
 export const protobufPackage = "interchain_security.ccv.provider.v1";
 

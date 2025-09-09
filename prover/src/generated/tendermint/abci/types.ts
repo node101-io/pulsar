@@ -18,11 +18,11 @@ import {
   type ServiceError,
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
-import { Timestamp } from "../../google/protobuf/timestamp";
-import { PublicKey } from "../crypto/keys";
-import { ProofOps } from "../crypto/proof";
-import { ConsensusParams } from "../types/params";
-import { BlockIDFlag, blockIDFlagFromJSON, blockIDFlagToJSON } from "../types/validator";
+import { Timestamp } from "../../google/protobuf/timestamp.js";
+import { PublicKey } from "../crypto/keys.js";
+import { ProofOps } from "../crypto/proof.js";
+import { ConsensusParams } from "../types/params.js";
+import { BlockIDFlag, blockIDFlagFromJSON, blockIDFlagToJSON } from "../types/validator.js";
 
 export const protobufPackage = "tendermint.abci";
 

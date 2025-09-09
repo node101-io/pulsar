@@ -18,7 +18,7 @@ import {
   type ServiceError,
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
-import { Params } from "./params";
+import { Params } from "./params.js";
 
 export const protobufPackage = "interchain_security.minakeys";
 

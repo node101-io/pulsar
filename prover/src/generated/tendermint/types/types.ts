@@ -6,10 +6,10 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Timestamp } from "../../google/protobuf/timestamp";
-import { Proof } from "../crypto/proof";
-import { Consensus } from "../version/types";
-import { BlockIDFlag, blockIDFlagFromJSON, blockIDFlagToJSON, ValidatorSet } from "./validator";
+import { Timestamp } from "../../google/protobuf/timestamp.js";
+import { Proof } from "../crypto/proof.js";
+import { Consensus } from "../version/types.js";
+import { BlockIDFlag, blockIDFlagFromJSON, blockIDFlagToJSON, ValidatorSet } from "./validator.js";
 
 export const protobufPackage = "tendermint.types";
 

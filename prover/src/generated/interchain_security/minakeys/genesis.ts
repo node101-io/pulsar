@@ -6,9 +6,9 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { KeyStore } from "./key_store";
-import { Params } from "./params";
-import { VoteExt } from "./vote_ext";
+import { KeyStore } from "./key_store.js";
+import { Params } from "./params.js";
+import { VoteExt } from "./vote_ext.js";
 
 export const protobufPackage = "interchain_security.minakeys";
 

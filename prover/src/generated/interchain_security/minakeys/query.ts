@@ -18,10 +18,10 @@ import {
   type ServiceError,
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
-import { PageRequest, PageResponse } from "../../cosmos/base/query/v1beta1/pagination";
-import { KeyStore } from "./key_store";
-import { Params } from "./params";
-import { VoteExt } from "./vote_ext";
+import { PageRequest, PageResponse } from "../../cosmos/base/query/v1beta1/pagination.js";
+import { KeyStore } from "./key_store.js";
+import { Params } from "./params.js";
+import { VoteExt } from "./vote_ext.js";
 
 export const protobufPackage = "interchain_security.minakeys";
 

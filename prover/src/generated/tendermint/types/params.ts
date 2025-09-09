@@ -6,7 +6,7 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Duration } from "../../google/protobuf/duration";
+import { Duration } from "../../google/protobuf/duration.js";
 
 export const protobufPackage = "tendermint.types";
 

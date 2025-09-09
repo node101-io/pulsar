@@ -6,12 +6,12 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Any } from "../../../google/protobuf/any";
-import { Duration } from "../../../google/protobuf/duration";
-import { Timestamp } from "../../../google/protobuf/timestamp";
-import { ValidatorUpdate } from "../../../tendermint/abci/types";
-import { Header } from "../../../tendermint/types/types";
-import { Coin } from "../../base/v1beta1/coin";
+import { Any } from "../../../google/protobuf/any.js";
+import { Duration } from "../../../google/protobuf/duration.js";
+import { Timestamp } from "../../../google/protobuf/timestamp.js";
+import { ValidatorUpdate } from "../../../tendermint/abci/types.js";
+import { Header } from "../../../tendermint/types/types.js";
+import { Coin } from "../../base/v1beta1/coin.js";
 
 export const protobufPackage = "cosmos.staking.v1beta1";
 

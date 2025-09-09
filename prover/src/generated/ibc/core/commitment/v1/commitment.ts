@@ -6,7 +6,7 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { CommitmentProof } from "../../../../cosmos/ics23/v1/proofs";
+import { CommitmentProof } from "../../../../cosmos/ics23/v1/proofs.js";
 
 export const protobufPackage = "ibc.core.commitment.v1";
 

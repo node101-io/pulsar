@@ -6,8 +6,8 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Any } from "../../../../google/protobuf/any";
-import { Timestamp } from "../../../../google/protobuf/timestamp";
+import { Any } from "../../../../google/protobuf/any.js";
+import { Timestamp } from "../../../../google/protobuf/timestamp.js";
 
 export const protobufPackage = "interchain_security.ccv.consumer.v1";
 

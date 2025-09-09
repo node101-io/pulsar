@@ -6,13 +6,13 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { ProofSpec } from "../../../../cosmos/ics23/v1/proofs";
-import { Duration } from "../../../../google/protobuf/duration";
-import { Timestamp } from "../../../../google/protobuf/timestamp";
-import { SignedHeader } from "../../../../tendermint/types/types";
-import { ValidatorSet } from "../../../../tendermint/types/validator";
-import { Height } from "../../../core/client/v1/client";
-import { MerkleRoot } from "../../../core/commitment/v1/commitment";
+import { ProofSpec } from "../../../../cosmos/ics23/v1/proofs.js";
+import { Duration } from "../../../../google/protobuf/duration.js";
+import { Timestamp } from "../../../../google/protobuf/timestamp.js";
+import { SignedHeader } from "../../../../tendermint/types/types.js";
+import { ValidatorSet } from "../../../../tendermint/types/validator.js";
+import { Height } from "../../../core/client/v1/client.js";
+import { MerkleRoot } from "../../../core/commitment/v1/commitment.js";
 
 export const protobufPackage = "ibc.lightclients.tendermint.v1";
 

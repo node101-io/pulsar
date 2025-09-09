@@ -6,7 +6,7 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Any } from "../../../../google/protobuf/any";
+import { Any } from "../../../../google/protobuf/any.js";
 
 export const protobufPackage = "ibc.core.client.v1";
 

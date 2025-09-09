@@ -6,9 +6,9 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Timestamp } from "../../google/protobuf/timestamp";
-import { LightBlock, Vote } from "./types";
-import { Validator } from "./validator";
+import { Timestamp } from "../../google/protobuf/timestamp.js";
+import { LightBlock, Vote } from "./types.js";
+import { Validator } from "./validator.js";
 
 export const protobufPackage = "tendermint.types";
 

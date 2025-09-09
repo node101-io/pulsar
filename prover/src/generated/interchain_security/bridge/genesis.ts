@@ -6,8 +6,8 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Params } from "./params";
-import { BridgeState } from "./state";
+import { Params } from "./params.js";
+import { BridgeState } from "./state.js";
 
 export const protobufPackage = "interchain_security.bridge";
 

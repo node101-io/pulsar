@@ -6,7 +6,7 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { PublicKey } from "../crypto/keys";
+import { PublicKey } from "../crypto/keys.js";
 
 export const protobufPackage = "tendermint.types";
 

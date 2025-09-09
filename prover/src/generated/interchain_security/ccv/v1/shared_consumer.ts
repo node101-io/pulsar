@@ -6,9 +6,9 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Duration } from "../../../google/protobuf/duration";
-import { ClientState, ConsensusState } from "../../../ibc/lightclients/tendermint/v1/tendermint";
-import { ValidatorUpdate } from "../../../tendermint/abci/types";
+import { Duration } from "../../../google/protobuf/duration.js";
+import { ClientState, ConsensusState } from "../../../ibc/lightclients/tendermint/v1/tendermint.js";
+import { ValidatorUpdate } from "../../../tendermint/abci/types.js";
 
 export const protobufPackage = "interchain_security.ccv.v1";
 

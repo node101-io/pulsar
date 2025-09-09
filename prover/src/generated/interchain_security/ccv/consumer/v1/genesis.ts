@@ -6,11 +6,11 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Timestamp } from "../../../../google/protobuf/timestamp";
-import { ClientState, ConsensusState } from "../../../../ibc/lightclients/tendermint/v1/tendermint";
-import { ValidatorUpdate } from "../../../../tendermint/abci/types";
-import { ConsumerParams, ProviderInfo } from "../../v1/shared_consumer";
-import { ConsumerPacketData } from "../../v1/wire";
+import { Timestamp } from "../../../../google/protobuf/timestamp.js";
+import { ClientState, ConsensusState } from "../../../../ibc/lightclients/tendermint/v1/tendermint.js";
+import { ValidatorUpdate } from "../../../../tendermint/abci/types.js";
+import { ConsumerParams, ProviderInfo } from "../../v1/shared_consumer.js";
+import { ConsumerPacketData } from "../../v1/wire.js";
 
 export const protobufPackage = "interchain_security.ccv.consumer.v1";
 
