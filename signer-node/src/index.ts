@@ -1,5 +1,5 @@
 import express, { Request, Response } from "express";
-import { fetchAccount, Field, Poseidon, PrivateKey, PublicKey, Signature } from "o1js";
+import { fetchAccount, Field, Mina, Poseidon, PrivateKey, PublicKey, Signature } from "o1js";
 import {
     actionListAdd,
     CalculateMaxWithBalances,
@@ -158,7 +158,13 @@ const contractInstance: SettlementContract = new SettlementContract(
 
 const port: number = Number(process.env.PORT ?? 6000);
 
-setMinaNetwork(process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet");
+// setMinaNetwork(process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet");
+Mina.setActiveInstance(
+    Mina.Network({
+        mina: `${process.env.REMOTE_SERVER_URL}:8080/graphql`,
+        archive: `${process.env.REMOTE_SERVER_URL}:8282`,
+    })
+);
 
 const app = express();
 app.use(express.json());
