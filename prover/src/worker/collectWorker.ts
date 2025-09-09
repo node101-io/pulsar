@@ -134,7 +134,10 @@ await createWorker<CollectSignatureJob, void>({
             // todo validate instead of assuming
             const finalActionState = actions[actions.length - 1].hash;
 
-            const signatureResponses = await collectSignatures(ENDPOINTS, finalActionState);
+            const signatureResponses = await collectSignatures(
+                [process.env.PULSAR_SERVER_URL!],
+                finalActionState
+            );
 
             const includedActionEntries = Array.from(
                 getIncludedActions(pulsarActions, signatureResponses[0].mask).entries()
