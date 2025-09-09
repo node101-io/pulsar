@@ -289,11 +289,6 @@ async function showMainMenu(): Promise<"deposit" | "withdraw" | "warm-up-cache" 
                     value: "withdraw",
                     short: "Withdraw",
                 },
-                {
-                    name: "🔥 Warm-up Cache",
-                    value: "warm-up-cache",
-                    short: "Warm-up Cache",
-                },
                 new inquirer.Separator(),
                 {
                     name: "🚪 Exit Application",
@@ -309,11 +304,78 @@ async function showMainMenu(): Promise<"deposit" | "withdraw" | "warm-up-cache" 
     return action;
 }
 
+async function showFirstMenu(): Promise<"warm-up-cache" | "contract-actions"> {
+    console.log("\n");
+    const { action } = await inquirer.prompt([
+        {
+            type: "list",
+            name: "action",
+            message: "🎯 What would you like to do?",
+            choices: [
+                {
+                    name: "🔥 Warm-up Cache",
+                    value: "warm-up-cache",
+                    short: "Warm-up Cache",
+                },
+                {
+                    name: "🏛️ Contract Actions (Deposit/Withdraw)",
+                    value: "contract-actions",
+                    short: "Contract Actions",
+                },
+            ],
+            pageSize: 10,
+            loop: false,
+        },
+    ]);
+
+    return action;
+}
+
+async function showExitMenu(): Promise<"exit" | "main-menu"> {
+    console.log("\n");
+    const { action } = await inquirer.prompt([
+        {
+            type: "list",
+            name: "action",
+            message: "🎯 What would you like to do?",
+            choices: [
+                {
+                    name: "🚪 Exit Application",
+                    value: "exit",
+                    short: "Exit",
+                },
+                {
+                    name: "🏠 Return to Main Menu",
+                    value: "main-menu",
+                    short: "Main Menu",
+                },
+            ],
+            pageSize: 10,
+            loop: false,
+        },
+    ]);
+
+    return action;
+}
+
 async function main() {
     try {
         printHeader();
 
         await validateEnvironment();
+
+        const firstAction = await showFirstMenu();
+
+        if (firstAction === "warm-up-cache") {
+            await performWarmUpCache();
+
+            const nextAction = await showExitMenu();
+            if (nextAction === "exit") {
+                console.log("\n Exit cli");
+                process.exit(0);
+            }
+        }
+
         const { signerPrivateKey, contractPrivateKey, contractInstance } =
             await initializeContract();
 
@@ -336,8 +398,6 @@ async function main() {
                     await performDeposit(signerPrivateKey, contractPrivateKey, contractInstance);
                 } else if (action === "withdraw") {
                     await performWithdraw(signerPrivateKey, contractPrivateKey, contractInstance);
-                } else if (action === "warm-up-cache") {
-                    await performWarmUpCache();
                 }
 
                 const { continueChoice } = await inquirer.prompt([
@@ -400,8 +460,6 @@ async function main() {
                             contractPrivateKey,
                             contractInstance
                         );
-                    } else if (action === "warm-up-cache") {
-                        await performWarmUpCache();
                     }
                 }
             }
