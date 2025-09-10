@@ -1,6 +1,7 @@
 services:
     mongo:
         image: mongo:7-jammy
+        networks: [pulsar-net]
         restart: unless-stopped
         environment:
             DOCKER: "1"
@@ -9,8 +10,8 @@ services:
             MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
         volumes:
             - signer-mongo-data:/data/db
-        ports:
-            - "27017:27017"
+        expose:
+            - 27017
 
     signer-node:
         build:
