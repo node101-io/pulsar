@@ -112,7 +112,8 @@ function isValidVerifyActionListRequest(body: unknown): body is VerifyActionList
             typeof actionData.public_key !== "string" ||
             typeof actionData.amount !== "string" ||
             typeof actionData.action_type !== "string" ||
-            typeof actionData.block_height !== "number"
+            typeof actionData.cosmos_address !== "string" ||
+            typeof actionData.cosmos_signature !== "string"
         ) {
             return false;
         }
@@ -183,10 +184,7 @@ app.post(
     ) => {
         try {
             if (!isValidVerifyActionListRequest(req.body)) {
-                throw new ValidationError(
-                    "Invalid request format",
-                    "Request must include 'actions' array, 'balances' object, 'witness' string, 'settled_height' number, and 'next_height' number"
-                );
+                throw new ValidationError("Invalid request format");
             }
 
             const { actions, balances } = req.body;
