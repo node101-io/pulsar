@@ -82,6 +82,8 @@ import {
 } from './test/mock.js';
 import { TestUtils } from './utils/testUtils.js';
 import { DeployScripts } from './scripts/deploy.js';
+import { PulsarEncoder } from './utils/cosmosUtils.js';
+
 export {
   merkleActionsAdd,
   emptyActionListHash,
@@ -147,4 +149,5 @@ export {
   mockValidatorList,
   TestUtils,
   DeployScripts,
+  PulsarEncoder,
 };
