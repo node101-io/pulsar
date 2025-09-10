@@ -7,7 +7,7 @@ import {
     merkleActionsAdd,
     PulsarAction,
     PulsarAuth,
-    setMinaNetwork,
+    PulsarEncoder,
     SettlementContract,
 } from "pulsar-contracts";
 import {
@@ -374,10 +374,7 @@ function validateActionList(rawActions: PulsarActionData[]): {
 
         const pulsarAction = new PulsarAction({
             type: Field(actionType),
-            account: PublicKey.from({
-                x: fromAddress(action.public_key).x,
-                isOdd: fromAddress(action.public_key).isOdd,
-            }),
+            account: PulsarEncoder.fromAddress(action.public_key),
             amount: Field(action.amount),
             pulsarAuth: PulsarAuth.empty(),
         });
@@ -398,133 +395,4 @@ function validateActionList(rawActions: PulsarActionData[]): {
     }
 
     return { actions, finalActionState: actionState.toString() };
-}
-
-const PUBLIC_KEY_X_BYTE_SIZE = 32;
-const PUBLIC_KEY_IS_ODD_BYTE_SIZE = 1;
-const PUBLIC_KEY_TOTAL_BYTE_SIZE = PUBLIC_KEY_X_BYTE_SIZE + PUBLIC_KEY_IS_ODD_BYTE_SIZE;
-
-function marshalBytes(pk: PublicKey): Uint8Array {
-    if (pk.x === null || pk.x === undefined) {
-        throw new Error("cannot marshal PublicKey: pk.x is nil");
-    }
-
-    const out = new Uint8Array(PUBLIC_KEY_TOTAL_BYTE_SIZE);
-
-    const xBytes = bigintToBytes(pk.x.toBigInt());
-
-    if (xBytes.length > PUBLIC_KEY_X_BYTE_SIZE) {
-        throw new Error(
-            `PublicKey.X is too large: got ${xBytes.length} bytes, max ${PUBLIC_KEY_X_BYTE_SIZE} bytes`
-        );
-    }
-
-    const offset = PUBLIC_KEY_X_BYTE_SIZE - xBytes.length;
-    out.set(xBytes, offset);
-
-    out[PUBLIC_KEY_X_BYTE_SIZE] = pk.isOdd.toBoolean() ? 0x01 : 0x00;
-
-    return out;
-}
-
-function toAddress(pk: PublicKey): string {
-    const pkBytes = marshalBytes(pk);
-
-    return base58Encode(pkBytes);
-}
-
-function bigintToBytes(value: bigint): Uint8Array {
-    if (value === 0n) {
-        return new Uint8Array([0]);
-    }
-
-    const bytes: number[] = [];
-    let temp = value;
-
-    while (temp > 0n) {
-        bytes.unshift(Number(temp & 0xffn));
-        temp = temp >> 8n;
-    }
-
-    return new Uint8Array(bytes);
-}
-
-function base58Encode(bytes: Uint8Array): string {
-    const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-
-    let num = 0n;
-    for (let i = 0; i < bytes.length; i++) {
-        num = num * 256n + BigInt(bytes[i]);
-    }
-
-    if (num === 0n) {
-        return alphabet[0];
-    }
-
-    let result = "";
-    while (num > 0n) {
-        const remainder = num % 58n;
-        num = num / 58n;
-        result = alphabet[Number(remainder)] + result;
-    }
-
-    for (let i = 0; i < bytes.length && bytes[i] === 0; i++) {
-        result = alphabet[0] + result;
-    }
-
-    return result;
-}
-
-function base58Decode(encoded: string): Uint8Array {
-    const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-
-    let num = 0n;
-    for (let i = 0; i < encoded.length; i++) {
-        const char = encoded[i];
-        const index = alphabet.indexOf(char);
-        if (index === -1) {
-            throw new Error(`Invalid base58 character: ${char}`);
-        }
-        num = num * 58n + BigInt(index);
-    }
-
-    const bytes: number[] = [];
-    while (num > 0n) {
-        bytes.unshift(Number(num & 0xffn));
-        num = num >> 8n;
-    }
-
-    for (let i = 0; i < encoded.length && encoded[i] === alphabet[0]; i++) {
-        bytes.unshift(0);
-    }
-
-    return new Uint8Array(bytes);
-}
-
-function unmarshalBytes(bytes: Uint8Array): { x: bigint; isOdd: boolean } {
-    if (bytes.length !== PUBLIC_KEY_TOTAL_BYTE_SIZE) {
-        throw new Error(
-            `Invalid byte length: got ${bytes.length}, expected ${PUBLIC_KEY_TOTAL_BYTE_SIZE}`
-        );
-    }
-
-    const xBytes = bytes.slice(0, PUBLIC_KEY_X_BYTE_SIZE);
-    const x = bytesToBigint(xBytes);
-
-    const isOdd = bytes[PUBLIC_KEY_X_BYTE_SIZE] === 0x01;
-
-    return { x, isOdd };
-}
-
-function fromAddress(address: string): { x: bigint; isOdd: boolean } {
-    const bytes = base58Decode(address);
-    return unmarshalBytes(bytes);
-}
-
-function bytesToBigint(bytes: Uint8Array): bigint {
-    let result = 0n;
-    for (let i = 0; i < bytes.length; i++) {
-        result = result * 256n + BigInt(bytes[i]);
-    }
-    return result;
 }

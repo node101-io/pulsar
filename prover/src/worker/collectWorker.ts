@@ -5,11 +5,11 @@ import fetch from "node-fetch";
 import { fetchAccount, PublicKey, Signature } from "o1js";
 import {
     PulsarAction,
+    PulsarEncoder,
     SettlementContract,
     ValidateReducePublicInput,
     VALIDATOR_NUMBER,
 } from "pulsar-contracts";
-import { ENDPOINTS } from "../mock/mockEndpoints.js";
 import dotenv from "dotenv";
 import { getOrCreateActionBatch, updateActionBatchStatus } from "../db.js";
 import {
@@ -353,7 +353,7 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
             }
 
             return {
-                publicKey: action.account.toBase58(),
+                publicKey: PulsarEncoder.toAddress(action.account),
                 amount: action.amount.toString(),
                 actionType: actionType,
                 // todo need hex encoded string
@@ -367,7 +367,7 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
         const msgValue = MsgResolveActions.fromPartial({
             creator: account.address,
             actions,
-            nextBlockHeight: "123123",
+            nextBlockHeight: "123126",
             merkleWitness,
         });
 
@@ -431,11 +431,12 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
 
         return result;
     } catch (error) {
-        logger.error("Failed to send resolve actions to Cosmos", error as Error, {
-            url: process.env.PULSAR_RPC_ENDPOINT,
-            actionsCount: pulsarActions.length,
-            event: "pulsar_resolve_actions_failed",
-        });
+        // logger.error("Failed to send resolve actions to Cosmos", error as Error, {
+        //     url: process.env.PULSAR_RPC_ENDPOINT,
+        //     actionsCount: pulsarActions.length,
+        //     event: "pulsar_resolve_actions_failed",
+        // });
+        console.error(error);
         throw error;
     }
 }
