@@ -45,6 +45,7 @@ interface ProcessedAction {
 }
 
 interface VerifyActionListResponse {
+    error?: string;
     mask: boolean[];
 }
 
@@ -256,11 +257,12 @@ app.post(
 
             res.json(response);
         } catch (error) {
-            logger.error("Error signing:", error);
-            const response: VerifyActionListResponse = {
+            logger.error("Error in sign endpoint:", error);
+
+            res.status(400).json({
+                error: error instanceof Error ? error.message : "Unknown error occurred",
                 mask: [],
-            };
-            res.status(400).json(response);
+            });
         }
     }
 );
