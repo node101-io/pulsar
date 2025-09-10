@@ -39,7 +39,12 @@ func (k Keeper) ProcessActions(ctx sdk.Context, actions []types.PulsarAction, ne
 		result.ProcessedCount++
 
 		// Always update all action hash (regardless of whether action is approved or ignored)
-		allActionHash = k.UpdateHash(allActionHash, action)
+		newHash, err := k.UpdateHash(ctx, allActionHash, action)
+		if err != nil {
+			ctx.Logger().Error("Failed to update all action hash", "error", err)
+			return nil, err
+		}
+		allActionHash = newHash
 
 		ctx.Logger().Debug("Processing action",
 			"index", i,

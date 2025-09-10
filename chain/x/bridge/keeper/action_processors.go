@@ -50,7 +50,12 @@ func (k Keeper) processDepositAction(ctx sdk.Context, action types.PulsarAction,
 
 	// Add to approved actions and update hash
 	*approvedActions = append(*approvedActions, action)
-	*approvedHash = k.UpdateHash(*approvedHash, action)
+	newHash, err := k.UpdateHash(ctx, *approvedHash, action)
+	if err != nil {
+		ctx.Logger().Error("Failed to update hash", "error", err)
+		return false
+	}
+	*approvedHash = newHash
 
 	// Emit event
 	ctx.EventManager().EmitEvent(
@@ -91,7 +96,12 @@ func (k Keeper) processWithdrawalAction(ctx sdk.Context, action types.PulsarActi
 
 	// Add to approved actions and update hash
 	*approvedActions = append(*approvedActions, action)
-	*approvedHash = k.UpdateHash(*approvedHash, action)
+	newHash, err := k.UpdateHash(ctx, *approvedHash, action)
+	if err != nil {
+		ctx.Logger().Error("Failed to update hash", "error", err)
+		return false
+	}
+	*approvedHash = newHash
 
 	// Emit event
 	ctx.EventManager().EmitEvent(
@@ -118,7 +128,12 @@ func (k Keeper) processWithdrawalAction(ctx sdk.Context, action types.PulsarActi
 func (k Keeper) processSettlementAction(ctx sdk.Context, action types.PulsarAction, approvedActions *[]types.PulsarAction, approvedHash *string) {
 	// Settlement actions are always approved - just add to approved actions and update hash
 	*approvedActions = append(*approvedActions, action)
-	*approvedHash = k.UpdateHash(*approvedHash, action)
+	newHash, err := k.UpdateHash(ctx, *approvedHash, action)
+	if err != nil {
+		ctx.Logger().Error("Failed to update hash", "error", err)
+		return
+	}
+	*approvedHash = newHash
 
 	// Emit event
 	ctx.EventManager().EmitEvent(

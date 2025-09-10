@@ -51,31 +51,54 @@ func (k msgServer) ResolveActions(goCtx context.Context, msg *types.MsgResolveAc
 		ctx.Logger().Error("Signer verification failed", "error", err)
 		return nil, err
 	}
-	ctx.Logger().Info("Action list verified successfully")
+	ctx.Logger().Info("Action list verified successfully", "is_valid_list", isValidList)
+	ctx.Logger().Info("Length of is_valid_list", "length", len(isValidList))
 
-	for index, isValid := range isValidList {
-		if !isValid {
-			ctx.Logger().Warn("The action with this index is invalid", "index", index, "action", msg.Actions[index])
-			// Remove the action from the list
-			msg.Actions = append(msg.Actions[:index], msg.Actions[index+1:]...)
+	minLen := len(isValidList)
+	if len(msg.Actions) < minLen {
+		minLen = len(msg.Actions)
+	}
+
+	validActionsList := make([]types.PulsarAction, 0, minLen)
+	for i := 0; i < minLen; i++ {
+		if isValidList[i] {
+			validActionsList = append(validActionsList, msg.Actions[i])
+		} else {
+			a := msg.Actions[i]
+			ctx.Logger().Warn("Invalid action filtered out",
+				"index", i,
+				"action_public_key", a.PublicKey,
+				"action_type", a.ActionType,
+				"action_amount", a.Amount.String(),
+				"action_cosmos_address", a.CosmosAddress,
+				"action_cosmos_signature", a.CosmosSignature,
+			)
 		}
 	}
 
+	ctx.Logger().Info("Successfully removed invalid actions", "valid_actions", validActionsList)
+
 	// Process actions
-	result, err := k.Keeper.ProcessActions(ctx, msg.Actions, msg.NextBlockHeight)
+	result, err := k.Keeper.ProcessActions(ctx, validActionsList, msg.NextBlockHeight)
 	if err != nil {
 		ctx.Logger().Error("Failed to process actions", "error", err)
 		return nil, err
 	}
 
+	ctx.Logger().Info("Successfully processed actions", "valid_actions", validActionsList)
+
 	// Update settled block height
 	k.Keeper.SetSettledBlockHeight(ctx, msg.NextBlockHeight)
+
+	ctx.Logger().Info("Successfully set settled block height", "block_height", msg.NextBlockHeight)
 
 	// Add reward to prover (creator of the message)
 	if err := k.Keeper.AddProverReward(ctx, msg.Creator); err != nil {
 		ctx.Logger().Error("Failed to add prover reward", "error", err)
 		return nil, err
 	}
+
+	ctx.Logger().Info("Successfully added prover reward", "prover", msg.Creator)
 
 	// Emit main event
 	ctx.EventManager().EmitEvent(
