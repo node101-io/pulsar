@@ -18,6 +18,7 @@ services:
             context: .
             dockerfile: Dockerfile
         restart: unless-stopped
+        networks: [pulsar-signer-net]
         env_file: .env
         environment:
             DOCKER: "1"
