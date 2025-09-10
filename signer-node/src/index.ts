@@ -172,7 +172,7 @@ const app = express();
 app.use(express.json());
 
 initMongo().catch((error) => {
-    logger.error("Failed to initialize MongoDB:", error);
+    console.error("Failed to initialize MongoDB:", error);
     process.exit(1);
 });
 
@@ -191,23 +191,23 @@ app.post(
             await fetchAccount({ publicKey: contractInstance.address });
             const initialActionState = contractInstance.actionState.get().toString();
 
-            logger.info(`Processing sign request with ${actions.length} actions`);
-            logger.info(`Initial action state: ${initialActionState}`);
+            console.log(`Processing sign request with ${actions.length} actions`);
+            console.log(`Initial action state: ${initialActionState}`);
 
             const { finalActionState, actions: typedActions } = validateActionList(actions);
-            logger.info(`Calculated final action state: ${finalActionState}`);
+            console.log(`Calculated final action state: ${finalActionState}`);
 
             try {
                 const cachedSignature = await getSignature(initialActionState, finalActionState);
                 if (cachedSignature) {
-                    logger.info("Returning cached signature");
+                    console.log("Returning cached signature");
                     const response: VerifyActionListResponse = {
                         mask: cachedSignature.mask,
                     };
                     return res.json(response);
                 }
             } catch (cacheError) {
-                logger.warn("Cache lookup failed, proceeding with calculation:", cacheError);
+                console.log("Cache lookup failed, proceeding with calculation:", cacheError);
             }
 
             if (!typedActions || !Array.isArray(typedActions)) {
@@ -244,18 +244,19 @@ app.post(
                     timestamp: new Date(),
                 };
                 await saveSignature(initialActionState, finalActionState, cacheData);
-                logger.info("Signature cached successfully");
+                console.log("Signature cached successfully");
             } catch (saveError) {
-                logger.error("Failed to cache signature:", saveError);
+                console.error("Failed to cache signature:", saveError);
             }
 
             const response: VerifyActionListResponse = {
                 mask: mask.toJSON(),
             };
+            console.log("Response", response);
 
             res.json(response);
         } catch (error) {
-            logger.error("Error in sign endpoint:", error);
+            console.error("Error in sign endpoint:", error);
 
             res.status(400).json({
                 error: error instanceof Error ? error.message : "Unknown error occurred",
@@ -281,13 +282,13 @@ app.post(
             }
 
             const { initialActionState, finalActionState } = req.body;
-            logger.info(
+            console.log(
                 `Looking up cached signature for states: ${initialActionState} -> ${finalActionState}`
             );
 
             const clientIp = req.ip || req.socket.remoteAddress || "unknown";
             if (await isIpBlocked(clientIp)) {
-                logger.warn(`Blocked request from IP: ${clientIp}`);
+                console.log(`Blocked request from IP: ${clientIp}`);
                 const errorResponse: ErrorResponse = {
                     error: "Access denied",
                     details: "Too many invalid attempts. Please try again later.",
@@ -299,7 +300,7 @@ app.post(
                 const cachedSignature = await getSignature(initialActionState, finalActionState);
 
                 if (cachedSignature) {
-                    logger.info("Found cached signature");
+                    console.log("Found cached signature");
                     const response: GetSignatureResponse = {
                         validatorPublicKey: publicKey.toBase58(),
                         signature: cachedSignature.signature,
@@ -313,18 +314,18 @@ app.post(
                     return res.json(response);
                 }
 
-                logger.info("No cached signature found");
+                console.log("No cached signature found");
                 const response: GetSignatureResponse = {
                     cached: false,
                 };
                 return res.json(response);
             } catch (dbError) {
-                logger.error("Database error:", dbError);
+                console.error("Database error:", dbError);
                 await registerInvalidAttempt(clientIp);
                 throw new ProcessingError("Failed to lookup signature", "Database error occurred");
             }
         } catch (error) {
-            logger.error("Error in getSignature:", error);
+            console.error("Error in getSignature:", error);
 
             let errorResponse: ErrorResponse;
             const clientIp = req.ip || req.socket.remoteAddress || "unknown";
