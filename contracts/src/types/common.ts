@@ -1,7 +1,7 @@
 import { Bool, Field, MerkleList, Poseidon, Provable, Struct } from 'o1js';
 import { BATCH_SIZE } from '../utils/constants.js';
 
-export { List, emptyHash, ReduceMask };
+export { List, emptyHash, ReduceMask, PulsarActionData };
 
 const emptyHash = Poseidon.hash([Field(0)]);
 const nextHash = (hash: Field, value: Field) => Poseidon.hash([hash, value]);
@@ -29,4 +29,12 @@ class ReduceMask extends Struct({
   toField(): Field {
     return Field.fromBits(this.list);
   }
+}
+
+interface PulsarActionData {
+  public_key: string;
+  amount: string;
+  action_type: string;
+  cosmos_address: string;
+  cosmos_signature: string;
 }

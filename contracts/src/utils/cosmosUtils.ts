@@ -185,4 +185,12 @@ class PulsarEncoder {
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   }
+
+  static hexToBigint(hex: string): bigint {
+    const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
+    if (cleanHex.length === 0) {
+      return 0n;
+    }
+    return BigInt('0x' + cleanHex);
+  }
 }

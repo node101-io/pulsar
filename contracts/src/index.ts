@@ -84,6 +84,11 @@ import {
 import { TestUtils } from './utils/testUtils.js';
 import { DeployScripts } from './scripts/deploy.js';
 import { PulsarEncoder } from './utils/cosmosUtils.js';
+import {
+  CalculateFinalActionState,
+  validateActionList,
+  PulsarActionData,
+} from './utils/actionQueueUtils.js';
 
 export {
   merkleActionsAdd,
@@ -152,4 +157,7 @@ export {
   TestUtils,
   DeployScripts,
   PulsarEncoder,
+  PulsarActionData,
+  validateActionList,
+  CalculateFinalActionState,
 };
