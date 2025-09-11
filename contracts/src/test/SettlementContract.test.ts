@@ -30,7 +30,11 @@ import {
   log,
   logZkappState,
 } from '../utils/loggers';
-import { PulsarAction, PulsarAuth } from '../types/PulsarAction';
+import {
+  CosmosSignature,
+  PulsarAction,
+  PulsarAuth,
+} from '../types/PulsarAction';
 import { fetchRawActions } from '../utils/fetch';
 import { actionListAdd, emptyActionListHash } from '../types/actionHelpers';
 
@@ -299,7 +303,7 @@ describe('SettlementProof tests', () => {
       async () => {
         await zkapp.deposit(
           amount,
-          PulsarAuth.from(Field(0), [Field(0), Field(0)])
+          PulsarAuth.from(Field(0), CosmosSignature.empty())
         );
       }
     );
@@ -311,7 +315,7 @@ describe('SettlementProof tests', () => {
           ...senderKey.toPublicKey().toFields(),
           amount.value,
 
-          ...PulsarAuth.from(Field(0), [Field(0), Field(0)]).toFields(),
+          ...PulsarAuth.from(Field(0), CosmosSignature.empty()).toFields(),
         ])
       );
     }
@@ -333,7 +337,7 @@ describe('SettlementProof tests', () => {
         async () => {
           await zkapp.deposit(
             amount,
-            PulsarAuth.from(Field(0), [Field(0), Field(0)])
+            PulsarAuth.from(Field(0), CosmosSignature.empty())
           );
         }
       );
@@ -748,7 +752,7 @@ describe('SettlementProof tests', () => {
           depositListHash,
           ...feePayerAccount.toFields(),
           Field(1e10),
-          ...PulsarAuth.from(Field(0), [Field(0), Field(0)]).toFields(),
+          ...PulsarAuth.from(Field(0), CosmosSignature.empty()).toFields(),
         ])
       );
     });
@@ -832,7 +836,7 @@ describe('SettlementProof tests', () => {
           depositListHash,
           ...feePayerAccount.toFields(),
           Field(1e10 + 123),
-          ...PulsarAuth.from(Field(0), [Field(0), Field(0)]).toFields(),
+          ...PulsarAuth.from(Field(0), CosmosSignature.empty()).toFields(),
         ])
       );
 

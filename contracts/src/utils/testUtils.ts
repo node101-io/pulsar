@@ -24,7 +24,11 @@ import {
   SignaturePublicKeyMatrix,
 } from '../types/signaturePubKeyList.js';
 import { List } from '../types/common.js';
-import { PulsarAction, PulsarAuth } from '../types/PulsarAction.js';
+import {
+  CosmosSignature,
+  PulsarAction,
+  PulsarAuth,
+} from '../types/PulsarAction.js';
 import {
   actionListAdd,
   emptyActionListHash,
@@ -196,10 +200,7 @@ async function MockReducerVerifierProof(
   };
 }
 
-function GenerateTestActions(
-  numActions: number,
-  blockHeight: number
-): PulsarAction[] {
+function GenerateTestActions(numActions: number): PulsarAction[] {
   const actions: PulsarAction[] = [];
   for (let i = 0; i < numActions; i++) {
     const randomType = Math.ceil(Math.random() * 2);
@@ -208,8 +209,7 @@ function GenerateTestActions(
         PulsarAction.deposit(
           PrivateKey.random().toPublicKey(),
           UInt64.from(Math.floor(Math.random() * 2 ** 32)).value,
-          Field(blockHeight),
-          PulsarAuth.from(Field(0), [Field(0), Field(0)])
+          PulsarAuth.from(Field(0), CosmosSignature.empty())
         )
       );
     } else if (randomType === 2) {

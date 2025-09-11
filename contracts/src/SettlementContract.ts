@@ -120,12 +120,7 @@ class SettlementContract extends SmartContract {
     depositAccountUpdate.send({ to: this.address, amount });
 
     this.reducer.dispatch(
-      PulsarAction.deposit(
-        sender,
-        amount.value,
-        Field(10), // this.network.blockchainLength.getAndRequireEquals().value,
-        pulsarAuth
-      )
+      PulsarAction.deposit(sender, amount.value, pulsarAuth)
     );
   }
 

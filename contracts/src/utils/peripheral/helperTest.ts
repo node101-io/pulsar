@@ -1,5 +1,9 @@
 import { Bool, Field, PublicKey, Reducer } from 'o1js';
-import { PulsarAction, PulsarAuth } from '../../types/PulsarAction.js';
+import {
+  CosmosSignature,
+  PulsarAction,
+  PulsarAuth,
+} from '../../types/PulsarAction.js';
 import {
   ActionList,
   actionListAdd,
@@ -208,7 +212,7 @@ const actions = [
     hash: '26571710784269107345182238424422549657159204297563013465882485878649417789319',
   },
 ].map((rawAction) => {
-  const [type, account, isOdd, amount, cosmosAddress, sig1, sig2] =
+  const [type, account, isOdd, amount, cosmosAddress, r, s] =
     rawAction.actions[0];
 
   return new PulsarAction({
@@ -218,10 +222,13 @@ const actions = [
       isOdd: Bool.fromFields([Field.from(isOdd)]),
     }),
     amount: Field.from(amount),
-    pulsarAuth: PulsarAuth.from(Field.from(cosmosAddress || '0'), [
-      Field.from(sig1 || '0'),
-      Field.from(sig2 || '0'),
-    ]),
+    pulsarAuth: PulsarAuth.from(
+      Field.from(cosmosAddress || '0'),
+      new CosmosSignature({
+        r: Field.from(r || '0'),
+        s: Field.from(s || '0'),
+      })
+    ),
   });
 });
 

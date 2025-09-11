@@ -24,6 +24,7 @@ import { ProofGenerators } from './types/proofGenerators.js';
 import {
   Batch,
   PulsarAction,
+  CosmosSignature,
   PulsarAuth,
   PulsarActionBase,
 } from './types/PulsarAction.js';
@@ -140,6 +141,7 @@ export {
   ValidateReduceProgram,
   ValidateReducePublicInput,
   PulsarAction,
+  CosmosSignature,
   PulsarAuth,
   PulsarActionBase,
   Batch,

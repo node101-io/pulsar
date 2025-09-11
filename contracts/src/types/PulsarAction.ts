@@ -1,34 +1,55 @@
 import { Bool, Field, Poseidon, Provable, PublicKey, Struct } from 'o1js';
 import { BATCH_SIZE } from '../utils/constants.js';
 
-export { PulsarAction, Batch, PulsarActionBase, PulsarAuth };
+export { PulsarAction, Batch, PulsarActionBase, PulsarAuth, CosmosSignature };
+
+class CosmosSignature extends Struct({
+  r: Field,
+  s: Field,
+}) {
+  static empty() {
+    return new this({ r: Field(0), s: Field(0) });
+  }
+
+  static from(r: Field, s: Field) {
+    return new this({ r, s });
+  }
+
+  toFields() {
+    return [this.r, this.s];
+  }
+
+  toJSON() {
+    return {
+      r: this.r.toString(),
+      s: this.s.toString(),
+    };
+  }
+}
 
 class PulsarAuth extends Struct({
   cosmosAddress: Field,
-  cosmosSignature: Provable.Array(Field, 2),
+  cosmosSignature: CosmosSignature,
 }) {
   static empty() {
     return new this({
       cosmosAddress: Field(0),
-      cosmosSignature: [Field(0), Field(0)],
+      cosmosSignature: CosmosSignature.empty(),
     });
   }
 
-  static from(cosmosAddress: Field, cosmosSignature: Field[]) {
-    if (cosmosSignature.length !== 2) {
-      throw new Error('Cosmos signature must be an array of 2 Fields');
-    }
+  static from(cosmosAddress: Field, cosmosSignature: CosmosSignature) {
     return new this({ cosmosAddress, cosmosSignature });
   }
 
   toFields() {
-    return [this.cosmosAddress, ...this.cosmosSignature];
+    return [this.cosmosAddress, ...this.cosmosSignature.toFields()];
   }
 
   toJSON() {
     return {
       cosmosAddress: this.cosmosAddress.toString(),
-      cosmosSignature: this.cosmosSignature.map((f) => f.toString()),
+      cosmosSignature: this.cosmosSignature.toJSON(),
     };
   }
 }
@@ -46,12 +67,7 @@ class PulsarAction extends Struct({
   amount: Field,
   pulsarAuth: PulsarAuth,
 }) {
-  static deposit(
-    account: PublicKey,
-    amount: Field,
-    blockHeight: Field,
-    pulsarAuth: PulsarAuth
-  ) {
+  static deposit(account: PublicKey, amount: Field, pulsarAuth: PulsarAuth) {
     return new this({
       type: Field(1),
       account,
@@ -101,8 +117,7 @@ class PulsarAction extends Struct({
   }
 
   static fromRawAction(rawAction: string[]) {
-    const [type, x, isOdd, amount, cosmosAddress, sig1, sig2] =
-      rawAction.map(Field);
+    const [type, x, isOdd, amount, cosmosAddress, r, s] = rawAction.map(Field);
 
     return new PulsarAction({
       type,
@@ -110,7 +125,7 @@ class PulsarAction extends Struct({
       amount,
       pulsarAuth: new PulsarAuth({
         cosmosAddress,
-        cosmosSignature: [sig1, sig2],
+        cosmosSignature: new CosmosSignature({ r, s }),
       }),
     });
   }

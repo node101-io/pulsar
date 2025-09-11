@@ -1,4 +1,5 @@
 import { Bool, Field, PublicKey } from 'o1js';
+import { CosmosSignature } from '../types/PulsarAction';
 
 export { PulsarEncoder };
 
@@ -128,5 +129,60 @@ class PulsarEncoder {
       result = result * 256n + BigInt(bytes[i]);
     }
     return result;
+  }
+
+  static bigintToHex(value: bigint): string {
+    return '0x' + value.toString(16);
+  }
+
+  static stringToHex(str: string): string {
+    return '0x' + Buffer.from(str, 'utf8').toString('hex');
+  }
+
+  static hexToBytes(hex: string): Uint8Array {
+    const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
+    if (cleanHex.length % 2 !== 0) {
+      throw new Error('Invalid hex string length');
+    }
+
+    const bytes = new Uint8Array(cleanHex.length / 2);
+    for (let i = 0; i < cleanHex.length; i += 2) {
+      bytes[i / 2] = parseInt(cleanHex.slice(i, i + 2), 16);
+    }
+    return bytes;
+  }
+
+  static parseCosmosSignature(cosmosSignature: string): CosmosSignature {
+    const cosmosSignatureBytes = PulsarEncoder.hexToBytes(cosmosSignature);
+
+    if (cosmosSignatureBytes.length !== 64) {
+      throw new Error(
+        `Invalid cosmos signature length: expected 64 bytes, got ${cosmosSignatureBytes.length}`
+      );
+    }
+
+    const sigR = PulsarEncoder.bytesToBigint(cosmosSignatureBytes.slice(0, 32));
+    const sigS = PulsarEncoder.bytesToBigint(cosmosSignatureBytes.slice(32));
+
+    return new CosmosSignature({ r: Field(sigR), s: Field(sigS) });
+  }
+
+  static encodeSignature(signature: CosmosSignature): string {
+    const rBytes = PulsarEncoder.bigintToBytes(signature.r.toBigInt());
+    const sBytes = PulsarEncoder.bigintToBytes(signature.s.toBigInt());
+
+    const paddedR = new Uint8Array(32);
+    const paddedS = new Uint8Array(32);
+
+    paddedR.set(rBytes, 32 - rBytes.length);
+    paddedS.set(sBytes, 32 - sBytes.length);
+
+    const combined = new Uint8Array(64);
+    combined.set(paddedR, 0);
+    combined.set(paddedS, 32);
+
+    return Array.from(combined)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
   }
 }
