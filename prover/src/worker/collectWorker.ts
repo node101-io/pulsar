@@ -353,9 +353,10 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
                 publicKey: PulsarEncoder.toAddress(action.account),
                 amount: action.amount.toString(),
                 actionType: actionType,
-                // todo need hex encoded string
-                cosmosAddress: action.pulsarAuth.cosmosAddress.toString(),
-                cosmosSignature: action.pulsarAuth.cosmosSignature[0].toString(),
+                cosmosAddress: PulsarEncoder.bigintToHex(
+                    action.pulsarAuth.cosmosAddress.toBigInt()
+                ),
+                cosmosSignature: PulsarEncoder.encodeSignature(action.pulsarAuth.cosmosSignature),
             };
         });
 

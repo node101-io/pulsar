@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import { AccountUpdate, fetchAccount, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
 import { cacheCompile } from "../cache.js";
 import logger from "../logger.js";
-import { PulsarAuth } from "pulsar-contracts/build/src/types/PulsarAction.js";
+import { CosmosSignature, PulsarAuth } from "pulsar-contracts";
 dotenv.config();
 
 if (
@@ -129,7 +129,7 @@ async function sendDepositActions() {
                     async () => {
                         await contractInstance.deposit(
                             UInt64.from(1e9),
-                            PulsarAuth.from(Field(0), [Field(0), Field(0)])
+                            PulsarAuth.from(Field(0), CosmosSignature.empty())
                         );
                     }
                 );
@@ -151,7 +151,7 @@ async function sendDepositActions() {
                     async () => {
                         await contractInstance.deposit(
                             UInt64.from(1e9),
-                            PulsarAuth.from(Field(0), [Field(0), Field(0)])
+                            PulsarAuth.from(Field(0), CosmosSignature.empty())
                         );
                     }
                 );

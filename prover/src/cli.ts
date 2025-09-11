@@ -3,7 +3,7 @@ import { DeployScripts, setMinaNetwork, SettlementContract } from "pulsar-contra
 import dotenv from "dotenv";
 import { AccountUpdate, fetchAccount, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
 import { cacheCompile } from "./cache.js";
-import { PulsarAuth } from "pulsar-contracts/build/src/types/PulsarAction.js";
+import { CosmosSignature, PulsarAuth } from "pulsar-contracts";
 import { prettierAddress } from "./utils.js";
 import fs from "fs";
 
@@ -144,7 +144,8 @@ async function performDeposit(
             default: "1.0",
             validate: (input) => {
                 const num = parseFloat(input);
-                if (isNaN(num) || num <= 0) return "Amount must be a positive number (e.g., 0.1234, 5.678)";
+                if (isNaN(num) || num <= 0)
+                    return "Amount must be a positive number (e.g., 0.1234, 5.678)";
                 return true;
             },
         },
@@ -165,7 +166,7 @@ async function performDeposit(
                 async () => {
                     await contractInstance.deposit(
                         UInt64.from(parseFloat(depositAmount) * 1e9),
-                        PulsarAuth.from(Field(0), [Field(0), Field(0)])
+                        PulsarAuth.from(Field(0), CosmosSignature.empty())
                     );
                 }
             );
@@ -191,7 +192,7 @@ async function performDeposit(
                 async () => {
                     await contractInstance.deposit(
                         UInt64.from(parseFloat(depositAmount)),
-                        PulsarAuth.from(Field(0), [Field(0), Field(0)])
+                        PulsarAuth.from(Field(0), CosmosSignature.empty())
                     );
                 }
             );
@@ -231,7 +232,8 @@ async function performWithdraw(
             default: "1.0",
             validate: (input) => {
                 const num = parseFloat(input);
-                if (isNaN(num) || num <= 0) return "Amount must be a positive number (e.g., 0.1234, 5.678)";
+                if (isNaN(num) || num <= 0)
+                    return "Amount must be a positive number (e.g., 0.1234, 5.678)";
                 return true;
             },
         },

@@ -28,7 +28,8 @@ interface PulsarActionData {
     public_key: string;
     amount: string;
     action_type: string;
-    block_height: number;
+    cosmos_address: string;
+    cosmos_signature: string;
 }
 
 interface VerifyActionListRequest {
@@ -377,7 +378,10 @@ function validateActionList(rawActions: PulsarActionData[]): {
             type: Field(actionType),
             account: PulsarEncoder.fromAddress(action.public_key),
             amount: Field(action.amount),
-            pulsarAuth: PulsarAuth.empty(),
+            pulsarAuth: PulsarAuth.from(
+                Field(BigInt(action.cosmos_address)),
+                PulsarEncoder.parseCosmosSignature(action.cosmos_signature)
+            ),
         });
 
         return {
