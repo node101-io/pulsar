@@ -1,14 +1,10 @@
 import express, { Request, Response } from "express";
-import { fetchAccount, Field, Mina, Poseidon, PrivateKey, PublicKey, Signature } from "o1js";
+import { fetchAccount, Mina, PrivateKey, PublicKey, Signature } from "o1js";
 import {
-    actionListAdd,
     CalculateMaxWithBalances,
-    emptyActionListHash,
-    merkleActionsAdd,
-    PulsarAction,
-    PulsarAuth,
-    PulsarEncoder,
     SettlementContract,
+    PulsarActionData,
+    validateActionList,
 } from "pulsar-contracts";
 import {
     getSignature,
@@ -18,19 +14,10 @@ import {
     resetInvalidAttempts,
     saveSignature,
 } from "./db.js";
-import logger from "./logger.js";
 import dotenv from "dotenv";
 import { getSignatureLimiter } from "./rateLimit.js";
 
 dotenv.config();
-
-interface PulsarActionData {
-    public_key: string;
-    amount: string;
-    action_type: string;
-    cosmos_address: string;
-    cosmos_signature: string;
-}
 
 interface VerifyActionListRequest {
     actions: PulsarActionData[];
@@ -38,11 +25,6 @@ interface VerifyActionListRequest {
     witness: string;
     settled_height: number;
     next_height: number;
-}
-
-interface ProcessedAction {
-    action: PulsarAction;
-    hash: bigint;
 }
 
 interface VerifyActionListResponse {
@@ -195,7 +177,10 @@ app.post(
             console.log(`Processing sign request with ${actions.length} actions`);
             console.log(`Initial action state: ${initialActionState}`);
 
-            const { finalActionState, actions: typedActions } = validateActionList(actions);
+            const { finalActionState, actions: typedActions } = validateActionList(
+                contractInstance.actionState.get(),
+                actions
+            );
             console.log(`Calculated final action state: ${finalActionState}`);
 
             try {
@@ -356,48 +341,3 @@ app.post(
 );
 
 app.listen(port, () => console.log(`Signer up on http://localhost:${port}`));
-
-function validateActionList(rawActions: PulsarActionData[]): {
-    actions: ProcessedAction[];
-    finalActionState: string;
-} {
-    if (rawActions.length === 0) {
-        return { actions: [], finalActionState: emptyActionListHash.toString() };
-    }
-
-    console.log(rawActions);
-    const actions: ProcessedAction[] = rawActions.map((action: PulsarActionData, index: number) => {
-        let actionType: number;
-        if (action.action_type === "deposit") {
-            actionType = 1;
-        } else {
-            actionType = 2;
-        }
-
-        const pulsarAction = new PulsarAction({
-            type: Field(actionType),
-            account: PulsarEncoder.fromAddress(action.public_key),
-            amount: Field(action.amount),
-            pulsarAuth: PulsarAuth.from(
-                Field(BigInt(action.cosmos_address)),
-                PulsarEncoder.parseCosmosSignature(action.cosmos_signature)
-            ),
-        });
-
-        return {
-            action: pulsarAction,
-            hash: Poseidon.hash(pulsarAction.toFields()).toBigInt(),
-        };
-    });
-
-    let actionState = contractInstance.actionState.get();
-    for (let index = 0; index < actions.length; index++) {
-        const action = actions[index];
-        actionState = merkleActionsAdd(
-            actionState,
-            actionListAdd(emptyActionListHash, action.action)
-        );
-    }
-
-    return { actions, finalActionState: actionState.toString() };
-}

@@ -1,5 +1,4 @@
 import { MongoClient, Collection, Document } from "mongodb";
-import logger from "./logger.js";
 
 interface CachedSignatureDoc extends Document {
     initialActionState: string;
@@ -41,8 +40,6 @@ export async function initMongo() {
         { timestamp: 1 },
         { expireAfterSeconds: 30 * 24 * 60 * 60 }
     );
-
-    logger.info(`MongoDB connected at ${uri}, using database "${db}"`);
 }
 
 export async function saveSignature(
@@ -64,11 +61,11 @@ export async function saveSignature(
             doc,
             { upsert: true }
         );
-        logger.info(
+        console.info(
             `Cached signature saved for states ${initialActionState} -> ${finalActionState}`
         );
     } catch (error) {
-        logger.error(`Failed to save signature: ${error}`);
+        console.error(`Failed to save signature: ${error}`);
         throw error;
     }
 }
@@ -82,7 +79,7 @@ export async function getSignature(
         finalActionState,
     });
     if (!doc) {
-        logger.info(
+        console.info(
             `No cached signature found for states ${initialActionState} -> ${finalActionState}`
         );
         return null;
