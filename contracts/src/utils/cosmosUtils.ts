@@ -1,5 +1,5 @@
 import { Bool, Field, PublicKey } from 'o1js';
-import { CosmosSignature } from '../types/PulsarAction';
+import { CosmosSignature } from '../types/PulsarAction.js';
 
 export { PulsarEncoder };
 
