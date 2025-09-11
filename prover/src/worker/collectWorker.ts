@@ -4,6 +4,7 @@ import { CollectSignatureJob, reduceQ } from "../workerConnection.js";
 import fetch from "node-fetch";
 import { fetchAccount, PublicKey, Signature } from "o1js";
 import {
+    CalculateFinalActionState,
     PulsarAction,
     PulsarEncoder,
     SettlementContract,
@@ -64,26 +65,18 @@ await createWorker<CollectSignatureJob, void>({
                 //     event: "existing_action_batch",
                 // });
                 console.log("Action batch already exists");
-                if (batch?.status === "settled") {
+                if (
+                    batch?.status === "settled" ||
+                    batch?.status === "reducing" ||
+                    batch?.status === "reduced"
+                ) {
                     // logger.info("Actions already settled, skipping", {
                     //     jobId: id,
                     //     blockHeight,
                     //     batchId: batch?.id,
                     //     event: "actions_already_settled",
                     // });
-                    console.log("Actions already settled, skipping");
-                    return;
-                }
-
-                if (batch?.status === "reducing" || batch?.status === "reduced") {
-                    // logger.info("Actions already being processed, skipping", {
-                    //     jobId: id,
-                    //     blockHeight,
-                    //     batchId: batch?.id,
-                    //     status: batch.status,
-                    //     event: "actions_already_processing",
-                    // });
-                    console.log("Actions already being processed, skipping");
+                    console.log(`Batch status is ${batch?.status}, skipping`);
                     return;
                 }
 
@@ -126,7 +119,10 @@ await createWorker<CollectSignatureJob, void>({
 
             await sendResolveActions(pulsarActions, blockHeight);
 
-            const finalActionState = actions[actions.length - 1].hash;
+            const finalActionState = CalculateFinalActionState(
+                contractInstance.actionState.get(),
+                pulsarActions
+            ).toString();
 
             const signatureResponses = await collectSignatures(
                 [process.env.PULSAR_SERVER_URL!],
@@ -143,9 +139,9 @@ await createWorker<CollectSignatureJob, void>({
 
             await updateActionBatchStatus(actions, "reducing");
 
-            const jobId = `reduce-${blockHeight}`;
-            reduceQ.add(
-                jobId,
+            const reduceJobId = `reduce-${blockHeight}`;
+            await reduceQ.add(
+                reduceJobId,
                 {
                     includedActions: includedActionEntries,
                     signaturePubkeyArray: signatures.map(([signature, publicKey]) => [
@@ -161,11 +157,12 @@ await createWorker<CollectSignatureJob, void>({
                         delay: 5_000,
                     },
                     removeOnComplete: true,
-                    jobId: jobId,
+                    jobId: reduceJobId,
                 }
             );
+
             await updateActionBatchStatus(actions, "reducing", {
-                reduceJobId: jobId,
+                reduceJobId,
             });
 
             // logger.info("Added reduce job for block height", {
@@ -176,7 +173,7 @@ await createWorker<CollectSignatureJob, void>({
             //     includedActionsCount: includedActionEntries.length,
             //     event: "reduce_job_added",
             // });
-            console.log("Added reduce job for block height", { blockHeight, reduceJobId: jobId });
+            console.log("Added reduce job for block height", { blockHeight, reduceJobId });
         } catch (error) {
             // logger.jobFailed(id, "collect-signature", error as Error, {
             //     blockHeight,

@@ -7,7 +7,8 @@ import { VoteExt } from "./interfaces.js";
 type ProofKind = "actionStack" | "settlement" | "validateReduce";
 
 interface ActionBatchDoc extends Document {
-    actionHash: string;
+    initialState: string;
+    finalState: string;
     status: "collecting" | "reducing" | "reduced" | "settled";
     createdAt: Date;
     updatedAt: Date;
@@ -136,24 +137,6 @@ export async function deleteProof(kind: ProofKind, range_low: number, range_high
     logger.info(`Deleted ${kind} proof for range [${range_low}, ${range_high}]`);
 }
 
-export async function fetchMultipleProofs(
-    kind: ProofKind,
-    range_low: number,
-    range_high: number
-): Promise<(ActionStackProof | SettlementProof | ValidateReduceProof)[]> {
-    await initMongo();
-
-    const docs = await proofsCol
-        .find({ kind, range_low: { $lte: range_high }, range_high: { $gte: range_low } })
-        .sort({ range_high: -1 })
-        .toArray();
-
-    logger.info(`Fetched ${docs.length} ${kind} proofs for range [${range_low}, ${range_high}]`);
-
-    const proofs = docs.map((doc) => deserializeProof(doc));
-    return Promise.all(proofs);
-}
-
 export async function fetchProof(
     kind: ProofKind,
     range_low: number,
@@ -233,21 +216,22 @@ export async function fetchLastStoredBlock(): Promise<BlockDoc | null> {
     return block;
 }
 
-// convert this to indexed by actions
 export async function getOrCreateActionBatch(
     actions: { actions: string[][]; hash: string }[]
 ): Promise<{ isNew: boolean; batch: ActionBatchDoc | null }> {
+    if (actions.length === 0) {
+        return { isNew: false, batch: null };
+    }
     await initMongo();
 
-    const actionHash = getActionsHash(actions);
-    logger.dbOperation("action_hash_generated", "actionBatch", undefined, { actionHash });
-
     try {
-        const existing = await actionBatchCol.findOne({ actionHash });
-        logger.dbOperation("action_batch_lookup", "actionBatch", undefined, { 
-            actionHash, 
-            found: !!existing,
-            existing: existing ? { id: existing._id } : null
+        const initialState = actions[0].hash;
+        const finalState = actions[actions.length - 1].hash;
+
+        const existing = await actionBatchCol.findOne({ initialState, finalState });
+        logger.dbOperation("action_batch_lookup", "actionBatch", undefined, {
+            initialState,
+            finalState,
         });
 
         if (existing !== null) {
@@ -255,7 +239,8 @@ export async function getOrCreateActionBatch(
         }
 
         const newDoc: ActionBatchDoc = {
-            actionHash,
+            initialState,
+            finalState,
             status: "collecting",
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -264,13 +249,13 @@ export async function getOrCreateActionBatch(
 
         const result = await actionBatchCol.insertOne(newDoc);
 
-        logger.info(`Created new action batch with hash ${actionHash}`);
+        logger.info(`Created new action batch between states ${initialState} -> ${finalState}`);
         return {
             isNew: true,
             batch: { ...newDoc, _id: result.insertedId } as ActionBatchDoc,
         };
     } catch (error) {
-        logger.error(`Failed to get/create action batch for block ${actionHash}: ${error}`);
+        logger.error(`Failed to get/create action batch: ${error}`);
         throw error;
     }
 }
@@ -280,12 +265,17 @@ export async function updateActionBatchStatus(
     status: ActionBatchDoc["status"],
     additionalFields?: Partial<ActionBatchDoc>
 ) {
+    if (actions.length === 0) {
+        return;
+    }
+
     await initMongo();
 
-    const actionHash = getActionsHash(actions);
+    const initialState = actions[0].hash;
+    const finalState = actions[actions.length - 1].hash;
 
     await actionBatchCol.updateOne(
-        { actionHash },
+        { initialState, finalState },
         {
             $set: {
                 status,
@@ -295,7 +285,7 @@ export async function updateActionBatchStatus(
         }
     );
 
-    logger.info(`Updated actions: ${actions.map((a) => a.hash).join(", ")} to status ${status}`);
+    logger.info(`Updated actions batch ${initialState} -> ${finalState} to status ${status}`);
 }
 
 export async function getStuckActionBatches(
@@ -324,13 +314,4 @@ export async function incrementRetryCount(blockHeight: number) {
             $set: { updatedAt: new Date() },
         }
     );
-}
-
-export async function getActionBatch(blockHeight: number): Promise<ActionBatchDoc | null> {
-    await initMongo();
-    return await actionBatchCol.findOne({ blockHeight });
-}
-
-function getActionsHash(actions: { actions: string[][]; hash: string }[]): string {
-    return Poseidon.hash(actions.map((a) => Field(a.hash))).toString();
 }

@@ -1,5 +1,5 @@
 import inquirer from "inquirer";
-import { DeployScripts, setMinaNetwork, SettlementContract } from "pulsar-contracts";
+import { DeployScripts, PulsarEncoder, setMinaNetwork, SettlementContract } from "pulsar-contracts";
 import dotenv from "dotenv";
 import { AccountUpdate, fetchAccount, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
 import { cacheCompile } from "./cache.js";
@@ -44,13 +44,13 @@ async function validateEnvironment() {
     await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate validation time
 
     if (
-        !process.env.MINA_PRIVATE_KEY ||
+        !process.env.MINA_PRIVATE_KEY_HEX ||
         !process.env.CONTRACT_PRIVATE_KEY ||
         !process.env.MINA_NETWORK
     ) {
         stopSpinner();
         printError("Missing required environment variables:");
-        if (!process.env.MINA_PRIVATE_KEY) console.log("  - MINA_PRIVATE_KEY");
+        if (!process.env.MINA_PRIVATE_KEY_HEX) console.log("  - MINA_PRIVATE_KEY_HEX");
         if (!process.env.CONTRACT_PRIVATE_KEY) console.log("  - CONTRACT_PRIVATE_KEY");
         if (!process.env.MINA_NETWORK) console.log("  - MINA_NETWORK");
         process.exit(1);
@@ -62,7 +62,9 @@ async function initializeContract() {
     const stopSpinner = createLoadingSpinner("Initializing contract and network...");
     await new Promise((resolve) => setTimeout(resolve, 300));
 
-    const signerPrivateKey = PrivateKey.fromBase58(process.env.MINA_PRIVATE_KEY!);
+    const signerPrivateKey = PrivateKey.fromBigInt(
+        PulsarEncoder.hexToBigint(process.env.MINA_PRIVATE_KEY_HEX!)
+    );
     const contractPrivateKey = PrivateKey.fromBase58(process.env.CONTRACT_PRIVATE_KEY!);
 
     if (process.env.DOCKER) {
