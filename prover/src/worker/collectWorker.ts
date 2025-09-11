@@ -115,6 +115,8 @@ await createWorker<CollectSignatureJob, void>({
             // });
             console.log("Job started", { blockHeight, actionsCount: actions.length });
 
+            await fetchAccount({ publicKey: contractInstance.address });
+
             const pulsarActions = actions.map((a) => PulsarAction.fromRawAction(a.actions[0]));
 
             await sendResolveActions(pulsarActions, blockHeight);
