@@ -364,6 +364,7 @@ function validateActionList(rawActions: PulsarActionData[]): {
         return { actions: [], finalActionState: emptyActionListHash.toString() };
     }
 
+    console.log(rawActions);
     const actions: ProcessedAction[] = rawActions.map((action: PulsarActionData, index: number) => {
         let actionType: number;
         if (action.action_type === "deposit") {
