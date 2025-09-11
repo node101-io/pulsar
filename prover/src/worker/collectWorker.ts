@@ -192,106 +192,6 @@ await createWorker<CollectSignatureJob, void>({
     },
 });
 
-export async function collectSignatures(
-    endpoints: string[],
-    finalActionState: string,
-    { maxRounds = Infinity, backoffMs = 2_000 }: CollectOptions = {}
-): Promise<GetSignatureResponse[]> {
-    console.log("Starting signature collection from endpoints:", endpoints);
-    const minRequired = Math.ceil((VALIDATOR_NUMBER * 2) / 3);
-    const got: Array<GetSignatureResponse> = [];
-    const seen = new Set<string>();
-    let remaining = endpoints;
-
-    await fetchAccount({ publicKey: contractInstance.address });
-
-    let round = 1;
-    for (; round <= maxRounds && got.length < minRequired; round++) {
-        logger.debug("Starting signature collection round", {
-            round,
-            validatorsQueried: remaining.length,
-            signaturesCollected: got.length,
-            signaturesRequired: minRequired,
-            event: "signature_collection_round",
-        });
-
-        const results = await Promise.all(
-            remaining.map(async (url) => {
-                try {
-                    const r = await fetch(url + "/sign", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            initialActionState: contractInstance.actionState.get().toString(),
-                            finalActionState,
-                        }),
-                    });
-                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                    const data = (await r.json()) as GetSignatureResponse;
-
-                    if (!data.signature || !data.validatorPublicKey) {
-                        throw new Error("Invalid response format");
-                    }
-                    const validatorPublicKey = PublicKey.fromBase58(data.validatorPublicKey);
-                    const signature = Signature.fromJSON(JSON.parse(data.signature));
-                    const publicInput = ValidateReducePublicInput.fromJSON(
-                        JSON.parse(data.publicInput || "{}")
-                    );
-                    if (signature.verify(validatorPublicKey, publicInput.hash().toFields())) {
-                        return { url, data };
-                    }
-                    throw new Error("Signature verification failed");
-                } catch (err) {
-                    logger.warn("Failed to fetch signature from validator", {
-                        validatorUrl: url,
-                        round,
-                        error: err instanceof Error ? err.message : String(err),
-                        event: "signature_fetch_failed",
-                    });
-                    return { url, data: undefined };
-                }
-            })
-        );
-
-        results
-            .filter((r) => r.data && !seen.has(r.url))
-            .forEach((r) => {
-                seen.add(r.url);
-                got.push(r.data!);
-            });
-
-        if (got.length >= minRequired) break;
-
-        remaining = results.filter((r) => !r.data).map((r) => r.url);
-
-        if (remaining.length && round < maxRounds) {
-            await new Promise((res) => setTimeout(res, backoffMs * round));
-        }
-    }
-
-    if (got.length < minRequired) {
-        const error = new Error(`Got only ${got.length} signatures (need ${minRequired})`);
-        logger.error("Insufficient signatures collected", error, {
-            signaturesCollected: got.length,
-            signaturesRequired: minRequired,
-            totalRounds: round - 1,
-            validatorsQueried: endpoints.length,
-            event: "insufficient_signatures",
-        });
-        throw error;
-    }
-
-    logger.info("Successfully collected signatures", {
-        signaturesCollected: got.length,
-        signaturesRequired: minRequired,
-        totalRounds: round - 1,
-        validatorsQueried: endpoints.length,
-        event: "signatures_collected_successfully",
-    });
-
-    return got;
-}
-
 function getIncludedActions(pulsarActions: PulsarAction[], mask: boolean[]): Map<string, number> {
     const actionHashMap: Map<string, number> = new Map();
     for (let i = 0; i < pulsarActions.length; i++) {
@@ -437,4 +337,104 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
         console.error(error);
         throw error;
     }
+}
+
+export async function collectSignatures(
+    endpoints: string[],
+    finalActionState: string,
+    { maxRounds = Infinity, backoffMs = 2_000 }: CollectOptions = {}
+): Promise<GetSignatureResponse[]> {
+    console.log("Starting signature collection from endpoints:", endpoints);
+    const minRequired = Math.ceil((VALIDATOR_NUMBER * 2) / 3);
+    const got: Array<GetSignatureResponse> = [];
+    const seen = new Set<string>();
+    let remaining = endpoints;
+
+    await fetchAccount({ publicKey: contractInstance.address });
+
+    let round = 1;
+    for (; round <= maxRounds && got.length < minRequired; round++) {
+        logger.debug("Starting signature collection round", {
+            round,
+            validatorsQueried: remaining.length,
+            signaturesCollected: got.length,
+            signaturesRequired: minRequired,
+            event: "signature_collection_round",
+        });
+
+        const results = await Promise.all(
+            remaining.map(async (url) => {
+                try {
+                    const r = await fetch(url + ":6000/getSignature", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            initialActionState: contractInstance.actionState.get().toString(),
+                            finalActionState,
+                        }),
+                    });
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    const data = (await r.json()) as GetSignatureResponse;
+
+                    if (!data.signature || !data.validatorPublicKey) {
+                        throw new Error("Invalid response format");
+                    }
+                    const validatorPublicKey = PublicKey.fromBase58(data.validatorPublicKey);
+                    const signature = Signature.fromJSON(JSON.parse(data.signature));
+                    const publicInput = ValidateReducePublicInput.fromJSON(
+                        JSON.parse(data.publicInput || "{}")
+                    );
+                    if (signature.verify(validatorPublicKey, publicInput.hash().toFields())) {
+                        return { url, data };
+                    }
+                    throw new Error("Signature verification failed");
+                } catch (err) {
+                    logger.warn("Failed to fetch signature from validator", {
+                        validatorUrl: url,
+                        round,
+                        error: err instanceof Error ? err.message : String(err),
+                        event: "signature_fetch_failed",
+                    });
+                    return { url, data: undefined };
+                }
+            })
+        );
+
+        results
+            .filter((r) => r.data && !seen.has(r.url))
+            .forEach((r) => {
+                seen.add(r.url);
+                got.push(r.data!);
+            });
+
+        if (got.length >= minRequired) break;
+
+        remaining = results.filter((r) => !r.data).map((r) => r.url);
+
+        if (remaining.length && round < maxRounds) {
+            await new Promise((res) => setTimeout(res, backoffMs * round));
+        }
+    }
+
+    if (got.length < minRequired) {
+        const error = new Error(`Got only ${got.length} signatures (need ${minRequired})`);
+        logger.error("Insufficient signatures collected", error, {
+            signaturesCollected: got.length,
+            signaturesRequired: minRequired,
+            totalRounds: round - 1,
+            validatorsQueried: endpoints.length,
+            event: "insufficient_signatures",
+        });
+        throw error;
+    }
+
+    logger.info("Successfully collected signatures", {
+        signaturesCollected: got.length,
+        signaturesRequired: minRequired,
+        totalRounds: round - 1,
+        validatorsQueried: endpoints.length,
+        event: "signatures_collected_successfully",
+    });
+
+    return got;
 }
