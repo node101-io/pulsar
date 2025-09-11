@@ -9,6 +9,12 @@ import fs from "fs";
 
 dotenv.config();
 
+const signerPrivateKey = PrivateKey.fromBigInt(
+    PulsarEncoder.hexToBigint(process.env.MINA_PRIVATE_KEY_HEX!)
+);
+const contractPrivateKey = PrivateKey.fromBase58(process.env.CONTRACT_PRIVATE_KEY!);
+const contractInstance = new SettlementContract(contractPrivateKey.toPublicKey());
+
 function printHeader() {
     console.clear();
     console.log("\n╭─────────────────────────────────╮");
@@ -58,14 +64,8 @@ async function validateEnvironment() {
     stopSpinner();
 }
 
-async function initializeContract() {
+function setNetwork() {
     const stopSpinner = createLoadingSpinner("Initializing contract and network...");
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    const signerPrivateKey = PrivateKey.fromBigInt(
-        PulsarEncoder.hexToBigint(process.env.MINA_PRIVATE_KEY_HEX!)
-    );
-    const contractPrivateKey = PrivateKey.fromBase58(process.env.CONTRACT_PRIVATE_KEY!);
 
     if (process.env.DOCKER) {
         setMinaNetwork(process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet");
@@ -79,6 +79,25 @@ async function initializeContract() {
     }
 
     stopSpinner();
+}
+
+async function initializeSigner() {
+    const stopSpinner = createLoadingSpinner("Initializing signer account...");
+
+    const { account, error } = await fetchAccount({
+        publicKey: signerPrivateKey.toPublicKey(),
+    });
+
+    if (
+        account &&
+        Mina.getAccount(signerPrivateKey.toPublicKey())
+            .balance.greaterThan(UInt64.from(1e10))
+            .toBoolean()
+    ) {
+        stopSpinner();
+        console.log("Signer account balance is sufficient.");
+        return;
+    }
 
     const { privateKey } = await Lightnet.acquireKeyPair({
         isRegularAccount: true,
@@ -87,48 +106,28 @@ async function initializeContract() {
             : `${process.env.REMOTE_SERVER_URL}:8181`,
     });
 
-    stopSpinner();
     console.log(
         `🔑 Acquired lightnet account: ${privateKey.toPublicKey().toBase58().slice(0, 12)}...`
     );
 
-    const shouldDeploy = await inquirer.prompt([
-        {
-            type: "confirm",
-            name: "deployChoice",
-            message: `Do you want to deploy the contract to the ${process.env.MINA_NETWORK} network?`,
-            default: false,
-        },
-    ]);
-
-    if (shouldDeploy.deployChoice) {
-        const tx = await Mina.transaction(
-            { sender: privateKey.toPublicKey(), fee: 1e9 },
-            async () => {
-                const senderAccount = AccountUpdate.createSigned(privateKey.toPublicKey());
-                // AccountUpdate.fundNewAccount(privateKey.toPublicKey());
-                senderAccount.send({
-                    to: signerPrivateKey.toPublicKey(),
-                    amount: UInt64.from(1e10),
-                });
-            }
-        );
-        await DeployScripts.waitTransactionAndFetchAccount(
-            tx,
-            [privateKey],
-            [signerPrivateKey.toPublicKey(), privateKey.toPublicKey()]
-        );
-    }
+    const tx = await Mina.transaction({ sender: privateKey.toPublicKey(), fee: 1e9 }, async () => {
+        const senderAccount = AccountUpdate.createSigned(privateKey.toPublicKey());
+        AccountUpdate.fundNewAccount(privateKey.toPublicKey());
+        senderAccount.send({
+            to: signerPrivateKey.toPublicKey(),
+            amount: UInt64.from(1e10),
+        });
+    });
+    await DeployScripts.waitTransactionAndFetchAccount(
+        tx,
+        [privateKey],
+        [signerPrivateKey.toPublicKey(), privateKey.toPublicKey()]
+    );
 
     console.log(`🔑 Signer: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
     console.log(`📝 Contract: ${contractPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
     console.log(`🌐 Network: ${process.env.MINA_NETWORK}\n`);
-
-    return {
-        signerPrivateKey,
-        contractPrivateKey,
-        contractInstance: new SettlementContract(contractPrivateKey.toPublicKey()),
-    };
+    stopSpinner();
 }
 
 async function performDeposit(
@@ -183,9 +182,7 @@ async function performDeposit(
             stopSubmitSpinner();
 
             printSuccess("Deposit completed successfully!");
-            console.log(
-                `📍 From: ${prettierAddress(signerPrivateKey.toPublicKey().toBase58())}...`
-            );
+            console.log(`From: ${prettierAddress(signerPrivateKey.toPublicKey().toBase58())}...`);
         } else {
             stopSpinner();
             const stopTxSpinner = createLoadingSpinner("Building transaction...");
@@ -209,7 +206,7 @@ async function performDeposit(
             stopSubmitSpinner();
 
             printSuccess("Deposit completed successfully!");
-            console.log(`📍 From: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
+            console.log(`From: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
         }
     } catch (error) {
         stopSpinner();
@@ -267,7 +264,7 @@ async function performWithdraw(
             stopSubmitSpinner();
 
             printSuccess("Withdraw completed successfully!");
-            console.log(`📍 To: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
+            console.log(`To: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
         } else {
             stopSpinner();
             const stopTxSpinner = createLoadingSpinner("Building transaction...");
@@ -288,7 +285,7 @@ async function performWithdraw(
             stopSubmitSpinner();
 
             printSuccess("Withdraw completed successfully!");
-            console.log(`📍 To: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
+            console.log(`To: ${signerPrivateKey.toPublicKey().toBase58().slice(0, 12)}...`);
         }
     } catch (error) {
         stopSpinner();
@@ -413,6 +410,8 @@ async function main() {
 
         await validateEnvironment();
 
+        setNetwork();
+
         const firstAction = await showFirstMenu();
 
         if (firstAction === "warm-up-cache") {
@@ -425,8 +424,7 @@ async function main() {
             }
         }
 
-        const { signerPrivateKey, contractPrivateKey, contractInstance } =
-            await initializeContract();
+        await initializeSigner();
 
         const stopCompileSpinner = createLoadingSpinner(
             "Compiling contracts (this may take a moment)..."

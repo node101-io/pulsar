@@ -234,7 +234,6 @@ async function sendResolveActions(pulsarActions: PulsarAction[], blockHeight: nu
 
         const actions: CosmosPulsarAction[] = pulsarActions.map((action) => {
             let actionType = "";
-            // Todo: fix type issue in pulsar side
             if (PulsarAction.isDeposit(action).toBoolean()) {
                 actionType = "deposit";
             } else {
