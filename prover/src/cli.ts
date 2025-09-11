@@ -136,6 +136,20 @@ async function performDeposit(
 ) {
     console.log("\n🔄 Starting deposit process...\n");
 
+    const { depositAmount } = await inquirer.prompt([
+        {
+            type: "input",
+            name: "depositAmount",
+            message: "💰 Enter deposit amount (e.g., 0.1234, 5.678):",
+            default: "1.0",
+            validate: (input) => {
+                const num = parseFloat(input);
+                if (isNaN(num) || num <= 0) return "Amount must be a positive number (e.g., 0.1234, 5.678)";
+                return true;
+            },
+        },
+    ]);
+
     const stopSpinner = createLoadingSpinner("Preparing deposit transaction...");
 
     try {
@@ -150,7 +164,7 @@ async function performDeposit(
                 { sender: signerPrivateKey.toPublicKey(), fee: 1e9 },
                 async () => {
                     await contractInstance.deposit(
-                        UInt64.from(1e9),
+                        UInt64.from(parseFloat(depositAmount) * 1e9),
                         PulsarAuth.from(Field(0), [Field(0), Field(0)])
                     );
                 }
@@ -176,7 +190,7 @@ async function performDeposit(
                 { sender: signerPrivateKey.toPublicKey(), fee: 1e9 },
                 async () => {
                     await contractInstance.deposit(
-                        UInt64.from(1e9),
+                        UInt64.from(parseFloat(depositAmount)),
                         PulsarAuth.from(Field(0), [Field(0), Field(0)])
                     );
                 }
@@ -209,6 +223,20 @@ async function performWithdraw(
 ) {
     console.log("\n🔄 Starting withdraw process...\n");
 
+    const { withdrawAmount } = await inquirer.prompt([
+        {
+            type: "input",
+            name: "withdrawAmount",
+            message: "💸 Enter withdraw amount (e.g., 0.1234, 5.678):",
+            default: "1.0",
+            validate: (input) => {
+                const num = parseFloat(input);
+                if (isNaN(num) || num <= 0) return "Amount must be a positive number (e.g., 0.1234, 5.678)";
+                return true;
+            },
+        },
+    ]);
+
     const stopSpinner = createLoadingSpinner("Preparing withdraw transaction...");
 
     try {
@@ -221,7 +249,7 @@ async function performWithdraw(
             const tx = await Mina.transaction(
                 { sender: signerPrivateKey.toPublicKey(), fee: 1e9 },
                 async () => {
-                    await contractInstance.withdraw(UInt64.from(1e7));
+                    await contractInstance.withdraw(UInt64.from(parseFloat(withdrawAmount) * 1e9));
                 }
             );
             stopTxSpinner();
@@ -242,7 +270,7 @@ async function performWithdraw(
             const tx = await Mina.transaction(
                 { sender: signerPrivateKey.toPublicKey(), fee: 1e10 },
                 async () => {
-                    await contractInstance.withdraw(UInt64.from(1e9));
+                    await contractInstance.withdraw(UInt64.from(parseFloat(withdrawAmount)));
                 }
             );
             stopTxSpinner();

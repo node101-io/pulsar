@@ -29,7 +29,6 @@ import { encodeSecp256k1Pubkey } from "cosmwasm";
 dotenv.config();
 
 interface CollectOptions {
-    minRequired?: number;
     maxRounds?: number;
     backoffMs?: number;
 }
@@ -196,12 +195,10 @@ await createWorker<CollectSignatureJob, void>({
 export async function collectSignatures(
     endpoints: string[],
     finalActionState: string,
-    {
-        minRequired = Math.ceil((VALIDATOR_NUMBER * 2) / 3),
-        maxRounds = Infinity,
-        backoffMs = 2_000,
-    }: CollectOptions = {}
+    { maxRounds = Infinity, backoffMs = 2_000 }: CollectOptions = {}
 ): Promise<GetSignatureResponse[]> {
+    console.log("Starting signature collection from endpoints:", endpoints);
+    const minRequired = Math.ceil((VALIDATOR_NUMBER * 2) / 3);
     const got: Array<GetSignatureResponse> = [];
     const seen = new Set<string>();
     let remaining = endpoints;
