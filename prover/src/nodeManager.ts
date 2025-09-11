@@ -29,6 +29,10 @@ async function main() {
 
     minaClient.on("actions", async ({ blockHeight, actions }) => {
         logger.info(`Actions fetched for block ${blockHeight}: ${JSON.stringify(actions)}`);
+        if (actions.length === 0) {
+            logger.info(`No actions found for block ${blockHeight}, skipping...`);
+            return;
+        }
         await collectSignatureQ.add(
             "collect-" + blockHeight,
             {

@@ -1,6 +1,6 @@
 import { createWorker } from "./worker.js";
 import { CollectSignatureJob, reduceQ } from "../workerConnection.js";
-import logger from "../logger.js";
+// import logger from "../logger.js";
 import fetch from "node-fetch";
 import { fetchAccount, PublicKey, Signature } from "o1js";
 import {
@@ -51,46 +51,39 @@ await createWorker<CollectSignatureJob, void>({
     jobHandler: async ({ data, id }) => {
         const { blockHeight, actions } = data;
 
-        if (actions.length === 0) {
-            logger.warn("No actions found for block height", {
-                jobId: id,
-                blockHeight,
-                event: "no_actions_found",
-                workerId: "collectWorker",
-            });
-            return;
-        }
-
         try {
             const { isNew, batch } = await getOrCreateActionBatch(actions);
 
             if (!isNew) {
-                logger.debug("Action batch already exists", {
-                    jobId: id,
-                    batchId: batch?.id,
-                    status: batch?.status,
-                    blockHeight,
-                    actionsCount: actions.length,
-                    event: "existing_action_batch",
-                });
+                // logger.debug("Action batch already exists", {
+                //     jobId: id,
+                //     batchId: batch?.id,
+                //     status: batch?.status,
+                //     blockHeight,
+                //     actionsCount: actions.length,
+                //     event: "existing_action_batch",
+                // });
+                console.log("Action batch already exists");
                 if (batch?.status === "settled") {
-                    logger.info("Actions already settled, skipping", {
-                        jobId: id,
-                        blockHeight,
-                        batchId: batch?.id,
-                        event: "actions_already_settled",
-                    });
+                    // logger.info("Actions already settled, skipping", {
+                    //     jobId: id,
+                    //     blockHeight,
+                    //     batchId: batch?.id,
+                    //     event: "actions_already_settled",
+                    // });
+                    console.log("Actions already settled, skipping");
                     return;
                 }
 
                 if (batch?.status === "reducing" || batch?.status === "reduced") {
-                    logger.info("Actions already being processed, skipping", {
-                        jobId: id,
-                        blockHeight,
-                        batchId: batch?.id,
-                        status: batch.status,
-                        event: "actions_already_processing",
-                    });
+                    // logger.info("Actions already being processed, skipping", {
+                    //     jobId: id,
+                    //     blockHeight,
+                    //     batchId: batch?.id,
+                    //     status: batch.status,
+                    //     event: "actions_already_processing",
+                    // });
+                    console.log("Actions already being processed, skipping");
                     return;
                 }
 
@@ -101,36 +94,38 @@ await createWorker<CollectSignatureJob, void>({
                     Date.now() - batch.updatedAt.getTime() > stuckThreshold;
 
                 if (!isStuck) {
-                    logger.info("Actions already being collected, skipping", {
-                        jobId: id,
-                        blockHeight,
-                        batchId: batch?.id,
-                        status: batch?.status,
-                        event: "actions_already_collecting",
-                    });
+                    // logger.info("Actions already being collected, skipping", {
+                    //     jobId: id,
+                    //     blockHeight,
+                    //     batchId: batch?.id,
+                    //     status: batch?.status,
+                    //     event: "actions_already_collecting",
+                    // });
+                    console.log("Actions already being collected, skipping");
                     return;
                 }
 
-                logger.warn("Retrying stuck collection", {
-                    jobId: id,
-                    blockHeight,
-                    batchId: batch?.id,
-                    stuckDuration: Date.now() - batch.updatedAt.getTime(),
-                    event: "retry_stuck_collection",
-                });
+                // logger.warn("Retrying stuck collection", {
+                //     jobId: id,
+                //     blockHeight,
+                //     batchId: batch?.id,
+                //     stuckDuration: Date.now() - batch.updatedAt.getTime(),
+                //     event: "retry_stuck_collection",
+                // });
+                console.log("Retrying stuck collection");
             }
 
-            logger.jobStarted(id, "collect-signature", {
-                blockHeight,
-                actionsCount: actions.length,
-                workerId: "collectWorker",
-            });
+            // logger.jobStarted(id, "collect-signature", {
+            //     blockHeight,
+            //     actionsCount: actions.length,
+            //     workerId: "collectWorker",
+            // });
+            console.log("Job started", { blockHeight, actionsCount: actions.length });
 
             const pulsarActions = actions.map((a) => PulsarAction.fromRawAction(a.actions[0]));
 
             await sendResolveActions(pulsarActions);
 
-            // todo validate instead of assuming
             const finalActionState = actions[actions.length - 1].hash;
 
             const signatureResponses = await collectSignatures(
@@ -173,20 +168,22 @@ await createWorker<CollectSignatureJob, void>({
                 reduceJobId: jobId,
             });
 
-            logger.info("Added reduce job for block height", {
-                jobId: id,
-                blockHeight,
-                reduceJobId: jobId,
-                signaturesCollected: signatures.length,
-                includedActionsCount: includedActionEntries.length,
-                event: "reduce_job_added",
-            });
+            // logger.info("Added reduce job for block height", {
+            //     jobId: id,
+            //     blockHeight,
+            //     reduceJobId: jobId,
+            //     signaturesCollected: signatures.length,
+            //     includedActionsCount: includedActionEntries.length,
+            //     event: "reduce_job_added",
+            // });
+            console.log("Added reduce job for block height", { blockHeight, reduceJobId: jobId });
         } catch (error) {
-            logger.jobFailed(id, "collect-signature", error as Error, {
-                blockHeight,
-                actionsCount: actions.length,
-                workerId: "collectWorker",
-            });
+            // logger.jobFailed(id, "collect-signature", error as Error, {
+            //     blockHeight,
+            //     actionsCount: actions.length,
+            //     workerId: "collectWorker",
+            // });
+            console.error("Job failed", error);
             throw error;
         }
     },
@@ -202,8 +199,6 @@ function getIncludedActions(pulsarActions: PulsarAction[], mask: boolean[]): Map
     }
     return actionHashMap;
 }
-
-const TYPE_URL = `/${protobufPackage}.MsgResolveActions`;
 
 async function sendResolveActions(pulsarActions: PulsarAction[]) {
     try {
@@ -272,7 +267,7 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
         const msgBytes = MsgResolveActions.encode(msgValue).finish();
 
         const anyMsg = Any.fromPartial({
-            typeUrl: TYPE_URL,
+            typeUrl: `/${protobufPackage}.MsgResolveActions`,
             value: msgBytes,
         });
         const txBody = TxBody.fromPartial({
@@ -318,13 +313,16 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
             throw new Error(`Broadcast failed with code ${result.code}: ${result.rawLog}`);
         }
 
-        logger.info("Resolve actions sent successfully to Cosmos", {
+        // logger.info("Resolve actions sent successfully to Cosmos", {
+        //     txHash: result.transactionHash,
+        //     code: result.code,
+        //     height: result.height,
+        //     actionsCount: actions.length,
+        //     creator: account.address,
+        //     event: "pulsar_resolve_actions_success",
+        // });
+        console.log("Resolve actions sent successfully to Cosmos", {
             txHash: result.transactionHash,
-            code: result.code,
-            height: result.height,
-            actionsCount: actions.length,
-            creator: account.address,
-            event: "pulsar_resolve_actions_success",
         });
 
         return result;
@@ -354,12 +352,16 @@ export async function collectSignatures(
 
     let round = 1;
     for (; round <= maxRounds && got.length < minRequired; round++) {
-        logger.debug("Starting signature collection round", {
+        // logger.debug("Starting signature collection round", {
+        //     round,
+        //     validatorsQueried: remaining.length,
+        //     signaturesCollected: got.length,
+        //     signaturesRequired: minRequired,
+        //     event: "signature_collection_round",
+        // });
+        console.log("Starting signature collection round", {
             round,
             validatorsQueried: remaining.length,
-            signaturesCollected: got.length,
-            signaturesRequired: minRequired,
-            event: "signature_collection_round",
         });
 
         const results = await Promise.all(
@@ -389,12 +391,13 @@ export async function collectSignatures(
                     }
                     throw new Error("Signature verification failed");
                 } catch (err) {
-                    logger.warn("Failed to fetch signature from validator", {
-                        validatorUrl: url,
-                        round,
-                        error: err instanceof Error ? err.message : String(err),
-                        event: "signature_fetch_failed",
-                    });
+                    // logger.warn("Failed to fetch signature from validator", {
+                    //     validatorUrl: url,
+                    //     round,
+                    //     error: err instanceof Error ? err.message : String(err),
+                    //     event: "signature_fetch_failed",
+                    // });
+                    console.warn("Failed to fetch signature from validator", url, err);
                     return { url, data: undefined };
                 }
             })
@@ -418,23 +421,25 @@ export async function collectSignatures(
 
     if (got.length < minRequired) {
         const error = new Error(`Got only ${got.length} signatures (need ${minRequired})`);
-        logger.error("Insufficient signatures collected", error, {
-            signaturesCollected: got.length,
-            signaturesRequired: minRequired,
-            totalRounds: round - 1,
-            validatorsQueried: endpoints.length,
-            event: "insufficient_signatures",
-        });
+        // logger.error("Insufficient signatures collected", error, {
+        //     signaturesCollected: got.length,
+        //     signaturesRequired: minRequired,
+        //     totalRounds: round - 1,
+        //     validatorsQueried: endpoints.length,
+        //     event: "insufficient_signatures",
+        // });
+        console.error(error);
         throw error;
     }
 
-    logger.info("Successfully collected signatures", {
-        signaturesCollected: got.length,
-        signaturesRequired: minRequired,
-        totalRounds: round - 1,
-        validatorsQueried: endpoints.length,
-        event: "signatures_collected_successfully",
-    });
+    // logger.info("Successfully collected signatures", {
+    //     signaturesCollected: got.length,
+    //     signaturesRequired: minRequired,
+    //     totalRounds: round - 1,
+    //     validatorsQueried: endpoints.length,
+    //     event: "signatures_collected_successfully",
+    // });
+    console.log("Successfully collected signatures", { signaturesCollected: got.length });
 
     return got;
 }
