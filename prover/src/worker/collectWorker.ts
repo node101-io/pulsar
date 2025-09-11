@@ -124,7 +124,7 @@ await createWorker<CollectSignatureJob, void>({
 
             const pulsarActions = actions.map((a) => PulsarAction.fromRawAction(a.actions[0]));
 
-            await sendResolveActions(pulsarActions);
+            await sendResolveActions(pulsarActions, blockHeight);
 
             const finalActionState = actions[actions.length - 1].hash;
 
@@ -200,7 +200,7 @@ function getIncludedActions(pulsarActions: PulsarAction[], mask: boolean[]): Map
     return actionHashMap;
 }
 
-async function sendResolveActions(pulsarActions: PulsarAction[]) {
+async function sendResolveActions(pulsarActions: PulsarAction[], blockHeight: number) {
     try {
         const rpcEndpoint = process.env.PULSAR_RPC_ENDPOINT;
         const privateKeyHex = process.env.PULSAR_PRIVATE_KEY_HEX;
@@ -260,7 +260,7 @@ async function sendResolveActions(pulsarActions: PulsarAction[]) {
         const msgValue = MsgResolveActions.fromPartial({
             creator: account.address,
             actions,
-            nextBlockHeight: "123126",
+            nextBlockHeight: blockHeight.toString(),
             merkleWitness,
         });
 
