@@ -375,11 +375,14 @@ export async function collectSignatures(
                     });
                     if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
 
+                    console.log(r);
                     const responseText = await r.text();
+                    console.log("Response text:", responseText);
                     let data: GetSignatureResponse;
 
                     try {
                         data = JSON.parse(responseText) as GetSignatureResponse;
+                        console.log("Parsed data:", data);
                     } catch (parseError) {
                         throw new Error(
                             `Invalid JSON response: ${responseText.substring(0, 100)}...`
@@ -395,10 +398,13 @@ export async function collectSignatures(
                     }
 
                     const validatorPublicKey = PublicKey.fromBase58(data.validatorPublicKey);
+                    console.log("Validator public key:", validatorPublicKey.toBase58());
                     const signature = Signature.fromJSON(JSON.parse(data.signature));
+                    console.log("Signature:", signature.toBase58());
                     const publicInput = ValidateReducePublicInput.fromJSON(
                         JSON.parse(data.publicInput || "{}")
                     );
+                    console.log("Public input:", publicInput.toJSON());
                     if (signature.verify(validatorPublicKey, publicInput.hash().toFields())) {
                         return { url, data };
                     }

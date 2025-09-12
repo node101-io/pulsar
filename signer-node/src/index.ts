@@ -260,6 +260,7 @@ app.post(
         res: Response<GetSignatureResponse | ErrorResponse>
     ) => {
         try {
+            console.log("Received getSignature request:", req.body);
             if (!isValidGetSignatureRequest(req.body)) {
                 throw new ValidationError(
                     "Invalid request format",
@@ -295,7 +296,7 @@ app.post(
                         isValid: cachedSignature.isValid,
                         cached: true,
                     };
-
+                    console.log("Response", response);
                     await resetInvalidAttempts(clientIp);
                     return res.json(response);
                 }
