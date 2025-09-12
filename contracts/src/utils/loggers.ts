@@ -44,7 +44,6 @@ function enableLogs() {
 }
 
 function logZkappState(label: string, zkapp: SettlementContract) {
-  if (!logsEnabled) return;
   console.log(`${label.toUpperCase()}:`);
   console.table({
     actionState: zkapp.actionState.get().toString(),
