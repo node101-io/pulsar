@@ -3,7 +3,7 @@ import { DeployScripts, PulsarEncoder, setMinaNetwork, SettlementContract } from
 import dotenv from "dotenv";
 import { AccountUpdate, fetchAccount, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
 import { cacheCompile } from "./cache.js";
-import { CosmosSignature, PulsarAuth } from "pulsar-contracts";
+import { CosmosSignature, PulsarAuth, logZkappState } from "pulsar-contracts";
 import { prettierAddress } from "./utils.js";
 import fs from "fs";
 
@@ -91,7 +91,7 @@ async function initializeSigner() {
     if (
         account &&
         Mina.getAccount(signerPrivateKey.toPublicKey())
-            .balance.greaterThan(UInt64.from(1e10))
+            .balance.greaterThan(UInt64.from(0))
             .toBoolean()
     ) {
         stopSpinner();
@@ -317,7 +317,30 @@ async function performWarmUpCache() {
     }
 }
 
-async function showMainMenu(): Promise<"deposit" | "withdraw" | "warm-up-cache" | "exit"> {
+async function performLogContractState(contractInstance: SettlementContract) {
+    console.log("\n📊 Fetching contract state...\n");
+
+    const stopSpinner = createLoadingSpinner("Fetching contract account information...");
+
+    try {
+        await fetchAccount({ publicKey: contractInstance.address });
+        stopSpinner();
+
+        console.log("\n📋 Contract State Information:");
+        console.log("─".repeat(50));
+        logZkappState("Current Contract State", contractInstance);
+        console.log("─".repeat(50));
+
+        printSuccess("Contract state logged successfully!");
+    } catch (error) {
+        stopSpinner();
+        printError("Failed to fetch contract state!");
+        console.log(`Details: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+    }
+}
+
+async function showMainMenu(): Promise<"deposit" | "withdraw" | "log-state" | "exit"> {
     console.log("\n");
     const { action } = await inquirer.prompt([
         {
@@ -334,6 +357,11 @@ async function showMainMenu(): Promise<"deposit" | "withdraw" | "warm-up-cache" 
                     name: "💸 Make a Withdrawal",
                     value: "withdraw",
                     short: "Withdraw",
+                },
+                {
+                    name: "📊 Log Contract State",
+                    value: "log-state",
+                    short: "Log State",
                 },
                 new inquirer.Separator(),
                 {
@@ -445,6 +473,8 @@ async function main() {
                     await performDeposit(signerPrivateKey, contractPrivateKey, contractInstance);
                 } else if (action === "withdraw") {
                     await performWithdraw(signerPrivateKey, contractPrivateKey, contractInstance);
+                } else if (action === "log-state") {
+                    await performLogContractState(contractInstance);
                 }
 
                 const { continueChoice } = await inquirer.prompt([
@@ -507,6 +537,8 @@ async function main() {
                             contractPrivateKey,
                             contractInstance
                         );
+                    } else if (action === "log-state") {
+                        await performLogContractState(contractInstance);
                     }
                 }
             }

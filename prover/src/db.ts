@@ -58,9 +58,8 @@ export async function initMongo() {
 
     await blocksCol.createIndex({ height: 1 }, { unique: true });
 
-    await actionBatchCol.createIndex({ blockHeight: 1 });
+    await actionBatchCol.createIndex({ initialState: 1, finalState: 1 }, { unique: true });
     await actionBatchCol.createIndex({ status: 1, updatedAt: 1 });
-    await actionBatchCol.createIndex({ actionHash: 1 }, { unique: true });
 
     await storeBlock(
         0,

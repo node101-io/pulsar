@@ -89,6 +89,15 @@ import {
   validateActionList,
   PulsarActionData,
 } from './utils/actionQueueUtils.js';
+import {
+  writeJsonLog,
+  log,
+  table,
+  logZkappState,
+  enableLogs,
+  analyzeMethods,
+  logParams,
+} from './utils/loggers.js';
 
 export {
   merkleActionsAdd,
@@ -160,4 +169,11 @@ export {
   PulsarActionData,
   validateActionList,
   CalculateFinalActionState,
+  writeJsonLog,
+  log,
+  table,
+  logZkappState,
+  enableLogs,
+  analyzeMethods,
+  logParams,
 };
