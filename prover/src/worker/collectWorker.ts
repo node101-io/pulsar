@@ -373,12 +373,27 @@ export async function collectSignatures(
                             finalActionState,
                         }),
                     });
-                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                    const data = (await r.json()) as GetSignatureResponse;
+                    if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
 
-                    if (!data.signature || !data.validatorPublicKey) {
-                        throw new Error("Invalid response format");
+                    const responseText = await r.text();
+                    let data: GetSignatureResponse;
+
+                    try {
+                        data = JSON.parse(responseText) as GetSignatureResponse;
+                    } catch (parseError) {
+                        throw new Error(
+                            `Invalid JSON response: ${responseText.substring(0, 100)}...`
+                        );
                     }
+
+                    if ("error" in data) {
+                        throw new Error(`Server error: ${(data as any).error}`);
+                    }
+
+                    if (!data.cached || !data.signature || !data.validatorPublicKey) {
+                        throw new Error("No cached signature available");
+                    }
+
                     const validatorPublicKey = PublicKey.fromBase58(data.validatorPublicKey);
                     const signature = Signature.fromJSON(JSON.parse(data.signature));
                     const publicInput = ValidateReducePublicInput.fromJSON(
