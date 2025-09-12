@@ -4,6 +4,7 @@ import { CollectSignatureJob, reduceQ } from "../workerConnection.js";
 import fetch from "node-fetch";
 import { fetchAccount, PublicKey, Signature } from "o1js";
 import {
+    BATCH_SIZE,
     CalculateFinalActionState,
     PulsarAction,
     PulsarEncoder,
@@ -41,6 +42,13 @@ interface GetSignatureResponse {
     mask: boolean[];
     isValid?: boolean;
     cached: boolean;
+}
+
+interface SignatureResult {
+    validatorPublicKey: PublicKey;
+    signature: Signature;
+    publicInput: ValidateReducePublicInput;
+    mask: boolean[];
 }
 
 const contractInstance = new SettlementContract(
@@ -131,12 +139,13 @@ await createWorker<CollectSignatureJob, void>({
                 finalActionState
             );
 
-            const includedActionEntries = Array.from(
+            const includedActions = Array.from(
                 getIncludedActions(pulsarActions, signatureResponses[0].mask).entries()
             );
-            const signatures = signatureResponses.map((r) => [
-                Signature.fromJSON(JSON.parse(r.signature)),
-                PublicKey.fromBase58(r.validatorPublicKey),
+
+            let signaturePubkeyArray = signatureResponses.map((r) => [
+                r.signature.toBase58(),
+                r.validatorPublicKey.toBase58(),
             ]);
 
             await updateActionBatchStatus(actions, "reducing");
@@ -145,11 +154,8 @@ await createWorker<CollectSignatureJob, void>({
             await reduceQ.add(
                 reduceJobId,
                 {
-                    includedActions: includedActionEntries,
-                    signaturePubkeyArray: signatures.map(([signature, publicKey]) => [
-                        signature.toBase58(),
-                        publicKey.toBase58(),
-                    ]),
+                    includedActions,
+                    signaturePubkeyArray,
                     actions,
                 },
                 {
@@ -339,10 +345,10 @@ export async function collectSignatures(
     endpoints: string[],
     finalActionState: string,
     { maxRounds = Infinity, backoffMs = 2_000 }: CollectOptions = {}
-): Promise<GetSignatureResponse[]> {
+): Promise<SignatureResult[]> {
     console.log("Starting signature collection from endpoints:", endpoints);
     const minRequired = Math.ceil((VALIDATOR_NUMBER * 2) / 3);
-    const got: Array<GetSignatureResponse> = [];
+    const got: Array<SignatureResult> = [];
     const seen = new Set<string>();
     let remaining = endpoints;
 
@@ -398,16 +404,13 @@ export async function collectSignatures(
                     }
 
                     const validatorPublicKey = PublicKey.fromBase58(data.validatorPublicKey);
-                    console.log("Validator public key:", validatorPublicKey.toBase58());
-                    console.log("Signature (base58):", data.signature);
                     const signature = Signature.fromBase58(data.signature);
-                    console.log("Signature:", signature.toBase58());
                     const publicInput = ValidateReducePublicInput.fromJSON(
                         JSON.parse(data.publicInput || "{}")
                     );
-                    console.log("Public input:", publicInput.toJSON());
+
                     if (signature.verify(validatorPublicKey, publicInput.hash().toFields())) {
-                        return { url, data };
+                        return { url, validatorPublicKey, signature, publicInput, mask: data.mask };
                     }
                     throw new Error("Signature verification failed");
                 } catch (err) {
@@ -417,22 +420,29 @@ export async function collectSignatures(
                     //     error: err instanceof Error ? err.message : String(err),
                     //     event: "signature_fetch_failed",
                     // });
-                    console.warn("Failed to fetch signature from validator", url, err);
-                    return { url, data: undefined };
+                    console.error("Failed to fetch signature from validator", url, err);
+                    return { url };
                 }
             })
         );
 
-        results
-            .filter((r) => r.data && !seen.has(r.url))
-            .forEach((r) => {
-                seen.add(r.url);
-                got.push(r.data!);
-            });
+        for (const res of results) {
+            if (res.signature && !seen.has(res.signature.toString())) {
+                got.push({
+                    validatorPublicKey: res.validatorPublicKey,
+                    signature: res.signature,
+                    publicInput: res.publicInput,
+                    mask: res.mask,
+                });
+                seen.add(res.signature.toString());
+            }
+        }
+
+        console.log(`Round ${round} complete. Collected ${got.length} unique signatures so far.`);
 
         if (got.length >= minRequired) break;
 
-        remaining = results.filter((r) => !r.data).map((r) => r.url);
+        remaining = results.filter((r) => !r.signature).map((r) => r.url);
 
         if (remaining.length && round < maxRounds) {
             await new Promise((res) => setTimeout(res, backoffMs * round));
@@ -450,6 +460,13 @@ export async function collectSignatures(
         // });
         console.error(error);
         throw error;
+    }
+
+    for (let i = 0; i < BATCH_SIZE; i++) {
+        for (let j = 0; j < got.length - 1; j++) {
+            if (got[j].mask[i] !== got[j + 1].mask[i])
+                throw new Error("Inconsistent masks received");
+        }
     }
 
     // logger.info("Successfully collected signatures", {
