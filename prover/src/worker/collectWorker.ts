@@ -399,7 +399,8 @@ export async function collectSignatures(
 
                     const validatorPublicKey = PublicKey.fromBase58(data.validatorPublicKey);
                     console.log("Validator public key:", validatorPublicKey.toBase58());
-                    const signature = Signature.fromJSON(JSON.parse(data.signature));
+                    console.log("Signature (base58):", data.signature);
+                    const signature = Signature.fromBase58(data.signature);
                     console.log("Signature:", signature.toBase58());
                     const publicInput = ValidateReducePublicInput.fromJSON(
                         JSON.parse(data.publicInput || "{}")
