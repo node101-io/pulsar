@@ -8,6 +8,9 @@
   ],
   "compilerOptions": {
     "composite": true,
-    "types": ["node"]
+    "types": ["node"],
+    // Override deprecated options with safe values
+    "importsNotUsedAsValues": "remove",
+    "preserveValueImports": false
   }
 }
