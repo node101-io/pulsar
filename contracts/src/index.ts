@@ -76,12 +76,6 @@ import {
   ValidateReduceProgram,
   ValidateReducePublicInput,
 } from './ValidateReduce.js';
-import {
-  devnetTestAccounts,
-  validatorSet,
-  testAccounts,
-  mockValidatorList,
-} from './test/mock.js';
 import { TestUtils } from './utils/testUtils.js';
 import { DeployScripts } from './scripts/deploy.js';
 import { PulsarEncoder } from './utils/cosmosUtils.js';
@@ -91,7 +85,6 @@ import {
   PulsarActionData,
 } from './utils/actionQueueUtils.js';
 import {
-  writeJsonLog,
   log,
   table,
   logZkappState,
@@ -161,17 +154,12 @@ export {
   PulsarAuth,
   PulsarActionBase,
   Batch,
-  devnetTestAccounts,
-  validatorSet,
-  testAccounts,
-  mockValidatorList,
   TestUtils,
   DeployScripts,
   PulsarEncoder,
   PulsarActionData,
   validateActionList,
   CalculateFinalActionState,
-  writeJsonLog,
   log,
   table,
   logZkappState,

@@ -8,7 +8,6 @@ import {
 } from 'o1js';
 import { SettlementContract } from '../SettlementContract.js';
 import { List } from '../types/common.js';
-import { mockValidatorList } from '../test/mock.js';
 
 export const DeployScripts = {
   fetchAccounts,
@@ -98,7 +97,7 @@ async function deploySettlementContract(
 async function deployAndInitializeContract(
   signerPrivateKey: PrivateKey,
   contractPrivateKey: PrivateKey = PrivateKey.random(),
-  validatorList: List = mockValidatorList,
+  validatorList: List,
   fee: number = 1e9
 ) {
   const contractInstance = new SettlementContract(
