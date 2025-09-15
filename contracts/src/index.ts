@@ -53,6 +53,7 @@ import {
   fetchBlockHeight,
   fetchEvents,
   setMinaNetwork,
+  waitForTransaction,
 } from './utils/fetch.js';
 import {
   GenerateSettlementProof,
@@ -75,12 +76,6 @@ import {
   ValidateReduceProgram,
   ValidateReducePublicInput,
 } from './ValidateReduce.js';
-import {
-  devnetTestAccounts,
-  validatorSet,
-  testAccounts,
-  mockValidatorList,
-} from './test/mock.js';
 import { TestUtils } from './utils/testUtils.js';
 import { DeployScripts } from './scripts/deploy.js';
 import { PulsarEncoder } from './utils/cosmosUtils.js';
@@ -90,7 +85,6 @@ import {
   PulsarActionData,
 } from './utils/actionQueueUtils.js';
 import {
-  writeJsonLog,
   log,
   table,
   logZkappState,
@@ -129,6 +123,7 @@ export {
   fetchBlockHeight,
   fetchEvents,
   setMinaNetwork,
+  waitForTransaction,
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
@@ -159,17 +154,12 @@ export {
   PulsarAuth,
   PulsarActionBase,
   Batch,
-  devnetTestAccounts,
-  validatorSet,
-  testAccounts,
-  mockValidatorList,
   TestUtils,
   DeployScripts,
   PulsarEncoder,
   PulsarActionData,
   validateActionList,
   CalculateFinalActionState,
-  writeJsonLog,
   log,
   table,
   logZkappState,

@@ -1,5 +1,3 @@
-import * as path from 'path';
-import * as fs from 'fs';
 import { SettlementContract } from '../SettlementContract.js';
 import {
   ACTION_QUEUE_SIZE,
@@ -8,22 +6,7 @@ import {
   VALIDATOR_NUMBER,
 } from './constants.js';
 
-export {
-  writeJsonLog,
-  log,
-  table,
-  logZkappState,
-  enableLogs,
-  analyzeMethods,
-  logParams,
-};
-
-function writeJsonLog(fileName: string, data: any) {
-  const dir = path.join(process.cwd(), 'logs');
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const filePath = path.join(dir, fileName);
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-}
+export { log, table, logZkappState, enableLogs, analyzeMethods, logParams };
 
 let logsEnabled = false;
 

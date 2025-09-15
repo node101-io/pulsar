@@ -10,6 +10,7 @@ export {
   fetchBlockHeight,
   fetchEvents,
   setMinaNetwork,
+  waitForTransaction,
 };
 
 async function fetchRawActions(
@@ -108,4 +109,151 @@ function setMinaNetwork(network: 'devnet' | 'mainnet' | 'lightnet' = 'devnet') {
   );
 
   Mina.setActiveInstance(Network);
+}
+
+type FailureReasonResponse = {
+  failures: string[];
+  index: number;
+}[];
+
+type BestChainResponse = {
+  bestChain: {
+    transactions: {
+      zkappCommands: {
+        hash: string;
+        failureReason: FailureReasonResponse;
+      }[];
+    };
+  }[];
+};
+
+async function fetchLatestBlockZkappStatus(
+  endpoint: string,
+  blockLength = 5
+): Promise<BestChainResponse> {
+  const query = `
+    query BestChain {
+      bestChain(maxLength: ${blockLength}) {
+        commandTransactionCount
+        transactions {
+          zkappCommands {
+            hash
+            failureReason {
+              failures
+              index
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
+    }
+
+    return result.data;
+  } catch (error) {
+    console.error('Error fetching latest block zkApp status:', error);
+    throw error;
+  }
+}
+
+async function checkZkappTransaction(
+  transactionHash: string,
+  endpoint: string,
+  blockLength = 5
+) {
+  let bestChainBlocks = await fetchLatestBlockZkappStatus(
+    endpoint,
+    blockLength
+  );
+  for (let block of bestChainBlocks.bestChain) {
+    for (let zkappCommand of block.transactions.zkappCommands) {
+      if (zkappCommand.hash === transactionHash) {
+        if (zkappCommand.failureReason !== null) {
+          let failureReason = zkappCommand.failureReason
+            .reverse()
+            .map((failure) => {
+              return [failure.failures.map((failureItem) => failureItem)];
+            });
+          return {
+            success: false,
+            failureReason,
+          };
+        } else {
+          return {
+            success: true,
+            failureReason: null,
+          };
+        }
+      }
+    }
+  }
+  return {
+    success: false,
+    failureReason: null,
+  };
+}
+
+async function waitForTransaction(
+  transactionHash: string,
+  endpoint: string,
+  maxAttempts: number = 60, // 10 minutes if interval is 10 seconds
+  interval: number = 10000, // 10 seconds
+  attempts: number = 0
+): Promise<{
+  success: boolean;
+  failureReason: any;
+}> {
+  try {
+    const res = await checkZkappTransaction(transactionHash, endpoint);
+    if (res.success) {
+      return {
+        success: true,
+        failureReason: null,
+      };
+    } else if (res.failureReason) {
+      return {
+        success: false,
+        failureReason: res.failureReason,
+      };
+    }
+  } catch (error) {
+    return {
+      success: false,
+      failureReason: `Error checking transaction: ${error}`,
+    };
+  }
+
+  if (maxAttempts && attempts >= maxAttempts) {
+    return {
+      success: false,
+      failureReason: 'Max attempts reached',
+    };
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, interval));
+  return waitForTransaction(
+    transactionHash,
+    endpoint,
+    maxAttempts,
+    interval,
+    attempts + 1
+  );
 }
