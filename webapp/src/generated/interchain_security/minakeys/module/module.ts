@@ -2,27 +2,43 @@
 // versions:
 //   protoc-gen-ts_proto  v2.6.1
 //   protoc               unknown
-// source: cosmos/minakeys/module/module.proto
+// source: interchain_security/minakeys/module/module.proto
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 
-export const protobufPackage = "cosmos.minakeys.module";
+export const protobufPackage = "interchain_security.minakeys.module";
 
 /** Module is the config object for the module. */
 export interface Module {
   /** authority defines the custom module authority. If not set, defaults to the governance module. */
   authority: string;
+  /**
+   * secondary_key_hex allows providing the secondary key directly as a hex string.
+   * If provided, this takes precedence over secondary_key_path and the default file lookup.
+   */
+  secondaryKeyHex: string;
+  /**
+   * secondary_key_path allows specifying a custom path to the secondary key file.
+   * If provided, this takes precedence over the default $HOME/.secondary_key.toml lookup.
+   */
+  secondaryKeyPath: string;
 }
 
 function createBaseModule(): Module {
-  return { authority: "" };
+  return { authority: "", secondaryKeyHex: "", secondaryKeyPath: "" };
 }
 
 export const Module: MessageFns<Module> = {
   encode(message: Module, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.authority !== "") {
       writer.uint32(10).string(message.authority);
+    }
+    if (message.secondaryKeyHex !== "") {
+      writer.uint32(18).string(message.secondaryKeyHex);
+    }
+    if (message.secondaryKeyPath !== "") {
+      writer.uint32(26).string(message.secondaryKeyPath);
     }
     return writer;
   },
@@ -42,6 +58,22 @@ export const Module: MessageFns<Module> = {
           message.authority = reader.string();
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.secondaryKeyHex = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.secondaryKeyPath = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -52,13 +84,23 @@ export const Module: MessageFns<Module> = {
   },
 
   fromJSON(object: any): Module {
-    return { authority: isSet(object.authority) ? globalThis.String(object.authority) : "" };
+    return {
+      authority: isSet(object.authority) ? globalThis.String(object.authority) : "",
+      secondaryKeyHex: isSet(object.secondaryKeyHex) ? globalThis.String(object.secondaryKeyHex) : "",
+      secondaryKeyPath: isSet(object.secondaryKeyPath) ? globalThis.String(object.secondaryKeyPath) : "",
+    };
   },
 
   toJSON(message: Module): unknown {
     const obj: any = {};
     if (message.authority !== "") {
       obj.authority = message.authority;
+    }
+    if (message.secondaryKeyHex !== "") {
+      obj.secondaryKeyHex = message.secondaryKeyHex;
+    }
+    if (message.secondaryKeyPath !== "") {
+      obj.secondaryKeyPath = message.secondaryKeyPath;
     }
     return obj;
   },
@@ -69,6 +111,8 @@ export const Module: MessageFns<Module> = {
   fromPartial<I extends Exact<DeepPartial<Module>, I>>(object: I): Module {
     const message = createBaseModule();
     message.authority = object.authority ?? "";
+    message.secondaryKeyHex = object.secondaryKeyHex ?? "";
+    message.secondaryKeyPath = object.secondaryKeyPath ?? "";
     return message;
   },
 };

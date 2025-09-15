@@ -34,12 +34,15 @@ export const waitForTxCommit = async (txHashHex: string): Promise<any> => {
           const code = result?.tx_result?.code;
           if (typeof code === 'number' && code > 0) {
             const rawLog = result?.tx_result?.log || result?.tx_result?.info || 'Transaction failed';
-            throw Object.assign(new Error(rawLog), { code });
+            throw new Error(rawLog, { cause: 31 });
           }
           return result;
         }
       }
-    } catch (_) {
+    } catch (error) {
+      if (error instanceof Error && error.cause === 31)
+        throw new Error(error.message);
+
       // ignore and keep polling
     }
     await new Promise(r => setTimeout(r, pollIntervalMs));

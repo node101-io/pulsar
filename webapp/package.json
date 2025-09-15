@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "proto:generate": "cd src/generated && buf generate ../../../cosmos --template ../../../cosmos/proto/buf.gen.ts.yaml"
+    "proto:generate": "cd src/generated && buf generate ../../../chain --template ../../../chain/proto/buf.gen.ts.yaml"
   },
   "dependencies": {
     "@cosmjs/amino": "^0.34.0",
@@ -41,7 +41,8 @@
     "mina-signer": "^3.0.7",
     "motion": "^12.23.6",
     "next": "^15.1.6",
-    "o1js": "^2.7.0",
+    "o1js": "^2.9.0",
+    "pulsar-contracts": "^0.4.19",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.5.2",
@@ -50,6 +51,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@bufbuild/protobuf": "^2.8.0",
     "@cloudflare/workers-types": "^4.20250214.0",
     "@opennextjs/cloudflare": "^1.5.1",
     "@types/node": "^22.10.6",

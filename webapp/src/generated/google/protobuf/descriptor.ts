@@ -177,19 +177,11 @@ export interface FileDescriptorProto {
    * The supported values are "proto2", "proto3", and "editions".
    *
    * If `edition` is present, this value must be "editions".
-   * WARNING: This field should only be used by protobuf plugins or special
-   * cases like the proto compiler. Other uses are discouraged and
-   * developers should rely on the protoreflect APIs for their client language.
    */
   syntax?:
     | string
     | undefined;
-  /**
-   * The edition of the proto file.
-   * WARNING: This field should only be used by protobuf plugins or special
-   * cases like the proto compiler. Other uses are discouraged and
-   * developers should rely on the protoreflect APIs for their client language.
-   */
+  /** The edition of the proto file. */
   edition?: Edition | undefined;
 }
 
@@ -834,12 +826,7 @@ export interface FileOptions {
   rubyPackage?:
     | string
     | undefined;
-  /**
-   * Any features defined in the specific edition.
-   * WARNING: This field should only be used by protobuf plugins or special
-   * cases like the proto compiler. Other uses are discouraged and
-   * developers should rely on the protoreflect APIs for their client language.
-   */
+  /** Any features defined in the specific edition. */
   features?:
     | FeatureSet
     | undefined;
@@ -977,12 +964,7 @@ export interface MessageOptions {
   deprecatedLegacyJsonFieldConflicts?:
     | boolean
     | undefined;
-  /**
-   * Any features defined in the specific edition.
-   * WARNING: This field should only be used by protobuf plugins or special
-   * cases like the proto compiler. Other uses are discouraged and
-   * developers should rely on the protoreflect APIs for their client language.
-   */
+  /** Any features defined in the specific edition. */
   features?:
     | FeatureSet
     | undefined;
@@ -1087,12 +1069,7 @@ export interface FieldOptions {
   retention?: FieldOptions_OptionRetention | undefined;
   targets: FieldOptions_OptionTargetType[];
   editionDefaults: FieldOptions_EditionDefault[];
-  /**
-   * Any features defined in the specific edition.
-   * WARNING: This field should only be used by protobuf plugins or special
-   * cases like the proto compiler. Other uses are discouraged and
-   * developers should rely on the protoreflect APIs for their client language.
-   */
+  /** Any features defined in the specific edition. */
   features?: FeatureSet | undefined;
   featureSupport?:
     | FieldOptions_FeatureSupport
@@ -1358,12 +1335,7 @@ export interface FieldOptions_FeatureSupport {
 }
 
 export interface OneofOptions {
-  /**
-   * Any features defined in the specific edition.
-   * WARNING: This field should only be used by protobuf plugins or special
-   * cases like the proto compiler. Other uses are discouraged and
-   * developers should rely on the protoreflect APIs for their client language.
-   */
+  /** Any features defined in the specific edition. */
   features?:
     | FeatureSet
     | undefined;
@@ -1401,12 +1373,7 @@ export interface EnumOptions {
   deprecatedLegacyJsonFieldConflicts?:
     | boolean
     | undefined;
-  /**
-   * Any features defined in the specific edition.
-   * WARNING: This field should only be used by protobuf plugins or special
-   * cases like the proto compiler. Other uses are discouraged and
-   * developers should rely on the protoreflect APIs for their client language.
-   */
+  /** Any features defined in the specific edition. */
   features?:
     | FeatureSet
     | undefined;
@@ -1424,12 +1391,7 @@ export interface EnumValueOptions {
   deprecated?:
     | boolean
     | undefined;
-  /**
-   * Any features defined in the specific edition.
-   * WARNING: This field should only be used by protobuf plugins or special
-   * cases like the proto compiler. Other uses are discouraged and
-   * developers should rely on the protoreflect APIs for their client language.
-   */
+  /** Any features defined in the specific edition. */
   features?:
     | FeatureSet
     | undefined;
@@ -1450,12 +1412,7 @@ export interface EnumValueOptions {
 }
 
 export interface ServiceOptions {
-  /**
-   * Any features defined in the specific edition.
-   * WARNING: This field should only be used by protobuf plugins or special
-   * cases like the proto compiler. Other uses are discouraged and
-   * developers should rely on the protoreflect APIs for their client language.
-   */
+  /** Any features defined in the specific edition. */
   features?:
     | FeatureSet
     | undefined;
@@ -1483,12 +1440,7 @@ export interface MethodOptions {
   idempotencyLevel?:
     | MethodOptions_IdempotencyLevel
     | undefined;
-  /**
-   * Any features defined in the specific edition.
-   * WARNING: This field should only be used by protobuf plugins or special
-   * cases like the proto compiler. Other uses are discouraged and
-   * developers should rely on the protoreflect APIs for their client language.
-   */
+  /** Any features defined in the specific edition. */
   features?:
     | FeatureSet
     | undefined;
@@ -1557,8 +1509,8 @@ export interface UninterpretedOption {
    * identified it as during parsing. Exactly one of these should be set.
    */
   identifierValue?: string | undefined;
-  positiveIntValue?: number | undefined;
-  negativeIntValue?: number | undefined;
+  positiveIntValue?: string | undefined;
+  negativeIntValue?: string | undefined;
   doubleValue?: number | undefined;
   stringValue?: Uint8Array | undefined;
   aggregateValue?: string | undefined;
@@ -1591,7 +1543,6 @@ export interface FeatureSet {
   utf8Validation?: FeatureSet_Utf8Validation | undefined;
   messageEncoding?: FeatureSet_MessageEncoding | undefined;
   jsonFormat?: FeatureSet_JsonFormat | undefined;
-  enforceNamingStyle?: FeatureSet_EnforceNamingStyle | undefined;
 }
 
 export enum FeatureSet_FieldPresence {
@@ -1829,45 +1780,6 @@ export function featureSet_JsonFormatToJSON(object: FeatureSet_JsonFormat): stri
     case FeatureSet_JsonFormat.LEGACY_BEST_EFFORT:
       return "LEGACY_BEST_EFFORT";
     case FeatureSet_JsonFormat.UNRECOGNIZED:
-    default:
-      return "UNRECOGNIZED";
-  }
-}
-
-export enum FeatureSet_EnforceNamingStyle {
-  ENFORCE_NAMING_STYLE_UNKNOWN = 0,
-  STYLE2024 = 1,
-  STYLE_LEGACY = 2,
-  UNRECOGNIZED = -1,
-}
-
-export function featureSet_EnforceNamingStyleFromJSON(object: any): FeatureSet_EnforceNamingStyle {
-  switch (object) {
-    case 0:
-    case "ENFORCE_NAMING_STYLE_UNKNOWN":
-      return FeatureSet_EnforceNamingStyle.ENFORCE_NAMING_STYLE_UNKNOWN;
-    case 1:
-    case "STYLE2024":
-      return FeatureSet_EnforceNamingStyle.STYLE2024;
-    case 2:
-    case "STYLE_LEGACY":
-      return FeatureSet_EnforceNamingStyle.STYLE_LEGACY;
-    case -1:
-    case "UNRECOGNIZED":
-    default:
-      return FeatureSet_EnforceNamingStyle.UNRECOGNIZED;
-  }
-}
-
-export function featureSet_EnforceNamingStyleToJSON(object: FeatureSet_EnforceNamingStyle): string {
-  switch (object) {
-    case FeatureSet_EnforceNamingStyle.ENFORCE_NAMING_STYLE_UNKNOWN:
-      return "ENFORCE_NAMING_STYLE_UNKNOWN";
-    case FeatureSet_EnforceNamingStyle.STYLE2024:
-      return "STYLE2024";
-    case FeatureSet_EnforceNamingStyle.STYLE_LEGACY:
-      return "STYLE_LEGACY";
-    case FeatureSet_EnforceNamingStyle.UNRECOGNIZED:
     default:
       return "UNRECOGNIZED";
   }
@@ -5672,8 +5584,8 @@ function createBaseUninterpretedOption(): UninterpretedOption {
   return {
     name: [],
     identifierValue: "",
-    positiveIntValue: 0,
-    negativeIntValue: 0,
+    positiveIntValue: "0",
+    negativeIntValue: "0",
     doubleValue: 0,
     stringValue: new Uint8Array(0),
     aggregateValue: "",
@@ -5688,10 +5600,10 @@ export const UninterpretedOption: MessageFns<UninterpretedOption> = {
     if (message.identifierValue !== undefined && message.identifierValue !== "") {
       writer.uint32(26).string(message.identifierValue);
     }
-    if (message.positiveIntValue !== undefined && message.positiveIntValue !== 0) {
+    if (message.positiveIntValue !== undefined && message.positiveIntValue !== "0") {
       writer.uint32(32).uint64(message.positiveIntValue);
     }
-    if (message.negativeIntValue !== undefined && message.negativeIntValue !== 0) {
+    if (message.negativeIntValue !== undefined && message.negativeIntValue !== "0") {
       writer.uint32(40).int64(message.negativeIntValue);
     }
     if (message.doubleValue !== undefined && message.doubleValue !== 0) {
@@ -5734,7 +5646,7 @@ export const UninterpretedOption: MessageFns<UninterpretedOption> = {
             break;
           }
 
-          message.positiveIntValue = longToNumber(reader.uint64());
+          message.positiveIntValue = reader.uint64().toString();
           continue;
         }
         case 5: {
@@ -5742,7 +5654,7 @@ export const UninterpretedOption: MessageFns<UninterpretedOption> = {
             break;
           }
 
-          message.negativeIntValue = longToNumber(reader.int64());
+          message.negativeIntValue = reader.int64().toString();
           continue;
         }
         case 6: {
@@ -5784,8 +5696,8 @@ export const UninterpretedOption: MessageFns<UninterpretedOption> = {
         ? object.name.map((e: any) => UninterpretedOption_NamePart.fromJSON(e))
         : [],
       identifierValue: isSet(object.identifierValue) ? globalThis.String(object.identifierValue) : "",
-      positiveIntValue: isSet(object.positiveIntValue) ? globalThis.Number(object.positiveIntValue) : 0,
-      negativeIntValue: isSet(object.negativeIntValue) ? globalThis.Number(object.negativeIntValue) : 0,
+      positiveIntValue: isSet(object.positiveIntValue) ? globalThis.String(object.positiveIntValue) : "0",
+      negativeIntValue: isSet(object.negativeIntValue) ? globalThis.String(object.negativeIntValue) : "0",
       doubleValue: isSet(object.doubleValue) ? globalThis.Number(object.doubleValue) : 0,
       stringValue: isSet(object.stringValue) ? bytesFromBase64(object.stringValue) : new Uint8Array(0),
       aggregateValue: isSet(object.aggregateValue) ? globalThis.String(object.aggregateValue) : "",
@@ -5800,11 +5712,11 @@ export const UninterpretedOption: MessageFns<UninterpretedOption> = {
     if (message.identifierValue !== undefined && message.identifierValue !== "") {
       obj.identifierValue = message.identifierValue;
     }
-    if (message.positiveIntValue !== undefined && message.positiveIntValue !== 0) {
-      obj.positiveIntValue = Math.round(message.positiveIntValue);
+    if (message.positiveIntValue !== undefined && message.positiveIntValue !== "0") {
+      obj.positiveIntValue = message.positiveIntValue;
     }
-    if (message.negativeIntValue !== undefined && message.negativeIntValue !== 0) {
-      obj.negativeIntValue = Math.round(message.negativeIntValue);
+    if (message.negativeIntValue !== undefined && message.negativeIntValue !== "0") {
+      obj.negativeIntValue = message.negativeIntValue;
     }
     if (message.doubleValue !== undefined && message.doubleValue !== 0) {
       obj.doubleValue = message.doubleValue;
@@ -5825,8 +5737,8 @@ export const UninterpretedOption: MessageFns<UninterpretedOption> = {
     const message = createBaseUninterpretedOption();
     message.name = object.name?.map((e) => UninterpretedOption_NamePart.fromPartial(e)) || [];
     message.identifierValue = object.identifierValue ?? "";
-    message.positiveIntValue = object.positiveIntValue ?? 0;
-    message.negativeIntValue = object.negativeIntValue ?? 0;
+    message.positiveIntValue = object.positiveIntValue ?? "0";
+    message.negativeIntValue = object.negativeIntValue ?? "0";
     message.doubleValue = object.doubleValue ?? 0;
     message.stringValue = object.stringValue ?? new Uint8Array(0);
     message.aggregateValue = object.aggregateValue ?? "";
@@ -5918,7 +5830,6 @@ function createBaseFeatureSet(): FeatureSet {
     utf8Validation: 0,
     messageEncoding: 0,
     jsonFormat: 0,
-    enforceNamingStyle: 0,
   };
 }
 
@@ -5941,9 +5852,6 @@ export const FeatureSet: MessageFns<FeatureSet> = {
     }
     if (message.jsonFormat !== undefined && message.jsonFormat !== 0) {
       writer.uint32(48).int32(message.jsonFormat);
-    }
-    if (message.enforceNamingStyle !== undefined && message.enforceNamingStyle !== 0) {
-      writer.uint32(56).int32(message.enforceNamingStyle);
     }
     return writer;
   },
@@ -6003,14 +5911,6 @@ export const FeatureSet: MessageFns<FeatureSet> = {
           message.jsonFormat = reader.int32() as any;
           continue;
         }
-        case 7: {
-          if (tag !== 56) {
-            break;
-          }
-
-          message.enforceNamingStyle = reader.int32() as any;
-          continue;
-        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -6030,9 +5930,6 @@ export const FeatureSet: MessageFns<FeatureSet> = {
       utf8Validation: isSet(object.utf8Validation) ? featureSet_Utf8ValidationFromJSON(object.utf8Validation) : 0,
       messageEncoding: isSet(object.messageEncoding) ? featureSet_MessageEncodingFromJSON(object.messageEncoding) : 0,
       jsonFormat: isSet(object.jsonFormat) ? featureSet_JsonFormatFromJSON(object.jsonFormat) : 0,
-      enforceNamingStyle: isSet(object.enforceNamingStyle)
-        ? featureSet_EnforceNamingStyleFromJSON(object.enforceNamingStyle)
-        : 0,
     };
   },
 
@@ -6056,9 +5953,6 @@ export const FeatureSet: MessageFns<FeatureSet> = {
     if (message.jsonFormat !== undefined && message.jsonFormat !== 0) {
       obj.jsonFormat = featureSet_JsonFormatToJSON(message.jsonFormat);
     }
-    if (message.enforceNamingStyle !== undefined && message.enforceNamingStyle !== 0) {
-      obj.enforceNamingStyle = featureSet_EnforceNamingStyleToJSON(message.enforceNamingStyle);
-    }
     return obj;
   },
 
@@ -6073,7 +5967,6 @@ export const FeatureSet: MessageFns<FeatureSet> = {
     message.utf8Validation = object.utf8Validation ?? 0;
     message.messageEncoding = object.messageEncoding ?? 0;
     message.jsonFormat = object.jsonFormat ?? 0;
-    message.enforceNamingStyle = object.enforceNamingStyle ?? 0;
     return message;
   },
 };
@@ -6688,28 +6581,20 @@ export const GeneratedCodeInfo_Annotation: MessageFns<GeneratedCodeInfo_Annotati
 };
 
 function bytesFromBase64(b64: string): Uint8Array {
-  if ((globalThis as any).Buffer) {
-    return Uint8Array.from(globalThis.Buffer.from(b64, "base64"));
-  } else {
-    const bin = globalThis.atob(b64);
-    const arr = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; ++i) {
-      arr[i] = bin.charCodeAt(i);
-    }
-    return arr;
+  const bin = globalThis.atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; ++i) {
+    arr[i] = bin.charCodeAt(i);
   }
+  return arr;
 }
 
 function base64FromBytes(arr: Uint8Array): string {
-  if ((globalThis as any).Buffer) {
-    return globalThis.Buffer.from(arr).toString("base64");
-  } else {
-    const bin: string[] = [];
-    arr.forEach((byte) => {
-      bin.push(globalThis.String.fromCharCode(byte));
-    });
-    return globalThis.btoa(bin.join(""));
-  }
+  const bin: string[] = [];
+  arr.forEach((byte) => {
+    bin.push(globalThis.String.fromCharCode(byte));
+  });
+  return globalThis.btoa(bin.join(""));
 }
 
 type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;
@@ -6723,17 +6608,6 @@ export type DeepPartial<T> = T extends Builtin ? T
 type KeysOfUnion<T> = T extends T ? keyof T : never;
 export type Exact<P, I extends P> = P extends Builtin ? P
   : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };
-
-function longToNumber(int64: { toString(): string }): number {
-  const num = globalThis.Number(int64.toString());
-  if (num > globalThis.Number.MAX_SAFE_INTEGER) {
-    throw new globalThis.Error("Value is larger than Number.MAX_SAFE_INTEGER");
-  }
-  if (num < globalThis.Number.MIN_SAFE_INTEGER) {
-    throw new globalThis.Error("Value is smaller than Number.MIN_SAFE_INTEGER");
-  }
-  return num;
-}
 
 function isSet(value: any): boolean {
   return value !== null && value !== undefined;

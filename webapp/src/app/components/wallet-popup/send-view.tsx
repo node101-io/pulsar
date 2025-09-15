@@ -28,13 +28,13 @@ export const SendView = ({ setCurrentView }: {
   const [showSaveDialog, setShowSaveDialog] = useState<boolean>(false);
 
   const { isConnected: isMinaConnected, signMessage: minaSignMessage, account: minaAccount } = useMinaWallet();
-  const { getSigningClient, isSigningClientLoading, wallet: pulsarWallet } = usePulsarWallet();
+  const { getSigningClient, isSigningClientLoading, wallet: pulsarWallet, address: pulsarAddress } = usePulsarWallet();
   const connectedWallet = useConnectedWallet();
   const broadcastTx = useBroadcastTx();
 
   const { data: priceData } = useMinaPrice();
-  const { data: pminaBalance } = usePminaBalance(connectedWallet?.address, {
-    enabled: !!connectedWallet?.address,
+  const { data: pminaBalance } = usePminaBalance(pulsarAddress, {
+    enabled: !!pulsarAddress,
   });
 
   const getSavedAddresses = (): SavedAddress[] => {

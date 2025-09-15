@@ -2,24 +2,26 @@
 // versions:
 //   protoc-gen-ts_proto  v2.6.1
 //   protoc               unknown
-// source: cosmos/minakeys/genesis.proto
+// source: interchain_security/minakeys/genesis.proto
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { KeyStore } from "./key_store";
-import { Params } from "./params";
+import { KeyStore } from "./key_store.js";
+import { Params } from "./params.js";
+import { VoteExt } from "./vote_ext.js";
 
-export const protobufPackage = "cosmos.minakeys";
+export const protobufPackage = "interchain_security.minakeys";
 
 /** GenesisState defines the minakeys module's genesis state. */
 export interface GenesisState {
   /** params defines all the parameters of the module. */
-  params: Params | undefined;
+  params?: Params | undefined;
   keyStoreList: KeyStore[];
+  voteExtList: VoteExt[];
 }
 
 function createBaseGenesisState(): GenesisState {
-  return { params: undefined, keyStoreList: [] };
+  return { params: undefined, keyStoreList: [], voteExtList: [] };
 }
 
 export const GenesisState: MessageFns<GenesisState> = {
@@ -29,6 +31,9 @@ export const GenesisState: MessageFns<GenesisState> = {
     }
     for (const v of message.keyStoreList) {
       KeyStore.encode(v!, writer.uint32(18).fork()).join();
+    }
+    for (const v of message.voteExtList) {
+      VoteExt.encode(v!, writer.uint32(26).fork()).join();
     }
     return writer;
   },
@@ -56,6 +61,14 @@ export const GenesisState: MessageFns<GenesisState> = {
           message.keyStoreList.push(KeyStore.decode(reader, reader.uint32()));
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.voteExtList.push(VoteExt.decode(reader, reader.uint32()));
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -71,6 +84,9 @@ export const GenesisState: MessageFns<GenesisState> = {
       keyStoreList: globalThis.Array.isArray(object?.keyStoreList)
         ? object.keyStoreList.map((e: any) => KeyStore.fromJSON(e))
         : [],
+      voteExtList: globalThis.Array.isArray(object?.voteExtList)
+        ? object.voteExtList.map((e: any) => VoteExt.fromJSON(e))
+        : [],
     };
   },
 
@@ -81,6 +97,9 @@ export const GenesisState: MessageFns<GenesisState> = {
     }
     if (message.keyStoreList?.length) {
       obj.keyStoreList = message.keyStoreList.map((e) => KeyStore.toJSON(e));
+    }
+    if (message.voteExtList?.length) {
+      obj.voteExtList = message.voteExtList.map((e) => VoteExt.toJSON(e));
     }
     return obj;
   },
@@ -94,6 +113,7 @@ export const GenesisState: MessageFns<GenesisState> = {
       ? Params.fromPartial(object.params)
       : undefined;
     message.keyStoreList = object.keyStoreList?.map((e) => KeyStore.fromPartial(e)) || [];
+    message.voteExtList = object.voteExtList?.map((e) => VoteExt.fromPartial(e)) || [];
     return message;
   },
 };

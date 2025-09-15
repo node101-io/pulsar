@@ -1,7 +1,7 @@
 import inquirer from "inquirer";
 import { DeployScripts, PulsarEncoder, setMinaNetwork, SettlementContract } from "pulsar-contracts";
 import dotenv from "dotenv";
-import { AccountUpdate, fetchAccount, Field, Lightnet, Mina, PrivateKey, UInt64 } from "o1js";
+import { AccountUpdate, fetchAccount, Field, Lightnet, Mina, PrivateKey, PublicKey, UInt64 } from "o1js";
 import { cacheCompile } from "./cache.js";
 import { CosmosSignature, PulsarAuth, logZkappState } from "pulsar-contracts";
 import { prettierAddress } from "./utils.js";
@@ -295,6 +295,86 @@ async function performWithdraw(
     }
 }
 
+async function performFaucetToAddress() {
+    console.log("\n🪙 Faucet to address (Lightnet only) ...\n");
+
+    if (process.env.MINA_NETWORK !== "lightnet") {
+        printError("Faucet is only available on MINA_NETWORK=lightnet");
+        return;
+    }
+
+    const { recipient, faucetAmount } = await inquirer.prompt([
+        {
+            type: "input",
+            name: "recipient",
+            message: "📬 Enter recipient B62 address:",
+            validate: (input) => {
+                try {
+                    PublicKey.fromBase58(input);
+                    return true;
+                } catch (e) {
+                    return "Enter a valid B62 Mina address";
+                }
+            },
+        },
+        {
+            type: "input",
+            name: "faucetAmount",
+            message: "💧 Enter amount to send (e.g., 1.0, 5.5):",
+            default: "5.0",
+            validate: (input) => {
+                const num = parseFloat(input);
+                if (isNaN(num) || num <= 0) return "Amount must be a positive number";
+                return true;
+            },
+        },
+    ]);
+
+    const stopSpinner = createLoadingSpinner("Preparing faucet transfer...");
+
+    try {
+        const recipientPk = PublicKey.fromBase58(recipient);
+
+        const { privateKey } = await Lightnet.acquireKeyPair({
+            isRegularAccount: true,
+            lightnetAccountManagerEndpoint: process.env.DOCKER
+                ? "http://mina-local-lightnet:8181"
+                : `${process.env.REMOTE_SERVER_URL}:8181`,
+        });
+
+        stopSpinner();
+        const stopTxSpinner = createLoadingSpinner("Building transaction...");
+        // Check if recipient account exists to conditionally pay account creation fee
+        const { account: recipientAccount } = await fetchAccount({ publicKey: recipientPk });
+        const tx = await Mina.transaction(
+            { sender: privateKey.toPublicKey(), fee: 1e9 },
+            async () => {
+                const senderAccount = AccountUpdate.createSigned(privateKey.toPublicKey());
+                if (!recipientAccount) {
+                    AccountUpdate.fundNewAccount(privateKey.toPublicKey());
+                }
+                senderAccount.send({
+                    to: recipientPk,
+                    amount: UInt64.from(parseFloat(faucetAmount) * 1e9),
+                });
+            }
+        );
+        stopTxSpinner();
+
+        const stopSubmitSpinner = createLoadingSpinner("Submitting transaction to network...");
+        await DeployScripts.waitTransactionAndFetchAccount(tx, [privateKey], [recipientPk, privateKey.toPublicKey()]);
+        stopSubmitSpinner();
+
+        printSuccess("Faucet transfer completed successfully!");
+        console.log(`To: ${prettierAddress(recipientPk.toBase58())}...`);
+    } catch (error) {
+        stopSpinner();
+        printError("Faucet transfer failed!");
+        console.log(`Details: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+    }
+}
+
 async function performWarmUpCache() {
     console.log("\n🔥 Starting cache warm-up process...\n");
 
@@ -340,7 +420,7 @@ async function performLogContractState(contractInstance: SettlementContract) {
     }
 }
 
-async function showMainMenu(): Promise<"deposit" | "withdraw" | "log-state" | "exit"> {
+async function showMainMenu(): Promise<"deposit" | "withdraw" | "log-state" | "faucet" | "exit"> {
     console.log("\n");
     const { action } = await inquirer.prompt([
         {
@@ -362,6 +442,11 @@ async function showMainMenu(): Promise<"deposit" | "withdraw" | "log-state" | "e
                     name: "📊 Log Contract State",
                     value: "log-state",
                     short: "Log State",
+                },
+                {
+                    name: "🪙 Faucet to Address (Lightnet)",
+                    value: "faucet",
+                    short: "Faucet",
                 },
                 new inquirer.Separator(),
                 {
@@ -475,6 +560,8 @@ async function main() {
                     await performWithdraw(signerPrivateKey, contractPrivateKey, contractInstance);
                 } else if (action === "log-state") {
                     await performLogContractState(contractInstance);
+                } else if (action === "faucet") {
+                    await performFaucetToAddress();
                 }
 
                 const { continueChoice } = await inquirer.prompt([
@@ -539,6 +626,8 @@ async function main() {
                         );
                     } else if (action === "log-state") {
                         await performLogContractState(contractInstance);
+                    } else if (action === "faucet") {
+                        await performFaucetToAddress();
                     }
                 }
             }

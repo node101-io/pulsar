@@ -4,8 +4,8 @@ plugins:
     out: ../../../webapp/src/generated
     opt:
       - esModuleInterop=true
-      - env=node
+      - env=browser
       - forceLong=string
       - useOptionals=true
-      - outputServices=grpc-js
+      - outputServices=none
       - importSuffix=.js

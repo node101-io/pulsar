@@ -24,8 +24,8 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
     isFetching: isFetchingBalance,
     error: balanceError,
     refetch: refetchBalance
-  } = usePminaBalance(minaAccount, {
-    enabled: !!minaAccount && isMinaConnected && currentWallet === 'mina',
+  } = usePminaBalance(pulsarAddress, {
+    enabled: !!pulsarAddress && isPulsarConnected && currentWallet === 'pulsar',
   });
 
   const {
@@ -55,12 +55,7 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
   };
 
   const getBalance = () => {
-    if (currentWallet === 'mina') {
-      return pminaBalance ? `${pminaBalance.toFixed(3)} pMINA` : '0.000 pMINA';
-    } else if (currentWallet === 'pulsar') {
-      return '0.000 PULSAR';
-    }
-    return '0.000';
+    return pminaBalance ? `${pminaBalance.toFixed(2)} pMINA` : '0.000 pMINA';
   };
 
   const getBalanceUSD = () => {

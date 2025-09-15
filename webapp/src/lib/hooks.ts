@@ -100,8 +100,8 @@ export function useKeyStore(
     queryKey: ["keyStore", pulsarWalletAddress, minaWalletAddress],
     queryFn: async () => {
       const [responseForPulsar, responseForMina] = await Promise.all([
-        pulsarWalletAddress ? fetch(`http://5.9.42.22:1317/pulsar/cosmos/minakeys/key_store/${pulsarWalletAddress}`) : null,
-        minaWalletAddress ? fetch(`http://5.9.42.22:1317/pulsar/cosmos/minakeys/key_store/${await formatMinaPublicKey(minaWalletAddress)}`) : null,
+        pulsarWalletAddress ? fetch(`http://5.9.42.22:1317/interchain_security/minakeys/key_store/${pulsarWalletAddress}`) : null,
+        minaWalletAddress ? fetch(`http://5.9.42.22:1317/interchain_security/minakeys/key_store/${await formatMinaPublicKey(minaWalletAddress)}`) : null,
       ]);
 
       const dataForPulsar = responseForPulsar && responseForPulsar.ok

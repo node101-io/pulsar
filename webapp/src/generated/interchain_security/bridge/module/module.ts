@@ -2,33 +2,46 @@
 // versions:
 //   protoc-gen-ts_proto  v2.6.1
 //   protoc               unknown
-// source: cosmos/minakeys/params.proto
+// source: interchain_security/bridge/module/module.proto
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 
-export const protobufPackage = "cosmos.minakeys";
+export const protobufPackage = "interchain_security.bridge.module";
 
-/** Params defines the parameters for the module. */
-export interface Params {
+/** Module is the config object for the module. */
+export interface Module {
+  /** authority defines the custom module authority. If not set, defaults to the governance module. */
+  authority: string;
 }
 
-function createBaseParams(): Params {
-  return {};
+function createBaseModule(): Module {
+  return { authority: "" };
 }
 
-export const Params: MessageFns<Params> = {
-  encode(_: Params, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+export const Module: MessageFns<Module> = {
+  encode(message: Module, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.authority !== "") {
+      writer.uint32(10).string(message.authority);
+    }
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): Params {
+  decode(input: BinaryReader | Uint8Array, length?: number): Module {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseParams();
+    const message = createBaseModule();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.authority = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -38,20 +51,24 @@ export const Params: MessageFns<Params> = {
     return message;
   },
 
-  fromJSON(_: any): Params {
-    return {};
+  fromJSON(object: any): Module {
+    return { authority: isSet(object.authority) ? globalThis.String(object.authority) : "" };
   },
 
-  toJSON(_: Params): unknown {
+  toJSON(message: Module): unknown {
     const obj: any = {};
+    if (message.authority !== "") {
+      obj.authority = message.authority;
+    }
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<Params>, I>>(base?: I): Params {
-    return Params.fromPartial(base ?? ({} as any));
+  create<I extends Exact<DeepPartial<Module>, I>>(base?: I): Module {
+    return Module.fromPartial(base ?? ({} as any));
   },
-  fromPartial<I extends Exact<DeepPartial<Params>, I>>(_: I): Params {
-    const message = createBaseParams();
+  fromPartial<I extends Exact<DeepPartial<Module>, I>>(object: I): Module {
+    const message = createBaseModule();
+    message.authority = object.authority ?? "";
     return message;
   },
 };
@@ -67,6 +84,10 @@ export type DeepPartial<T> = T extends Builtin ? T
 type KeysOfUnion<T> = T extends T ? keyof T : never;
 export type Exact<P, I extends P> = P extends Builtin ? P
   : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };
+
+function isSet(value: any): boolean {
+  return value !== null && value !== undefined;
+}
 
 export interface MessageFns<T> {
   encode(message: T, writer?: BinaryWriter): BinaryWriter;

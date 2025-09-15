@@ -2,12 +2,12 @@
 // versions:
 //   protoc-gen-ts_proto  v2.6.1
 //   protoc               unknown
-// source: cosmos/minakeys/key_store.proto
+// source: interchain_security/minakeys/key_store.proto
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 
-export const protobufPackage = "cosmos.minakeys";
+export const protobufPackage = "interchain_security.minakeys";
 
 export interface KeyStore {
   cosmosPublicKey: string;

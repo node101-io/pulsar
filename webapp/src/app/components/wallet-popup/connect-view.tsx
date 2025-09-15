@@ -15,7 +15,7 @@ import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx"
 import { BroadcastMode } from "@interchain-kit/core/types"
 import { useQueryClient } from "@tanstack/react-query"
 import { AnimatePresence, motion } from "motion/react"
-import { KeyStore } from "@/generated/cosmos/minakeys/key_store"
+import { KeyStore } from "@/generated/interchain_security/minakeys/key_store"
 
 export const ConnectView = ({ keyStore: keyStoreData }: {
   keyStore: {

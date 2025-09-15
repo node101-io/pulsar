@@ -2,20 +2,20 @@
 // versions:
 //   protoc-gen-ts_proto  v2.6.1
 //   protoc               unknown
-// source: cosmos/minakeys/tx.proto
+// source: interchain_security/minakeys/tx.proto
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Params } from "./params";
+import { Params } from "./params.js";
 
-export const protobufPackage = "cosmos.minakeys";
+export const protobufPackage = "interchain_security.minakeys";
 
 /** MsgUpdateParams is the Msg/UpdateParams request type. */
 export interface MsgUpdateParams {
   /** authority is the address that controls the module (defaults to x/gov unless overwritten). */
   authority: string;
   /** NOTE: All parameters must be supplied. */
-  params: Params | undefined;
+  params?: Params | undefined;
 }
 
 /**
@@ -514,74 +514,21 @@ export const MsgUpdateKeyStoreResponse: MessageFns<MsgUpdateKeyStoreResponse> = 
   },
 };
 
-/** Msg defines the Msg service. */
-export interface Msg {
-  /**
-   * UpdateParams defines a (governance) operation for updating the module
-   * parameters. The authority defaults to the x/gov module account.
-   */
-  UpdateParams(request: MsgUpdateParams): Promise<MsgUpdateParamsResponse>;
-  CreateKeyStore(request: MsgCreateKeyStore): Promise<MsgCreateKeyStoreResponse>;
-  UpdateKeyStore(request: MsgUpdateKeyStore): Promise<MsgUpdateKeyStoreResponse>;
-}
-
-export const MsgServiceName = "cosmos.minakeys.Msg";
-export class MsgClientImpl implements Msg {
-  private readonly rpc: Rpc;
-  private readonly service: string;
-  constructor(rpc: Rpc, opts?: { service?: string }) {
-    this.service = opts?.service || MsgServiceName;
-    this.rpc = rpc;
-    this.UpdateParams = this.UpdateParams.bind(this);
-    this.CreateKeyStore = this.CreateKeyStore.bind(this);
-    this.UpdateKeyStore = this.UpdateKeyStore.bind(this);
-  }
-  UpdateParams(request: MsgUpdateParams): Promise<MsgUpdateParamsResponse> {
-    const data = MsgUpdateParams.encode(request).finish();
-    const promise = this.rpc.request(this.service, "UpdateParams", data);
-    return promise.then((data) => MsgUpdateParamsResponse.decode(new BinaryReader(data)));
-  }
-
-  CreateKeyStore(request: MsgCreateKeyStore): Promise<MsgCreateKeyStoreResponse> {
-    const data = MsgCreateKeyStore.encode(request).finish();
-    const promise = this.rpc.request(this.service, "CreateKeyStore", data);
-    return promise.then((data) => MsgCreateKeyStoreResponse.decode(new BinaryReader(data)));
-  }
-
-  UpdateKeyStore(request: MsgUpdateKeyStore): Promise<MsgUpdateKeyStoreResponse> {
-    const data = MsgUpdateKeyStore.encode(request).finish();
-    const promise = this.rpc.request(this.service, "UpdateKeyStore", data);
-    return promise.then((data) => MsgUpdateKeyStoreResponse.decode(new BinaryReader(data)));
-  }
-}
-
-interface Rpc {
-  request(service: string, method: string, data: Uint8Array): Promise<Uint8Array>;
-}
-
 function bytesFromBase64(b64: string): Uint8Array {
-  if ((globalThis as any).Buffer) {
-    return Uint8Array.from(globalThis.Buffer.from(b64, "base64"));
-  } else {
-    const bin = globalThis.atob(b64);
-    const arr = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; ++i) {
-      arr[i] = bin.charCodeAt(i);
-    }
-    return arr;
+  const bin = globalThis.atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; ++i) {
+    arr[i] = bin.charCodeAt(i);
   }
+  return arr;
 }
 
 function base64FromBytes(arr: Uint8Array): string {
-  if ((globalThis as any).Buffer) {
-    return globalThis.Buffer.from(arr).toString("base64");
-  } else {
-    const bin: string[] = [];
-    arr.forEach((byte) => {
-      bin.push(globalThis.String.fromCharCode(byte));
-    });
-    return globalThis.btoa(bin.join(""));
-  }
+  const bin: string[] = [];
+  arr.forEach((byte) => {
+    bin.push(globalThis.String.fromCharCode(byte));
+  });
+  return globalThis.btoa(bin.join(""));
 }
 
 type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;
