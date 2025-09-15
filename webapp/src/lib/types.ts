@@ -45,6 +45,7 @@ export interface MinaProvider {
   addChain(args: AddChainArgs): Promise<ChainInfoArgs | ProviderError>;
   signMessage(args: SignMessageArgs): Promise<SignedData | ProviderError>;
   sendPayment(args: SendPaymentArgs): Promise<SendTransactionResult | ProviderError>;
+  sendTransaction?(args: { transaction: string } | { transaction: any }): Promise<SendTransactionResult | ProviderError>;
   on(event: "accountsChanged", callback: (accounts: string[]) => void): void;
   on(event: "chainChanged", callback: (chainInfo: ChainInfoArgs) => void): void;
 }

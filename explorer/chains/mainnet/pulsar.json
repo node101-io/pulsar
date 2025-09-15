@@ -1,0 +1,37 @@
+{
+  "chain_name": "pulsar",
+  "registry_name": "pulsar",
+  "api": [
+    {
+      "provider": "node",
+      "address": "http://5.9.42.22:1317"
+    }
+  ],
+  "rpc": [
+    {
+      "provider": "node",
+      "address": "http://5.9.42.22:26657"
+    }
+  ],
+  "sdk_version": "0.50.13",
+  "coin_type": "118",
+  "min_tx_fee": "500",
+  "addr_prefix": "consumer",
+  "logo": "https://pulsar-seven.vercel.app/favicon.ico",
+  "assets": [
+    {
+      "base": "stake",
+      "symbol": "STAKE",
+      "exponent": "6",
+      "coingecko_id": "",
+      "logo": "https://pulsar-seven.vercel.app/favicon.ico"
+    },
+    {
+      "base": "token",
+      "symbol": "TOKEN",
+      "exponent": "6",
+      "coingecko_id": "",
+      "logo": "https://pulsar-seven.vercel.app/favicon.ico"
+    }
+  ]
+}

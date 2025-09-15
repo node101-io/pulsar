@@ -124,7 +124,15 @@ export default function Transactions() {
         type: 'outgoing'
       }
     ],
-    pulsar: []
+    pulsar: [
+      {
+        hash: '0xp7b9d5e2f3c8410296fe',
+        amount: 100000,
+        date: new Date('2025-08-14'),
+        type: 'outgoing',
+        to: 'consumer1430...k3lcn'
+      },
+    ]
   }
 
   return (
@@ -199,14 +207,8 @@ export default function Transactions() {
         )}
 
         <div className="flex-1 flex flex-col items-center justify-center text-center">
-          {!isConnected ? (
-            <div className="my-24 flex flex-col items-center justify-center">
-              <p className="text-2xl text-background mb-4 font-medium font-family-darker-grotesque leading-none">
-                Connect wallet to display<br />your transactions.
-              </p>
-              <Image src="/no-transaction.svg" alt="No transactions" width={48} height={48} />
-            </div>
-          ) : (
+          {/* Always show transactions, even when wallet is not connected */}
+          {(
             <div className="flex flex-col w-full h-72 max-h-72 overflow-y-scroll scrollbar scrollbar-thumb-[#66A55A] scrollbar-track-text scrollbar-thumb-border scrollbar-thumb-rounded-full scrollbar-track-rounded-full scrollbar-w-2 scrollbar-hover:scrollbar-thumb-[#58824f]">
               {activeTransactionType === 'bridge' ? (
                 <>
@@ -239,9 +241,9 @@ export default function Transactions() {
                           <div className="flex flex-col items-end">
                             <div className="flex items-center gap-1">
                               <p className="text-base text-[#585858] font-medium font-family-darker-grotesque leading-none">{transaction.amount} MINA</p>
-                              <Image src='/mina-token-logo.png' width={16} height={16} alt="Mina" className="border-1 border-black rounded-full mt-1" />
+                              <Image src='/pulsar-token-logo.png' width={16} height={16} alt="Mina" className="border-1 border-black rounded-full mt-1" />
                             </div>
-                            <p className="text-base text-[#585858] font-medium font-family-darker-grotesque leading-none">~${(transaction.amount * price).toFixed(2)}</p>
+                            {/* <p className="text-base text-[#585858] font-medium font-family-darker-grotesque leading-none">~${(transaction.amount * price).toFixed(2)}</p> */}
                           </div>
                         </a>
                         ))}
@@ -264,20 +266,64 @@ export default function Transactions() {
                   })()}
                 </>
               ) : (
-                <div className="my-auto flex flex-col items-center justify-center">
-                  {searchAddress ? (
-                    <div className="text-2xl text-background mb-4 font-medium font-family-darker-grotesque leading-none text-center">
-                      <p>No pulsar transactions found</p>
-                      <p>matching your search.</p>
-                    </div>
-                  ) : (
-                    <div className="text-2xl text-background mb-4 font-medium font-family-darker-grotesque leading-none text-center">
-                      <p>No pulsar transactions</p>
-                      <p>available yet.</p>
-                    </div>
-                  )}
-                  <Image src="/no-transaction.svg" alt="No transactions" width={48} height={48} />
-                </div>
+                <>
+                  {(() => {
+                    const filteredTransactions = mockTransactions.pulsar
+                      .filter(transaction =>
+                        transaction.hash.toLowerCase().includes(searchAddress.toLowerCase())
+                      );
+
+                    return filteredTransactions.length > 0 ? (
+                      <div className="gap-4 flex flex-col pr-6 pb-4">
+                        {filteredTransactions.map((transaction) => (
+                        <a
+                          key={transaction.hash}
+                          className="flex gap-3 items-center justify-between"
+                          href={`https://explorer.pulsar.com/tx/${transaction.hash}`}
+                          target="_blank"
+                        >
+                          <div className={cn(
+                            "flex items-center justify-center size-8 border-1 border-black rounded-full",
+                            transaction.type === "outgoing" ? "bg-[#FFAB90]" : "bg-[#CBDCDB]"
+                          )}>
+                            <Image src='/arrow-dark.svg' width={14} height={14} alt="Arrow" className={cn(transaction.type === "outgoing" ? "-rotate-45" : "rotate-135")} />
+                          </div>
+                          <div className="flex flex-col items-start mr-auto pb-1">
+                            <h3 className="text-xl text-background font-medium font-family-darker-grotesque leading-none">
+                              {transaction.type === "outgoing" ? "Send Token" : "Receive Token"}
+                            </h3>
+                            <p className="text-base text-[#585858] font-medium font-family-darker-grotesque leading-none">
+                              {/* {transaction.date.toLocaleDateString()} • {transaction.type === "outgoing" ? `To: ${transaction.to}` : `From: ${transaction.from}`} */}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end">
+                            <div className="flex items-center gap-1">
+                              <p className="text-base text-[#585858] font-medium font-family-darker-grotesque leading-none">{transaction.amount} PMINA</p>
+                              <Image src='/pulsar-token-logo.png' width={16} height={16} alt="Mina" className="border-1 border-black rounded-full mt-1" />
+                            </div>
+                            {/* <p className="text-base text-[#585858] font-medium font-family-darker-grotesque leading-none">~${(transaction.amount * price).toFixed(2)}</p> */}
+                          </div>
+                        </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="my-auto flex flex-col items-center justify-center">
+                        {searchAddress ? (
+                          <div className="text-2xl text-background mb-4 font-medium font-family-darker-grotesque leading-none text-center">
+                            <p>No pulsar transactions found</p>
+                            <p>matching your search.</p>
+                          </div>
+                        ) : (
+                          <div className="text-2xl text-background mb-4 font-medium font-family-darker-grotesque leading-none text-center">
+                            <p>No pulsar transactions</p>
+                            <p>available yet.</p>
+                          </div>
+                        )}
+                        <Image src="/no-transaction.svg" alt="No transactions" width={48} height={48} />
+                      </div>
+                    );
+                  })()}
+                </>
               )}
             </div>
           )}

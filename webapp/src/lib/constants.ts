@@ -1,7 +1,8 @@
 import type { Chain, AssetList } from "@chain-registry/types";
 
-export const MINA_RPC_URL = "https://api.minascan.io/node/mainnet/v1/graphql"
-export const BRIDGE_ADDRESS = "B62qkUHaJUHERZuCHQhXCQ8xsGBqyYSgjQsKnKN5HhSJecakuJ4pYyk"
+export const MINA_RPC_URL = "http://65.108.68.236:8080/graphql";
+//  || "https://api.minascan.io/node/mainnet/v1/graphql"
+export const BRIDGE_ADDRESS = "B62qoaJYLUD66gzvSnjwsHJP2JHc4mPvsSKhgHUUL4M64uW8Yamj1RD";
 
 export const consumerChain: Chain = {
   chainType: "cosmos",

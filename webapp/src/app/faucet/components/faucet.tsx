@@ -17,8 +17,8 @@ export default function Faucet() {
   }, []);
 
   const handleDrip = () => {
-    if (!connectedWallet)
-      return toast.error('Please connect your wallet first');
+    // if (!connectedWallet)
+    //   return toast.error('Please connect your wallet first');
 
     dripMutation.mutate({ walletAddress: inputRef.current?.value || '' }, {
       onSuccess: (data) => {
@@ -66,10 +66,10 @@ export default function Faucet() {
         </div>
 
         <button
-          disabled={!mounted || !connectedWallet || dripMutation.isPending}
+          disabled={!mounted || dripMutation.isPending}
           className={cn(
             "mx-auto px-10 pt-2.5 pb-1.5 flex items-center justify-center gap-3 rounded-full transition-all leading-none text-background text-lg font-medium border-1 border-black",
-            !mounted || !connectedWallet || dripMutation.isPending
+            !mounted || dripMutation.isPending
               ? "opacity-50 cursor-not-allowed bg-gray-200"
               : "hover:bg-background hover:text-text cursor-pointer bg-text"
           )}

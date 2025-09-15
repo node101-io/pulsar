@@ -1,22 +1,21 @@
-import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 import { consumerChain } from "./constants";
 import { MsgSend } from "cosmjs-types/cosmos/bank/v1beta1/tx";
 import { Any } from "cosmjs-types/google/protobuf/any";
-import { TxBody, SignDoc } from "cosmjs-types/cosmos/tx/v1beta1/tx";
+import { TxBody, SignDoc, TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 import { Registry, makeAuthInfoBytes, encodePubkey, coin } from "@cosmjs/proto-signing";
 
-import { MsgCreateKeyStore } from "@/generated/cosmos/minakeys/tx";
+import { MsgCreateKeyStore } from "@/generated/interchain_security/minakeys/tx";
 
 const registry = new Registry();
 registry.register("/cosmos.bank.v1beta1.MsgSend", MsgSend);
 
 const cosmosTxTypeExtension = Any.fromPartial({
-  typeUrl: "/cosmos.minakeys.TxTypeExtension",
+  typeUrl: "/interchain_security.minakeys.TxTypeExtension",
   // 0 = COSMOS_TX
   value: Uint8Array.from([8, 0]), // protobuf encoded: field 1, varint, value 0
 });
 const minaTxTypeExtension = Any.fromPartial({
-  typeUrl:  "/cosmos.minakeys.TxTypeExtension",
+  typeUrl:  "/interchain_security.minakeys.TxTypeExtension",
   // 1 = MINA_TX
   value: Uint8Array.from([8, 1]), // protobuf encoded: field 1, varint, value 1
 });
@@ -108,13 +107,13 @@ export const createKeyStoreTx = ({
 
   const bodyBytes = TxBody.encode(TxBody.fromPartial({
     messages: [{
-      typeUrl: "/cosmos.minakeys.MsgCreateKeyStore",
+      typeUrl: "/interchain_security.minakeys.MsgCreateKeyStore",
       value: MsgCreateKeyStore.encode(MsgCreateKeyStore.fromPartial({
         creator: fromAddress,
         cosmosPublicKey: cosmosPublicKeyHex,
         minaPublicKey: minaPublicKey,
-        cosmosSignature: cosmosSignature,
-        minaSignature: minaSignature,
+        cosmosSignature: Buffer.from(cosmosSignature),
+        minaSignature: Buffer.from(minaSignature),
       })).finish(),
     }],
     memo: "Creating KeyStore with cross-signature validation",
