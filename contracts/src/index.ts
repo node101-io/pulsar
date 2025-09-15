@@ -53,6 +53,7 @@ import {
   fetchBlockHeight,
   fetchEvents,
   setMinaNetwork,
+  waitForTransaction,
 } from './utils/fetch.js';
 import {
   GenerateSettlementProof,
@@ -129,6 +130,7 @@ export {
   fetchBlockHeight,
   fetchEvents,
   setMinaNetwork,
+  waitForTransaction,
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
