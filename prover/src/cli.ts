@@ -340,6 +340,60 @@ async function performLogContractState(contractInstance: SettlementContract) {
     }
 }
 
+async function performRecoverBase58Address() {
+    console.log("\n🔧 Recover Base58 Address from Private Key...\n");
+
+    const { encodedPubkey } = await inquirer.prompt([
+        {
+            type: "input",
+            name: "encodedPubkey",
+            message: "Enter encoded public key (base58):",
+        },
+    ]);
+
+    try {
+        const pubKey = PulsarEncoder.fromAddress(encodedPubkey);
+
+        console.log("─".repeat(50));
+        console.log(`Base58 (B62 format) pubkey: ${pubKey.toBase58()}`);
+        console.log("─".repeat(50));
+
+        printSuccess("Base58 address recovered successfully!");
+    } catch (error) {
+        printError("Failed to recover Base58 address!");
+        console.log(`Details: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+    }
+}
+
+async function showUtilsMenu(): Promise<"recover-base58" | "back"> {
+    console.log("\n");
+    const { action } = await inquirer.prompt([
+        {
+            type: "list",
+            name: "action",
+            message: "🔧 Utils - What would you like to do?",
+            choices: [
+                {
+                    name: "🔑 Recover Base58 Address",
+                    value: "recover-base58",
+                    short: "Recover Address",
+                },
+                new inquirer.Separator(),
+                {
+                    name: "🔙 Back to Main Menu",
+                    value: "back",
+                    short: "Back",
+                },
+            ],
+            pageSize: 10,
+            loop: false,
+        },
+    ]);
+
+    return action;
+}
+
 async function showMainMenu(): Promise<"deposit" | "withdraw" | "log-state" | "exit"> {
     console.log("\n");
     const { action } = await inquirer.prompt([
@@ -378,7 +432,7 @@ async function showMainMenu(): Promise<"deposit" | "withdraw" | "log-state" | "e
     return action;
 }
 
-async function showFirstMenu(): Promise<"warm-up-cache" | "contract-actions"> {
+async function showFirstMenu(): Promise<"warm-up-cache" | "contract-actions" | "utils"> {
     console.log("\n");
     const { action } = await inquirer.prompt([
         {
@@ -395,6 +449,11 @@ async function showFirstMenu(): Promise<"warm-up-cache" | "contract-actions"> {
                     name: "🏛️ Contract Actions (Deposit/Withdraw)",
                     value: "contract-actions",
                     short: "Contract Actions",
+                },
+                {
+                    name: "🔧 Utils",
+                    value: "utils",
+                    short: "Utils",
                 },
             ],
             pageSize: 10,
@@ -444,6 +503,37 @@ async function main() {
 
         if (firstAction === "warm-up-cache") {
             await performWarmUpCache();
+
+            const nextAction = await showExitMenu();
+            if (nextAction === "exit") {
+                console.log("\n Exit cli");
+                process.exit(0);
+            }
+        } else if (firstAction === "utils") {
+            while (true) {
+                const utilsAction = await showUtilsMenu();
+
+                if (utilsAction === "back") {
+                    break;
+                }
+
+                if (utilsAction === "recover-base58") {
+                    await performRecoverBase58Address();
+                }
+
+                const { continueUtils } = await inquirer.prompt([
+                    {
+                        type: "confirm",
+                        name: "continueUtils",
+                        message: "\n🔄 Would you like to use another utility?",
+                        default: true,
+                    },
+                ]);
+
+                if (!continueUtils) {
+                    break;
+                }
+            }
 
             const nextAction = await showExitMenu();
             if (nextAction === "exit") {
