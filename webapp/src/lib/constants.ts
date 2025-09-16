@@ -34,14 +34,14 @@ export const consumerChain: Chain = {
   staking: {
     stakingTokens: [
       {
-        denom: "stake",
+        denom: "upmina",
       },
     ],
   },
   fees: {
     feeTokens: [
       {
-        denom: "stake",
+        denom: "upmina",
         fixedMinGasPrice: 0.025,
       },
     ],
@@ -52,14 +52,14 @@ export const consumerAssetList: AssetList = {
   chainName: "consumer",
   assets: [
     {
-      base: "stake",
-      name: "stake",
-      display: "stake",
-      symbol: "STAKE",
+      base: "upmina",
+      name: "upmina",
+      display: "pmina",
+      symbol: "PMINA",
       typeAsset: "sdk.coin",
       denomUnits: [
-        { denom: "stake", exponent: 0 },
-        { denom: "stake", exponent: 6 },
+        { denom: "upmina", exponent: 0 },
+        { denom: "pmina", exponent: 6 },
       ],
     },
     {

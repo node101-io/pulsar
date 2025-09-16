@@ -9,7 +9,7 @@ export function cn(...inputs: ClassValue[]) {
 export const fetchPminaBalance = async (account: string): Promise<number> => {
   const balance = await fetch(`http://5.9.42.22:1317/cosmos/bank/v1beta1/balances/${account}`);
   const json = await balance.json() as { balances: { denom: string, amount: string }[] };
-  return Number(json.balances.find(item => item.denom === 'stake')?.amount ?? 0);
+  return Number(json.balances.find(item => item.denom === 'upmina')?.amount ?? 0);
 };
 
 export const formatTimeLeft = (ms: number): string => {

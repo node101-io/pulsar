@@ -51,57 +51,6 @@ export default function Bridge() {
     setGasFee(0);
   }, [activeTab]);
 
-  const waitForMinaTx = async (
-    txHash: string
-  ): Promise<{
-    status: "INCLUDED" | "REJECTED" | "TIMEOUT";
-    reason?: string;
-  }> => {
-    try {
-      const { fetchTransactionStatus, checkZkappTransaction } = await import(
-        "o1js"
-      );
-      const maxAttempts = 120; // ~6 minutes at 3s intervals
-      const intervalMs = 3000;
-
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          const status = await fetchTransactionStatus(txHash, MINA_RPC_URL);
-          if (status === "INCLUDED") return { status: "INCLUDED" } as const;
-          if (status === "UNKNOWN") {
-            // Try to retrieve failure reasons if available in recent blocks
-            try {
-              const res = await checkZkappTransaction(txHash);
-              if (!res.success && res.failureReason) {
-                const reason = res.failureReason
-                  .map((lvl1) => lvl1.map((lvl2) => lvl2.join(" ")).join(" "))
-                  .join("; ");
-                if (reason) return { status: "REJECTED", reason } as const;
-              }
-            } catch {}
-          }
-        } catch {}
-        await new Promise((r) => setTimeout(r, intervalMs));
-      }
-
-      // Final check for explicit failure reasons before timing out
-      try {
-        const res = await checkZkappTransaction(txHash);
-        if (!res.success && res.failureReason) {
-          const reason = res.failureReason
-            .map((lvl1) => lvl1.map((lvl2) => lvl2.join(" ")).join(" "))
-            .join("; ");
-          if (reason) return { status: "REJECTED", reason } as const;
-        }
-      } catch {}
-
-      return { status: "TIMEOUT" } as const;
-    } catch (e) {
-      console.error("waitForMinaTx error:", e);
-      return { status: "TIMEOUT" } as const;
-    }
-  };
-
   const handleBridge = async () => {
     if (!account || !isConnected) {
       toast.error("Please connect your wallet first");
@@ -139,6 +88,7 @@ export default function Bridge() {
           MultisigVerifierProgram,
           ActionStackProgram,
           ValidateReduceProgram,
+          waitForTransaction,
         } = await import("pulsar-contracts");
 
         Mina.setActiveInstance(Mina.Network({ mina: MINA_RPC_URL }));
@@ -210,19 +160,19 @@ export default function Bridge() {
         console.log("tx hash", result);
 
         const loadingId = toast.loading("Waiting for confirmation on Mina...");
-        const finalStatus = await waitForMinaTx(result.hash);
+        const finalStatus = await waitForTransaction(result.hash, MINA_RPC_URL);
         toast.dismiss(loadingId);
 
-        if (finalStatus.status === "INCLUDED") {
+        if (finalStatus.success) {
           toast.success("Deposit confirmed on-chain.");
           setAmount("");
           setGasFee(0);
-        } else if (finalStatus.status === "REJECTED") {
-          toast.error(
-            `Deposit failed: ${finalStatus.reason || "Unknown error"}`
-          );
         } else {
-          toast("No confirmation yet. It may still be pending.");
+          toast.error(
+            `Deposit failed: ${finalStatus.failureReason || "Unknown error"}`
+          );
+          setIsTransacting(false);
+          return;
         }
       } catch (err: any) {
         console.error(err);
