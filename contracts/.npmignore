@@ -3,7 +3,6 @@ src
 benchmarks
 
 build/src/benchmark
-build/src/scripts
 build/src/test
 build/src/utils/peripheral
 # Editor

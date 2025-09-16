@@ -37,6 +37,9 @@ import {
 } from '../types/PulsarAction';
 import { fetchRawActions } from '../utils/fetch';
 import { actionListAdd, emptyActionListHash } from '../types/actionHelpers';
+import { DeployScripts } from '../scripts/deploy.js';
+
+const { sendMina } = DeployScripts;
 
 describe('SettlementProof tests', () => {
   const testEnvironment = process.env.TEST_ENV ?? 'local';
@@ -84,25 +87,6 @@ describe('SettlementProof tests', () => {
 
   // Local Mina blockchain
   let Local: Awaited<ReturnType<typeof Mina.LocalBlockchain>>;
-
-  async function sendMina(
-    senderKey: PrivateKey,
-    receiverKey: PublicKey,
-    amount: UInt64
-  ) {
-    const tx = await Mina.transaction(
-      { sender: senderKey.toPublicKey(), fee },
-      async () => {
-        const senderAccount = AccountUpdate.createSigned(
-          senderKey.toPublicKey()
-        );
-        AccountUpdate.fundNewAccount(senderKey.toPublicKey());
-        senderAccount.send({ to: receiverKey, amount });
-      }
-    );
-
-    await waitTransactionAndFetchAccount(tx, [senderKey], [receiverKey]);
-  }
 
   async function waitTransactionAndFetchAccount(
     tx: Awaited<ReturnType<typeof Mina.transaction>>,

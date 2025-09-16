@@ -43,7 +43,6 @@ import {
 } from '../test/mock.js';
 import { TestUtils } from '../utils/testUtils.js';
 import { performance } from 'node:perf_hooks';
-// import { memoryUsage } from 'node:process';
 import why from 'why-is-node-running';
 import {
   Block,
@@ -57,16 +56,9 @@ import {
   SETTLEMENT_MATRIX_SIZE,
 } from '../utils/constants.js';
 import { CosmosSignature, PulsarAuth } from '../types/PulsarAction.js';
+import { DeployScripts } from '../scripts/deploy.js';
 
-// function logMem(label = '') {
-//   if (!logsEnabled) return;
-//   const { rss, heapUsed, external } = memoryUsage();
-//   console.log(label, {
-//     rss: (rss / 1e6).toFixed(0) + ' MB',
-//     heap: (heapUsed / 1e6).toFixed(0) + ' MB',
-//     ext: (external / 1e6).toFixed(0) + ' MB',
-//   });
-// }
+const { sendMina } = DeployScripts;
 
 interface Sample {
   label: string;
@@ -395,23 +387,6 @@ async function main() {
   await BenchActionStackProgram(ACTION_QUEUE_SIZE);
   await BenchActionStackProgram(ACTION_QUEUE_SIZE * 2);
   await BenchActionStackProgram(ACTION_QUEUE_SIZE * 4);
-}
-
-async function sendMina(
-  senderKey: PrivateKey,
-  receiverKey: PublicKey,
-  amount: UInt64
-) {
-  const tx = await Mina.transaction(
-    { sender: senderKey.toPublicKey(), fee },
-    async () => {
-      const senderAccount = AccountUpdate.createSigned(senderKey.toPublicKey());
-      AccountUpdate.fundNewAccount(senderKey.toPublicKey());
-      senderAccount.send({ to: receiverKey, amount });
-    }
-  );
-
-  await waitTransactionAndFetchAccount(tx, [senderKey], [receiverKey]);
 }
 
 async function settlementProofBenchmark(

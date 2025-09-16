@@ -26,6 +26,9 @@ import { List } from '../types/common.js';
 import { ActionStackProgram } from '../ActionStack.js';
 import { MapFromArray, PrepareBatch } from '../utils/reduceWitness.js';
 import { analyzeMethods, enableLogs, log } from '../utils/loggers.js';
+import { DeployScripts } from '../scripts/deploy.js';
+
+const { sendMina } = DeployScripts;
 
 const testEnvironment = process.env.TEST_ENV ?? 'local';
 const localTest = testEnvironment === 'local';
@@ -193,23 +196,6 @@ log('ActionStackProgram compiled');
 if (proofsEnabled) {
   await SettlementContract.compile();
   log('SettlementContract compiled');
-}
-
-async function sendMina(
-  senderKey: PrivateKey,
-  receiverKey: PublicKey,
-  amount: UInt64
-) {
-  const tx = await Mina.transaction(
-    { sender: senderKey.toPublicKey(), fee },
-    async () => {
-      const senderAccount = AccountUpdate.createSigned(senderKey.toPublicKey());
-      AccountUpdate.fundNewAccount(senderKey.toPublicKey());
-      senderAccount.send({ to: receiverKey, amount });
-    }
-  );
-
-  await waitTransactionAndFetchAccount(tx, [senderKey], [receiverKey]);
 }
 
 async function waitTransactionAndFetchAccount(
