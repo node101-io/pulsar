@@ -27,6 +27,13 @@
       "logo": "https://pulsar-seven.vercel.app/favicon.ico"
     },
     {
+      "base": "upmina",
+      "symbol": "upMina",
+      "exponent": "6",
+      "coingecko_id": "",
+      "logo": "https://pulsar-seven.vercel.app/favicon.ico"
+    },
+    {
       "base": "token",
       "symbol": "TOKEN",
       "exponent": "6",
