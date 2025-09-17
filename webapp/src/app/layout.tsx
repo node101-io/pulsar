@@ -5,6 +5,7 @@ import { Toaster } from "react-hot-toast"
 import { MinaWalletProvider } from "@/app/_providers/mina-wallet"
 import { PulsarWalletProvider } from "@/app/_providers/pulsar-wallet"
 import { QueryClientProvider } from "@/app/_providers/query-client"
+import { WorkerProvider } from "@/app/_providers/worker"
 import Header from "./components/header"
 import localFont from "next/font/local"
 import { Darker_Grotesque } from "next/font/google"
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: {
         <MinaWalletProvider>
           <PulsarWalletProvider>
             <QueryClientProvider>
+              <WorkerProvider>
               <Toaster
                 position="top-center"
                 toastOptions={{
@@ -65,8 +67,9 @@ export default function RootLayout({ children }: {
                   },
                 }}
               />
-              <Header />
-              {children}
+                <Header />
+                {children}
+              </WorkerProvider>
             </QueryClientProvider>
           </PulsarWalletProvider>
         </MinaWalletProvider>

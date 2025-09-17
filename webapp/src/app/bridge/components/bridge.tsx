@@ -7,9 +7,13 @@ import { useMinaWallet } from "@/app/_providers/mina-wallet";
 import { BRIDGE_ADDRESS, MINA_RPC_URL } from "@/lib/constants";
 import { toast } from "react-hot-toast";
 import { useMinaPrice, usePminaBalance, useMinaBalance } from "@/lib/hooks";
+import { useWorker, useWorkerInit } from "@/app/_providers/worker";
 
 export default function Bridge() {
   const { account, isConnected } = useMinaWallet();
+  const worker = useWorker();
+  const { isInitialized, isInitializing, workerReady, initializeWorker } =
+    useWorkerInit();
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
   const [amount, setAmount] = useState<string>("");
   const [gasFee, setGasFee] = useState<number>(0);
@@ -78,40 +82,12 @@ export default function Bridge() {
           return;
         }
 
-        const { Mina, PublicKey, UInt64, Field, fetchAccount } = await import(
-          "o1js"
-        );
-        const {
-          SettlementContract,
-          PulsarAuth,
-          CosmosSignature,
-          MultisigVerifierProgram,
-          ActionStackProgram,
-          ValidateReduceProgram,
-          waitForTransaction,
-        } = await import("pulsar-contracts");
+        if (!worker) {
+          toast.error("Worker not ready. Please try again.");
+          return;
+        }
 
-        Mina.setActiveInstance(Mina.Network({ mina: MINA_RPC_URL }));
-
-        const sender = PublicKey.fromBase58(account);
-        await fetchAccount({ publicKey: sender }, MINA_RPC_URL);
-
-        console.time("compile MultisigVerifierProgram");
-        await MultisigVerifierProgram.compile();
-        console.timeEnd("compile MultisigVerifierProgram");
-        console.time("compile ActionStackProgram");
-        await ActionStackProgram.compile();
-        console.timeEnd("compile ActionStackProgram");
-        console.time("compile ValidateReduceProgram");
-        await ValidateReduceProgram.compile();
-        console.timeEnd("compile ValidateReduceProgram");
-        console.time("compile SettlementContract");
-        await SettlementContract.compile();
-        console.timeEnd("compile SettlementContract");
-
-        const contract = new SettlementContract(
-          PublicKey.fromBase58(BRIDGE_ADDRESS)
-        );
+        await initializeWorker();
 
         const amountNano = Math.floor(Number(amount) * 1e9);
         if (!Number.isFinite(amountNano) || amountNano <= 0) {
@@ -119,15 +95,10 @@ export default function Bridge() {
           return;
         }
 
-        const tx = await Mina.transaction({ sender, fee: 1e9 }, async () => {
-          await contract.deposit(
-            UInt64.from(amountNano),
-            PulsarAuth.from(Field(0), CosmosSignature.empty())
-          );
+        const json = await worker.deposit({
+          sender: account,
+          amount: amountNano,
         });
-
-        await tx.prove();
-        const json = tx.toJSON();
         const result = await window.mina.sendTransaction({ transaction: json });
 
         if (!("hash" in result)) {
@@ -160,7 +131,10 @@ export default function Bridge() {
         console.log("tx hash", result);
 
         const loadingId = toast.loading("Waiting for confirmation on Mina...");
-        const finalStatus = await waitForTransaction(result.hash, MINA_RPC_URL);
+        const finalStatus = await worker!.waitForTransaction({
+          hash: result.hash,
+          rpcUrl: MINA_RPC_URL,
+        });
         toast.dismiss(loadingId);
 
         if (finalStatus.success) {
@@ -367,16 +341,34 @@ export default function Bridge() {
         </div>
 
         <button
-          disabled={hasError || !amount || isTransacting || !isConnected}
+          disabled={
+            hasError ||
+            !amount ||
+            isTransacting ||
+            !isConnected ||
+            isInitializing ||
+            !workerReady
+          }
           className={cn(
             "mx-auto px-10 pt-2.5 pb-1.5 justify-center items-center rounded-full transition-all leading-none border-1 border-black uppercase w-fit",
-            hasError || !amount || isTransacting || !isConnected
+            hasError ||
+              !amount ||
+              isTransacting ||
+              !isConnected ||
+              isInitializing ||
+              !workerReady
               ? "opacity-50 cursor-not-allowed bg-gray-200"
               : "hover:bg-background hover:text-text cursor-pointer"
           )}
           onClick={handleBridge}
         >
-          {isTransacting ? "Processing..." : "Bridge"}
+          {!workerReady
+            ? "Loading..."
+            : isInitializing
+            ? "Initializing..."
+            : isTransacting
+            ? "Processing..."
+            : "Bridge"}
         </button>
       </div>
     </main>
