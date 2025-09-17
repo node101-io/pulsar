@@ -47,7 +47,7 @@ export default function Header() {
           height={22}
           className="text-text transition-colors cursor-pointer"
         />
-        <span className="absolute top-0 left-0 -translate-x-1/5 -translate-y-1/2 text-background text-[6px] leading-none px-1 pt-1 pb-0.5 bg-[#FFB29A] rounded-full">TESTNET</span>
+        <span className="absolute top-0 left-0 -translate-x-1/5 -translate-y-1/2 text-background text-[6px] leading-none px-1 pt-1 pb-0.5 bg-[#FFB29A] rounded-full">DEVNET</span>
       </Link>
 
       <nav className="flex items-center gap-18 text-base text-text">

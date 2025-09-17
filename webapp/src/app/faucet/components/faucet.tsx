@@ -29,7 +29,9 @@ export default function Faucet() {
           return toast.error(data.error || 'Failed to send tokens');
         }
 
-        toast.success(`Successfully sent ${data.data.amount} ${data.data.token}!`);
+        // Backend returns faucet amount in upMINA; display in pMINA
+        const pminaAmount = (data.data.amount / 1e9).toString();
+        toast.success(`Successfully sent ${pminaAmount} ${data.data.token}!`);
       },
       onError: (error) => {
         console.error('Faucet error:', error);
@@ -50,15 +52,15 @@ export default function Faucet() {
       </div>
 
       <div className="w-144 mx-auto bg-text rounded-[30px] p-6 border-1 border-black flex flex-col space-y-5 overflow-hidden">
-        <h2 className="text-xl text-background text-center font-medium mb-2">Pulsar Testnet</h2>
+        <h2 className="text-xl text-background text-center font-medium mb-4 border border-black rounded-full pt-2 pb-1">Pulsar Devnet</h2>
 
         <input
           type="text"
           // value={mounted ? (connectedWallet?.address || '') : ''}
           // readOnly
           ref={inputRef}
-          placeholder="Connect wallet to see address"
-          className="w-full text-center text-lg text-background focus:outline-none leading-none bg-[#BFBFBF] rounded-2xl p-4 font-family-darker-grotesque placeholder:text-[#666]"
+          placeholder="consumer... or B62q..."
+          className="w-full text-center text-lg text-background focus:outline-none leading-none rounded-2xl p-4 font-family-darker-grotesque placeholder:text-[#666]"
         />
 
         <div className="text-center text-sm text-background font-family-darker-grotesque">

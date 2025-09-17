@@ -139,28 +139,6 @@ export function useKeyStore(
   });
 }
 
-export function useBroadcastTx() {
-  return useMutation<{ success: boolean, data: { hash: string, code?: number } }, Error, { tx: string }>({
-    mutationFn: async ({ tx }) => {
-      const res = await client.grpc.call.$post({
-        protoFile: "tx_service.proto",
-        pkg: "cosmos.tx.v1beta1",
-        service: "Service",
-        method: "BroadcastTx",
-        request: {
-          txBytes: tx,
-          mode: 'BROADCAST_MODE_SYNC'
-        }
-      });
-
-      const json = await res.json() as any;
-      const hash = json?.data?.txResponse?.txhash || json?.data?.txResponse?.txHash || json?.data?.txhash;
-
-      return { success: !!json?.success, data: { hash, code: json?.data?.txResponse?.code } };
-    },
-  });
-};
-
 export function useConnectedWallet() {
   const { isConnected: isMinaConnected, account: minaAccount } = useMinaWallet();
   const { status: keplrStatus, address: keplrAddress, username: keplrUsername } = usePulsarWallet();

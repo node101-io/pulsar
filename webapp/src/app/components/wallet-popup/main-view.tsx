@@ -2,7 +2,7 @@ import Image from "next/image"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
 import toast from "react-hot-toast"
-import { useMinaPrice, usePminaBalance } from "@/lib/hooks"
+import { useKeyStore, useMinaPrice, usePminaBalance } from "@/lib/hooks"
 import { useQueryClient } from "@tanstack/react-query"
 import { WalletState } from "@interchain-kit/core"
 
@@ -13,6 +13,7 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
   const { disconnectWallet: disconnectMina, account: minaAccount, isConnected: isMinaConnected } = useMinaWallet();
   const { disconnect: disconnectPulsar, address: pulsarAddress, status: pulsarStatus } = usePulsarWallet();
   const queryClient = useQueryClient();
+  const { data: keyStore } = useKeyStore(pulsarAddress, minaAccount);
 
   const isPulsarConnected = pulsarStatus === WalletState.Connected;
   const currentWallet = isMinaConnected && minaAccount ? 'mina' : isPulsarConnected ? 'pulsar' : null;
@@ -24,8 +25,8 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
     isFetching: isFetchingBalance,
     error: balanceError,
     refetch: refetchBalance
-  } = usePminaBalance(pulsarAddress, {
-    enabled: !!pulsarAddress && isPulsarConnected && currentWallet === 'pulsar',
+  } = usePminaBalance(keyStore?.keyStore?.creator || keyStore?.keyStore?.minaPublicKey, {
+    enabled: !!keyStore?.keyStore?.creator || !!keyStore?.keyStore?.minaPublicKey,
   });
 
   const {
@@ -34,7 +35,7 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
     isFetching: isFetchingPrice,
     error: priceError,
   } = useMinaPrice({
-    enabled: !!minaAccount && isMinaConnected && !isLoadingBalance && !isFetchingBalance && pminaBalance !== undefined && currentWallet === 'mina',
+    enabled: !!minaAccount && isMinaConnected && !isLoadingBalance && !isFetchingBalance && pminaBalance !== undefined,
   });
 
   const handleCopyAddress = () => {
@@ -112,13 +113,13 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
             {getBalance()}
           </h1>
           <div className="flex items-center justify-between mt-1">
-            {priceError && currentWallet === 'mina' ? (
+            {priceError ? (
               <h3 className="text-base text-red-500">Price unavailable</h3>
             ) : (
               getBalanceUSD()
             )}
 
-            {!balanceError && currentWallet === 'mina' && (
+            {!balanceError && (
               <button
                 onClick={() => {
                   refetchBalance();

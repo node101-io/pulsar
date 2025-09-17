@@ -45,10 +45,6 @@ export default function Bridge() {
       : pminaBalanceData || 0;
   const isOverBalance = Number(amount) > balance;
   const hasError = isOverBalance && amount !== "";
-  const currentBalanceError =
-    activeTab === "deposit" ? balanceError : pminaBalanceError;
-  const isLoadingCurrentBalance =
-    activeTab === "deposit" ? isLoadingBalance : isLoadingPminaBalance;
 
   useEffect(() => {
     setAmount("");

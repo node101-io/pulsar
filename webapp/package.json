@@ -41,7 +41,7 @@
     "jstack": "^1.1.1",
     "mina-signer": "^3.0.7",
     "motion": "^12.23.6",
-    "next": "^15.1.6",
+    "next": "15.1.6",
     "o1js": "^2.9.0",
     "pulsar-contracts": "^0.4.20",
     "react": "^19.0.0",

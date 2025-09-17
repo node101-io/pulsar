@@ -1,16 +1,18 @@
 import Image from "next/image"
 import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { useBroadcastTx, useMinaPrice } from "@/lib/hooks";
+import { useKeyStore, useMinaPrice } from "@/lib/hooks";
 import { toast } from "react-hot-toast";
 import { useMinaWallet } from "@/app/_providers/mina-wallet";
 import { usePulsarWallet } from "@/app/_providers/pulsar-wallet";
 import { usePminaBalance, useConnectedWallet } from "@/lib/hooks";
 import { createKeyStoreTx, createSendTokenTx } from "@/lib/tx";
-import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
+import { TxRaw, SignDoc } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 import { DeliverTxResponse } from "@interchainjs/types/rpc";
 import { BroadcastMode, CosmosWallet } from "@interchain-kit/core";
 import { consumerChain } from "@/lib/constants";
+import { fromBase64, toBase64 } from "@cosmjs/encoding";
+import { packMinaSignature } from "@/lib/crypto";
 
 interface SavedAddress {
   name: string;
@@ -30,11 +32,11 @@ export const SendView = ({ setCurrentView }: {
   const { isConnected: isMinaConnected, signMessage: minaSignMessage, account: minaAccount } = useMinaWallet();
   const { getSigningClient, isSigningClientLoading, wallet: pulsarWallet, address: pulsarAddress } = usePulsarWallet();
   const connectedWallet = useConnectedWallet();
-  const broadcastTx = useBroadcastTx();
+  const { data: keyStore } = useKeyStore(pulsarAddress, minaAccount);
 
   const { data: priceData } = useMinaPrice();
-  const { data: pminaBalance } = usePminaBalance(pulsarAddress, {
-    enabled: !!pulsarAddress,
+  const { data: pminaBalance } = usePminaBalance(keyStore?.keyStore?.creator || keyStore?.keyStore?.minaPublicKey, {
+    enabled: !!keyStore?.keyStore?.creator || !!keyStore?.keyStore?.minaPublicKey,
   });
 
   const getSavedAddresses = (): SavedAddress[] => {
@@ -279,85 +281,174 @@ export const SendView = ({ setCurrentView }: {
 
       <button
         onClick={async () => {
-          try {
-            const wallet = pulsarWallet.getWalletOfType(CosmosWallet);
-
-            if (!wallet)
-              return toast.error('Please connect a wallet first', { id: 'no-wallet' });
-
-            const amount = parseFloat(sendAmount);
-            if (!sendAmount || amount <= 0)
-              return toast.error('Please enter a valid amount', { id: 'invalid-amount' });
-
-            if (!recipientAddress || recipientAddress.trim() === '')
-              return toast.error('Please enter a recipient address', { id: 'invalid-recipient' });
-
-            if (pminaBalance && amount > pminaBalance)
-              return toast.error('Insufficient balance', { id: 'insufficient-balance' });
-
-            if (!connectedWallet)
-              return toast.error('Please connect a wallet first', { id: 'no-wallet' });
-
-            toast.loading('Please sign the transaction in your wallet...', { id: 'signing-transaction' });
-
-            const signingClient = await getSigningClient();
-
-            if (!signingClient.client)
-              return toast.error('Please connect a wallet first', { id: 'no-wallet' });
-
-            const account = await wallet.getAccount(consumerChain.chainId!);
-
-            const accountNumber = await signingClient.client.getAccountNumber(account.address).catch(err => {
-              if(/key not found/.test(err.message)) {
-                toast.error('Please get tokens from faucet first', { id: 'no-account' });
+          if (connectedWallet?.type === 'cosmos') {
+            try {
+              const wallet = pulsarWallet.getWalletOfType(CosmosWallet);
+  
+              if (!wallet)
+                return toast.error('Please connect a wallet first', { id: 'no-wallet' });
+  
+              const amount = parseFloat(sendAmount);
+              if (!sendAmount || amount <= 0)
+                return toast.error('Please enter a valid amount', { id: 'invalid-amount' });
+  
+              if (!recipientAddress || recipientAddress.trim() === '')
+                return toast.error('Please enter a recipient address', { id: 'invalid-recipient' });
+  
+              if (pminaBalance && amount > pminaBalance)
+                return toast.error('Insufficient balance', { id: 'insufficient-balance' });
+  
+              if (!connectedWallet)
+                return toast.error('Please connect a wallet first', { id: 'no-wallet' });
+  
+              toast.loading('Please sign the transaction in your wallet...', { id: 'signing-transaction' });
+  
+              const signingClient = await getSigningClient();
+  
+              if (!signingClient.client)
+                return toast.error('Please connect a wallet first', { id: 'no-wallet' });
+  
+              const account = await wallet.getAccount(consumerChain.chainId!);
+  
+              const accountNumber = await signingClient.client.getAccountNumber(account.address).catch(err => {
+                if(/key not found/.test(err.message)) {
+                  toast.error('Please get tokens from faucet first', { id: 'no-account' });
+                  return;
+                }
                 return;
-              }
-              return;
-            });
-            const sequence = await signingClient.client.getSequence(account.address).catch(err => {
-              if(/key not found/.test(err.message)) {
-                toast.error('Please get tokens from faucet first', { id: 'no-account' });
+              });
+              const sequence = await signingClient.client.getSequence(account.address).catch(err => {
+                if(/key not found/.test(err.message)) {
+                  toast.error('Please get tokens from faucet first', { id: 'no-account' });
+                  return;
+                }
                 return;
-              }
-              return;
-            });
-
-            if (accountNumber == undefined || sequence == undefined) return;
-
-            const signDoc = createSendTokenTx({
-              sequence,
-              pubkeyBytes: account.pubkey,
-              accountNumber,
-              fromAddress: connectedWallet.address,
-              toAddress: recipientAddress.trim(),
-              amount: amount.toString(),
-              walletType: connectedWallet.type
-            });
-
-            if (connectedWallet.type === 'cosmos') {
+              });
+  
+              if (accountNumber == undefined || sequence == undefined) return;
+  
+              const upminaAmount = Math.floor(amount * 1e9).toString();
+  
+              const signDoc = createSendTokenTx({
+                sequence,
+                pubkeyBytes: account.pubkey,
+                accountNumber,
+                fromAddress: connectedWallet.address,
+                toAddress: recipientAddress.trim(),
+                amount: upminaAmount,
+                walletType: connectedWallet.type
+              });
+  
               const signedTx = await wallet.signDirect(consumerChain.chainId!, account.address, signDoc);
-
+  
               const protobufTx = TxRaw.encode({
                 bodyBytes: signedTx.signed.bodyBytes,
                 authInfoBytes: signedTx.signed.authInfoBytes,
                 signatures: [new Uint8Array(Buffer.from(signedTx.signature.signature, 'base64'))],
               }).finish();
-
+  
               const txResponse = await wallet.sendTx(consumerChain.chainId!, protobufTx, BroadcastMode.Sync);
               console.log('tx hash', Buffer.from(txResponse).toString('hex').toUpperCase());
-            } else if (connectedWallet.type === 'mina') {
-              // TODO: implement
+  
+              toast.success('Transaction successful', { id: 'transaction-success' });
+  
+              setSendAmount('');
+              setRecipientAddress('');
+              setCurrentView('main');
+            } catch (error) {
+              toast.dismiss('signing-transaction');
+              toast.error(error instanceof Error ? error.message : 'Failed to process transaction', { id: 'transaction-failed' });
+              console.error('Transaction failed:', error);
+            }  
+          } else if (connectedWallet?.type === 'mina') {
+            try {
+              if (!sendAmount || parseFloat(sendAmount) <= 0)
+                return toast.error('Please enter a valid amount', { id: 'invalid-amount' });
+
+              if (!recipientAddress || recipientAddress.trim() === '')
+                return toast.error('Please enter a recipient address', { id: 'invalid-recipient' });
+
+              const amount = parseFloat(sendAmount);
+              if (pminaBalance && amount > pminaBalance)
+                return toast.error('Insufficient balance', { id: 'insufficient-balance' });
+
+              if (!keyStore?.keyStore?.creator)
+                return toast.error('Please register your keystore first', { id: 'no-keystore' });
+
+              toast.loading('Please sign the transaction in your wallet...', { id: 'signing-transaction' });
+
+              const upminaAmount = Math.floor(amount * 1e9).toString();
+
+              const account = await fetch(`http://5.9.42.22:1317/cosmos/auth/v1beta1/accounts/${keyStore.keyStore.creator}`);
+              const accountData = await account.json() as {
+                account: {
+                  "@type": string,
+                  address: string,
+                  pub_key: {
+                    "@type": string,
+                    key: string
+                  },
+                  account_number: string,
+                  sequence: string
+                }
+              };
+
+              const signDoc = createSendTokenTx({
+                sequence: Number(accountData.account.sequence),
+                pubkeyBytes: fromBase64(accountData.account.pub_key.key),
+                accountNumber: BigInt(accountData.account.account_number),
+                fromAddress: accountData.account.address,
+                toAddress: recipientAddress.trim(),
+                amount: upminaAmount,
+                walletType: connectedWallet.type
+              });
+
+              const signBytes = SignDoc.encode(signDoc).finish();
+              let message = '';
+              for (let i = 0; i < signBytes.length; i++) {
+                message += String.fromCharCode(signBytes[i]!);
+              }
+
+              const minaSigned = await minaSignMessage({ message });
+
+              const minaSigBytes = packMinaSignature(minaSigned.signature.field, minaSigned.signature.scalar);
+
+              const protobufTx = TxRaw.encode({
+                bodyBytes: signDoc.bodyBytes,
+                authInfoBytes: signDoc.authInfoBytes,
+                signatures: [minaSigBytes],
+              }).finish();
+
+              const result = await fetch(`http://5.9.42.22:1317/cosmos/tx/v1beta1/txs`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  tx_bytes: toBase64(protobufTx),
+                  mode: 'BROADCAST_MODE_SYNC'
+                })
+              });
+
+              const { tx_response } = await result.json() as { tx_response: { 
+                txhash: string,
+                code: number,
+                raw_log: string
+              }};
+        
+              console.log("result", tx_response);
+
+              if (tx_response.code === 0) {
+                console.log('tx hash', tx_response.txhash);
+                toast.success('Transaction successful', { id: 'transaction-success' });
+                setSendAmount('');
+                setRecipientAddress('');
+                setCurrentView('main');
+              } else {
+                toast.error(`Broadcast failed${tx_response.code ? ` (code ${tx_response.code})` : ''}`, { id: 'transaction-failed' });
+              }
+            } catch (error) {
+              toast.dismiss('signing-transaction');
+              toast.error(error instanceof Error ? error.message : 'Failed to process transaction', { id: 'transaction-failed' });
+              console.error('Transaction failed:', error);
             }
-
-            toast.success('Transaction successful', { id: 'transaction-success' });
-
-            setSendAmount('');
-            setRecipientAddress('');
-            setCurrentView('main');
-          } catch (error) {
-            toast.dismiss('signing-transaction');
-            toast.error(error instanceof Error ? error.message : 'Failed to process transaction', { id: 'transaction-failed' });
-            console.error('Transaction failed:', error);
           }
         }}
         disabled={!connectedWallet || (connectedWallet.type === 'cosmos' && isSigningClientLoading)}
