@@ -1,6 +1,6 @@
 import { jstack } from "jstack"
 
-interface Env {
+export interface Env {
   Bindings: {}
 }
 

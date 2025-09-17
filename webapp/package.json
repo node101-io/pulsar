@@ -54,7 +54,6 @@
   "devDependencies": {
     "@bufbuild/protobuf": "^2.8.0",
     "@cloudflare/workers-types": "^4.20250214.0",
-    "@opennextjs/cloudflare": "^1.5.1",
     "@types/node": "^22.10.6",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
