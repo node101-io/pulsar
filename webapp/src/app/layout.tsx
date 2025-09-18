@@ -34,7 +34,7 @@ export default function RootLayout({ children }: {
     <html lang="en" className={`${recady.variable} ${darkerGrotesque.variable} font-family-recady bg-background h-dvh w-dvw hide-scrollbar`}>
       <head>
         <title>Pulsar</title>
-        <meta name="description" content="TODO" />
+        <meta name="description" content="Jump to Pulsar" />
         <link rel="icon" href="/favicon.ico" />
       </head>
       <body className={`font-recady antialiased h-dvh w-dvw overscroll-none flex flex-col`}>
