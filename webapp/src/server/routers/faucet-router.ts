@@ -9,7 +9,7 @@ import { fromHex, fromBase64 } from "@cosmjs/encoding";
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 import { consumerChain } from "@/lib/constants";
 
-const FAUCET_AMOUNT = 100000
+const FAUCET_AMOUNT = 10 * 1e9
 
 if (!process.env.FAUCET_WALLET_PRIVATE_KEY)
   console.warn("⚠️  FAUCET_WALLET_PRIVATE_KEY environment variable not found.")
