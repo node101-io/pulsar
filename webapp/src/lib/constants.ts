@@ -1,6 +1,6 @@
 import type { Chain, AssetList } from "@chain-registry/types";
 
-export const MINA_RPC_URL = "http://mina.pulsarchain.xyz/graphql";
+export const MINA_RPC_URL = "https://mina.pulsarchain.xyz/graphql";
 //  || "https://api.minascan.io/node/mainnet/v1/graphql"
 export const BRIDGE_ADDRESS = "B62qoaJYLUD66gzvSnjwsHJP2JHc4mPvsSKhgHUUL4M64uW8Yamj1RD";
 
