@@ -16,6 +16,7 @@ import { BroadcastMode } from "@interchain-kit/core/types"
 import { useQueryClient } from "@tanstack/react-query"
 import { AnimatePresence, motion } from "motion/react"
 import { KeyStore } from "@/generated/interchain_security/minakeys/key_store"
+import { suggestPulsarToKeplr } from "@/lib/keplr"
 
 export const ConnectView = ({ keyStore: keyStoreData }: {
   keyStore: {
@@ -191,6 +192,12 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
         });
         window.open('https://chrome.google.com/webstore/detail/keplr/dmkamcknogkgcdfhhbddcghachkejeap', '_blank');
         return;
+      }
+
+      try {
+        await suggestPulsarToKeplr();
+      } catch (e) {
+        console.warn('Keplr suggest chain failed or not needed:', e);
       }
 
       await connectPulsar();
