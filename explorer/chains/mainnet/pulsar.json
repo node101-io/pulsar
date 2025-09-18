@@ -4,13 +4,13 @@
   "api": [
     {
       "provider": "node",
-      "address": "http://5.9.42.22:1317"
+      "address": "https://rest.pulsarchain.xyz/"
     }
   ],
   "rpc": [
     {
       "provider": "node",
-      "address": "http://5.9.42.22:26657"
+      "address": "https://rpc.pulsarchain.xyz/"
     }
   ],
   "sdk_version": "0.50.13",

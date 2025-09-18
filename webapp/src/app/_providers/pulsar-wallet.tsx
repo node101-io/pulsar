@@ -32,8 +32,8 @@ export function PulsarWalletProvider({ children }: {
       endpointOptions={{
         endpoints: {
           consumer: {
-            rpc: ["http://5.9.42.22:26657/"],
-            rest: ["http://5.9.42.22:1317"],
+            rpc: ["https://rpc.pulsarchain.xyz/"],
+            rest: ["https://rest.pulsarchain.xyz/"],
           },
         },
       }}

@@ -22,12 +22,12 @@ export const consumerChain: Chain = {
   apis: {
     rpc: [
       {
-        address: "http://5.9.42.22:26657",
+        address: "https://rpc.pulsarchain.xyz/",
       },
     ],
     rest: [
       {
-        address: "http://5.9.42.22:1317",
+        address: "https://rest.pulsarchain.xyz/",
       },
     ],
   },

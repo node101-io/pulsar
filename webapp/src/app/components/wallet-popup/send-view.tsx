@@ -379,7 +379,7 @@ export const SendView = ({ setCurrentView }: {
 
               const upminaAmount = Math.floor(amount * 1e9).toString();
 
-              const account = await fetch(`http://5.9.42.22:1317/cosmos/auth/v1beta1/accounts/${keyStore.keyStore.creator}`);
+              const account = await fetch(`https://rest.pulsarchain.xyz/cosmos/auth/v1beta1/accounts/${keyStore.keyStore.creator}`);
               const accountData = await account.json() as {
                 account: {
                   "@type": string,
@@ -419,7 +419,7 @@ export const SendView = ({ setCurrentView }: {
                 signatures: [minaSigBytes],
               }).finish();
 
-              const result = await fetch(`http://5.9.42.22:1317/cosmos/tx/v1beta1/txs`, {
+              const result = await fetch(`https://rest.pulsarchain.xyz/cosmos/tx/v1beta1/txs`, {
                 method: 'POST',
                 body: JSON.stringify({
                   tx_bytes: toBase64(protobufTx),
