@@ -48,9 +48,6 @@ function page(p: number) {
 </template>
 <route>
   {
-    meta: {
-      i18n: 'governance',
-      order: 2
-    }
+    meta: {}
   }
 </route>

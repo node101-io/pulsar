@@ -325,10 +325,7 @@ function changeTab(v: string) {
 </template>
 <route>
   {
-    meta: {
-      i18n: 'uptime',
-      order: 8
-    }
+    meta: {}
   }
 </route>
 

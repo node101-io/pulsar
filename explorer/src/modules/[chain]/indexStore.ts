@@ -174,34 +174,34 @@ export const useIndexModule = defineStore('module-index', {
           stats: formatter.formatTokenAmount(bank.supply),
           change: 0,
         },
-        {
-          title: 'Bonded Tokens',
-          color: 'warning',
-          icon: 'mdi-lock',
-          stats: formatter.formatTokenAmount({
-            // @ts-ignore
-            amount: this.pool.bonded_tokens,
-            denom: staking.params.bond_denom,
-          }),
-          change: 0,
-        },
-        {
-          title: 'Inflation',
-          color: 'success',
-          icon: 'mdi-chart-multiple',
-          stats: formatter.formatDecimalToPercent(mintStore.inflation),
-          change: 0,
-        },
-        {
-          title: 'Community Pool',
-          color: 'primary',
-          icon: 'mdi-bank',
-          stats: formatter.formatTokens(
-            // @ts-ignore
-            this.communityPool?.filter((x: Coin) => x.denom === staking.params.bond_denom)
-          ),
-          change: 0,
-        },
+        // {
+        //   title: 'Bonded Tokens',
+        //   color: 'warning',
+        //   icon: 'mdi-lock',
+        //   stats: formatter.formatTokenAmount({
+        //     // @ts-ignore
+        //     amount: this.pool.bonded_tokens,
+        //     denom: staking.params.bond_denom,
+        //   }),
+        //   change: 0,
+        // },
+        // {
+        //   title: 'Inflation',
+        //   color: 'success',
+        //   icon: 'mdi-chart-multiple',
+        //   stats: formatter.formatDecimalToPercent(mintStore.inflation),
+        //   change: 0,
+        // },
+        // {
+        //   title: 'Community Pool',
+        //   color: 'primary',
+        //   icon: 'mdi-bank',
+        //   stats: formatter.formatTokens(
+        //     // @ts-ignore
+        //     this.communityPool?.filter((x: Coin) => x.denom === staking.params.bond_denom)
+        //   ),
+        //   change: 0,
+        // },
       ];
     },
 

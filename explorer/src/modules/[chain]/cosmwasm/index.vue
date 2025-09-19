@@ -102,8 +102,6 @@ function gotoHistory() {
 
 <route>
     {
-      meta: {
-        i18n: 'cosmwasm'
-      }
+      meta: {}
     }
 </route>

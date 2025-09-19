@@ -53,7 +53,7 @@ export default function Transactions() {
               <div className="my-auto flex items-center justify-center h-full">
                 <p className="text-base text-[#585858] whitespace-pre">View all Pulsar transactions </p>
                 <a
-                  href="https://explorer.pulsarchain.xyz/"
+                  href="https://explorer.pulsarchain.xyz/pulsar"
                   target="_blank"
                   className="inline-block border-black rounded-full text-background underline text-base hover:-translate-y-px transition-all duration-300"
                 >

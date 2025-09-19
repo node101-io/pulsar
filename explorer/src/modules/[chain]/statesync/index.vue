@@ -131,8 +131,6 @@ onMounted(() => {
 
 <route>
     {
-      meta: {
-        i18n: 'state-sync'
-      }
+      meta: {}
     }
   </route>

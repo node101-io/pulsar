@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import type { ChainConfig, Endpoint } from '@/types/chaindata';
 import { useDashboard} from './useDashboard';
-import type { NavGroup, NavLink, NavSectionTitle, VerticalNavItems } from '@/layouts/types';
+import type { VerticalNavItems } from '@/layouts/types';
 import { useRouter } from 'vue-router';
 import { CosmosRestClient } from '@/libs/client';
 import {
@@ -99,27 +99,8 @@ export const useBlockchain = defineStore('blockchain', {
         }
       });
 
-      // combine all together
-      return [
-        ...currNavItem,
-        { heading: 'Ecosystem' } as NavSectionTitle,
-        {
-          title: 'Favorite',
-          children: favNavItems,
-          badgeContent: favNavItems.length,
-          badgeClass: 'bg-primary',
-          i18n: true,
-          icon: { icon: 'mdi-star', size: '22' },
-        } as NavGroup,
-        {
-          title: 'All Blockchains',
-          to: { path: '/' },
-          badgeContent: this.dashboard.length,
-          badgeClass: 'bg-primary',
-          i18n: true,
-          icon: { icon: 'mdi-grid', size: '22' },
-        } as NavLink,
-      ];
+      // combine all together (hide Ecosystem/Favorite/All Blockchains sections)
+      return [...currNavItem];
     },
   },
   actions: {
