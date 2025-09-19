@@ -4,22 +4,48 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useMinaWallet } from "@/app/_providers/mina-wallet";
-import { BRIDGE_ADDRESS, MINA_RPC_URL } from "@/lib/constants";
+import { BRIDGE_ADDRESS, MINA_RPC_URL, consumerChain } from "@/lib/constants";
 import { toast } from "react-hot-toast";
-import { useMinaPrice, usePminaBalance, useMinaBalance } from "@/lib/hooks";
+import {
+  useMinaPrice,
+  usePminaBalance,
+  useMinaBalance,
+  useConnectedWallet,
+  useKeyStore,
+} from "@/lib/hooks";
 import { useWorker, useWorkerInit } from "@/app/_providers/worker";
+import { usePulsarWallet } from "@/app/_providers/pulsar-wallet";
+import { createLockForWithdrawalTx } from "@/lib/tx";
+import { TxRaw, SignDoc } from "cosmjs-types/cosmos/tx/v1beta1/tx";
+import { fromBase64, toBase64 } from "@cosmjs/encoding";
+import { packMinaSignature, formatMinaPublicKey } from "@/lib/crypto";
+import { BroadcastMode, CosmosWallet } from "@interchain-kit/core";
+import { waitForTxCommit } from "@/lib/utils";
 
 export default function Bridge() {
-  const { account, isConnected } = useMinaWallet();
+  const {
+    account,
+    isConnected,
+    signMessage: minaSignMessage,
+  } = useMinaWallet();
+  const { getSigningClient, wallet: pulsarWallet } = usePulsarWallet();
   const worker = useWorker();
-  const { isInitialized, isInitializing, workerReady, initializeWorker } =
-    useWorkerInit();
+  const {
+    isInitialized,
+    isInitializing,
+    workerReady,
+    initializeWorker,
+    compiledCount,
+    totalPrograms,
+  } = useWorkerInit();
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
   const [amount, setAmount] = useState<string>("");
   const [gasFee, setGasFee] = useState<number>(0);
   const [isTransacting, setIsTransacting] = useState(false);
 
   const { data: priceData } = useMinaPrice();
+  const connectedWallet = useConnectedWallet();
+  const { data: keyStore } = useKeyStore(undefined, account);
 
   const {
     data: balanceData,
@@ -33,8 +59,8 @@ export default function Bridge() {
     data: pminaBalanceData,
     isLoading: isLoadingPminaBalance,
     error: pminaBalanceError,
-  } = usePminaBalance(account, {
-    enabled: !!account && isConnected && activeTab === "withdraw",
+  } = usePminaBalance(keyStore?.keyStore?.creator || keyStore?.keyStore?.minaPublicKey, {
+    enabled: !!keyStore?.keyStore?.creator || !!keyStore?.keyStore?.minaPublicKey,
   });
 
   const balance =
@@ -151,7 +177,214 @@ export default function Bridge() {
         return;
       }
     } else if (activeTab === "withdraw") {
-      toast.success("Withdraw functionality coming soon!");
+      try {
+        if (!connectedWallet) {
+          toast.error("Please connect a wallet first");
+          setIsTransacting(false);
+          return;
+        }
+
+        const amountNano = Math.floor(Number(amount) * 1e9);
+        if (!Number.isFinite(amountNano) || amountNano <= 0) {
+          toast.error("Invalid amount");
+          setIsTransacting(false);
+          return;
+        }
+
+        toast.loading("Locking pMINA on Pulsar...", { id: "lock-withdrawal" });
+
+        if (connectedWallet.type === "cosmos") {
+          const wallet = pulsarWallet.getWalletOfType(CosmosWallet);
+          const signingClient = await getSigningClient();
+          if (!wallet || !signingClient.client)
+            throw new Error("Keplr not ready");
+
+          const accountInfo = await wallet.getAccount(consumerChain.chainId!);
+          const accountNumber = await signingClient.client.getAccountNumber(
+            accountInfo.address
+          );
+          const sequence = await signingClient.client.getSequence(
+            accountInfo.address
+          );
+
+          const signDoc = createLockForWithdrawalTx({
+            sequence,
+            pubkeyBytes: accountInfo.pubkey,
+            accountNumber,
+            fromAddress: connectedWallet.address,
+            minaPublicKey: await formatMinaPublicKey(account!),
+            amount: amountNano.toString(),
+            walletType: connectedWallet.type,
+          });
+
+          const signedTx = await wallet.signDirect(
+            consumerChain.chainId!,
+            accountInfo.address,
+            signDoc
+          );
+          const protobufTx = TxRaw.encode({
+            bodyBytes: signedTx.signed.bodyBytes,
+            authInfoBytes: signedTx.signed.authInfoBytes,
+            signatures: [
+              new Uint8Array(
+                Buffer.from(signedTx.signature.signature, "base64")
+              ),
+            ],
+          }).finish();
+
+          const txHashBytes = await wallet.sendTx(
+            consumerChain.chainId!,
+            protobufTx,
+            BroadcastMode.Sync
+          );
+          const txHashHex = Buffer.from(txHashBytes)
+            .toString("hex")
+            .toUpperCase();
+          await waitForTxCommit(txHashHex);
+        } else if (connectedWallet.type === "mina") {
+          if (!keyStore?.keyStore?.creator) {
+            toast.dismiss("lock-withdrawal");
+            toast.error("Please register your keystore first");
+            setIsTransacting(false);
+            return;
+          }
+
+          const accountRes = await fetch(
+            `https://rest.pulsarchain.xyz/cosmos/auth/v1beta1/accounts/${keyStore.keyStore.creator}`
+          );
+          const accountData = (await accountRes.json()) as {
+            account: {
+              "@type": string;
+              address: string;
+              pub_key: { "@type": string; key: string };
+              account_number: string;
+              sequence: string;
+            };
+          };
+
+          const signDoc = createLockForWithdrawalTx({
+            sequence: Number(accountData.account.sequence),
+            pubkeyBytes: fromBase64(accountData.account.pub_key.key),
+            accountNumber: BigInt(accountData.account.account_number),
+            fromAddress: accountData.account.address,
+            minaPublicKey: await formatMinaPublicKey(account!),
+            amount: amountNano.toString(),
+            walletType: connectedWallet.type,
+          });
+
+          const signBytes = SignDoc.encode(signDoc).finish();
+          let message = "";
+          for (let i = 0; i < signBytes.length; i++) {
+            message += String.fromCharCode(signBytes[i]!);
+          }
+          const minaSigned = await minaSignMessage({ message });
+          const minaSigBytes = packMinaSignature(
+            minaSigned.signature.field,
+            minaSigned.signature.scalar
+          );
+
+          const protobufTx = TxRaw.encode({
+            bodyBytes: signDoc.bodyBytes,
+            authInfoBytes: signDoc.authInfoBytes,
+            signatures: [minaSigBytes],
+          }).finish();
+
+          const result = await fetch(
+            `https://rest.pulsarchain.xyz/cosmos/tx/v1beta1/txs`,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                tx_bytes: toBase64(protobufTx),
+                mode: "BROADCAST_MODE_SYNC",
+              }),
+            }
+          );
+          const { tx_response } = (await result.json()) as {
+            tx_response: { txhash: string; code: number; raw_log: string };
+          };
+          if (tx_response.code !== 0)
+            throw new Error(
+              `Cosmos lock failed${
+                tx_response.code ? ` (code ${tx_response.code})` : ""
+              }`
+            );
+          await waitForTxCommit(tx_response.txhash);
+        }
+
+        toast.success("Locked on Pulsar. Proceeding on Mina...", {
+          id: "lock-withdrawal",
+        });
+
+        if (!window.mina?.sendTransaction) {
+          toast.error("Auro Wallet not found. Please install Auro Wallet.");
+          setIsTransacting(false);
+          return;
+        }
+        if (!worker) {
+          toast.error("Worker not ready. Please try again.");
+          setIsTransacting(false);
+          return;
+        }
+
+        await initializeWorker();
+        const json = await worker.withdraw({
+          sender: account!,
+          amount: amountNano,
+        });
+        const result = await window.mina.sendTransaction({ transaction: json });
+
+        if (!("hash" in result)) {
+          switch ((result as any).code) {
+            case 1001:
+              toast.error("Please connect your Auro Wallet first.");
+              break;
+            case 1002:
+              toast.error("Transaction was rejected by user.");
+              break;
+            case 20003:
+              toast.error("Invalid parameters.");
+              break;
+            case 23001:
+              toast.error("Origin mismatch.");
+              break;
+            default:
+              toast.error(
+                `Transaction failed: ${
+                  (result as any).message || "Unknown error"
+                }`
+              );
+          }
+          setIsTransacting(false);
+          return;
+        }
+
+        toast.success(
+          `Withdraw transaction submitted! Hash: ${result.hash.slice(0, 10)}...`
+        );
+        const loadingId = toast.loading("Waiting for confirmation on Mina...");
+        const finalStatus = await worker!.waitForTransaction({
+          hash: result.hash,
+          rpcUrl: MINA_RPC_URL,
+        });
+        toast.dismiss(loadingId);
+        if (finalStatus.success) {
+          toast.success("Withdraw confirmed on-chain.");
+          setAmount("");
+          setGasFee(0);
+        } else {
+          toast.error(
+            `Withdraw failed: ${finalStatus.failureReason || "Unknown error"}`
+          );
+          setIsTransacting(false);
+          return;
+        }
+      } catch (err: any) {
+        toast.dismiss("lock-withdrawal");
+        console.error(err);
+        toast.error(err?.message || "Failed to process withdraw");
+        setIsTransacting(false);
+        return;
+      }
     } else {
       toast.error("Invalid tab");
     }
@@ -361,7 +594,9 @@ export default function Bridge() {
           {!workerReady
             ? "Loading..."
             : isInitializing
-            ? "Initializing..."
+            ? `Initializing...${
+                totalPrograms ? ` ${compiledCount}/${totalPrograms}` : ""
+              }`
             : isTransacting
             ? "Processing..."
             : "Bridge"}

@@ -5,6 +5,7 @@ import { TxBody, SignDoc, TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 import { Registry, makeAuthInfoBytes, encodePubkey, coin } from "@cosmjs/proto-signing";
 
 import { MsgCreateKeyStore } from "@/generated/interchain_security/minakeys/tx";
+import { MsgLockForWithdrawal } from "@/generated/interchain_security/bridge/tx";
 
 const registry = new Registry();
 registry.register("/cosmos.bank.v1beta1.MsgSend", MsgSend);
@@ -55,7 +56,7 @@ export const createSendTokenTx = ({
         amount: [coin(amount, consumerChain.fees!.feeTokens[0]!.denom)],
       })).finish(),
     }],
-    memo: 'test',
+    memo: "Sending tokens",
     extensionOptions: [walletType === 'mina' ? minaTxTypeExtension : cosmosTxTypeExtension],
   })).finish();
 
@@ -127,3 +128,54 @@ export const createKeyStoreTx = ({
   return signDoc;
 };
 
+export const createLockForWithdrawalTx = ({
+  sequence,
+  pubkeyBytes,
+  accountNumber,
+  fromAddress,
+  minaPublicKey,
+  amount,
+  walletType,
+}: {
+  sequence: number | bigint,
+  pubkeyBytes: Uint8Array,
+  accountNumber: bigint,
+  fromAddress: string,
+  minaPublicKey: string,
+  amount: string,
+  walletType: 'mina' | 'cosmos'
+}): SignDoc => {
+  const feeAmount = coin("1000", consumerChain.fees!.feeTokens[0]!.denom);
+  const gasLimit = 200_000;
+  const chainId = consumerChain.chainId;
+
+  const pubkey = encodePubkey({
+    type: "tendermint/PubKeySecp256k1",
+    value: Buffer.from(pubkeyBytes).toString("base64"),
+  });
+
+  const bodyBytes = TxBody.encode(TxBody.fromPartial({
+    messages: [{
+      typeUrl: "/interchain_security.bridge.MsgLockForWithdrawal",
+      value: MsgLockForWithdrawal.encode(MsgLockForWithdrawal.fromPartial({
+        creator: fromAddress,
+        minaPublicKey,
+        amount,
+      })).finish(),
+    }],
+    memo: "Lock pMINA for withdrawal",
+    extensionOptions: [walletType === 'mina' ? minaTxTypeExtension : cosmosTxTypeExtension],
+  })).finish();
+
+  const authInfoBytes = makeAuthInfoBytes(
+    [{ pubkey: pubkey, sequence: sequence }],
+    [feeAmount],
+    gasLimit,
+    undefined,
+    undefined,
+  );
+
+  const signDoc = SignDoc.fromPartial({ bodyBytes, authInfoBytes, chainId, accountNumber });
+
+  return signDoc;
+};
