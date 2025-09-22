@@ -203,10 +203,12 @@ app.post(
                 );
             }
 
+            console.log("Balances:", balances);
             const withdrawMapping: Map<string, number> = new Map();
             for (const [key, value] of Object.entries(balances)) {
                 withdrawMapping.set(key, Number(value));
             }
+            console.log("Withdraw mapping:", withdrawMapping);
 
             await fetchAccount({ publicKey: contractInstance.address });
             const { publicInput, mask } = CalculateMaxWithBalances(
