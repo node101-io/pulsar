@@ -144,6 +144,7 @@ function CalculateMaxWithBalances(
     }
 
     if (PulsarAction.isDeposit(pack.action).toBoolean()) {
+      console.log('Processing deposit for action:', pack.action.toJSON());
       if (deposits === MAX_DEPOSIT_PER_BATCH) {
         log('Max deposits reached for batch');
         break;
@@ -161,19 +162,26 @@ function CalculateMaxWithBalances(
         ]),
       });
     } else if (PulsarAction.isWithdrawal(pack.action).toBoolean()) {
+      console.log('Processing withdrawal for action:', pack.action.toJSON());
       const accountBalance = withdrawBalances.get(
         pack.action.account.toString()
+      );
+      console.log(
+        'Account balance for',
+        pack.action.account.toString(),
+        ':',
+        accountBalance
       );
       if (
         accountBalance === undefined ||
         pack.action.amount.toBigInt() > BigInt(accountBalance)
       ) {
-        log('Action skipped:', pack.action.toJSON());
+        console.log('Action skipped:', pack.action.toJSON());
         batchActions.push(pack.action);
         endActionState = BigInt(pack.hash);
         continue;
       } else if (withdrawals === MAX_WITHDRAWAL_PER_BATCH) {
-        log('Max withdrawals reached for batch');
+        console.log('Max withdrawals reached for batch');
         break;
       }
       withdrawals++;
@@ -181,6 +189,12 @@ function CalculateMaxWithBalances(
       withdrawBalances.set(
         pack.action.account.toString(),
         accountBalance - Number(pack.action.amount.toBigInt())
+      );
+      console.log(
+        'Updated account balance for',
+        pack.action.account.toString(),
+        ':',
+        withdrawBalances.get(pack.action.account.toString())
       );
 
       publicInput = new ValidateReducePublicInput({
