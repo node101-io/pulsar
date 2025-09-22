@@ -194,19 +194,41 @@ class SettlementContract extends SmartContract {
         withdrawalListHash
       );
 
-      const recipient = Provable.if(
+      const to = Provable.if(
         shouldWithdraw,
         action.account,
-        PublicKey.empty()
+        PublicKey.from({
+          x: Field(0),
+          isOdd: Bool(false),
+        })
       );
 
+      const amount = Provable.if(
+        shouldWithdraw,
+        UInt64.Unsafe.fromField(action.amount).add(WITHDRAW_DOWN_PAYMENT),
+        UInt64.from(0)
+      );
+
+      Provable.asProver(() => {
+        if (!isDummy.toBoolean()) {
+          console.log('Processing action:', action.toJSON());
+        }
+        if (shouldWithdraw.toBoolean()) {
+          console.log(`Withdrawing ${amount.toString()} to ${to.toBase58()}`);
+        } else if (shouldDeposit.toBoolean()) {
+          console.log(
+            `Depositing ${UInt64.Unsafe.fromField(
+              action.amount
+            ).toString()} from ${action.account.toBase58()}`
+          );
+        } else {
+          console.log('No operation for this action');
+        }
+      });
+
       this.send({
-        to: AccountUpdate.create(recipient),
-        amount: Provable.if(
-          shouldWithdraw,
-          UInt64.Unsafe.fromField(action.amount).add(WITHDRAW_DOWN_PAYMENT),
-          UInt64.from(0)
-        ),
+        to,
+        amount,
       });
     }
 
