@@ -178,6 +178,10 @@ function CalculateMaxWithBalances(
       }
       withdrawals++;
       mask[i] = true;
+      withdrawBalances.set(
+        pack.action.account.toString(),
+        accountBalance - Number(pack.action.amount.toBigInt())
+      );
 
       publicInput = new ValidateReducePublicInput({
         ...publicInput,

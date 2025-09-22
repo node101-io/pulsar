@@ -5,6 +5,7 @@ import {
     SettlementContract,
     PulsarActionData,
     validateActionList,
+    PulsarEncoder,
 } from "pulsar-contracts";
 import {
     getSignature,
@@ -206,7 +207,7 @@ app.post(
             console.log("Balances:", balances);
             const withdrawMapping: Map<string, number> = new Map();
             for (const [key, value] of Object.entries(balances)) {
-                withdrawMapping.set(key, Number(value));
+                withdrawMapping.set(PulsarEncoder.fromAddress(key).toBase58(), Number(value));
             }
             console.log("Withdraw mapping:", withdrawMapping);
 
