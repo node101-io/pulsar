@@ -164,11 +164,11 @@ function CalculateMaxWithBalances(
     } else if (PulsarAction.isWithdrawal(pack.action).toBoolean()) {
       console.log('Processing withdrawal for action:', pack.action.toJSON());
       const accountBalance = withdrawBalances.get(
-        pack.action.account.toString()
+        pack.action.account.toBase58()
       );
       console.log(
         'Account balance for',
-        pack.action.account.toString(),
+        pack.action.account.toBase58(),
         ':',
         accountBalance
       );
@@ -187,14 +187,14 @@ function CalculateMaxWithBalances(
       withdrawals++;
       mask[i] = true;
       withdrawBalances.set(
-        pack.action.account.toString(),
+        pack.action.account.toBase58(),
         accountBalance - Number(pack.action.amount.toBigInt())
       );
       console.log(
         'Updated account balance for',
-        pack.action.account.toString(),
+        pack.action.account.toBase58(),
         ':',
-        withdrawBalances.get(pack.action.account.toString())
+        withdrawBalances.get(pack.action.account.toBase58())
       );
 
       publicInput = new ValidateReducePublicInput({
