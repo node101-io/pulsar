@@ -209,21 +209,6 @@ class SettlementContract extends SmartContract {
         UInt64.from(0)
       );
 
-      Provable.asProver(() => {
-        if (!isDummy.toBoolean()) {
-          console.log('Processing action:', action.toJSON());
-        }
-        if (shouldWithdraw.toBoolean()) {
-          console.log(`Withdrawing ${amount.toString()} to ${to.toBase58()}`);
-        } else if (shouldDeposit.toBoolean()) {
-          console.log(
-            `Depositing ${UInt64.Unsafe.fromField(
-              action.amount
-            ).toString()} from ${action.account.toBase58()}`
-          );
-        }
-      });
-
       this.send({
         to,
         amount,
