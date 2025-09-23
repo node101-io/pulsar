@@ -131,7 +131,7 @@ class SettlementContract extends SmartContract {
 
     withdrawalUpdate.send({
       to: this.address,
-      amount: amount.add(UInt64.from(WITHDRAW_DOWN_PAYMENT)),
+      amount: UInt64.from(WITHDRAW_DOWN_PAYMENT),
     });
 
     this.reducer.dispatch(PulsarAction.withdrawal(account, amount.value));
