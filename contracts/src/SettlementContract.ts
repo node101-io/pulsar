@@ -221,8 +221,6 @@ class SettlementContract extends SmartContract {
               action.amount
             ).toString()} from ${action.account.toBase58()}`
           );
-        } else {
-          console.log('No operation for this action');
         }
       });
 

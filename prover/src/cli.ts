@@ -446,7 +446,7 @@ async function performRecoverBase58Address() {
     }
 }
 
-async function showUtilsMenu(): Promise<"recover-base58" | "back"> {
+async function showUtilsMenu(): Promise<"recover-base58" | "faucet" | "back"> {
     console.log("\n");
     const { action } = await inquirer.prompt([
         {
@@ -458,6 +458,11 @@ async function showUtilsMenu(): Promise<"recover-base58" | "back"> {
                     name: "🔑 Recover Base58 Address",
                     value: "recover-base58",
                     short: "Recover Address",
+                },
+                {
+                    name: "🪙 Faucet to Address (Lightnet)",
+                    value: "faucet",
+                    short: "Faucet",
                 },
                 new inquirer.Separator(),
                 {
@@ -474,7 +479,7 @@ async function showUtilsMenu(): Promise<"recover-base58" | "back"> {
     return action;
 }
 
-async function showMainMenu(): Promise<"deposit" | "withdraw" | "log-state" | "faucet" | "exit"> {
+async function showMainMenu(): Promise<"deposit" | "withdraw" | "log-state" | "exit"> {
     console.log("\n");
     const { action } = await inquirer.prompt([
         {
@@ -496,11 +501,6 @@ async function showMainMenu(): Promise<"deposit" | "withdraw" | "log-state" | "f
                     name: "📊 Log Contract State",
                     value: "log-state",
                     short: "Log State",
-                },
-                {
-                    name: "🪙 Faucet to Address (Lightnet)",
-                    value: "faucet",
-                    short: "Faucet",
                 },
                 new inquirer.Separator(),
                 {
@@ -604,6 +604,8 @@ async function main() {
 
                 if (utilsAction === "recover-base58") {
                     await performRecoverBase58Address();
+                } else if (utilsAction === "faucet") {
+                    await performFaucetToAddress();
                 }
 
                 const { continueUtils } = await inquirer.prompt([
@@ -650,8 +652,6 @@ async function main() {
                     await performWithdraw(signerPrivateKey, contractPrivateKey, contractInstance);
                 } else if (action === "log-state") {
                     await performLogContractState(contractInstance);
-                } else if (action === "faucet") {
-                    await performFaucetToAddress();
                 }
 
                 const { continueChoice } = await inquirer.prompt([
@@ -716,8 +716,6 @@ async function main() {
                         );
                     } else if (action === "log-state") {
                         await performLogContractState(contractInstance);
-                    } else if (action === "faucet") {
-                        await performFaucetToAddress();
                     }
                 }
             }
