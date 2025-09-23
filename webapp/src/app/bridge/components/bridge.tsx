@@ -59,9 +59,13 @@ export default function Bridge() {
     data: pminaBalanceData,
     isLoading: isLoadingPminaBalance,
     error: pminaBalanceError,
-  } = usePminaBalance(keyStore?.keyStore?.creator || keyStore?.keyStore?.minaPublicKey, {
-    enabled: !!keyStore?.keyStore?.creator || !!keyStore?.keyStore?.minaPublicKey,
-  });
+  } = usePminaBalance(
+    keyStore?.keyStore?.creator || keyStore?.keyStore?.minaPublicKey,
+    {
+      enabled:
+        !!keyStore?.keyStore?.creator || !!keyStore?.keyStore?.minaPublicKey,
+    }
+  );
 
   const balance =
     activeTab === "deposit"
@@ -184,7 +188,7 @@ export default function Bridge() {
           return;
         }
 
-        const amountNano = Math.floor(Number(amount) * 1e9);
+        const amountNano = Math.floor(Number(amount) * 1e9 * 0.98);
         if (!Number.isFinite(amountNano) || amountNano <= 0) {
           toast.error("Invalid amount");
           setIsTransacting(false);
@@ -446,7 +450,7 @@ export default function Bridge() {
               value={amount}
               onChange={(e) => {
                 setAmount(e.target.value);
-                setGasFee(Number(e.target.value) * 0.01);
+                setGasFee(Number(e.target.value) * 0.02);
               }}
             />
             <button className="bg-text rounded-full p-2.5 pb-1.5 border border-black flex items-center gap-2.5 leading-none transition-colors">
