@@ -188,7 +188,7 @@ export default function Bridge() {
           return;
         }
 
-        const amountNano = Math.floor(Number(amount) * 1e9 * 0.98);
+        const amountNano = Math.floor(Number(amount) * 1e9);
         if (!Number.isFinite(amountNano) || amountNano <= 0) {
           toast.error("Invalid amount");
           setIsTransacting(false);
@@ -333,7 +333,7 @@ export default function Bridge() {
         await initializeWorker();
         const json = await worker.withdraw({
           sender: account!,
-          amount: amountNano,
+          amount: Math.floor(amountNano * 0.98),
         });
         const result = await window.mina.sendTransaction({ transaction: json });
 
@@ -450,7 +450,8 @@ export default function Bridge() {
               value={amount}
               onChange={(e) => {
                 setAmount(e.target.value);
-                setGasFee(Number(e.target.value) * 0.02);
+                activeTab === "withdraw" &&
+                  setGasFee(Number(e.target.value) * 0.02);
               }}
             />
             <button className="bg-text rounded-full p-2.5 pb-1.5 border border-black flex items-center gap-2.5 leading-none transition-colors">
