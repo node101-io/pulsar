@@ -218,7 +218,7 @@ const MultisigVerifierProgram = ZkProgram({
             );
             totalStake = totalStake.add(stake);
 
-            list.push(Poseidon.hash(publicKey.toFields()));
+            list.push(Poseidon.hash([...publicKey.toFields(), stake]));
           }
 
           list.hash.assertEquals(

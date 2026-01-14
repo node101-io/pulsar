@@ -72,7 +72,7 @@ const ValidateReduceProgram = ZkProgram({
           accumulatedStake = Provable.if(isValid, accumulatedStake.add(stake), accumulatedStake);
           totalStake = totalStake.add(stake);
 
-          list.push(Poseidon.hash(publicKey.toFields()));
+          list.push(Poseidon.hash([...publicKey.toFields(), stake]));
         }
 
         list.hash.assertEquals(
