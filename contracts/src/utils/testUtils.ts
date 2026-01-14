@@ -65,7 +65,7 @@ function GenerateSignaturePubKeyList(
   }
 
   return SignaturePublicKeyList.fromArray(
-    signatures.map((signature, i) => [signature, signerSet[i][1]])
+    signatures.map((signature, i) => [signature, signerSet[i][1], Field(1)])
   );
 }
 
@@ -82,7 +82,7 @@ function GenerateSignaturePubKeyMatrix(
   }
   return SignaturePublicKeyMatrix.fromArray(
     signatureMatrix.map((list) =>
-      list.list.map((item) => [item.signature, item.publicKey])
+      list.list.map((item) => [item.signature, item.publicKey, item.stake])
     )
   );
 }
@@ -100,7 +100,11 @@ function GenerateReducerSignatureList(
   }
 
   return SignaturePublicKeyList.fromArray(
-    signatures.map((signature, i) => [signature, proofGeneratorsList[i][1]])
+    signatures.map((signature, i) => [
+      signature,
+      proofGeneratorsList[i][1],
+      Field(1),
+    ])
   );
 }
 
@@ -111,7 +115,7 @@ function CreateValidatorMerkleList(
 
   for (let i = 0; i < validatorSet.length; i++) {
     const [, publicKey] = validatorSet[i];
-    merkleList.push(Poseidon.hash(publicKey.toFields()));
+    merkleList.push(Poseidon.hash([...publicKey.toFields(), Field(1)]));
   }
 
   return merkleList;

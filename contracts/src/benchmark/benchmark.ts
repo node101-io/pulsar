@@ -251,7 +251,7 @@ async function main() {
 
   for (let i = 0; i < VALIDATOR_NUMBER; i++) {
     const [, publicKey] = activeSet[i % 60];
-    merkleList.push(Poseidon.hash(publicKey.toFields()));
+    merkleList.push(Poseidon.hash([...publicKey.toFields(), Field(1)]));
   }
 
   logParams();
@@ -310,7 +310,7 @@ async function main() {
 
   for (let i = 0; i < VALIDATOR_NUMBER; i++) {
     const [, publicKey] = activeSet[i];
-    merkleList.push(Poseidon.hash(publicKey.toFields()));
+    merkleList.push(Poseidon.hash([...publicKey.toFields(), Field(1)]));
   }
 
   if (testEnvironment === 'local') {
