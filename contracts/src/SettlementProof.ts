@@ -202,15 +202,21 @@ const MultisigVerifierProgram = ZkProgram({
             'Skipped block'
           );
 
-          let counter = Field.from(0);
+          let accumulatedStake = Field.from(0);
+          let totalStake = Field.from(0);
           let list = List.empty();
           const signatureMessage = pulsarBlocks.list[i].hash().toFields();
 
           for (let j = 0; j < VALIDATOR_NUMBER; j++) {
-            const { signature, publicKey } =
+            const { signature, publicKey, stake } =
               signaturePublicKeyMatrix.matrix[i].list[j];
             const isValid = signature.verify(publicKey, signatureMessage);
-            counter = Provable.if(isValid, counter.add(1), counter);
+            accumulatedStake = Provable.if(
+              isValid,
+              accumulatedStake.add(stake),
+              accumulatedStake
+            );
+            totalStake = totalStake.add(stake);
 
             list.push(Poseidon.hash(publicKey.toFields()));
           }
@@ -219,11 +225,12 @@ const MultisigVerifierProgram = ZkProgram({
             publicInputs.InitialMerkleListRoot,
             "Validator MerkleList hash doesn't match"
           );
-          counter.assertGreaterThanOrEqual(
-            // Field.from((VALIDATOR_NUMBER * 2) / 3),
-            Field(VALIDATOR_NUMBER),
-            'Not enough valid signatures'
-          );
+          accumulatedStake
+            .mul(3)
+            .assertGreaterThanOrEqual(
+              totalStake.mul(2),
+              'Not enough valid signatures (stake < 2/3)'
+            );
         }
 
         return {

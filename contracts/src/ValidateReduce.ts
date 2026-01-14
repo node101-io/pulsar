@@ -61,14 +61,16 @@ const ValidateReduceProgram = ZkProgram({
         publicInputs: ValidateReducePublicInput,
         signaturePublicKeyList: SignaturePublicKeyList
       ) {
-        let counter = Field.from(0);
+        let accumulatedStake = Field.from(0);
+        let totalStake = Field.from(0);
         let list = List.empty();
         const signatureMessage = publicInputs.hash().toFields();
 
         for (let i = 0; i < VALIDATOR_NUMBER; i++) {
-          const { signature, publicKey } = signaturePublicKeyList.list[i];
+          const { signature, publicKey, stake } = signaturePublicKeyList.list[i];
           const isValid = signature.verify(publicKey, signatureMessage);
-          counter = Provable.if(isValid, counter.add(1), counter);
+          accumulatedStake = Provable.if(isValid, accumulatedStake.add(stake), accumulatedStake);
+          totalStake = totalStake.add(stake);
 
           list.push(Poseidon.hash(publicKey.toFields()));
         }
@@ -77,10 +79,9 @@ const ValidateReduceProgram = ZkProgram({
           publicInputs.merkleListRoot,
           "Validator MerkleList hash doesn't match"
         );
-        counter.assertGreaterThanOrEqual(
-          // Field.from((VALIDATOR_NUMBER * 2) / 3),
-          Field.from(1),
-          'Not enough valid signatures'
+        accumulatedStake.mul(3).assertGreaterThanOrEqual(
+          totalStake.mul(2),
+          'Not enough valid signatures (stake < 2/3)'
         );
       },
     },
