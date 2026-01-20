@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
-import { TestNode } from "../test/integration/testNode.js";
+import { TestProverNode } from "../test/integration/testProverNode.js";
 import logger from "../logger.js";
 import dotenv from "dotenv";
+import { setMinaNetwork } from "pulsar-contracts";
+import { Mina } from "o1js";
 
 dotenv.config();
 
@@ -12,7 +14,27 @@ async function main() {
     const grpcPort = parseInt(process.env.TEST_GRPC_PORT || "50051");
     const minaNetwork = (process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet") || "lightnet";
     const minaContractAddress = process.env.CONTRACT_ADDRESS || "";
-    const minaRemoteServerUrl = process.env.REMOTE_SERVER_URL || "";
+    const minaRemoteServerUrl = process.env.REMOTE_SERVER_URL || "localhost";
+
+    // Mina network'ü ayarla
+    if (process.env.DOCKER) {
+        // Docker içindeyse setMinaNetwork kullan
+        setMinaNetwork(minaNetwork);
+        logger.info(`Mina network set to: ${minaNetwork} (Docker mode)`);
+    } else if (minaRemoteServerUrl) {
+        // Custom RPC endpoint varsa kullan
+        Mina.setActiveInstance(
+            Mina.Network({
+                mina: `http://${minaRemoteServerUrl}:8080/graphql`,
+                archive: `http://${minaRemoteServerUrl}:8282`,
+            })
+        );
+        logger.info(`Mina network configured with custom endpoint: ${minaRemoteServerUrl}`);
+    } else {
+        // Default olarak setMinaNetwork kullan
+        setMinaNetwork(minaNetwork);
+        logger.info(`Mina network set to: ${minaNetwork}`);
+    }
 
     logger.info("Starting test node with configuration", {
         validatorCount,
@@ -23,7 +45,7 @@ async function main() {
         minaRemoteServerUrl,
     });
 
-    const testNode = new TestNode({
+    const testNode = new TestProverNode({
         validatorCount,
         blockInterval,
         grpcPort,

@@ -16,14 +16,19 @@ import { KeyStore } from "../../generated/interchain_security/minakeys/key_store
 
 export class MockGrpcServer {
     private server: Server;
-    private mockChain: MockChain;
+    private mockChain: MockChain | null;
     private port: number;
     private started: boolean = false;
 
-    constructor(mockChain: MockChain, port: number = 50051) {
+    constructor(mockChain: MockChain | null, port: number = 50051) {
         this.server = new Server();
         this.mockChain = mockChain;
         this.port = port;
+        this.setupServices();
+    }
+
+    setMockChain(mockChain: MockChain): void {
+        this.mockChain = mockChain;
         this.setupServices();
     }
 
@@ -38,6 +43,12 @@ export class MockGrpcServer {
                 callback: grpc.sendUnaryData<QueryGetKeyStoreResponse>
             ) => {
                 try {
+                    if (!this.mockChain) {
+                        return callback({
+                            code: grpc.status.UNAVAILABLE,
+                            message: "Mock chain not available (using real lightnet)",
+                        });
+                    }
                     const { index } = call.request;
                     const validator = this.mockChain.getValidatorByCosmosAddress(index);
 
@@ -50,7 +61,6 @@ export class MockGrpcServer {
 
                     const minaPubkey = validator.minaPublicKey;
                     
-                    // encode Cosmos public key as hex
                     const cosmosPubkeyHex = Buffer.from(validator.cosmosPubkey).toString("hex");
 
                     const keyStore: KeyStore = {
@@ -78,6 +88,12 @@ export class MockGrpcServer {
                 callback: grpc.sendUnaryData<QueryVoteExtByHeightResponse>
             ) => {
                 try {
+                    if (!this.mockChain) {
+                        return callback({
+                            code: grpc.status.UNAVAILABLE,
+                            message: "Mock chain not available (using real lightnet)",
+                        });
+                    }
                     const { blockHeight, pagination } = call.request;
                     const height = parseInt(blockHeight);
 
@@ -121,6 +137,12 @@ export class MockGrpcServer {
                 callback: grpc.sendUnaryData<QueryGetMinaPubkeyResponse>
             ) => {
                 try {
+                    if (!this.mockChain) {
+                        return callback({
+                            code: grpc.status.UNAVAILABLE,
+                            message: "Mock chain not available (using real lightnet)",
+                        });
+                    }
                     const { validatorAddr } = call.request;
                     const validator = this.mockChain.getValidatorByMinaPublicKey(validatorAddr);
 
