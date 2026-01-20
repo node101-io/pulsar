@@ -44,16 +44,36 @@ async function retryUntilSuccess() {
 
                 await fetchAccount({ publicKey: privateKey.toPublicKey() });
 
+                const { account: signerAccount } = await fetchAccount({
+                    publicKey: signerPrivateKey.toPublicKey(),
+                });
+                const { account: contractAccount } = await fetchAccount({
+                    publicKey: contractPrivateKey.toPublicKey(),
+                });
+
+                const signerExists = signerAccount !== null;
+                const contractExists = contractAccount !== null;
+
+                logger.info(
+                    `Signer account exists: ${signerExists}, Contract account exists: ${contractExists}`
+                );
+
                 const tx = await Mina.transaction(
                     { sender: privateKey.toPublicKey(), fee: 1e9 },
                     async () => {
                         const senderAccount = AccountUpdate.createSigned(privateKey.toPublicKey());
-                        AccountUpdate.fundNewAccount(privateKey.toPublicKey());
+
+                        if (!signerExists) {
+                            AccountUpdate.fundNewAccount(signerPrivateKey.toPublicKey());
+                        }
                         senderAccount.send({
                             to: signerPrivateKey.toPublicKey(),
                             amount: UInt64.from(1e10),
                         });
-                        AccountUpdate.fundNewAccount(privateKey.toPublicKey());
+
+                        if (!contractExists) {
+                            AccountUpdate.fundNewAccount(contractPrivateKey.toPublicKey());
+                        }
                         await contractInstance.deploy();
                         await contractInstance.initialize(
                             Field.from(
@@ -177,4 +197,3 @@ async function sendDepositActions() {
 }
 
 await retryUntilSuccess();
-// await sendDepositActions();
