@@ -10,14 +10,27 @@ async function main() {
     const validatorCount = parseInt(process.env.TEST_VALIDATOR_COUNT || "25");
     const blockInterval = parseInt(process.env.TEST_BLOCK_INTERVAL || "5000");
     const grpcPort = parseInt(process.env.TEST_GRPC_PORT || "50051");
+    const minaNetwork = (process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet") || "lightnet";
+    const minaContractAddress = process.env.CONTRACT_ADDRESS || "";
+    const minaRemoteServerUrl = process.env.REMOTE_SERVER_URL || "";
 
     logger.info("Starting test node with configuration", {
         validatorCount,
         blockInterval,
         grpcPort,
+        minaNetwork,
+        minaContractAddress: minaContractAddress ? `${minaContractAddress.slice(0, 12)}...` : "not set",
+        minaRemoteServerUrl,
     });
 
-    const testNode = new TestNode(validatorCount, blockInterval, grpcPort);
+    const testNode = new TestNode({
+        validatorCount,
+        blockInterval,
+        grpcPort,
+        minaNetwork,
+        minaContractAddress,
+        minaRemoteServerUrl,
+    });
 
     // Graceful shutdown
     process.on("SIGINT", async () => {
@@ -35,11 +48,10 @@ async function main() {
     try {
         await testNode.start();
 
-        // Status log'u periyodik olarak yazdır
         setInterval(() => {
             const status = testNode.getStatus();
             logger.info("Test node status", status);
-        }, 30000); // Her 30 saniyede bir
+        }, 30000);
     } catch (error) {
         logger.error("Failed to start test node", error as Error);
         process.exit(1);

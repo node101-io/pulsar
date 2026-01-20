@@ -1,7 +1,6 @@
 import { EventEmitter } from "events";
 import { MockValidator, createMockValidators } from "./mockValidator.js";
 import { MockBlock, generateMockBlock, mockBlockToBlockData } from "./mockBlockGenerator.js";
-import { BlockData } from "../../interfaces.js";
 import logger from "../../logger.js";
 
 export class MockChain extends EventEmitter {
@@ -11,7 +10,7 @@ export class MockChain extends EventEmitter {
     private blockInterval?: NodeJS.Timeout;
     private blockGenerationInterval: number = 5000; // new block every 5 secs
 
-    constructor(validatorCount: number = 25, blockInterval: number = 5000) {
+    constructor(blockInterval: number = 5000) {
         super();
         this.blockGenerationInterval = blockInterval;
     }
@@ -82,8 +81,6 @@ export class MockChain extends EventEmitter {
     }
 
     getValidators(height?: number): MockValidator[] {
-        // for now, return all validators
-        // TODO: handle validator set changes based on height
         return this.validators;
     }
 
