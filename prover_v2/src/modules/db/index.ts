@@ -3,6 +3,6 @@ import {
     incrementRetryCount,
     fetchBlockRange,
     fetchLastStoredBlock,
-} from "./utils";
+} from "./utils.js";
 
 export { DB, incrementRetryCount, fetchBlockRange, fetchLastStoredBlock };
