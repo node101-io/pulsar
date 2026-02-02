@@ -9,6 +9,7 @@ export interface BlockData {
     height: number;
     stateRoot: string;
     validators: string[];
+    validatorListHash?: string;
     voteExt: VoteExt[];
 }
 

@@ -3,9 +3,11 @@ import {
     fetchLastStoredBlock,
     incrementRetryCount,
 } from "./utils.js";
-import { MongoClient, Collection, Document } from "mongodb";
-import { ProofKind, ProofStatus } from "./types.js";
+import { MongoClient, Collection, Document, ObjectId } from "mongodb";
+import { ProofStatus } from "./types.js";
 import { ProofDoc, BlockDoc, ProofEpochDoc } from "./interfaces.js";
+import { Signature } from "o1js";
+import { BlockData } from "../utils/interfaces.js";
 
 export class DB {
     public client: MongoClient;
@@ -34,24 +36,155 @@ export class DB {
 
         await this.proofEpochsCol.createIndex({ height: 1 }, { unique: true });
 
-        // TODO: store block, logs
+        await this.storeBlock({
+            height: 0,
+            stateRoot: BigInt(
+                "0x" +
+                    Buffer.from(
+                        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                        "base64",
+                    ).toString("hex"),
+            ).toString(),
+            validators: [
+                "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+            ],
+            validatorListHash:
+                "6310558633462665370159457076080992493592463962672742685757201873330974620505",
+            voteExt: [],
+        });
+
+        await this.storeBlock({
+            height: 1,
+            stateRoot: BigInt(
+                "0x" +
+                    Buffer.from(
+                        "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+                        "base64",
+                    ).toString("hex"),
+            ).toString(),
+            validators: [
+                "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+            ],
+            validatorListHash:
+                "6310558633462665370159457076080992493592463962672742685757201873330974620505",
+            voteExt: [
+                {
+                    index: "0",
+                    height: 1,
+                    validatorAddr:
+                        "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+                    signature: Signature.fromValue({
+                        r: 1252644915096851551329970336594686639171015300754931693803244151631871298454n,
+                        s: 20663247868890391450363957100878086376161396675631391829127242325233880313431n,
+                    }).toBase58(),
+                },
+            ],
+        });
+
+        // TODO: Add logger info
     }
 
-    async storeProof() {}
+    async storeProof(data: string): Promise<ObjectId> {
+        await this.ensureConnected();
 
-    async deleteProof() {}
+        const result = await this.proofsCol.insertOne({ data } as ProofDoc);
 
-    async getProof() {}
+        // TODO: Add logger info
 
-    async deserializeProof() {}
+        return result.insertedId;
+    }
 
-    async storeProofEpoch() {}
+    async deleteProof(id: ObjectId) {
+        await this.ensureConnected();
+        await this.proofsCol.deleteOne({ _id: id });
 
-    async deleteProofEpoch() {}
+        // TODO: Add logger info
+    }
 
-    async getProofEpoch() {}
+    async getProof(id: ObjectId) {
+        await this.ensureConnected();
 
-    async storeBlock() {}
+        const proof = await this.proofsCol.findOne({ _id: id });
 
-    async getBlock() {}
+        // TODO: Add logger info
+        if (!proof || !proof.data) throw new Error("Proof not found");
+
+        return JSON.parse(proof.data);
+    }
+
+    async storeProofInProofEpoch(
+        height: number,
+        proof: ObjectId,
+        index: number,
+    ) {
+        await this.ensureConnected();
+        if (index < 0 || index > 31) {
+            throw new Error("Index must be between 0 and 31");
+        }
+
+        if (index > 15) {
+            await this.proofEpochsCol.findOneAndUpdate(
+                { height },
+                {
+                    $set: {
+                        [`proofs.${index}`]: proof,
+                        [`status.${index % 16}`]: "done" as ProofStatus,
+                    },
+                },
+            );
+        } else {
+            await this.proofEpochsCol.findOneAndUpdate(
+                { height },
+                {
+                    $set: {
+                        [`proofs.${index}`]: proof,
+                    },
+                },
+            );
+        }
+        // TODO: Add logger info
+    }
+
+    async deleteProofEpoch(height: number) {
+        await this.ensureConnected();
+
+        await this.proofEpochsCol.deleteOne({ height });
+
+        // TODO: Add logger info
+    }
+
+    async getProofEpoch(height: number) {
+        await this.ensureConnected();
+
+        const proofEpoch = await this.proofEpochsCol.findOne({ height });
+
+        // TODO: Add logger info
+        return proofEpoch;
+    }
+
+    async storeBlock(block: BlockData) {
+        await this.ensureConnected();
+
+        await this.blocksCol.updateOne(
+            { height: block.height },
+            { $set: block as BlockDoc },
+            { upsert: true },
+        );
+
+        // TODO: Add logger info
+    }
+
+    async getBlock(height: number) {
+        await this.ensureConnected();
+
+        return this.blocksCol.findOne({ height });
+
+        // TODO: Add logger info
+    }
+
+    async ensureConnected() {
+        if (!this.client) {
+            await this.initMongo();
+        }
+    }
 }
