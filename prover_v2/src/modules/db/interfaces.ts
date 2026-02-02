@@ -1,8 +1,8 @@
 import { ProofStatus } from "./types";
 import { VoteExt } from "../utils/interfaces.js";
+import { ObjectId } from "mongodb";
 
 export interface ProofDoc extends Document {
-    id: number;
     data: string;
 }
 
@@ -16,7 +16,7 @@ export interface BlockDoc extends Document {
 
 export interface ProofEpochDoc extends Document {
     height: number;
-    proofs: number[];
+    proofs: ObjectId[];
     status: ProofStatus[];
     timeoutAt: Date;
     failCount: number;
