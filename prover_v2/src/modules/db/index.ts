@@ -1,8 +1,8 @@
 import { DB } from "./db.js";
 import {
-    incrementRetryCount,
+    incrementFailCount,
     fetchBlockRange,
     fetchLastStoredBlock,
 } from "./utils.js";
 
-export { DB, incrementRetryCount, fetchBlockRange, fetchLastStoredBlock };
+export { DB, incrementFailCount, fetchBlockRange, fetchLastStoredBlock };

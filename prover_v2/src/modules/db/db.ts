@@ -1,9 +1,4 @@
-import {
-    fetchBlockRange,
-    fetchLastStoredBlock,
-    incrementRetryCount,
-} from "./utils.js";
-import { MongoClient, Collection, Document, ObjectId } from "mongodb";
+import { MongoClient, Collection, ObjectId } from "mongodb";
 import { ProofStatus } from "./types.js";
 import { ProofDoc, BlockDoc, ProofEpochDoc } from "./interfaces.js";
 import { Signature } from "o1js";
