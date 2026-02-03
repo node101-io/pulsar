@@ -8,7 +8,15 @@ export async function masterRunner() {
 
     const task = await db.proofEpochsCol.findOne(
         {
-            status: { $all: ["done"] },
+            // we used not and ne with elemMatch to achieve this
+            // because MongoDB doesn't have a straightforward way
+            // to check if all elements in an array match a condition
+            // * check if all elements in status are "done" *
+            $and: [
+                { status: { $ne: [] } },
+                { "status.0": { $exists: true } },
+                { status: { $not: { $elemMatch: { $ne: "done" } } } },
+            ],
             timeoutAt: { $lt: new Date() },
         },
         {
