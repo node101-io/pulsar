@@ -2,7 +2,7 @@ import { DB } from "../../db";
 import { sleep } from "../../utils/functions";
 import { worker } from "./worker";
 
-const patterns = [
+export const patterns = [
     // leaf nodes aggregation
     { startNode: 0, aggregated: 0 },
     { startNode: 2, aggregated: 1 },
@@ -32,7 +32,7 @@ export async function masterRunner() {
         $and: [
             { [`proofs.${p.startNode}`]: { $exists: true } },
             { [`proofs.${p.startNode + 1}`]: { $exists: true } },
-            { [`status.${p.aggregated}`]: { $exists: false } },
+            { [`status.${p.aggregated}`]: { $eq: "waiting" } },
         ],
     }));
 
