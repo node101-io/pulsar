@@ -10,28 +10,29 @@ export async function worker(task: WithId<BlockDoc>) {
 
     const height = task.height;
 
-    // set block status to done immediately to prevent errors when worker crashes at the status step
-    await setBlockStatusDone(db, height);
+    const session = db.client.startSession();
+    try {
+        await session.withTransaction(async () => {
+            // change proof epoch's specific proof slot to processing (preventing concurrency issues)
+            await registerProofEpoch(height);
 
-    // change proof epoch's specific proof slot to processing (preventing concurrency issues)
-    await registerProofEpoch(height);
+            const proofId = await createProof(db, task);
 
-    const proofId = await createProof(db, task);
-
-    if (height % 16 == 0) {
-        await createProofEpoch(height, proofId);
-    } else {
-        setProofOnEpoch(db, height, proofId).then((epoch) => {
-            if (epoch) {
-                setBlockStatusDone(db, height).then(() => {
-                    // TODO: Add logger info
-                });
+            if (height % 16 == 0) {
+                await createProofEpoch(height, proofId);
             } else {
-                db.proofsCol.findOneAndDelete({ _id: proofId });
-
-                // TODO: Add logger warn
+                const epoch = await setProofOnEpoch(db, height, proofId);
+                if (epoch) {
+                    await setBlockStatusDone(db, height);
+                    // TODO: Add logger info
+                } else {
+                    await db.proofsCol.findOneAndDelete({ _id: proofId });
+                    // TODO: Add logger warn
+                }
             }
         });
+    } finally {
+        await session.endSession();
     }
 }
 
