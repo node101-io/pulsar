@@ -1,6 +1,7 @@
 import { DB } from "./db";
 import { BlockDoc } from "./interfaces";
 import { TIMEOUT_TIME_MS } from "../utils/constants";
+import logger from "../../logger";
 
 export async function fetchBlockRange(
     range_low: number,
@@ -18,7 +19,9 @@ export async function fetchBlockRange(
         blocks.unshift(blocks[0]);
     }
 
-    // TODO: Add logger info
+    logger.info(
+        `Fetched blocks from height ${range_low} to ${range_high}. Total blocks fetched: ${blocks.length}`,
+    );
 
     return blocks;
 }
@@ -29,11 +32,11 @@ export async function fetchLastStoredBlock(): Promise<BlockDoc | null> {
 
     const block = await db.blocksCol.findOne({}, { sort: { height: -1 } });
     if (!block) {
-        // TODO: Add logger warn
+        logger.warn(`No blocks found in the database.`);
         return null;
     }
 
-    // TODO: Add logger info
+    logger.info(`Fetched last stored block at height ${block.height}.`);
     return block;
 }
 

@@ -3,6 +3,7 @@ import { ProofStatus } from "./types.js";
 import { ProofDoc, BlockDoc, ProofEpochDoc } from "./interfaces.js";
 import { Signature } from "o1js";
 import { BlockData } from "../utils/interfaces.js";
+import logger from "../../logger.js";
 
 export class DB {
     public client: MongoClient;
@@ -76,7 +77,7 @@ export class DB {
             ],
         });
 
-        // TODO: Add logger info
+        logger.info("Connected to MongoDB and initialized collections.");
     }
 
     async storeProof(data: string): Promise<ObjectId> {
@@ -84,7 +85,7 @@ export class DB {
 
         const result = await this.proofsCol.insertOne({ data } as ProofDoc);
 
-        // TODO: Add logger info
+        logger.info(`Stored proof with id ${result.insertedId.toHexString()}.`);
 
         return result.insertedId;
     }
@@ -93,7 +94,7 @@ export class DB {
         await this.ensureConnected();
         await this.proofsCol.deleteOne({ _id: id });
 
-        // TODO: Add logger info
+        logger.info(`Deleted proof with id ${id.toHexString()}.`);
     }
 
     async getProof(id: ObjectId) {
@@ -101,9 +102,9 @@ export class DB {
 
         const proof = await this.proofsCol.findOne({ _id: id });
 
-        // TODO: Add logger info
         if (!proof || !proof.data) throw new Error("Proof not found");
 
+        logger.info(`Retrieved proof with id ${id.toHexString()}.`);
         return JSON.parse(proof.data);
     }
 
@@ -137,7 +138,10 @@ export class DB {
                 },
             );
         }
-        // TODO: Add logger info
+
+        logger.info(
+            `Stored proof ${proof.toHexString()} in proof epoch at height ${height} for index ${index}.`,
+        );
     }
 
     async deleteProofEpoch(height: number) {
@@ -145,7 +149,7 @@ export class DB {
 
         await this.proofEpochsCol.deleteOne({ height });
 
-        // TODO: Add logger info
+        logger.info(`Deleted proof epoch at height ${height}.`);
     }
 
     async getProofEpoch(height: number) {
@@ -153,7 +157,7 @@ export class DB {
 
         const proofEpoch = await this.proofEpochsCol.findOne({ height });
 
-        // TODO: Add logger info
+        logger.info(`Retrieved proof epoch at height ${height}.`);
         return proofEpoch;
     }
 
@@ -166,15 +170,15 @@ export class DB {
             { upsert: true },
         );
 
-        // TODO: Add logger info
+        logger.info(`Stored block at height ${block.height}.`);
     }
 
     async getBlock(height: number) {
         await this.ensureConnected();
 
-        return this.blocksCol.findOne({ height });
+        logger.info(`Retrieved block at height ${height}.`);
 
-        // TODO: Add logger info
+        return this.blocksCol.findOne({ height });
     }
 
     async ensureConnected() {
