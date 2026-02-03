@@ -3,6 +3,7 @@ import { BlockDoc, ProofEpochDoc } from "../../db/interfaces";
 import { ProofStatus } from "../../db/types";
 import { DB } from "../../db";
 import { TIMEOUT_TIME_MS } from "../../utils/constants";
+import logger from "../../../logger";
 
 export async function worker(task: WithId<BlockDoc>) {
     const db = new DB();
@@ -24,10 +25,14 @@ export async function worker(task: WithId<BlockDoc>) {
                 const epoch = await setProofOnEpoch(db, height, proofId);
                 if (epoch) {
                     await setBlockStatusDone(db, height);
-                    // TODO: Add logger info
+                    logger.info(
+                        `Set proof ${proofId.toHexString()} for block height ${height} in proof epoch ${epoch.height}.`,
+                    );
                 } else {
                     await db.proofsCol.findOneAndDelete({ _id: proofId });
-                    // TODO: Add logger warn
+                    logger.warn(
+                        `Proof epoch slot was not in 'processing' status for block height ${height}. Deleted proof ${proofId.toHexString()}.`,
+                    );
                 }
             }
         });
@@ -41,7 +46,9 @@ async function createProof(db: DB, block: BlockDoc) {
 
     const proof = await db.storeProof("test-proof-data");
 
-    // TODO: Add logger info
+    logger.info(
+        `Created proof ${proof.toHexString()} for block ${block.height}`,
+    );
 
     return proof; // return proof id
 }
@@ -69,7 +76,9 @@ async function createProofEpoch(height: number, proofId: ObjectId) {
         { upsert: true },
     );
 
-    // TODO: Add logger info
+    logger.info(
+        `Created proof epoch for height ${epochHeight} with proof for block ${height}`,
+    );
 }
 
 /**
