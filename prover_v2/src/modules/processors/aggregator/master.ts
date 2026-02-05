@@ -1,8 +1,15 @@
+import { ObjectId } from "mongodb";
 import { DB } from "../../db";
 import { sleep } from "../../utils/functions";
 import { worker } from "./worker";
 
-export const patterns = [
+export interface Aggregation {
+    left: ObjectId;
+    right: ObjectId;
+    index: number;
+}
+
+const patterns = [
     // leaf nodes aggregation
     { startNode: 0, aggregated: 0 },
     { startNode: 2, aggregated: 1 },
@@ -39,15 +46,34 @@ export async function masterRunner() {
     const task = await db.proofEpochsCol.findOne(
         {
             $or: orClauses,
-            timeoutAt: { $lt: new Date() },
+            timeoutAt: { $gt: new Date() },
         },
         {
-            sort: { timeoutAt: -1 },
+            sort: { timeoutAt: 1 },
         },
     );
 
     if (task) {
-        worker(task);
+        const result = patterns.find((p) => {
+            if (
+                task.proofs[p.startNode] &&
+                task.proofs[p.startNode + 1] &&
+                !task.status[p.aggregated]
+            ) {
+                return true;
+            }
+            return false;
+        });
+
+        if (!result) throw new Error("No valid aggregation pattern found.");
+
+        const aggregation: Aggregation = {
+            left: task.proofs[result.startNode],
+            right: task.proofs[result.startNode + 1],
+            index: result.aggregated,
+        };
+
+        worker(task, aggregation);
     } else {
         await sleep(1000);
         masterRunner();

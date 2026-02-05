@@ -1,33 +1,17 @@
 import { WithId } from "mongodb";
 import { ProofEpochDoc } from "../../db/interfaces";
 import { DB } from "../../db";
-import { ProofStatus } from "../../db/types";
-import { patterns } from "./master";
+import { ProofKind, ProofStatus } from "../../db/types";
 import logger from "../../../logger";
+import { Aggregation } from "./master";
+import { PROOF_EPOCH_SIZE } from "../../utils/constants";
 
-export async function worker(task: WithId<ProofEpochDoc>) {
+export async function worker(
+    task: WithId<ProofEpochDoc>,
+    aggregation: Aggregation,
+) {
     const db = new DB();
     await db.initMongo();
-
-    // Worker logic goes here
-    const result = patterns.find((p) => {
-        if (
-            task.proofs[p.startNode] &&
-            task.proofs[p.startNode + 1] &&
-            !task.status[p.aggregated]
-        ) {
-            return true;
-        }
-        return false;
-    });
-
-    if (!result) throw new Error("No valid aggregation pattern found.");
-
-    const aggregation = {
-        left: task.proofs[result.startNode],
-        right: task.proofs[result.startNode + 1],
-        index: result.aggregated,
-    };
 
     // register aggregation proof in db
     await registerAggregatedProofSlot(db, task, aggregation.index);
@@ -42,19 +26,19 @@ export async function worker(task: WithId<ProofEpochDoc>) {
     // TODO: generate aggregated proof using leftProof and rightProof
     const aggregatedProof = null;
 
-    // TODO: store aggregated proof in db and update proof epoch
     await db.proofEpochsCol.findOneAndUpdate(
         { height: task.height },
         {
             $set: {
-                [`proofs.${16 + aggregation.index}`]: aggregatedProof,
+                [`proofs.${PROOF_EPOCH_SIZE + aggregation.index}`]:
+                    aggregatedProof,
                 [`status.${aggregation.index}`]: "done" as ProofStatus,
             },
         },
     );
 
     logger.info(
-        `Aggregated proof for epoch at height ${task.height} stored in slot ${16 + aggregation.index}.`,
+        `Aggregated proof for epoch at height ${task.height} stored in slot ${PROOF_EPOCH_SIZE + aggregation.index}.`,
     );
 }
 
@@ -63,12 +47,23 @@ async function registerAggregatedProofSlot(
     task: WithId<ProofEpochDoc>,
     index: number,
 ) {
-    await db.proofEpochsCol.updateOne(
-        { height: task.height },
-        {
-            $set: {
-                [`status.${index}`]: "processing" as ProofStatus,
+    await db.proofEpochsCol
+        .updateOne(
+            {
+                height: task.height,
+                [`status.${index}`]: { $ne: "processing" as ProofStatus },
             },
-        },
-    );
+            {
+                $set: {
+                    kind: "aggregation" as ProofKind,
+                    [`status.${index}`]: "processing" as ProofStatus,
+                },
+            },
+        )
+        .then((result) => {
+            if (!result)
+                throw new Error(
+                    `Failed to register aggregated proof slot for epoch at height ${task.height}.`,
+                );
+        });
 }
