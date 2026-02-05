@@ -1,4 +1,4 @@
-import { ProofStatus } from "./types";
+import { ProofKind, ProofStatus } from "./types";
 import { VoteExt } from "../utils/interfaces.js";
 import { ObjectId } from "mongodb";
 
@@ -19,5 +19,6 @@ export interface ProofEpochDoc extends Document {
     proofs: ObjectId[];
     status: ProofStatus[];
     timeoutAt: Date;
+    kind: ProofKind;
     failCount: number;
 }
