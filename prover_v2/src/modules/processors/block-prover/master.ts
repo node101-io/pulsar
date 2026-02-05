@@ -10,10 +10,10 @@ export async function masterRunner() {
     const task = await db.blocksCol.findOne(
         {
             status: "waiting" as ProofStatus,
-            timeoutAt: { $lt: new Date() },
+            timeoutAt: { $gt: new Date() },
         },
         {
-            sort: { timeoutAt: -1 },
+            sort: { timeoutAt: 1 },
         },
     );
 

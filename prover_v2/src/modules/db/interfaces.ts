@@ -8,6 +8,7 @@ export interface ProofDoc extends Document {
 
 export interface BlockDoc extends Document {
     height: number;
+    status: ProofStatus;
     stateRoot: string;
     validators: string[];
     validatorListHash: string;
