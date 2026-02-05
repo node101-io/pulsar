@@ -16,6 +16,7 @@ export async function masterRunner() {
                 { status: { $ne: [] } },
                 { "status.0": { $exists: true } },
                 { status: { $not: { $elemMatch: { $ne: "done" } } } },
+                { "proofs.30": { $exists: true } },
             ],
             timeoutAt: { $lt: new Date() },
         },
