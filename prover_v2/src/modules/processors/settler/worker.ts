@@ -13,6 +13,13 @@ import { PROOF_EPOCH_SETTLEMENT_INDEX } from "../../utils/constants.js";
 dotenv.config();
 
 export async function worker(task: IProofEpoch) {
+    if (task.failCount > 0 && task.kind === "done") {
+        logger.info(
+            `Skipping settlement for epoch at height ${task.height} because it is already marked as done.`,
+        );
+        return;
+    }
+
     await registerProofEpoch(task);
 
     const settlementProofId = task.proofs[PROOF_EPOCH_SETTLEMENT_INDEX];

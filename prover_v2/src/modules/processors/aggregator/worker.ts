@@ -10,6 +10,14 @@ import { PROOF_EPOCH_LEAF_COUNT } from "../../utils/constants.js";
 import { MergeSettlementProofs, SettlementProof } from "pulsar-contracts";
 
 export async function worker(task: IProofEpoch, aggregation: Aggregation) {
+    // Eğer daha önce fail olduysa ve bu slot zaten 'done' ise tekrar çalıştırma
+    if (task.failCount > 0 && task.status[aggregation.index] === "done") {
+        logger.info(
+            `Skipping aggregation for epoch ${task.height}, index ${aggregation.index} because it is already done.`,
+        );
+        return;
+    }
+
     // register aggregation proof in db
     await registerAggregatedProofSlot(task, aggregation.index);
 
