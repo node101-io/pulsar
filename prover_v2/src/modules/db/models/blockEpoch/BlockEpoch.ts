@@ -1,6 +1,9 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
+import {
+    BLOCK_EPOCH_SIZE,
+    WORKER_TIMEOUT_MS,
+} from "../../../utils/constants.js";
 import { BlockStatus } from "../../types.js";
-import { PROOF_EPOCH_SIZE, TIMEOUT_TIME_MS } from "../../../utils/constants.js";
 
 export interface IBlockEpoch extends Document {
     height: number;
@@ -20,15 +23,14 @@ const BlockEpochSchema = new Schema<IBlockEpoch>(
                 default: null,
             },
         ],
-        status: [
-            {
-                type: String,
-                enum: ["waiting", "processing", "done", "failed"] as const,
-            },
-        ],
+        status: {
+            type: [String],
+            enum: ["waiting", "processing", "done", "failed"],
+            default: Array(BLOCK_EPOCH_SIZE).fill("waiting" as BlockStatus),
+        },
         timeoutAt: {
             type: Date,
-            default: new Date(Date.now() + TIMEOUT_TIME_MS),
+            default: new Date(Date.now() + WORKER_TIMEOUT_MS),
         },
         failCount: { type: Number, default: 0 },
     },
