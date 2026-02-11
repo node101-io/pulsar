@@ -1,32 +1,33 @@
-import { WithId } from "mongodb";
-import { ProofEpochDoc } from "../../db/interfaces";
-import { DB } from "../../db";
-import { SettlementContract } from "pulsar-contracts";
+import {
+    type IProofEpoch,
+    ProofEpochModel,
+} from "../../db/models/proofEpoch/ProofEpoch.js";
+import { getProof } from "../../db/models/proof/utils.js";
+import { ProofKind } from "../../db/types.js";
+import { SettlementContract, SettlementProof } from "pulsar-contracts";
 import { Mina, PublicKey, fetchAccount } from "o1js";
 import dotenv from "dotenv";
-import { ProofKind } from "../../db/types";
-import logger from "../../../logger";
+import logger from "../../../logger.js";
+import { PROOF_EPOCH_SETTLEMENT_INDEX } from "../../utils/constants.js";
 
 dotenv.config();
 
-export async function worker(task: WithId<ProofEpochDoc>) {
-    const db = new DB();
-    await db.initMongo();
-
+export async function worker(task: IProofEpoch) {
     await registerProofEpoch(task);
 
-    const proofEpoch = await db.proofEpochsCol.findOne({ height: task.height });
-    const settlementProofId = proofEpoch?.proofs[30];
+    const settlementProofId = task.proofs[PROOF_EPOCH_SETTLEMENT_INDEX];
 
     if (!settlementProofId) {
         throw new Error("Settlement proof ID is missing.");
     }
 
-    const settlementProof = await db.getProof(settlementProofId);
+    const settlementProofJson = await getProof(settlementProofId);
 
-    if (!settlementProof) {
+    if (!settlementProofJson) {
         throw new Error("Settlement proof is missing.");
     }
+
+    const settlementProof = await SettlementProof.fromJSON(settlementProofJson);
 
     const contractAddress = process.env.CONTRACT_ADDRESS;
     if (!contractAddress) {
@@ -48,7 +49,6 @@ export async function worker(task: WithId<ProofEpochDoc>) {
 
     await fetchAccount({ publicKey: contractInstance.address });
 
-    // TODO: check if type of sefflementProof suits the settle function
     await contractInstance
         .settle(settlementProof)
         .then(async () => {
@@ -66,59 +66,50 @@ export async function worker(task: WithId<ProofEpochDoc>) {
         });
 }
 
-async function registerProofEpoch(task: WithId<ProofEpochDoc>) {
-    const db = new DB();
-    await db.initMongo();
-
-    await db.proofEpochsCol
-        .findOneAndUpdate(
-            {
-                height: task.height,
-                kind: { $ne: "settlement" as ProofKind },
+async function registerProofEpoch(task: IProofEpoch) {
+    const result = await ProofEpochModel.findOneAndUpdate(
+        {
+            height: task.height,
+            kind: { $ne: "settlement" as ProofKind },
+        },
+        {
+            $set: {
+                kind: "settlement" as ProofKind,
             },
-            {
-                $set: {
-                    kind: "settlement" as ProofKind,
-                },
-            },
-        )
-        .then((result) => {
-            if (!result) {
-                throw new Error(
-                    `Proof epoch at height ${task.height} is already registered as settlement.`,
-                );
-            }
+        },
+    );
 
-            logger.info(
-                `Registered proof epoch at height ${task.height} as settlement.`,
-            );
-        });
+    if (!result) {
+        throw new Error(
+            `Proof epoch at height ${task.height} is already registered as settlement.`,
+        );
+    }
+
+    logger.info(
+        `Registered proof epoch at height ${task.height} as settlement.`,
+    );
 }
 
 async function setProofEpochDone(height: number) {
-    const db = new DB();
-    await db.initMongo();
+    const result = await ProofEpochModel.findOneAndUpdate(
+        {
+            height,
+            kind: "settlement" as ProofKind,
+        },
+        {
+            $set: {
+                kind: "done" as ProofKind,
+            },
+        },
+    );
 
-    await db.proofEpochsCol
-        .findOneAndUpdate(
-            {
-                height: height,
-                kind: "settlement" as ProofKind,
-            },
-            {
-                $set: {
-                    kind: "done" as ProofKind,
-                },
-            },
-        )
-        .then((result) => {
-            if (!result) {
-                throw new Error(
-                    `Proof epoch at height ${height} not found or not in settlement state.`,
-                );
-            }
-            logger.info(
-                `Proof epoch at height ${height} marked as done after settlement.`,
-            );
-        });
+    if (!result) {
+        throw new Error(
+            `Proof epoch at height ${height} not found or not in settlement state.`,
+        );
+    }
+
+    logger.info(
+        `Proof epoch at height ${height} marked as done after settlement.`,
+    );
 }
