@@ -1,7 +1,7 @@
 // Processors constants
 export const WORKER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-export const PROOF_EPOCH_SIZE = 16;
 export const BLOCK_EPOCH_SIZE = 8;
+export const PROOF_EPOCH_LEAF_COUNT = 4;
 export const WORKER_COUNT = 10;
 
 // Pulsar client constants
