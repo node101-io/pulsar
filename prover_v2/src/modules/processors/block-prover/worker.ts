@@ -1,169 +1,142 @@
-import { ObjectId, WithId } from "mongodb";
-import { BlockDoc, ProofEpochDoc } from "../../db/interfaces";
-import { ProofKind, ProofStatus } from "../../db/types";
-import { DB } from "../../db";
-import { TIMEOUT_TIME_MS, PROOF_EPOCH_SIZE } from "../../utils/constants";
-import logger from "../../../logger";
+import { Types } from "mongoose";
+import mongoose from "mongoose";
 
-export async function worker(task: WithId<BlockDoc>) {
-    const db = new DB();
-    await db.initMongo();
+import {
+    ProofEpochModel,
+    BlockEpochModel,
+    storeProof,
+    fetchBlockRange,
+} from "../../db/index.js";
+import {
+    WORKER_TIMEOUT_MS,
+    PROOF_EPOCH_SIZE,
+    BLOCK_EPOCH_SIZE,
+} from "../../utils/constants.js";
+import { ProofKind, ProofStatus } from "../../db/types.js";
+import logger from "../../../logger.js";
+import { BlockProverJob } from "../utils/jobs.js";
+import {
+    GeneratePulsarBlock,
+    GenerateSettlementProof,
+    SignaturePublicKeyList,
+} from "pulsar-contracts";
+import { Field, PublicKey, Signature } from "o1js";
 
-    const proofEpochHeight =
-        Math.floor(task.height / PROOF_EPOCH_SIZE) * PROOF_EPOCH_SIZE;
+export async function worker(task: BlockProverJob) {
+    const blockEpochHeight = task.height;
 
-    const session = db.client.startSession();
+    const session = await mongoose.startSession();
     try {
         await session.withTransaction(async () => {
-            await registerBlock(task.height);
+            const epoch = await BlockEpochModel.findOne({
+                height: blockEpochHeight,
+            });
 
-            const proofId = await createProof(db, task);
-
-            if (task.height % PROOF_EPOCH_SIZE == 0) {
-                await createProofEpoch(proofEpochHeight, task.height, proofId);
-            } else {
-                const epoch = await setProofOnEpoch(
-                    db,
-                    proofEpochHeight,
-                    task.height,
-                    proofId,
+            if (!epoch) {
+                throw new Error(
+                    `BlockEpoch at height ${blockEpochHeight} not found.`,
                 );
-                if (epoch) {
-                    await setBlockStatusDone(db, task.height);
-                    logger.info(
-                        `Set proof ${proofId.toHexString()} for block height ${task.height} in proof epoch ${epoch.height}.`,
-                    );
-                } else {
-                    await db.proofsCol.findOneAndDelete({ _id: proofId });
-                    logger.warn(
-                        `Block was not in 'processing' status for height ${task.height}. Deleted proof ${proofId.toHexString()}.`,
-                    );
-                }
             }
+
+            const proofId = await createProof(blockEpochHeight);
+
+            await createOrUpdateProofEpoch(epoch.height, proofId);
+
+            logger.info(
+                `Processed block epoch starting at height ${blockEpochHeight} and stored proofs in proof epochs.`,
+            );
         });
     } finally {
         await session.endSession();
     }
 }
 
-async function createProof(db: DB, block: BlockDoc) {
-    // TODO: create proof logic here
+async function createProof(height: number) {
+    const rangeLow = height;
+    const rangeHigh = height + BLOCK_EPOCH_SIZE - 1;
 
-    const proof = await db.storeProof("test-proof-data");
+    const blockDocs = await fetchBlockRange(rangeLow, rangeHigh);
 
-    logger.info(
-        `Created proof ${proof.toHexString()} for block ${block.height}`,
+    if (blockDocs.length !== BLOCK_EPOCH_SIZE) {
+        throw new Error(
+            `Expected ${
+                BLOCK_EPOCH_SIZE
+            } blocks for proof starting at height ${height}, but got ${
+                blockDocs.length
+            }`,
+        );
+    }
+
+    const blocks = [];
+    const signaturePubKeyLists: SignaturePublicKeyList[] = [];
+
+    for (let i = 1; i < blockDocs.length; i++) {
+        const prev = blockDocs[i - 1];
+        const cur = blockDocs[i];
+
+        const block = GeneratePulsarBlock(
+            Field.from(prev.validatorListHash),
+            Field.from(prev.stateRoot),
+            Field.from(prev.height),
+            Field.from(cur.validatorListHash),
+            Field.from(cur.stateRoot),
+            Field.from(cur.height),
+        );
+        blocks.push(block);
+
+        const sigList = SignaturePublicKeyList.fromArray(
+            cur.voteExt.map((ext) => [
+                Signature.fromBase58(ext.signature),
+                PublicKey.fromBase58(ext.validatorAddr),
+            ]),
+        );
+        signaturePubKeyLists.push(sigList);
+    }
+
+    const settlementProof = await GenerateSettlementProof(
+        blocks,
+        signaturePubKeyLists,
     );
 
-    return proof; // return proof id
+    const proofJson = JSON.stringify(settlementProof.toJSON());
+
+    const proofId = await storeProof(proofJson);
+
+    logger.info(`Created proof ${proofId.toHexString()} for block ${height}`);
+
+    return proofId;
 }
 
 /**
- * Creates a new proof epoch document if it does not exist and sets the proof for the given height
- * @param proofEpochHeight Proof epoch height
- * @param height Block height
- * @param proofId Proof ObjectId
+ * Creates a new block epoch document if it does not exist and sets the block at the given height
  */
-async function createProofEpoch(
-    proofEpochHeight: number,
+async function createOrUpdateProofEpoch(
     height: number,
-    proofId: ObjectId,
+    proofId: Types.ObjectId,
 ) {
-    const db = new DB();
-    await db.initMongo();
-
-    await db.proofEpochsCol.findOneAndUpdate(
-        { height: proofEpochHeight },
+    const result = await ProofEpochModel.findOneAndUpdate(
+        { height: height },
         {
             $setOnInsert: {
-                height: proofEpochHeight,
+                height: height,
                 kind: "blockProof" as ProofKind,
-                proofs: Array(31).fill(null),
-                status: Array(15).fill("waiting" as ProofStatus),
+                proofs: Array(PROOF_EPOCH_SIZE).fill(null),
+                status: Array((PROOF_EPOCH_SIZE - 1) / 2).fill(
+                    "waiting" as ProofStatus,
+                ),
                 failCount: 0,
-                timeoutAt: new Date(Date.now() + TIMEOUT_TIME_MS),
+                timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS),
             },
             $set: {
-                [`proofs.${height % PROOF_EPOCH_SIZE}`]: proofId,
+                [`proofs.${height % BLOCK_EPOCH_SIZE}`]: proofId,
             },
         },
-        { upsert: true },
+        { upsert: true, new: true },
     );
 
     logger.info(
         `Created proof epoch for first height ${height} with proof for block ${height}`,
     );
-}
 
-/**
- * Change block status from 'waiting' to 'processing'
- * @param height Block height
- **/
-async function registerBlock(height: number) {
-    const db = new DB();
-    await db.initMongo();
-
-    await db.blocksCol
-        .updateOne(
-            {
-                height: height,
-                status: "waiting" as ProofStatus,
-            },
-            {
-                $set: {
-                    status: "processing" as ProofStatus,
-                },
-            },
-        )
-        .then((result) => {
-            if (!result) {
-                throw new Error(
-                    `Block at height ${height} is not in 'waiting' status.`,
-                );
-            }
-
-            logger.info(
-                `Registered block at height ${height} as 'processing'.`,
-            );
-        });
-}
-
-/**
- * Set proof ID on epoch for specific height
- * @param db Database instance
- * @param height Block height
- * @param proofEpochHeight Proof epoch height
- * @param proofId Proof ObjectId
- * @return Updated ProofEpochDoc or null if not found
- */
-async function setProofOnEpoch(
-    db: DB,
-    proofEpochHeight: number,
-    height: number,
-    proofId: ObjectId,
-): Promise<WithId<ProofEpochDoc> | null> {
-    return db.proofEpochsCol.findOneAndUpdate(
-        {
-            height: proofEpochHeight,
-        },
-        {
-            $set: {
-                [`proofs.${height % PROOF_EPOCH_SIZE}`]: proofId,
-            },
-        },
-    );
-}
-
-async function setBlockStatusDone(db: DB, height: number) {
-    await db.blocksCol.findOneAndUpdate(
-        {
-            height: height,
-            status: { $ne: "done" },
-        },
-        {
-            $set: {
-                status: "done",
-            },
-        },
-    );
+    return result;
 }

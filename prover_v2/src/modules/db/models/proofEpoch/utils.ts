@@ -1,6 +1,6 @@
 import { Types } from "mongoose";
 import { ProofEpochModel } from "./ProofEpoch.js";
-import { TIMEOUT_TIME_MS } from "../../../utils/constants.js";
+import { WORKER_TIMEOUT_MS } from "../../../utils/constants.js";
 import logger from "../../../../logger.js";
 
 export async function getProofEpoch(height: number) {
@@ -42,7 +42,7 @@ export async function incrementFailCount(height: number) {
         { height },
         {
             $inc: { failCount: 1 },
-            $set: { timeoutAt: new Date(Date.now() + TIMEOUT_TIME_MS) },
+            $set: { timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS) },
         },
     );
 }
