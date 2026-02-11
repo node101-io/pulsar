@@ -131,7 +131,6 @@ async function handleTask() {
     if (epoch) {
         const epochHeight = epoch.height;
 
-        // Bu epoch tamamen dolu; tek bir job ile tüm epoch'u worker'a gönderiyoruz
         await queue.add("block-prover", { height: epochHeight });
         logger.debug(
             `Pushed epoch task to queue: epoch starting at height ${epochHeight}`,

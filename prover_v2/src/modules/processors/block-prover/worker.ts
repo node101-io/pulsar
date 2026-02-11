@@ -38,6 +38,20 @@ export async function worker(task: BlockProverJob) {
                 );
             }
 
+            if (epoch.failCount > 0) {
+                const proofEpoch = await ProofEpochModel.findOne({
+                    height: blockEpochHeight,
+                    kind: "blockProof" as ProofKind,
+                });
+
+                if (proofEpoch && proofEpoch.proofs.some((p) => p !== null)) {
+                    logger.info(
+                        `Skipping block proof generation for epoch starting at height ${blockEpochHeight} because proofs already exist after previous failures.`,
+                    );
+                    return;
+                }
+            }
+
             const proofId = await createProof(blockEpochHeight);
 
             await createOrUpdateProofEpoch(epoch.height, proofId);

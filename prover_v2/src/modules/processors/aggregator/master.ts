@@ -25,7 +25,6 @@ export interface Aggregation {
     index: number;
 }
 
-// Ağaçtaki aggregation pattern'leri (eski master'dan aynen alındı)
 const patterns = [
     // leaf nodes aggregation
     { startNode: 0, aggregated: 0 },
@@ -222,7 +221,6 @@ async function handleTask() {
     checkWorkers();
 
     if (epoch) {
-        // Bu epoch içindeki TÜM uygun aggregation slot'larını bul ve hepsi için job at
         const availablePatterns = patterns.filter(
             (p) =>
                 epoch.proofs[p.startNode] &&
