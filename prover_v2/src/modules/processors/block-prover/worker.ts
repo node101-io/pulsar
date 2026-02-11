@@ -9,8 +9,8 @@ import {
 } from "../../db/index.js";
 import {
     WORKER_TIMEOUT_MS,
-    PROOF_EPOCH_SIZE,
     BLOCK_EPOCH_SIZE,
+    PROOF_EPOCH_LEAF_COUNT,
 } from "../../utils/constants.js";
 import { ProofKind, ProofStatus } from "../../db/types.js";
 import logger from "../../../logger.js";
@@ -120,8 +120,8 @@ async function createOrUpdateProofEpoch(
             $setOnInsert: {
                 height: height,
                 kind: "blockProof" as ProofKind,
-                proofs: Array(PROOF_EPOCH_SIZE).fill(null),
-                status: Array((PROOF_EPOCH_SIZE - 1) / 2).fill(
+                proofs: Array(PROOF_EPOCH_LEAF_COUNT * 2 - 1).fill(null),
+                status: Array(PROOF_EPOCH_LEAF_COUNT - 1).fill(
                     "waiting" as ProofStatus,
                 ),
                 failCount: 0,
