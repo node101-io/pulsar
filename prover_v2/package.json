@@ -39,6 +39,7 @@
         "inquirer": "^12.9.4",
         "ioredis": "^5.7.0",
         "mongodb": "^6.19.0",
+        "mongoose": "^9.1.6",
         "node-fetch": "^3.3.2",
         "pulsar-contracts": "^0.4.31",
         "rimraf": "^6.0.1",
