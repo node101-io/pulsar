@@ -3,6 +3,8 @@ export const WORKER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 export const BLOCK_EPOCH_SIZE = 8;
 export const PROOF_EPOCH_LEAF_COUNT = 4;
 export const WORKER_COUNT = 10;
+// Settlement proof index in ProofEpoch.proofs[]
+export const PROOF_EPOCH_SETTLEMENT_INDEX = PROOF_EPOCH_LEAF_COUNT * 2 - 2;
 
 // Pulsar client constants
 export const POLL_INTERVAL_MS = 5_000;
