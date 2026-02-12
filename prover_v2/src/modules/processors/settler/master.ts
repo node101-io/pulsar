@@ -6,7 +6,11 @@ import {
 } from "../../utils/constants.js";
 
 // db
-import { ProofEpochModel } from "../../db/index.js";
+import { ProofKind } from "../../db/types.js";
+import {
+    incrementProofEpochFailCount,
+    ProofEpochModel,
+} from "../../db/index.js";
 
 // bullmq
 import { Worker } from "bullmq";
@@ -84,7 +88,11 @@ async function createWorker(workerId: number) {
         );
     });
 
-    worker.on("failed", (job, err) => {
+    worker.on("failed", async (job, err) => {
+        if (job?.data.height) {
+            await incrementProofEpochFailCount(job.data.height);
+        }
+
         logger.error(
             `Settler worker ${workerId} failed job ${job?.id} for epoch height ${job?.data.height}`,
             err as Error,
@@ -130,7 +138,8 @@ function checkWorkers() {
 async function handleTask() {
     const epoch = await ProofEpochModel.findOne(
         {
-            [`proofs.${PROOF_EPOCH_SETTLEMENT_INDEX}`]: { $exists: true },
+            [`proofs.${PROOF_EPOCH_SETTLEMENT_INDEX}`]: { $ne: null },
+            kind: { $ne: "done" as ProofKind },
             timeoutAt: { $gt: new Date() },
         },
         undefined,
