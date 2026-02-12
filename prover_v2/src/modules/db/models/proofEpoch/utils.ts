@@ -1,6 +1,10 @@
 import { Types } from "mongoose";
 import { ProofEpochModel } from "./ProofEpoch.js";
-import { WORKER_TIMEOUT_MS } from "../../../utils/constants.js";
+import {
+    PROOF_EPOCH_LEAF_COUNT,
+    PROOF_EPOCH_SETTLEMENT_INDEX,
+    WORKER_TIMEOUT_MS,
+} from "../../../utils/constants.js";
 import logger from "../../../../logger.js";
 
 export async function getProofEpoch(height: number) {
@@ -12,7 +16,7 @@ export async function storeProofInProofEpoch(
     proof: Types.ObjectId,
     index: number,
 ) {
-    if (index < 0 || index > 31) {
+    if (index < 0 || index > PROOF_EPOCH_SETTLEMENT_INDEX) {
         throw new Error("Index must be between 0 and 31");
     }
 
@@ -20,8 +24,8 @@ export async function storeProofInProofEpoch(
         [`proofs.${index}`]: proof,
     };
 
-    if (index > 15) {
-        update[`status.${index % 16}`] = "done";
+    if (index > PROOF_EPOCH_LEAF_COUNT - 1) {
+        update[`status.${index % PROOF_EPOCH_LEAF_COUNT}`] = "done";
     }
 
     await ProofEpochModel.findOneAndUpdate({ height }, { $set: update });
