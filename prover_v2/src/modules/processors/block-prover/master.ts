@@ -2,7 +2,10 @@
 import { WORKER_COUNT } from "../../utils/constants.js";
 
 // db imports
-import { BlockEpochModel } from "../../db/index.js";
+import {
+    BlockEpochModel,
+    incrementBlockEpochFailCount,
+} from "../../db/index.js";
 
 // bullmq imports
 import { Worker } from "bullmq";
@@ -69,7 +72,11 @@ async function createWorker(workerId: number) {
         );
     });
 
-    worker.on("failed", (job, err) => {
+    worker.on("failed", async (job, err) => {
+        if (job?.data.height) {
+            await incrementBlockEpochFailCount(job.data.height);
+        }
+
         logger.error(
             `Worker ${workerId} failed job ${job?.id} for block height ${job?.data.height}`,
             err as Error,
@@ -121,6 +128,7 @@ async function handleTask() {
     const epoch = await BlockEpochModel.findOne(
         {
             blocks: { $not: { $elemMatch: { $eq: null } } },
+            epochStatus: { $eq: "waiting" },
         },
         undefined,
         { sort: { height: 1 } },
