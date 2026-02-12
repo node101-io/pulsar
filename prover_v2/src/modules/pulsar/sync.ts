@@ -1,94 +1,78 @@
-import { List } from "pulsar-contracts";
-import { Poseidon, PublicKey } from "o1js";
+import * as grpc from "@grpc/grpc-js";
 
 import logger from "../../logger.js";
-import { PulsarClient } from "./client.js";
-import { DB, fetchLastStoredBlock } from "../db/index.js";
+import { fetchLastStoredBlock } from "../db/index.js";
 import { BlockData } from "../utils/interfaces.js";
-import { POLL_INTERVAL_MS } from "../utils/constants.js";
+import {
+    POLL_INTERVAL_MS,
+    TENDERMINT_SERVICE_NAME,
+    MINA_KEYS_SERVICE_NAME,
+} from "../utils/constants.js";
+import {
+    createClient,
+    getLatestHeight,
+    getBlockData,
+    storePulsarBlock,
+} from "./utils.js";
+import { sleep } from "../utils/functions.js";
+
+type TmClient = any;
+type MkClient = any;
 
 export async function startPulsarSync() {
-    const db = new DB();
-    await db.initMongo();
-
     const lastStored = await fetchLastStoredBlock();
-    const initialHeight = lastStored?.height ?? 0;
+    let currentHeight = lastStored?.height ?? 0;
 
     const rpcAddress = process.env.PULSAR_GRPC_ENDPOINT || "localhost:50051";
 
-    const client = new PulsarClient(
+    logger.info("Starting Pulsar sync loop", {
         rpcAddress,
-        initialHeight,
-        POLL_INTERVAL_MS,
-    );
-
-    client.on("start", () => {
-        logger.info("Pulsar client started, listening for new blocks");
+        startHeight: currentHeight,
+        event: "pulsar_sync_start",
     });
 
-    client.on(
-        "newPulsarBlock",
-        async ({ blockData }: { blockData: BlockData }) => {
-            try {
-                if (blockData.height <= initialHeight) {
-                    return;
+    const credentials = grpc.credentials.createInsecure();
+
+    const tmClient = (await createClient(
+        TENDERMINT_SERVICE_NAME,
+        rpcAddress,
+        credentials,
+    )) as TmClient;
+    const mkClient = (await createClient(
+        MINA_KEYS_SERVICE_NAME,
+        rpcAddress,
+        credentials,
+    )) as MkClient;
+
+    while (true) {
+        try {
+            const latestHeight = await getLatestHeight(tmClient);
+
+            if (latestHeight > currentHeight) {
+                logger.info("New Pulsar blocks detected", {
+                    fromHeight: currentHeight + 1,
+                    toHeight: latestHeight,
+                    count: latestHeight - currentHeight,
+                    event: "pulsar_new_blocks",
+                });
+
+                for (let h = currentHeight + 1; h <= latestHeight; h++) {
+                    const blockData: BlockData = await getBlockData(
+                        tmClient,
+                        mkClient,
+                        h,
+                    );
+                    await storePulsarBlock(blockData);
+                    currentHeight = h;
                 }
-
-                await storeBlock(db, blockData);
-            } catch (error) {
-                logger.error(
-                    "Error while handling new Pulsar block",
-                    error as Error,
-                    {
-                        blockHeight: blockData.height,
-                        event: "pulsar_block_handle_error",
-                    },
-                );
             }
-        },
-    );
+        } catch (error) {
+            logger.error("Error during Pulsar sync loop", error as Error, {
+                currentHeight,
+                event: "pulsar_sync_error",
+            });
+        }
 
-    client.on("error", (error: Error) => {
-        logger.error("Error in Pulsar client", error, {
-            event: "pulsar_client_error",
-        });
-    });
-
-    client.on("stop", () => {
-        logger.info("Pulsar client stopped", {
-            event: "pulsar_client_stopped",
-        });
-    });
-
-    await client.start();
-}
-
-function computeValidatorListHash(validators: string[]): string {
-    const validatorsList = List.empty();
-
-    for (const validator of validators) {
-        validatorsList.push(
-            Poseidon.hash(PublicKey.fromBase58(validator).toFields()),
-        );
+        await sleep(POLL_INTERVAL_MS);
     }
-
-    return validatorsList.hash.toString();
-}
-
-async function storeBlock(db: DB, blockData: BlockData) {
-    const { validators, ...rest } = blockData;
-
-    const validatorListHash = computeValidatorListHash(validators);
-
-    await db.storeBlock({
-        ...rest,
-        validators,
-        validatorListHash,
-    });
-
-    logger.info("Stored Pulsar block", {
-        blockHeight: blockData.height,
-        validatorsCount: validators.length,
-        event: "pulsar_block_stored",
-    });
 }
