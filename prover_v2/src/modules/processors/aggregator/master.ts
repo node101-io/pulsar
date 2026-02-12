@@ -4,7 +4,10 @@ import { Types } from "mongoose";
 import { WORKER_COUNT, WORKER_TIMEOUT_MS } from "../../utils/constants.js";
 
 // db
-import { ProofEpochModel } from "../../db/index.js";
+import {
+    incrementProofEpochFailCount,
+    ProofEpochModel,
+} from "../../db/index.js";
 
 // bullmq
 import { Worker } from "bullmq";
@@ -62,23 +65,6 @@ async function initializeWorkers() {
         await createWorker(i);
     }
     logger.info(`Initialized ${WORKER_COUNT} workers for aggregator queue`);
-}
-
-function findNextAggregation(task: any): Aggregation | null {
-    for (const p of patterns) {
-        if (
-            task.proofs[p.startNode] &&
-            task.proofs[p.startNode + 1] &&
-            task.status[p.aggregated] === "waiting"
-        ) {
-            return {
-                left: task.proofs[p.startNode] as Types.ObjectId,
-                right: task.proofs[p.startNode + 1] as Types.ObjectId,
-                index: p.aggregated,
-            };
-        }
-    }
-    return null;
 }
 
 async function createWorker(workerId: number) {
@@ -155,7 +141,11 @@ async function createWorker(workerId: number) {
         );
     });
 
-    worker.on("failed", (job, err) => {
+    worker.on("failed", async (job, err) => {
+        if (job?.data.height) {
+            await incrementProofEpochFailCount(job.data.height);
+        }
+
         logger.error(
             `Aggregator worker ${workerId} failed job ${job?.id} for epoch height ${job?.data.height}`,
             err as Error,
@@ -203,8 +193,8 @@ function checkWorkers() {
 async function handleTask() {
     const orClauses = patterns.map((p) => ({
         $and: [
-            { [`proofs.${p.startNode}`]: { $exists: true } },
-            { [`proofs.${p.startNode + 1}`]: { $exists: true } },
+            { [`proofs.${p.startNode}`]: { $ne: null } },
+            { [`proofs.${p.startNode + 1}`]: { $ne: null } },
             { [`status.${p.aggregated}`]: { $eq: "waiting" } },
         ],
     }));

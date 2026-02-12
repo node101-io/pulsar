@@ -23,7 +23,7 @@ export {
     getProofEpoch,
     storeProofInProofEpoch,
     deleteProofEpoch,
-    incrementFailCount,
+    incrementProofEpochFailCount,
 } from "./models/proofEpoch/utils.js";
 
 // BlockEpoch

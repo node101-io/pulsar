@@ -37,7 +37,7 @@ export async function deleteProofEpoch(height: number) {
     logger.info(`Deleted proof epoch at height ${height}.`);
 }
 
-export async function incrementFailCount(height: number) {
+export async function incrementProofEpochFailCount(height: number) {
     await ProofEpochModel.updateOne(
         { height },
         {
