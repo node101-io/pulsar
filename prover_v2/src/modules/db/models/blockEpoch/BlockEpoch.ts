@@ -9,6 +9,7 @@ export interface IBlockEpoch extends Document {
     height: number;
     blocks: (Types.ObjectId | null)[];
     status: BlockStatus[];
+    epochStatus: BlockStatus;
     timeoutAt: Date;
     failCount: number;
 }
@@ -27,6 +28,11 @@ const BlockEpochSchema = new Schema<IBlockEpoch>(
             type: [String],
             enum: ["waiting", "processing", "done", "failed"],
             default: Array(BLOCK_EPOCH_SIZE).fill("waiting" as BlockStatus),
+        },
+        epochStatus: {
+            type: String,
+            enum: ["waiting", "processing", "done", "failed"],
+            default: "waiting" as BlockStatus,
         },
         timeoutAt: {
             type: Date,

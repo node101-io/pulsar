@@ -12,7 +12,7 @@ import {
     BLOCK_EPOCH_SIZE,
     PROOF_EPOCH_LEAF_COUNT,
 } from "../../utils/constants.js";
-import { ProofKind, ProofStatus } from "../../db/types.js";
+import { BlockStatus, ProofKind, ProofStatus } from "../../db/types.js";
 import logger from "../../../logger.js";
 import { BlockProverJob } from "../utils/jobs.js";
 import {
@@ -28,9 +28,11 @@ export async function worker(task: BlockProverJob) {
     const session = await mongoose.startSession();
     try {
         await session.withTransaction(async () => {
-            const epoch = await BlockEpochModel.findOne({
-                height: blockEpochHeight,
-            });
+            const epoch = await BlockEpochModel.findOneAndUpdate(
+                { height: blockEpochHeight },
+                { $set: { epochStatus: "processing" as BlockStatus } },
+                { new: true },
+            );
 
             if (!epoch) {
                 throw new Error(
@@ -55,6 +57,11 @@ export async function worker(task: BlockProverJob) {
             const proofId = await createProof(blockEpochHeight);
 
             await createOrUpdateProofEpoch(epoch.height, proofId);
+
+            await BlockEpochModel.findOneAndUpdate(
+                { height: blockEpochHeight },
+                { $set: { epochStatus: "done" as BlockStatus } },
+            );
 
             logger.info(
                 `Processed block epoch starting at height ${blockEpochHeight} and stored proofs in proof epochs.`,
