@@ -7,10 +7,11 @@ interface BlockProverJob {
 interface AggregatorJob {
     height: number;
     index: number;
+    left: string;
+    right: string;
 }
 
 interface SettlerJob {
-    // Proof epoch height whose settlement proof will be submitted
     height: number;
 }
 
