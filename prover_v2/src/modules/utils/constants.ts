@@ -1,5 +1,6 @@
 // Processors constants
 export const WORKER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+export const STALLED_INTERVAL_MS = 5000; // 5 seconds
 export const BLOCK_EPOCH_SIZE = 8;
 export const PROOF_EPOCH_LEAF_COUNT = 4;
 export const WORKER_COUNT = 10;

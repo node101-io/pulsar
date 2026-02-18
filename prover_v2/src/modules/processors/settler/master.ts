@@ -1,8 +1,8 @@
 import {
-    PROOF_EPOCH_LEAF_COUNT,
     PROOF_EPOCH_SETTLEMENT_INDEX,
     WORKER_COUNT,
     WORKER_TIMEOUT_MS,
+    STALLED_INTERVAL_MS,
 } from "../../utils/constants.js";
 
 // db
@@ -27,13 +27,7 @@ import logger from "../../../logger.js";
 
 const queue = settlerQ;
 
-interface WorkerInfo {
-    worker: Worker<SettlerJob>;
-    lastFinishTime: Date | null;
-    lastStartTime: Date | null;
-}
-
-const workers: WorkerInfo[] = [];
+const workers: Worker<SettlerJob>[] = [];
 
 async function initializeWorkers() {
     for (let i = 0; i < WORKER_COUNT; i++) {
@@ -43,46 +37,39 @@ async function initializeWorkers() {
 }
 
 async function createWorker(workerId: number) {
-    const workerInfo: WorkerInfo = {
-        worker: new Worker<SettlerJob>(
-            "settler",
-            async (job) => {
-                workerInfo.lastStartTime = new Date();
-                logger.info(
-                    `Settler worker ${workerId} started job ${job.id} for epoch height ${job.data.height}`,
+    const worker = new Worker<SettlerJob>(
+        "settler",
+        async (job) => {
+            logger.info(
+                `Settler worker ${workerId} started job ${job.id} for epoch height ${job.data.height}`,
+            );
+
+            const epoch = await ProofEpochModel.findOne({
+                height: job.data.height,
+            });
+
+            if (!epoch) {
+                logger.warn(
+                    `Settler worker ${workerId} could not find epoch at height ${job.data.height}`,
                 );
+                return;
+            }
 
-                const epoch = await ProofEpochModel.findOne({
-                    height: job.data.height,
-                });
+            await processSettlement(epoch);
 
-                if (!epoch) {
-                    logger.warn(
-                        `Settler worker ${workerId} could not find epoch at height ${job.data.height}`,
-                    );
-                    return;
-                }
-
-                await processSettlement(epoch);
-
-                workerInfo.lastFinishTime = new Date();
-                logger.info(
-                    `Settler worker ${workerId} finished job ${job.id} for epoch height ${job.data.height}`,
-                );
-            },
-            {
-                connection,
-                concurrency: 1,
-            },
-        ),
-        lastFinishTime: null,
-        lastStartTime: null,
-    };
-
-    const worker = workerInfo.worker;
+            logger.info(
+                `Settler worker ${workerId} finished job ${job.id} for epoch height ${job.data.height}`,
+            );
+        },
+        {
+            connection,
+            concurrency: 1,
+            lockDuration: WORKER_TIMEOUT_MS,
+            stalledInterval: STALLED_INTERVAL_MS,
+        },
+    );
 
     worker.on("completed", (job) => {
-        workerInfo.lastFinishTime = new Date();
         logger.info(
             `Settler worker ${workerId} completed job ${job.id} for epoch height ${job.data.height}`,
         );
@@ -92,7 +79,6 @@ async function createWorker(workerId: number) {
         if (job?.data.height) {
             await incrementProofEpochFailCount(job.data.height);
         }
-
         logger.error(
             `Settler worker ${workerId} failed job ${job?.id} for epoch height ${job?.data.height}`,
             err as Error,
@@ -105,34 +91,13 @@ async function createWorker(workerId: number) {
 
     worker.on("closed", async () => {
         logger.warn(`Settler worker ${workerId} closed, creating replacement`);
-        const index = workers.findIndex((w) => w === workerInfo);
+        const index = workers.indexOf(worker);
         if (index !== -1) workers.splice(index, 1);
         await createWorker(workerId);
     });
 
-    workers.push(workerInfo);
+    workers.push(worker);
     return worker;
-}
-
-function checkWorkers() {
-    const now = Date.now();
-    for (let i = 0; i < workers.length; i++) {
-        const workerInfo = workers[i];
-        const { lastFinishTime, lastStartTime } = workerInfo;
-        if (
-            lastStartTime &&
-            !lastFinishTime &&
-            now - lastStartTime.getTime() > WORKER_TIMEOUT_MS
-        ) {
-            logger.warn(
-                `Settler worker ${i} appears stuck (started ${
-                    now - lastStartTime.getTime()
-                }ms ago), closing`,
-            );
-            workerInfo.worker.close();
-            workers.splice(i, 1);
-        }
-    }
 }
 
 async function handleTask() {
@@ -146,25 +111,20 @@ async function handleTask() {
         { sort: { timeoutAt: 1 } },
     );
 
-    checkWorkers();
-
     if (epoch) {
         await queue.add("settler", { height: epoch.height });
         logger.debug(
             `Pushed settler job to queue for epoch at height ${epoch.height}`,
-            {
-                epochHeight: epoch.height,
-                event: "settler_task_queued",
-            },
+            { epochHeight: epoch.height, event: "settler_task_queued" },
         );
     } else {
         await sleep(1000);
     }
-
-    handleTask();
 }
 
 export async function masterRunner() {
     await initializeWorkers();
-    handleTask();
+    while (true) {
+        await handleTask();
+    }
 }

@@ -1,7 +1,11 @@
 import { Types } from "mongoose";
 
 // constants
-import { WORKER_COUNT, WORKER_TIMEOUT_MS } from "../../utils/constants.js";
+import {
+    WORKER_COUNT,
+    WORKER_TIMEOUT_MS,
+    STALLED_INTERVAL_MS,
+} from "../../utils/constants.js";
 
 // db
 import {
@@ -52,13 +56,7 @@ const patterns = [
 
 const queue = aggregatorQ;
 
-interface WorkerInfo {
-    worker: Worker<AggregatorJob>;
-    lastFinishTime: Date | null;
-    lastStartTime: Date | null;
-}
-
-const workers: WorkerInfo[] = [];
+const workers: Worker<AggregatorJob>[] = [];
 
 async function initializeWorkers() {
     for (let i = 0; i < WORKER_COUNT; i++) {
@@ -68,74 +66,67 @@ async function initializeWorkers() {
 }
 
 async function createWorker(workerId: number) {
-    const workerInfo: WorkerInfo = {
-        worker: new Worker<AggregatorJob>(
-            "aggregator",
-            async (job) => {
-                workerInfo.lastStartTime = new Date();
-                logger.info(
-                    `Aggregator worker ${workerId} started job ${job.id} for epoch height ${job.data.height}`,
+    const worker = new Worker<AggregatorJob>(
+        "aggregator",
+        async (job) => {
+            logger.info(
+                `Aggregator worker ${workerId} started job ${job.id} for epoch height ${job.data.height}`,
+            );
+
+            const epoch = await ProofEpochModel.findOne({
+                height: job.data.height,
+            });
+
+            if (!epoch) {
+                logger.warn(
+                    `Aggregator worker ${workerId} could not find epoch at height ${job.data.height}`,
                 );
+                return;
+            }
 
-                const epoch = await ProofEpochModel.findOne({
-                    height: job.data.height,
-                });
-
-                if (!epoch) {
-                    logger.warn(
-                        `Aggregator worker ${workerId} could not find epoch at height ${job.data.height}`,
-                    );
-                    return;
-                }
-
-                const pattern = patterns.find(
-                    (p) => p.aggregated === job.data.index,
+            const pattern = patterns.find(
+                (p) => p.aggregated === job.data.index,
+            );
+            if (!pattern) {
+                logger.warn(
+                    `No aggregation pattern found for index ${job.data.index} on epoch ${epoch.height}`,
                 );
-                if (!pattern) {
-                    logger.warn(
-                        `No aggregation pattern found for index ${job.data.index} on epoch ${epoch.height}`,
-                    );
-                    return;
-                }
+                return;
+            }
 
-                if (
-                    !epoch.proofs[pattern.startNode] ||
-                    !epoch.proofs[pattern.startNode + 1]
-                ) {
-                    logger.warn(
-                        `Aggregation slot invalid for epoch ${epoch.height}, index ${job.data.index}`,
-                    );
-                    return;
-                }
-
-                const aggregation: Aggregation = {
-                    left: epoch.proofs[pattern.startNode] as Types.ObjectId,
-                    right: epoch.proofs[
-                        pattern.startNode + 1
-                    ] as Types.ObjectId,
-                    index: job.data.index,
-                };
-
-                await processAggregation(epoch, aggregation);
-
-                workerInfo.lastFinishTime = new Date();
-                logger.info(
-                    `Aggregator worker ${workerId} finished job ${job.id} for epoch height ${job.data.height}`,
+            if (
+                !epoch.proofs[pattern.startNode] ||
+                !epoch.proofs[pattern.startNode + 1]
+            ) {
+                logger.warn(
+                    `Aggregation slot invalid for epoch ${epoch.height}, index ${job.data.index}`,
                 );
-            },
-            {
-                connection,
-                concurrency: 1,
-            },
-        ),
-        lastFinishTime: null,
-        lastStartTime: null,
-    };
+                return;
+            }
 
-    const worker = workerInfo.worker;
+            const aggregation: Aggregation = {
+                left: epoch.proofs[pattern.startNode] as Types.ObjectId,
+                right: epoch.proofs[
+                    pattern.startNode + 1
+                ] as Types.ObjectId,
+                index: job.data.index,
+            };
+
+            await processAggregation(epoch, aggregation);
+
+            logger.info(
+                `Aggregator worker ${workerId} finished job ${job.id} for epoch height ${job.data.height}`,
+            );
+        },
+        {
+            connection,
+            concurrency: 1,
+            lockDuration: WORKER_TIMEOUT_MS,
+            stalledInterval: STALLED_INTERVAL_MS,
+        },
+    );
 
     worker.on("completed", (job) => {
-        workerInfo.lastFinishTime = new Date();
         logger.info(
             `Aggregator worker ${workerId} completed job ${job.id} for epoch height ${job.data.height}`,
         );
@@ -145,7 +136,6 @@ async function createWorker(workerId: number) {
         if (job?.data.height) {
             await incrementProofEpochFailCount(job.data.height);
         }
-
         logger.error(
             `Aggregator worker ${workerId} failed job ${job?.id} for epoch height ${job?.data.height}`,
             err as Error,
@@ -160,34 +150,13 @@ async function createWorker(workerId: number) {
         logger.warn(
             `Aggregator worker ${workerId} closed, creating replacement`,
         );
-        const index = workers.findIndex((w) => w === workerInfo);
+        const index = workers.indexOf(worker);
         if (index !== -1) workers.splice(index, 1);
         await createWorker(workerId);
     });
 
-    workers.push(workerInfo);
+    workers.push(worker);
     return worker;
-}
-
-function checkWorkers() {
-    const now = Date.now();
-    for (let i = 0; i < workers.length; i++) {
-        const workerInfo = workers[i];
-        const { lastFinishTime, lastStartTime } = workerInfo;
-        if (
-            lastStartTime &&
-            !lastFinishTime &&
-            now - lastStartTime.getTime() > WORKER_TIMEOUT_MS
-        ) {
-            logger.warn(
-                `Aggregator worker ${i} appears stuck (started ${
-                    now - lastStartTime.getTime()
-                }ms ago), closing`,
-            );
-            workerInfo.worker.close();
-            workers.splice(i, 1);
-        }
-    }
 }
 
 async function handleTask() {
@@ -207,8 +176,6 @@ async function handleTask() {
         undefined,
         { sort: { timeoutAt: 1 } },
     );
-
-    checkWorkers();
 
     if (epoch) {
         const availablePatterns = patterns.filter(
@@ -242,11 +209,11 @@ async function handleTask() {
     } else {
         await sleep(1000);
     }
-
-    handleTask();
 }
 
 export async function masterRunner() {
     await initializeWorkers();
-    handleTask();
+    while (true) {
+        await handleTask();
+    }
 }
