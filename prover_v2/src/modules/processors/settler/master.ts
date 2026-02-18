@@ -26,17 +26,8 @@ class SettlerMaster extends Master<SettlerJob> {
             workerCount: WORKER_COUNT,
             lockDurationMs: WORKER_TIMEOUT_MS,
             stalledIntervalMs: STALLED_INTERVAL_MS,
-            processJob: async (workerId, job) => {
-                const epoch = await ProofEpochModel.findOne({
-                    height: job.data.height,
-                });
-                if (!epoch) {
-                    logger.warn(
-                        `Settler worker ${workerId} could not find epoch at height ${job.data.height}`,
-                    );
-                    return;
-                }
-                await processSettlement(epoch);
+            processJob: async (_workerId, job) => {
+                await processSettlement(job.data);
             },
             onJobFailed: async (job) => {
                 if (job?.data.height) {
@@ -58,7 +49,16 @@ class SettlerMaster extends Master<SettlerJob> {
         );
 
         if (epoch) {
-            await settlerQ.add("settler", { height: epoch.height });
+            const settlementProofId = epoch.proofs[PROOF_EPOCH_SETTLEMENT_INDEX];
+            if (!settlementProofId) {
+                await sleep(1000);
+                return;
+            }
+
+            await settlerQ.add("settler", {
+                height: epoch.height,
+                settlementProofId: settlementProofId.toString(),
+            });
             logger.debug(
                 `Pushed settler job to queue for epoch at height ${epoch.height}`,
                 { epochHeight: epoch.height, event: "settler_task_queued" },

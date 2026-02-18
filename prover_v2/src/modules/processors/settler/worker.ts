@@ -1,33 +1,31 @@
-import {
-    type IProofEpoch,
-    ProofEpochModel,
-} from "../../db/models/proofEpoch/ProofEpoch.js";
+import { Types } from "mongoose";
+import { ProofEpochModel } from "../../db/models/proofEpoch/ProofEpoch.js";
 import { getProof } from "../../db/models/proof/utils.js";
 import { ProofKind } from "../../db/types.js";
 import { SettlementContract, SettlementProof } from "pulsar-contracts";
 import { Mina, PublicKey, fetchAccount } from "o1js";
 import dotenv from "dotenv";
 import logger from "../../../logger.js";
-import { PROOF_EPOCH_SETTLEMENT_INDEX } from "../../utils/constants.js";
+import { SettlerJob } from "../utils/jobs.js";
 
 dotenv.config();
 
-export async function worker(task: IProofEpoch) {
-    if (task.failCount > 0 && task.kind === "done") {
+export async function worker(task: SettlerJob) {
+    const epoch = await ProofEpochModel.findOne({ height: task.height });
+    if (!epoch) {
+        throw new Error(`ProofEpoch at height ${task.height} not found.`);
+    }
+
+    if (epoch.failCount > 0 && epoch.kind === "done") {
         logger.info(
             `Skipping settlement for epoch at height ${task.height} because it is already marked as done.`,
         );
         return;
     }
 
-    await registerProofEpoch(task);
+    await registerProofEpoch(task.height);
 
-    const settlementProofId = task.proofs[PROOF_EPOCH_SETTLEMENT_INDEX];
-
-    if (!settlementProofId) {
-        throw new Error("Settlement proof ID is missing.");
-    }
-
+    const settlementProofId = new Types.ObjectId(task.settlementProofId);
     const settlementProofJson = await getProof(settlementProofId);
 
     if (!settlementProofJson) {
@@ -73,10 +71,10 @@ export async function worker(task: IProofEpoch) {
         });
 }
 
-async function registerProofEpoch(task: IProofEpoch) {
+async function registerProofEpoch(height: number) {
     const result = await ProofEpochModel.findOneAndUpdate(
         {
-            height: task.height,
+            height,
             kind: { $ne: "settlement" as ProofKind },
         },
         {
@@ -88,12 +86,12 @@ async function registerProofEpoch(task: IProofEpoch) {
 
     if (!result) {
         throw new Error(
-            `Proof epoch at height ${task.height} is already registered as settlement.`,
+            `Proof epoch at height ${height} is already registered as settlement.`,
         );
     }
 
     logger.info(
-        `Registered proof epoch at height ${task.height} as settlement.`,
+        `Registered proof epoch at height ${height} as settlement.`,
     );
 }
 
