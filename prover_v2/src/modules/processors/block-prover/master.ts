@@ -1,5 +1,9 @@
 // constants imports
-import { WORKER_COUNT } from "../../utils/constants.js";
+import {
+    WORKER_COUNT,
+    WORKER_TIMEOUT_MS,
+    STALLED_INTERVAL_MS,
+} from "../../utils/constants.js";
 
 // db imports
 import {
@@ -16,20 +20,13 @@ import { connection } from "../utils/workerConnection.js";
 import { sleep } from "../../utils/functions.js";
 import { blockProverQ } from "../utils/queue.js";
 import { BlockProverJob } from "../utils/jobs.js";
-import { WORKER_TIMEOUT_MS } from "../../utils/constants.js";
 
 // logger imports
 import logger from "../../../logger.js";
 
 const queue = blockProverQ;
 
-interface WorkerInfo {
-    worker: Worker<BlockProverJob>;
-    lastFinishTime: Date | null;
-    lastStartTime: Date | null;
-}
-
-const workers: WorkerInfo[] = [];
+const workers: Worker<BlockProverJob>[] = [];
 
 async function initializeWorkers() {
     for (let i = 0; i < WORKER_COUNT; i++) {
@@ -39,34 +36,25 @@ async function initializeWorkers() {
 }
 
 async function createWorker(workerId: number) {
-    const workerInfo: WorkerInfo = {
-        worker: new Worker<BlockProverJob>(
-            "block-prover",
-            async (job) => {
-                // Update this worker's start time
-                workerInfo.lastStartTime = new Date();
-                logger.info(
-                    `Worker ${workerId} started processing job ${job.id} for block height ${job.data.height}`,
-                );
+    const worker = new Worker<BlockProverJob>(
+        "block-prover",
+        async (job) => {
+            logger.info(
+                `Worker ${workerId} started processing job ${job.id} for block height ${job.data.height}`,
+            );
+            await processTask({
+                height: job.data.height,
+            } as BlockProverJob);
+        },
+        {
+            connection,
+            concurrency: 1,
+            lockDuration: WORKER_TIMEOUT_MS,
+            stalledInterval: STALLED_INTERVAL_MS,
+        },
+    );
 
-                await processTask({
-                    height: job.data.height,
-                } as BlockProverJob);
-            },
-            {
-                connection,
-                concurrency: 1,
-            },
-        ),
-        lastFinishTime: null,
-        lastStartTime: null,
-    };
-
-    const worker = workerInfo.worker;
-
-    // Event listeners
     worker.on("completed", (job) => {
-        workerInfo.lastFinishTime = new Date();
         logger.info(
             `Worker ${workerId} completed job ${job.id} for block height ${job.data.height}`,
         );
@@ -76,7 +64,6 @@ async function createWorker(workerId: number) {
         if (job?.data.height) {
             await incrementBlockEpochFailCount(job.data.height);
         }
-
         logger.error(
             `Worker ${workerId} failed job ${job?.id} for block height ${job?.data.height}`,
             err as Error,
@@ -91,37 +78,13 @@ async function createWorker(workerId: number) {
         logger.warn(
             `Worker ${workerId} closed (crashed or manually closed), creating replacement`,
         );
-        // Remove old worker from array
-        const index = workers.findIndex((w) => w === workerInfo);
-        if (index !== -1) {
-            workers.splice(index, 1);
-        }
-        // Create replacement worker
+        const index = workers.indexOf(worker);
+        if (index !== -1) workers.splice(index, 1);
         await createWorker(workerId);
     });
 
-    workers.push(workerInfo);
+    workers.push(worker);
     return worker;
-}
-
-function checkWorkers() {
-    const now = Date.now();
-    for (let i = 0; i < workers.length; i++) {
-        const workerInfo = workers[i];
-
-        const { lastFinishTime, lastStartTime } = workerInfo;
-        if (
-            lastStartTime &&
-            !lastFinishTime &&
-            now - lastStartTime.getTime() > WORKER_TIMEOUT_MS
-        ) {
-            logger.warn(
-                `Worker ${i} appears stuck (started ${now - lastStartTime.getTime()}ms ago), closing`,
-            );
-            workerInfo.worker.close();
-            workers.splice(i, 1);
-        }
-    }
 }
 
 async function handleTask() {
@@ -134,27 +97,20 @@ async function handleTask() {
         { sort: { height: 1 } },
     );
 
-    checkWorkers();
-
     if (epoch) {
-        const epochHeight = epoch.height;
-
-        await queue.add("block-prover", { height: epochHeight });
+        await queue.add("block-prover", { height: epoch.height });
         logger.debug(
-            `Pushed epoch task to queue: epoch starting at height ${epochHeight}`,
-            {
-                epochHeight,
-                event: "epoch_task_queued",
-            },
+            `Pushed epoch task to queue: epoch starting at height ${epoch.height}`,
+            { epochHeight: epoch.height, event: "epoch_task_queued" },
         );
     } else {
         await sleep(1000);
     }
-
-    handleTask();
 }
 
 export async function masterRunner() {
     await initializeWorkers();
-    handleTask();
+    while (true) {
+        await handleTask();
+    }
 }
