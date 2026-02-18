@@ -4,127 +4,72 @@ import {
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
 } from "../../utils/constants.js";
-
-// db
 import { ProofKind } from "../../db/types.js";
 import {
     incrementProofEpochFailCount,
     ProofEpochModel,
 } from "../../db/index.js";
-
-// bullmq
-import { Worker } from "bullmq";
+import { Master } from "../base/Master.js";
 import { settlerQ } from "../utils/queue.js";
 import { SettlerJob } from "../utils/jobs.js";
 import { connection } from "../utils/workerConnection.js";
-
-// settler worker
 import { worker as processSettlement } from "./worker.js";
-
-// utils
 import { sleep } from "../../utils/functions.js";
 import logger from "../../../logger.js";
 
-const queue = settlerQ;
-
-const workers: Worker<SettlerJob>[] = [];
-
-async function initializeWorkers() {
-    for (let i = 0; i < WORKER_COUNT; i++) {
-        await createWorker(i);
-    }
-    logger.info(`Initialized ${WORKER_COUNT} workers for settler queue`);
-}
-
-async function createWorker(workerId: number) {
-    const worker = new Worker<SettlerJob>(
-        "settler",
-        async (job) => {
-            logger.info(
-                `Settler worker ${workerId} started job ${job.id} for epoch height ${job.data.height}`,
-            );
-
-            const epoch = await ProofEpochModel.findOne({
-                height: job.data.height,
-            });
-
-            if (!epoch) {
-                logger.warn(
-                    `Settler worker ${workerId} could not find epoch at height ${job.data.height}`,
-                );
-                return;
-            }
-
-            await processSettlement(epoch);
-
-            logger.info(
-                `Settler worker ${workerId} finished job ${job.id} for epoch height ${job.data.height}`,
-            );
-        },
-        {
+class SettlerMaster extends Master<SettlerJob> {
+    constructor() {
+        super({
+            queueName: "settler",
+            workerLabel: "Settler",
             connection,
-            concurrency: 1,
-            lockDuration: WORKER_TIMEOUT_MS,
-            stalledInterval: STALLED_INTERVAL_MS,
-        },
-    );
+            workerCount: WORKER_COUNT,
+            lockDurationMs: WORKER_TIMEOUT_MS,
+            stalledIntervalMs: STALLED_INTERVAL_MS,
+            processJob: async (workerId, job) => {
+                const epoch = await ProofEpochModel.findOne({
+                    height: job.data.height,
+                });
+                if (!epoch) {
+                    logger.warn(
+                        `Settler worker ${workerId} could not find epoch at height ${job.data.height}`,
+                    );
+                    return;
+                }
+                await processSettlement(epoch);
+            },
+            onJobFailed: async (job) => {
+                if (job?.data.height) {
+                    await incrementProofEpochFailCount(job.data.height);
+                }
+            },
+        });
+    }
 
-    worker.on("completed", (job) => {
-        logger.info(
-            `Settler worker ${workerId} completed job ${job.id} for epoch height ${job.data.height}`,
+    protected async handleTask(): Promise<void> {
+        const epoch = await ProofEpochModel.findOne(
+            {
+                [`proofs.${PROOF_EPOCH_SETTLEMENT_INDEX}`]: { $ne: null },
+                kind: { $ne: "done" as ProofKind },
+                timeoutAt: { $gt: new Date() },
+            },
+            undefined,
+            { sort: { timeoutAt: 1 } },
         );
-    });
 
-    worker.on("failed", async (job, err) => {
-        if (job?.data.height) {
-            await incrementProofEpochFailCount(job.data.height);
+        if (epoch) {
+            await settlerQ.add("settler", { height: epoch.height });
+            logger.debug(
+                `Pushed settler job to queue for epoch at height ${epoch.height}`,
+                { epochHeight: epoch.height, event: "settler_task_queued" },
+            );
+        } else {
+            await sleep(1000);
         }
-        logger.error(
-            `Settler worker ${workerId} failed job ${job?.id} for epoch height ${job?.data.height}`,
-            err as Error,
-        );
-    });
-
-    worker.on("error", (err) => {
-        logger.error(`Settler worker ${workerId} error`, err as Error);
-    });
-
-    worker.on("closed", async () => {
-        logger.warn(`Settler worker ${workerId} closed, creating replacement`);
-        const index = workers.indexOf(worker);
-        if (index !== -1) workers.splice(index, 1);
-        await createWorker(workerId);
-    });
-
-    workers.push(worker);
-    return worker;
-}
-
-async function handleTask() {
-    const epoch = await ProofEpochModel.findOne(
-        {
-            [`proofs.${PROOF_EPOCH_SETTLEMENT_INDEX}`]: { $ne: null },
-            kind: { $ne: "done" as ProofKind },
-            timeoutAt: { $gt: new Date() },
-        },
-        undefined,
-        { sort: { timeoutAt: 1 } },
-    );
-
-    if (epoch) {
-        await queue.add("settler", { height: epoch.height });
-        logger.debug(
-            `Pushed settler job to queue for epoch at height ${epoch.height}`,
-            { epochHeight: epoch.height, event: "settler_task_queued" },
-        );
-    } else {
-        await sleep(1000);
     }
 }
 
 export async function masterRunner() {
-    await initializeWorkers();
-    while (true) {
-        await handleTask();
-    }
+    const master = new SettlerMaster();
+    await master.run();
 }
