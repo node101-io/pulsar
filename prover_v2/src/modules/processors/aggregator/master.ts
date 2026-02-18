@@ -59,27 +59,9 @@ class AggregatorMaster extends Master<AggregatorJob> {
                     );
                     return;
                 }
-                const pattern = patterns.find(
-                    (p) => p.aggregated === job.data.index,
-                );
-                if (!pattern) {
-                    logger.warn(
-                        `No aggregation pattern found for index ${job.data.index} on epoch ${epoch.height}`,
-                    );
-                    return;
-                }
-                if (
-                    !epoch.proofs[pattern.startNode] ||
-                    !epoch.proofs[pattern.startNode + 1]
-                ) {
-                    logger.warn(
-                        `Aggregation slot invalid for epoch ${epoch.height}, index ${job.data.index}`,
-                    );
-                    return;
-                }
                 const aggregation: Aggregation = {
-                    left: epoch.proofs[pattern.startNode] as Types.ObjectId,
-                    right: epoch.proofs[pattern.startNode + 1] as Types.ObjectId,
+                    left: new Types.ObjectId(job.data.left),
+                    right: new Types.ObjectId(job.data.right),
                     index: job.data.index,
                 };
                 await processAggregation(epoch, aggregation);
@@ -125,9 +107,13 @@ class AggregatorMaster extends Master<AggregatorJob> {
                 await sleep(1000);
             } else {
                 for (const p of availablePatterns) {
+                    const leftId = epoch.proofs[p.startNode] as Types.ObjectId;
+                    const rightId = epoch.proofs[p.startNode + 1] as Types.ObjectId;
                     await aggregatorQ.add("aggregator", {
                         height: epoch.height,
                         index: p.aggregated,
+                        left: leftId.toString(),
+                        right: rightId.toString(),
                     });
                     logger.debug(
                         `Pushed aggregator job for epoch ${epoch.height}, aggregation index ${p.aggregated}`,
