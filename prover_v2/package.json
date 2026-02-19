@@ -3,7 +3,8 @@
     "version": "1.0.0",
     "type": "module",
     "scripts": {
-        "test": "npm run test",
+        "test": "vitest run",
+        "test:watch": "vitest",
         "build": "tsc",
         "proto:gen": "buf generate ../chain/proto",
         "start-mock": "npm run build && node dist/src/mock/pulsarNode.js",
@@ -49,7 +50,8 @@
         "@bufbuild/buf": "^1.57.0",
         "@types/express": "^5.0.3",
         "@types/node": "^24.3.1",
-        "typescript": "^5.9.2"
+        "typescript": "^5.9.2",
+        "vitest": "^4.0.18"
     },
     "peerDependencies": {
         "o1js": "^2.9.0"
