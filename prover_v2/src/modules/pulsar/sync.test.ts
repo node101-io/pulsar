@@ -5,7 +5,6 @@ import * as db from "../db/index.js";
 import * as functions from "../utils/functions.js";
 import { BlockData } from "../utils/interfaces.js";
 
-// Mock dependencies
 vi.mock("./utils.js");
 vi.mock("../db/index.js");
 vi.mock("../utils/functions.js");
@@ -27,7 +26,6 @@ describe("pulsar sync", () => {
         vi.clearAllMocks();
         sleepCallCount = 0;
 
-        // Mock gRPC clients
         mockTmClient = {
             GetLatestBlock: vi.fn(),
             GetBlockByHeight: vi.fn(),
@@ -39,7 +37,6 @@ describe("pulsar sync", () => {
             GetMinaPubkey: vi.fn(),
         };
 
-        // Mock createClient to return our mock clients
         vi.mocked(utils.createClient).mockImplementation(async (serviceName) => {
             if (serviceName.includes("tendermint")) {
                 return mockTmClient;
@@ -47,7 +44,6 @@ describe("pulsar sync", () => {
             return mockMkClient;
         });
 
-        // Mock sleep - throw after first call to stop infinite loop
         vi.mocked(functions.sleep).mockImplementation(async () => {
             sleepCallCount++;
             if (sleepCallCount > 1) {
@@ -60,7 +56,7 @@ describe("pulsar sync", () => {
     it("starts sync from last stored block height", async () => {
         const mockLastBlock = { height: 10 };
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue(mockLastBlock as any);
-        vi.mocked(utils.getLatestHeight).mockResolvedValue(10); // No new blocks
+        vi.mocked(utils.getLatestHeight).mockResolvedValue(10);
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
@@ -81,11 +77,10 @@ describe("pulsar sync", () => {
 
         vi.mocked(utils.getBlockData).mockResolvedValue(mockBlockData);
         vi.mocked(utils.storePulsarBlock).mockResolvedValue();
-        vi.mocked(utils.getLatestHeight).mockResolvedValue(7); // 2 new blocks: 6, 7
+        vi.mocked(utils.getLatestHeight).mockResolvedValue(7);
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
-        // Should call getBlockData for heights 6 and 7
         expect(utils.getBlockData).toHaveBeenCalledTimes(2);
         expect(utils.storePulsarBlock).toHaveBeenCalledTimes(2);
     });
@@ -98,8 +93,7 @@ describe("pulsar sync", () => {
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
-        expect(utils.getLatestHeight).toHaveBeenCalledTimes(2); // error, success
-        // Should continue after error
+        expect(utils.getLatestHeight).toHaveBeenCalledTimes(2);
         expect(functions.sleep).toHaveBeenCalled();
     });
 
