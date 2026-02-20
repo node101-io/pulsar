@@ -5,7 +5,7 @@ import { MAX_FAIL_COUNT, MONITOR_INTERVAL_MS } from "../utils/constants.js";
 import { BlockStatus, ProofStatus } from "../db/types.js";
 import { sleep } from "../utils/functions.js";
 
-async function checkBlockEpochs() {
+export async function checkBlockEpochs() {
     const failedEpochs = await BlockEpochModel.find({
         failCount: { $gt: MAX_FAIL_COUNT },
         epochStatus: { $ne: "failed" },
@@ -27,7 +27,7 @@ async function checkBlockEpochs() {
     return failedEpochs.length;
 }
 
-async function checkProofEpochs() {
+export async function checkProofEpochs() {
     const failedEpochs = await ProofEpochModel.find({
         failCount: { $gt: MAX_FAIL_COUNT },
         status: { $not: { $all: ["failed"] } },
