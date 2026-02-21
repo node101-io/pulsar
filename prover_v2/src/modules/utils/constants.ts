@@ -15,3 +15,7 @@ export const MINA_KEYS_SERVICE_NAME = "interchain_security.minakeys.Query";
 // Monitor constants
 export const MAX_FAIL_COUNT = 3;
 export const MONITOR_INTERVAL_MS = 30_000; // 30 seconds
+
+// Cleanup constants
+export const CLEANUP_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+export const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
