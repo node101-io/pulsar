@@ -10,16 +10,12 @@ import { PROOF_EPOCH_LEAF_COUNT } from "../../utils/constants.js";
 import { MergeSettlementProofs, SettlementProof } from "pulsar-contracts";
 
 export async function worker(task: IProofEpoch, aggregation: Aggregation) {
-    // Eğer daha önce fail olduysa ve bu slot zaten 'done' ise tekrar çalıştırma
     if (task.failCount > 0 && task.status[aggregation.index] === "done") {
         logger.info(
             `Skipping aggregation for epoch ${task.height}, index ${aggregation.index} because it is already done.`,
         );
         return;
     }
-
-    // register aggregation proof in db
-    await registerAggregatedProofSlot(task, aggregation.index);
 
     const leftProofJson = await getProof(aggregation.left);
     const rightProofJson = await getProof(aggregation.right);
@@ -70,25 +66,4 @@ async function generateAggregatedProof(
     const merged = await MergeSettlementProofs([left, right]);
 
     return JSON.stringify(merged.toJSON());
-}
-
-async function registerAggregatedProofSlot(task: IProofEpoch, index: number) {
-    const result = await ProofEpochModel.updateOne(
-        {
-            height: task.height,
-            [`status.${index}`]: { $ne: "processing" as ProofStatus },
-        },
-        {
-            $set: {
-                kind: "aggregation" as ProofKind,
-                [`status.${index}`]: "processing" as ProofStatus,
-            },
-        },
-    );
-
-    if (!result.matchedCount) {
-        throw new Error(
-            `Failed to register aggregated proof slot for epoch at height ${task.height}.`,
-        );
-    }
 }

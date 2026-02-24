@@ -107,6 +107,7 @@ class AggregatorMaster extends Master<AggregatorJob> {
                 );
                 await sleep(MASTER_SLEEP_INTERVAL_MS);
             } else {
+                const statusUpdates: Record<string, string> = {};
                 for (const p of availablePatterns) {
                     const leftId = epoch.proofs[p.startNode] as Types.ObjectId;
                     const rightId = epoch.proofs[
@@ -125,6 +126,14 @@ class AggregatorMaster extends Master<AggregatorJob> {
                             index: p.aggregated,
                             event: "aggregator_task_queued",
                         },
+                    );
+                    statusUpdates[`status.${p.aggregated}`] = "processing";
+                }
+
+                if (Object.keys(statusUpdates).length > 0) {
+                    await ProofEpochModel.updateOne(
+                        { _id: epoch._id },
+                        { $set: statusUpdates },
                     );
                 }
             }

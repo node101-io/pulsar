@@ -28,11 +28,10 @@ export async function worker(task: BlockProverJob) {
     const session = await mongoose.startSession();
     try {
         await session.withTransaction(async () => {
-            const epoch = await BlockEpochModel.findOneAndUpdate(
-                { height: blockEpochHeight },
-                { $set: { epochStatus: "processing" as BlockStatus } },
-                { new: true },
-            );
+            const epoch = await BlockEpochModel.findOne({
+                height: blockEpochHeight,
+                epochStatus: { $eq: "processing" as BlockStatus },
+            });
 
             if (!epoch) {
                 throw new Error(
