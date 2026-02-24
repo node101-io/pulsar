@@ -3,6 +3,7 @@ import {
     WORKER_COUNT,
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
+    MASTER_SLEEP_INTERVAL_MS,
 } from "../../utils/constants.js";
 import {
     incrementProofEpochFailCount,
@@ -104,11 +105,13 @@ class AggregatorMaster extends Master<AggregatorJob> {
                 logger.warn(
                     `Epoch ${epoch.height} matched query but has no valid aggregation slots, skipping`,
                 );
-                await sleep(1000);
+                await sleep(MASTER_SLEEP_INTERVAL_MS);
             } else {
                 for (const p of availablePatterns) {
                     const leftId = epoch.proofs[p.startNode] as Types.ObjectId;
-                    const rightId = epoch.proofs[p.startNode + 1] as Types.ObjectId;
+                    const rightId = epoch.proofs[
+                        p.startNode + 1
+                    ] as Types.ObjectId;
                     await aggregatorQ.add("aggregator", {
                         height: epoch.height,
                         index: p.aggregated,
@@ -126,7 +129,7 @@ class AggregatorMaster extends Master<AggregatorJob> {
                 }
             }
         } else {
-            await sleep(1000);
+            await sleep(MASTER_SLEEP_INTERVAL_MS);
         }
     }
 }

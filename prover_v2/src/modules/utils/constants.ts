@@ -1,4 +1,5 @@
 // Processors constants
+export const MASTER_SLEEP_INTERVAL_MS = 1000; // 1 second
 export const WORKER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 export const STALLED_INTERVAL_MS = 5000; // 5 seconds
 export const BLOCK_EPOCH_SIZE = 8;

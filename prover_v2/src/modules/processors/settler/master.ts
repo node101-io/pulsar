@@ -3,6 +3,7 @@ import {
     WORKER_COUNT,
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
+    MASTER_SLEEP_INTERVAL_MS,
 } from "../../utils/constants.js";
 import { ProofKind } from "../../db/types.js";
 import {
@@ -49,9 +50,10 @@ class SettlerMaster extends Master<SettlerJob> {
         );
 
         if (epoch) {
-            const settlementProofId = epoch.proofs[PROOF_EPOCH_SETTLEMENT_INDEX];
+            const settlementProofId =
+                epoch.proofs[PROOF_EPOCH_SETTLEMENT_INDEX];
             if (!settlementProofId) {
-                await sleep(1000);
+                await sleep(MASTER_SLEEP_INTERVAL_MS);
                 return;
             }
 
@@ -64,7 +66,7 @@ class SettlerMaster extends Master<SettlerJob> {
                 { epochHeight: epoch.height, event: "settler_task_queued" },
             );
         } else {
-            await sleep(1000);
+            await sleep(MASTER_SLEEP_INTERVAL_MS);
         }
     }
 }
