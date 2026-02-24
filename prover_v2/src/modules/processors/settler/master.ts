@@ -39,14 +39,19 @@ class SettlerMaster extends Master<SettlerJob> {
     }
 
     protected async handleTask(): Promise<void> {
-        const epoch = await ProofEpochModel.findOne(
+        const epoch = await ProofEpochModel.findOneAndUpdate(
             {
                 [`proofs.${PROOF_EPOCH_SETTLEMENT_INDEX}`]: { $ne: null },
-                kind: { $ne: "done" as ProofKind },
+                kind: { $nin: ["settlement", "done"] as ProofKind[] },
                 timeoutAt: { $gt: new Date() },
             },
-            undefined,
-            { sort: { timeoutAt: 1 } },
+            {
+                $set: { kind: "settlement" as ProofKind },
+            },
+            {
+                sort: { timeoutAt: 1 },
+                new: true,
+            },
         );
 
         if (epoch) {

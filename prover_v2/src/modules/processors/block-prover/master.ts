@@ -2,6 +2,7 @@ import {
     WORKER_COUNT,
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
+    MASTER_SLEEP_INTERVAL_MS,
 } from "../../utils/constants.js";
 import { BlockEpochModel, incrementBlockEpochFailCount } from "../../db/index.js";
 import { Master } from "../base/Master.js";
@@ -33,13 +34,18 @@ class BlockProverMaster extends Master<BlockProverJob> {
     }
 
     protected async handleTask(): Promise<void> {
-        const epoch = await BlockEpochModel.findOne(
+        const epoch = await BlockEpochModel.findOneAndUpdate(
             {
                 blocks: { $not: { $elemMatch: { $eq: null } } },
                 epochStatus: { $eq: "waiting" },
             },
-            undefined,
-            { sort: { height: 1 } },
+            {
+                $set: { epochStatus: "processing" },
+            },
+            {
+                sort: { height: 1 },
+                new: true,
+            },
         );
 
         if (epoch) {
@@ -49,7 +55,7 @@ class BlockProverMaster extends Master<BlockProverJob> {
                 { epochHeight: epoch.height, event: "epoch_task_queued" },
             );
         } else {
-            await sleep(1000);
+            await sleep(MASTER_SLEEP_INTERVAL_MS);
         }
     }
 }

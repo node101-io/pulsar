@@ -23,8 +23,6 @@ export async function worker(task: SettlerJob) {
         return;
     }
 
-    await registerProofEpoch(task.height);
-
     const settlementProofId = new Types.ObjectId(task.settlementProofId);
     const settlementProofJson = await getProof(settlementProofId);
 
@@ -69,30 +67,6 @@ export async function worker(task: SettlerJob) {
             );
             throw error;
         });
-}
-
-async function registerProofEpoch(height: number) {
-    const result = await ProofEpochModel.findOneAndUpdate(
-        {
-            height,
-            kind: { $ne: "settlement" as ProofKind },
-        },
-        {
-            $set: {
-                kind: "settlement" as ProofKind,
-            },
-        },
-    );
-
-    if (!result) {
-        throw new Error(
-            `Proof epoch at height ${height} is already registered as settlement.`,
-        );
-    }
-
-    logger.info(
-        `Registered proof epoch at height ${height} as settlement.`,
-    );
 }
 
 async function setProofEpochDone(height: number) {
