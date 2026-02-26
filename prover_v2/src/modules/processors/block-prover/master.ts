@@ -13,7 +13,7 @@ import { sleep } from "../../utils/functions.js";
 import logger from "../../../logger.js";
 import { worker as processTask } from "./worker.js";
 
-class BlockProverMaster extends Master<BlockProverJob> {
+export class BlockProverMaster extends Master<BlockProverJob> {
     constructor() {
         super({
             queueName: "block-prover",
@@ -49,11 +49,19 @@ class BlockProverMaster extends Master<BlockProverJob> {
         );
 
         if (epoch) {
-            await blockProverQ.add("block-prover", { height: epoch.height });
-            logger.debug(
-                `Pushed epoch task to queue: epoch starting at height ${epoch.height}`,
-                { epochHeight: epoch.height, event: "epoch_task_queued" },
-            );
+            try {
+                await blockProverQ.add("block-prover", { height: epoch.height });
+                logger.debug(
+                    `Pushed epoch task to queue: epoch starting at height ${epoch.height}`,
+                    { epochHeight: epoch.height, event: "epoch_task_queued" },
+                );
+            } catch (error) {
+                await BlockEpochModel.updateOne(
+                    { height: epoch.height, epochStatus: "processing" },
+                    { $set: { epochStatus: "waiting" } },
+                );
+                throw error;
+            }
         } else {
             await sleep(MASTER_SLEEP_INTERVAL_MS);
         }
