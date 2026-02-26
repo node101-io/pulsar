@@ -41,7 +41,7 @@ const patterns = [
     { startNode: 28, aggregated: 14 },
 ];
 
-class AggregatorMaster extends Master<AggregatorJob> {
+export class AggregatorMaster extends Master<AggregatorJob> {
     constructor() {
         super({
             queueName: "aggregator",
@@ -107,34 +107,54 @@ class AggregatorMaster extends Master<AggregatorJob> {
                 );
                 await sleep(MASTER_SLEEP_INTERVAL_MS);
             } else {
-                const statusUpdates: Record<string, string> = {};
                 for (const p of availablePatterns) {
                     const leftId = epoch.proofs[p.startNode] as Types.ObjectId;
                     const rightId = epoch.proofs[
                         p.startNode + 1
                     ] as Types.ObjectId;
-                    await aggregatorQ.add("aggregator", {
-                        height: epoch.height,
-                        index: p.aggregated,
-                        left: leftId.toString(),
-                        right: rightId.toString(),
-                    });
-                    logger.debug(
-                        `Pushed aggregator job for epoch ${epoch.height}, aggregation index ${p.aggregated}`,
+                    const claimed = await ProofEpochModel.updateOne(
                         {
-                            epochHeight: epoch.height,
-                            index: p.aggregated,
-                            event: "aggregator_task_queued",
+                            _id: epoch._id,
+                            [`proofs.${p.startNode}`]: { $ne: null },
+                            [`proofs.${p.startNode + 1}`]: { $ne: null },
+                            [`status.${p.aggregated}`]: { $eq: "waiting" },
                         },
+                        { $set: { [`status.${p.aggregated}`]: "processing" } },
                     );
-                    statusUpdates[`status.${p.aggregated}`] = "processing";
-                }
 
-                if (Object.keys(statusUpdates).length > 0) {
-                    await ProofEpochModel.updateOne(
-                        { _id: epoch._id },
-                        { $set: statusUpdates },
-                    );
+                    if (!claimed.modifiedCount) continue;
+
+                    try {
+                        await aggregatorQ.add("aggregator", {
+                            height: epoch.height,
+                            index: p.aggregated,
+                            left: leftId.toString(),
+                            right: rightId.toString(),
+                        });
+                        logger.debug(
+                            `Pushed aggregator job for epoch ${epoch.height}, aggregation index ${p.aggregated}`,
+                            {
+                                epochHeight: epoch.height,
+                                index: p.aggregated,
+                                event: "aggregator_task_queued",
+                            },
+                        );
+                    } catch (error) {
+                        await ProofEpochModel.updateOne(
+                            {
+                                _id: epoch._id,
+                                [`status.${p.aggregated}`]: {
+                                    $eq: "processing",
+                                },
+                            },
+                            {
+                                $set: {
+                                    [`status.${p.aggregated}`]: "waiting",
+                                },
+                            },
+                        );
+                        throw error;
+                    }
                 }
             }
         } else {
