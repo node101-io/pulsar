@@ -4,6 +4,7 @@ import { MASTER_SLEEP_INTERVAL_MS } from "../../utils/constants.js";
 vi.mock("../../db/index.js", () => ({
     BlockEpochModel: {
         findOneAndUpdate: vi.fn(),
+        updateOne: vi.fn(),
     },
     incrementBlockEpochFailCount: vi.fn(),
 }));
@@ -45,7 +46,7 @@ describe("block-prover master", () => {
         vi.clearAllMocks();
     });
 
-    it("queues epoch when found", async () => {
+    it("queues exactly one job when epoch found", async () => {
         vi.mocked(BlockEpochModel.findOneAndUpdate).mockResolvedValue({
             height: 8,
         } as any);
@@ -53,6 +54,7 @@ describe("block-prover master", () => {
         const m = new BlockProverMaster() as any;
         await m.handleTask();
 
+        expect(blockProverQ.add).toHaveBeenCalledTimes(1);
         expect(blockProverQ.add).toHaveBeenCalledWith("block-prover", {
             height: 8,
         });
@@ -69,5 +71,22 @@ describe("block-prover master", () => {
 
         expect(blockProverQ.add).not.toHaveBeenCalled();
         expect(sleep).toHaveBeenCalledWith(MASTER_SLEEP_INTERVAL_MS);
+    });
+
+    it("rolls back epochStatus when queue add fails", async () => {
+        vi.mocked(BlockEpochModel.findOneAndUpdate).mockResolvedValue({
+            height: 8,
+        } as any);
+        vi.mocked(blockProverQ.add).mockRejectedValueOnce(
+            new Error("queue error"),
+        );
+
+        const m = new BlockProverMaster() as any;
+        await expect(m.handleTask()).rejects.toThrow("queue error");
+
+        expect(BlockEpochModel.updateOne).toHaveBeenCalledWith(
+            { height: 8, epochStatus: "processing" },
+            { $set: { epochStatus: "waiting" } },
+        );
     });
 });
