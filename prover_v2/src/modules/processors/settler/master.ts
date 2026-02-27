@@ -18,7 +18,7 @@ import { worker as processSettlement } from "./worker.js";
 import { sleep } from "../../utils/functions.js";
 import logger from "../../../logger.js";
 
-class SettlerMaster extends Master<SettlerJob> {
+export class SettlerMaster extends Master<SettlerJob> {
     constructor() {
         super({
             queueName: "settler",
@@ -50,7 +50,7 @@ class SettlerMaster extends Master<SettlerJob> {
             },
             {
                 sort: { timeoutAt: 1 },
-                new: true,
+                new: false,
             },
         );
 
@@ -62,14 +62,22 @@ class SettlerMaster extends Master<SettlerJob> {
                 return;
             }
 
-            await settlerQ.add("settler", {
-                height: epoch.height,
-                settlementProofId: settlementProofId.toString(),
-            });
-            logger.debug(
-                `Pushed settler job to queue for epoch at height ${epoch.height}`,
-                { epochHeight: epoch.height, event: "settler_task_queued" },
-            );
+            try {
+                await settlerQ.add("settler", {
+                    height: epoch.height,
+                    settlementProofId: settlementProofId.toString(),
+                });
+                logger.debug(
+                    `Pushed settler job to queue for epoch at height ${epoch.height}`,
+                    { epochHeight: epoch.height, event: "settler_task_queued" },
+                );
+            } catch (error) {
+                await ProofEpochModel.updateOne(
+                    { height: epoch.height, kind: "settlement" as ProofKind },
+                    { $set: { kind: epoch.kind } },
+                );
+                throw error;
+            }
         } else {
             await sleep(MASTER_SLEEP_INTERVAL_MS);
         }
