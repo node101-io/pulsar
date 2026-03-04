@@ -1,0 +1,13 @@
+syntax = "proto3";
+package pulsar.pulsar.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/node101-io/pulsar-chain/x/pulsar/types";
+
+// Params defines the parameters for the module.
+message Params {
+  option (amino.name) = "pulsar/x/pulsar/Params";
+  option (gogoproto.equal) = true;
+}
