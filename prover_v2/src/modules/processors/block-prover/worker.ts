@@ -1,20 +1,15 @@
-import { Types } from "mongoose";
-import mongoose from "mongoose";
-
 import {
     ProofEpochModel,
-    BlockEpochModel,
-    storeProof,
     fetchBlockRange,
+    storeProof,
 } from "../../db/index.js";
 import {
-    WORKER_TIMEOUT_MS,
     BLOCK_EPOCH_SIZE,
     PROOF_EPOCH_LEAF_COUNT,
 } from "../../utils/constants.js";
-import { BlockStatus, ProofKind, ProofStatus } from "../../db/types.js";
 import logger from "../../../logger.js";
 import { BlockProverJob } from "../utils/jobs.js";
+import { tryEnqueueAggregation } from "../triggers.js";
 import {
     GeneratePulsarBlock,
     GenerateSettlementProof,
@@ -24,51 +19,44 @@ import { Field, PublicKey, Signature } from "o1js";
 
 export async function worker(task: BlockProverJob) {
     const blockEpochHeight = task.height;
+    const leafIndex =
+        (blockEpochHeight / BLOCK_EPOCH_SIZE) % PROOF_EPOCH_LEAF_COUNT;
 
-    const session = await mongoose.startSession();
-    try {
-        await session.withTransaction(async () => {
-            const epoch = await BlockEpochModel.findOne({
-                height: blockEpochHeight,
-                epochStatus: { $eq: "processing" as BlockStatus },
-            });
-
-            if (!epoch) {
-                throw new Error(
-                    `BlockEpoch at height ${blockEpochHeight} not found.`,
-                );
-            }
-
-            if (epoch.failCount > 0) {
-                const proofEpoch = await ProofEpochModel.findOne({
-                    height: blockEpochHeight,
-                    kind: "blockProof" as ProofKind,
-                });
-
-                if (proofEpoch && proofEpoch.proofs.some((p) => p !== null)) {
-                    logger.info(
-                        `Skipping block proof generation for epoch starting at height ${blockEpochHeight} because proofs already exist after previous failures.`,
-                    );
-                    return;
-                }
-            }
-
-            const proofId = await createProof(blockEpochHeight);
-
-            await createOrUpdateProofEpoch(epoch.height, proofId);
-
-            await BlockEpochModel.findOneAndUpdate(
-                { height: blockEpochHeight },
-                { $set: { epochStatus: "done" as BlockStatus } },
-            );
-
-            logger.info(
-                `Processed block epoch starting at height ${blockEpochHeight} and stored proofs in proof epochs.`,
-            );
-        });
-    } finally {
-        await session.endSession();
+    // Idempotency: skip if leaf proof already exists
+    const existing = await ProofEpochModel.findOne({
+        height: blockEpochHeight,
+    });
+    if (existing?.proofs[leafIndex]) {
+        logger.info(
+            `Block proof for epoch ${blockEpochHeight} already exists at leaf ${leafIndex}, skipping`,
+        );
+        // Still trigger next stage in case it was missed
+        await tryEnqueueAggregation(existing, leafIndex);
+        return;
     }
+
+    const proofId = await createProof(blockEpochHeight);
+
+    const proofEpoch = await ProofEpochModel.findOneAndUpdate(
+        { height: blockEpochHeight },
+        {
+            $setOnInsert: {
+                height: blockEpochHeight,
+                proofs: Array(PROOF_EPOCH_LEAF_COUNT * 2 - 1).fill(null),
+                settled: false,
+            },
+            $set: {
+                [`proofs.${leafIndex}`]: proofId,
+            },
+        },
+        { upsert: true, new: true },
+    );
+
+    logger.info(
+        `Stored block proof for epoch ${blockEpochHeight} at leaf index ${leafIndex}`,
+    );
+
+    await tryEnqueueAggregation(proofEpoch, leafIndex);
 }
 
 async function createProof(height: number) {
@@ -79,11 +67,7 @@ async function createProof(height: number) {
 
     if (blockDocs.length !== BLOCK_EPOCH_SIZE) {
         throw new Error(
-            `Expected ${
-                BLOCK_EPOCH_SIZE
-            } blocks for proof starting at height ${height}, but got ${
-                blockDocs.length
-            }`,
+            `Expected ${BLOCK_EPOCH_SIZE} blocks for proof starting at height ${height}, but got ${blockDocs.length}`,
         );
     }
 
@@ -125,38 +109,4 @@ async function createProof(height: number) {
     logger.info(`Created proof ${proofId.toHexString()} for block ${height}`);
 
     return proofId;
-}
-
-/**
- * Creates a new block epoch document if it does not exist and sets the block at the given height
- */
-async function createOrUpdateProofEpoch(
-    height: number,
-    proofId: Types.ObjectId,
-) {
-    const result = await ProofEpochModel.findOneAndUpdate(
-        { height: height },
-        {
-            $setOnInsert: {
-                height: height,
-                kind: "blockProof" as ProofKind,
-                proofs: Array(PROOF_EPOCH_LEAF_COUNT * 2 - 1).fill(null),
-                status: Array(PROOF_EPOCH_LEAF_COUNT - 1).fill(
-                    "waiting" as ProofStatus,
-                ),
-                failCount: 0,
-                timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS),
-            },
-            $set: {
-                [`proofs.${height % BLOCK_EPOCH_SIZE}`]: proofId,
-            },
-        },
-        { upsert: true, new: true },
-    );
-
-    logger.info(
-        `Created proof epoch for first height ${height} with proof for block ${height}`,
-    );
-
-    return result;
 }

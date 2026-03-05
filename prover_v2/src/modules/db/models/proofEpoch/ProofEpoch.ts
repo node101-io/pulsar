@@ -1,13 +1,9 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
-import { ProofKind, ProofStatus } from "../../types.js";
 
 export interface IProofEpoch extends Document {
     height: number;
     proofs: (Types.ObjectId | null)[];
-    status: ProofStatus[];
-    timeoutAt: Date;
-    kind: ProofKind;
-    failCount: number;
+    settled: boolean;
 }
 
 const ProofEpochSchema = new Schema<IProofEpoch>(
@@ -20,19 +16,7 @@ const ProofEpochSchema = new Schema<IProofEpoch>(
                 default: null,
             },
         ],
-        status: [
-            {
-                type: String,
-                enum: ["waiting", "processing", "done", "failed"],
-            },
-        ],
-        timeoutAt: { type: Date, required: true },
-        kind: {
-            type: String,
-            enum: ["blockProof", "aggregation", "settlement", "done"],
-            required: true,
-        },
-        failCount: { type: Number, default: 0 },
+        settled: { type: Boolean, default: false },
     },
     { timestamps: true },
 );

@@ -1,5 +1,4 @@
 // Processors constants
-export const MASTER_SLEEP_INTERVAL_MS = 1000; // 1 second
 export const WORKER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 export const STALLED_INTERVAL_MS = 5000; // 5 seconds
 export const BLOCK_EPOCH_SIZE = 8;
@@ -14,7 +13,6 @@ export const TENDERMINT_SERVICE_NAME = "cosmos.base.tendermint.v1beta1.Service";
 export const MINA_KEYS_SERVICE_NAME = "interchain_security.minakeys.Query";
 
 // Monitor constants
-export const MAX_FAIL_COUNT = 3;
 export const MONITOR_INTERVAL_MS = 30_000; // 30 seconds
 
 // Cleanup constants

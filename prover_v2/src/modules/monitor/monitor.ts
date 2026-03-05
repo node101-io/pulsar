@@ -1,72 +1,36 @@
 import logger from "../../logger.js";
-import { BlockEpochModel } from "../db/models/blockEpoch/BlockEpoch.js";
-import { ProofEpochModel } from "../db/models/proofEpoch/ProofEpoch.js";
-import { MAX_FAIL_COUNT, MONITOR_INTERVAL_MS } from "../utils/constants.js";
-import { BlockStatus, ProofStatus } from "../db/types.js";
+import { MONITOR_INTERVAL_MS } from "../utils/constants.js";
+import { blockProverQ, aggregatorQ, settlerQ } from "../processors/utils/queue.js";
 import { sleep } from "../utils/functions.js";
 
-export async function checkBlockEpochs() {
-    const failedEpochs = await BlockEpochModel.find({
-        failCount: { $gt: MAX_FAIL_COUNT },
-        epochStatus: { $ne: "failed" },
-    });
+export async function checkQueueHealth() {
+    const queues = [
+        { name: "block-prover", queue: blockProverQ },
+        { name: "aggregator", queue: aggregatorQ },
+        { name: "settler", queue: settlerQ },
+    ];
 
-    for (const epoch of failedEpochs) {
-        await BlockEpochModel.updateOne(
-            { height: epoch.height },
-            { $set: { epochStatus: "failed" as BlockStatus } },
-        );
+    for (const { name, queue } of queues) {
+        const failedCount = await queue.getFailedCount();
+        const waitingCount = await queue.getWaitingCount();
+        const activeCount = await queue.getActiveCount();
 
-        logger.warn("Block epoch marked as failed", {
-            height: epoch.height,
-            failCount: epoch.failCount,
-            event: "block_epoch_failed",
-        });
+        if (failedCount > 0) {
+            logger.warn(`Queue "${name}" has failed jobs`, {
+                queue: name,
+                failedCount,
+                waitingCount,
+                activeCount,
+                event: "queue_failed_jobs",
+            });
+        }
     }
-
-    return failedEpochs.length;
-}
-
-export async function checkProofEpochs() {
-    const failedEpochs = await ProofEpochModel.find({
-        failCount: { $gt: MAX_FAIL_COUNT },
-        status: { $not: { $all: ["failed"] } },
-    });
-
-    for (const epoch of failedEpochs) {
-        const failedStatus: ProofStatus[] = epoch.status.map(
-            () => "failed" as ProofStatus,
-        );
-
-        await ProofEpochModel.updateOne(
-            { height: epoch.height },
-            { $set: { status: failedStatus } },
-        );
-
-        logger.warn("Proof epoch marked as failed", {
-            height: epoch.height,
-            failCount: epoch.failCount,
-            kind: epoch.kind,
-            event: "proof_epoch_failed",
-        });
-    }
-
-    return failedEpochs.length;
 }
 
 async function monitorLoop() {
     while (true) {
         try {
-            const blockEpochCount = await checkBlockEpochs();
-            const proofEpochCount = await checkProofEpochs();
-
-            if (blockEpochCount > 0 || proofEpochCount > 0) {
-                logger.info("Monitor check completed", {
-                    failedBlockEpochs: blockEpochCount,
-                    failedProofEpochs: proofEpochCount,
-                    event: "monitor_check",
-                });
-            }
+            await checkQueueHealth();
         } catch (error) {
             logger.error("Error during monitor check", error as Error, {
                 event: "monitor_error",
@@ -78,8 +42,7 @@ async function monitorLoop() {
 }
 
 export async function startMonitor() {
-    logger.info("Starting monitor", {
-        maxFailCount: MAX_FAIL_COUNT,
+    logger.info("Starting queue health monitor", {
         intervalMs: MONITOR_INTERVAL_MS,
         event: "monitor_start",
     });

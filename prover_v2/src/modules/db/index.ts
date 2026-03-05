@@ -19,12 +19,7 @@ export {
     ProofEpochModel,
     type IProofEpoch,
 } from "./models/proofEpoch/ProofEpoch.js";
-export {
-    getProofEpoch,
-    storeProofInProofEpoch,
-    deleteProofEpoch,
-    incrementProofEpochFailCount,
-} from "./models/proofEpoch/utils.js";
+export { getProofEpoch, deleteProofEpoch } from "./models/proofEpoch/utils.js";
 
 // BlockEpoch
 export {
@@ -34,10 +29,5 @@ export {
 export {
     getBlockEpoch,
     storeBlockInBlockEpoch,
-    updateBlockStatusInEpoch,
     deleteBlockEpoch,
-    incrementBlockEpochFailCount,
 } from "./models/blockEpoch/utils.js";
-
-// Types
-export type { ProofKind, ProofStatus, BlockStatus } from "./types.js";

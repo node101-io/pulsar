@@ -4,7 +4,10 @@ import { List } from "pulsar-contracts";
 import { Poseidon, PublicKey, Signature } from "o1js";
 
 import logger from "../../logger.js";
-import { storeBlock } from "../db/index.js";
+import { storeBlock, storeBlockInBlockEpoch } from "../db/index.js";
+import { BLOCK_EPOCH_SIZE } from "../utils/constants.js";
+import { blockProverQ } from "../processors/utils/queue.js";
+import { DEFAULT_JOB_OPTIONS, blockProverJobId } from "../processors/utils/jobOptions.js";
 import {
     BlockParserResult,
     BlockData,
@@ -402,11 +405,38 @@ async function storePulsarBlock(blockData: BlockData) {
 
     const validatorListHash = computeValidatorListHash(validators);
 
-    await storeBlock({
+    const blockDoc = await storeBlock({
         ...rest,
         validators,
         validatorListHash,
     });
+
+    // Store block into its epoch
+    const index = blockData.height % BLOCK_EPOCH_SIZE;
+    const epoch = await storeBlockInBlockEpoch(
+        blockData.height,
+        blockDoc._id,
+        index,
+    );
+
+    // If epoch is full, trigger block-prover
+    const isEpochFull = epoch.blocks.every((b) => b !== null);
+    if (isEpochFull) {
+        const epochHeight =
+            Math.floor(blockData.height / BLOCK_EPOCH_SIZE) * BLOCK_EPOCH_SIZE;
+        await blockProverQ.add(
+            "block-prover",
+            { height: epochHeight },
+            {
+                jobId: blockProverJobId(epochHeight),
+                ...DEFAULT_JOB_OPTIONS,
+            },
+        );
+        logger.info("Epoch full, block-prover job enqueued", {
+            epochHeight,
+            event: "block_prover_triggered",
+        });
+    }
 
     logger.info("Stored Pulsar block", {
         blockHeight: blockData.height,

@@ -1,11 +1,10 @@
 import { BlockModel, IBlock } from "./Block.js";
 import { BlockData } from "../../../utils/interfaces.js";
-import { TIMEOUT_TIME_MS } from "../../../utils/constants.js";
 import logger from "../../../../logger.js";
 import { Signature } from "o1js";
 
 export async function storeBlock(block: BlockData) {
-    await BlockModel.updateOne(
+    const result = await BlockModel.findOneAndUpdate(
         { height: block.height },
         {
             $set: {
@@ -14,15 +13,13 @@ export async function storeBlock(block: BlockData) {
                 validatorListHash: block.validatorListHash,
                 voteExt: block.voteExt,
             },
-            $setOnInsert: {
-                status: "waiting",
-                timeoutAt: new Date(Date.now() + TIMEOUT_TIME_MS),
-            },
         },
-        { upsert: true },
+        { upsert: true, new: true },
     );
 
     logger.info(`Stored block at height ${block.height}.`);
+
+    return result;
 }
 
 export async function getBlock(height: number) {
@@ -66,7 +63,6 @@ export async function seedInitialBlocks() {
 
     await BlockModel.create({
         height: 0,
-        status: "done",
         stateRoot: BigInt(
             "0x" +
                 Buffer.from(
@@ -82,7 +78,6 @@ export async function seedInitialBlocks() {
 
     await BlockModel.create({
         height: 1,
-        status: "done",
         stateRoot: BigInt(
             "0x" +
                 Buffer.from(

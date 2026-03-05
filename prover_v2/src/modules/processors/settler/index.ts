@@ -1,3 +1,1 @@
-import { masterRunner } from "./master";
-
-export { masterRunner };
+export { worker } from "./worker.js";

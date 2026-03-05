@@ -1,7 +1,6 @@
 import { Types } from "mongoose";
 import { ProofEpochModel } from "../../db/models/proofEpoch/ProofEpoch.js";
 import { getProof } from "../../db/models/proof/utils.js";
-import { ProofKind } from "../../db/types.js";
 import { SettlementContract, SettlementProof } from "pulsar-contracts";
 import { Mina, PublicKey, fetchAccount } from "o1js";
 import dotenv from "dotenv";
@@ -16,9 +15,10 @@ export async function worker(task: SettlerJob) {
         throw new Error(`ProofEpoch at height ${task.height} not found.`);
     }
 
-    if (epoch.failCount > 0 && epoch.kind === "done") {
+    // Idempotency: skip if already settled
+    if (epoch.settled) {
         logger.info(
-            `Skipping settlement for epoch at height ${task.height} because it is already marked as done.`,
+            `Skipping settlement for epoch at height ${task.height} because it is already settled.`,
         );
         return;
     }
@@ -52,43 +52,18 @@ export async function worker(task: SettlerJob) {
 
     await fetchAccount({ publicKey: contractInstance.address });
 
-    await contractInstance
-        .settle(settlementProof)
-        .then(async () => {
-            logger.info(
-                `Settlement proof for epoch at height ${task.height} submitted to the contract.`,
-            );
-
-            await setProofEpochDone(task.height);
-        })
-        .catch((error) => {
-            logger.error(
-                `Failed to submit settlement proof for epoch at height ${task.height}: ${error}`,
-            );
-            throw error;
-        });
-}
-
-async function setProofEpochDone(height: number) {
-    const result = await ProofEpochModel.findOneAndUpdate(
-        {
-            height,
-            kind: "settlement" as ProofKind,
-        },
-        {
-            $set: {
-                kind: "done" as ProofKind,
-            },
-        },
-    );
-
-    if (!result) {
-        throw new Error(
-            `Proof epoch at height ${height} not found or not in settlement state.`,
-        );
-    }
+    await contractInstance.settle(settlementProof);
 
     logger.info(
-        `Proof epoch at height ${height} marked as done after settlement.`,
+        `Settlement proof for epoch at height ${task.height} submitted to the contract.`,
+    );
+
+    await ProofEpochModel.updateOne(
+        { height: task.height },
+        { $set: { settled: true } },
+    );
+
+    logger.info(
+        `Proof epoch at height ${task.height} marked as settled.`,
     );
 }
