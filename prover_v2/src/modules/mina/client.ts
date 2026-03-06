@@ -1,9 +1,9 @@
 import { fetchAccount, PublicKey } from "o1js";
 import {
     fetchBlockHeight,
-    fetchRawActions,
     setMinaNetwork,
     SettlementContract,
+    ENDPOINTS,
 } from "pulsar-contracts";
 import logger from "../../logger.js";
 
@@ -13,6 +13,7 @@ export interface MinaClientContext {
     watchedAddress: PublicKey;
     settlementContract: SettlementContract;
     network: MinaNetwork;
+    endpoint: string;
 }
 
 export async function initMinaClientContext(
@@ -21,11 +22,10 @@ export async function initMinaClientContext(
 ): Promise<MinaClientContext> {
     setMinaNetwork(network);
 
-    await fetchAccount({
-        publicKey: watchedAddress,
-    });
+    await fetchAccount({ publicKey: watchedAddress });
 
     const settlementContract = new SettlementContract(watchedAddress);
+    const endpoint = ENDPOINTS.NODE[network];
 
     logger.info("Initialized Mina client context", {
         network,
@@ -33,55 +33,18 @@ export async function initMinaClientContext(
         event: "mina_client_initialized",
     });
 
-    return {
-        watchedAddress,
-        settlementContract,
-        network,
-    };
+    return { watchedAddress, settlementContract, network, endpoint };
 }
 
 export async function getCurrentMinaBlockHeight(
     network: MinaNetwork,
 ): Promise<number> {
-    const height = await fetchBlockHeight(network);
-    return height;
+    return fetchBlockHeight(network);
 }
 
-export async function fetchMinaActions(
+export async function getContractBlockHeight(
     ctx: MinaClientContext,
-): Promise<unknown[]> {
-    const { watchedAddress, settlementContract, network } = ctx;
-
-    await fetchAccount({ publicKey: watchedAddress });
-
-    const fromActionState = settlementContract.actionState.get();
-
-    let actions = await fetchRawActions(watchedAddress, fromActionState);
-
-    logger.debug("Settlement contract state", {
-        actionState: settlementContract.actionState.get().toString(),
-        merkleListRoot: settlementContract.merkleListRoot.get().toString(),
-        stateRoot: settlementContract.stateRoot.get().toString(),
-        blockHeight: Number(settlementContract.blockHeight.get().toString()),
-        depositListHash: settlementContract.depositListHash.get().toString(),
-        withdrawalListHash: settlementContract.withdrawalListHash.get().toString(),
-        accountActionState: settlementContract.account.actionState
-            .get()
-            .toString(),
-        network,
-        event: "mina_contract_state_debug",
-    });
-
-    logger.debug("Processing Mina actions", {
-        fromActionState: fromActionState.toString(),
-        actionsCount: actions?.length || 0,
-        event: "mina_new_actions",
-    });
-
-    if (!actions || actions.length === 0) {
-        actions = [];
-    }
-
-    return actions;
+): Promise<number> {
+    await fetchAccount({ publicKey: ctx.watchedAddress });
+    return Number(ctx.settlementContract.blockHeight.get().toString());
 }
-

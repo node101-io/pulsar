@@ -39,5 +39,12 @@ export {
     incrementBlockEpochFailCount,
 } from "./models/blockEpoch/utils.js";
 
+// MinaState
+export {
+    MinaStateModel,
+    type IMinaState,
+} from "./models/minaState/MinaState.js";
+export { saveMinaState, getMinaState } from "./models/minaState/utils.js";
+
 // Types
 export type { ProofKind, ProofStatus, BlockStatus } from "./types.js";

@@ -1,14 +1,37 @@
 import { Types } from "mongoose";
+import { PublicKey } from "o1js";
+import { SettlementProof } from "pulsar-contracts";
+
+import logger from "../../../logger.js";
 import { ProofEpochModel } from "../../db/models/proofEpoch/ProofEpoch.js";
 import { getProof } from "../../db/models/proof/utils.js";
 import { ProofKind } from "../../db/types.js";
-import { SettlementContract, SettlementProof } from "pulsar-contracts";
-import { Mina, PublicKey, fetchAccount } from "o1js";
-import dotenv from "dotenv";
-import logger from "../../../logger.js";
+import {
+    type MinaClientContext,
+    type MinaNetwork,
+    initMinaClientContext,
+} from "../../mina/client.js";
+import { submitSettlement } from "../../mina/settlement.js";
+import { BLOCK_EPOCH_SIZE } from "../../utils/constants.js";
 import { SettlerJob } from "../utils/jobs.js";
 
-dotenv.config();
+let minaCtx: MinaClientContext | null = null;
+
+async function getMinaContext(): Promise<MinaClientContext> {
+    if (!minaCtx) {
+        const contractAddress = process.env.CONTRACT_ADDRESS;
+        if (!contractAddress) {
+            throw new Error("CONTRACT_ADDRESS is not set");
+        }
+        const network: MinaNetwork =
+            (process.env.MINA_NETWORK as MinaNetwork) || "lightnet";
+        minaCtx = await initMinaClientContext(
+            PublicKey.fromBase58(contractAddress),
+            network,
+        );
+    }
+    return minaCtx;
+}
 
 export async function worker(task: SettlerJob) {
     const epoch = await ProofEpochModel.findOne({ height: task.height });
@@ -16,57 +39,29 @@ export async function worker(task: SettlerJob) {
         throw new Error(`ProofEpoch at height ${task.height} not found.`);
     }
 
-    if (epoch.failCount > 0 && epoch.kind === "done") {
-        logger.info(
-            `Skipping settlement for epoch at height ${task.height} because it is already marked as done.`,
-        );
+    if (epoch.kind === "done") {
+        logger.info("Skipping settlement for already done epoch", {
+            epochHeight: task.height,
+            event: "settler_epoch_already_done",
+        });
         return;
     }
 
     const settlementProofId = new Types.ObjectId(task.settlementProofId);
     const settlementProofJson = await getProof(settlementProofId);
-
     if (!settlementProofJson) {
         throw new Error("Settlement proof is missing.");
     }
 
     const settlementProof = await SettlementProof.fromJSON(settlementProofJson);
+    const ctx = await getMinaContext();
 
-    const contractAddress = process.env.CONTRACT_ADDRESS;
-    if (!contractAddress) {
-        throw new Error(
-            "Contract address is not specified in environment variables",
-        );
-    }
+    // epoch.height is the starting block of the epoch
+    const epochLastPulsarBlock = epoch.height + BLOCK_EPOCH_SIZE - 1;
 
-    Mina.setActiveInstance(
-        Mina.Network({
-            mina: `${process.env.REMOTE_SERVER_URL}:8080/graphql`,
-            archive: `${process.env.REMOTE_SERVER_URL}:8282`,
-        }),
-    );
+    await submitSettlement(ctx, settlementProof, epochLastPulsarBlock);
 
-    const contractInstance = new SettlementContract(
-        PublicKey.fromBase58(contractAddress),
-    );
-
-    await fetchAccount({ publicKey: contractInstance.address });
-
-    await contractInstance
-        .settle(settlementProof)
-        .then(async () => {
-            logger.info(
-                `Settlement proof for epoch at height ${task.height} submitted to the contract.`,
-            );
-
-            await setProofEpochDone(task.height);
-        })
-        .catch((error) => {
-            logger.error(
-                `Failed to submit settlement proof for epoch at height ${task.height}: ${error}`,
-            );
-            throw error;
-        });
+    await setProofEpochDone(task.height);
 }
 
 async function setProofEpochDone(height: number) {
@@ -76,9 +71,7 @@ async function setProofEpochDone(height: number) {
             kind: "settlement" as ProofKind,
         },
         {
-            $set: {
-                kind: "done" as ProofKind,
-            },
+            $set: { kind: "done" as ProofKind },
         },
     );
 
@@ -88,7 +81,8 @@ async function setProofEpochDone(height: number) {
         );
     }
 
-    logger.info(
-        `Proof epoch at height ${height} marked as done after settlement.`,
-    );
+    logger.info("Proof epoch marked as done after settlement", {
+        epochHeight: height,
+        event: "settler_epoch_done",
+    });
 }
