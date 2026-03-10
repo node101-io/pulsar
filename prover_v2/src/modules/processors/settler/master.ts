@@ -1,5 +1,4 @@
 import {
-    WORKER_COUNT,
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
     MASTER_SLEEP_INTERVAL_MS,
@@ -23,7 +22,7 @@ export class SettlerMaster extends Master<SettlerJob> {
             queueName: "settler",
             workerLabel: "Settler",
             connection,
-            workerCount: WORKER_COUNT,
+            workerCount: 1,
             lockDurationMs: WORKER_TIMEOUT_MS,
             stalledIntervalMs: STALLED_INTERVAL_MS,
             processJob: async (_workerId, job) => {
