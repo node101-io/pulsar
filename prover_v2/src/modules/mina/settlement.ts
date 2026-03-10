@@ -1,4 +1,4 @@
-import { fetchAccount, Mina, PrivateKey } from "o1js";
+import { fetchAccount, Mina, PrivateKey, Transaction } from "o1js";
 import { SettlementProof, waitForTransaction } from "pulsar-contracts";
 
 import logger from "../../logger.js";
@@ -6,20 +6,24 @@ import { getContractBlockHeight, type MinaClientContext } from "./client.js";
 
 const MAX_RETRY_COUNT = 3;
 
-export async function submitSettlement(
+/**
+ * creates and proves the Mina settlement transaction
+ * returns the serialized proved transaction JSON, or null if the epoch is
+ * already settled on-chain
+ */
+export async function proveSettlementTx(
     ctx: MinaClientContext,
     proof: SettlementProof,
     epochLastPulsarBlock: number,
-): Promise<void> {
-    // check if already settled by another prover node
+): Promise<string | null> {
     const contractBlock = await getContractBlockHeight(ctx);
     if (contractBlock >= epochLastPulsarBlock) {
-        logger.info("Epoch already settled on Mina, skipping TX", {
+        logger.info("Epoch already settled on Mina, skipping TX proof", {
             epochLastPulsarBlock,
             contractBlockHeight: contractBlock,
-            event: "mina_settlement_skipped",
+            event: "mina_settlement_proof_skipped",
         });
-        return;
+        return null;
     }
 
     const privateKeyBase58 = process.env.MINA_PRIVATE_KEY;
@@ -29,18 +33,52 @@ export async function submitSettlement(
     const sender = PrivateKey.fromBase58(privateKeyBase58);
     const senderPublicKey = sender.toPublicKey();
 
+    await fetchAccount({ publicKey: senderPublicKey });
+
+    const tx = await Mina.transaction(
+        { sender: senderPublicKey, fee },
+        async () => {
+            await ctx.settlementContract.settle(proof);
+        },
+    );
+
+    await tx.prove();
+
+    logger.info("Settlement TX proved", {
+        epochLastPulsarBlock,
+        event: "mina_settlement_tx_proved",
+    });
+
+    return tx.toJSON();
+}
+
+/**
+ * Reconstructs a pre-proved transaction from JSON, then signs and sends it.
+ * Does NOT call tx.prove() — the proof must already be embedded in the JSON.
+ */
+export async function sendProvedSettlement(
+    ctx: MinaClientContext,
+    provedTxJson: string,
+    epochLastPulsarBlock: number,
+): Promise<void> {
+    const contractBlock = await getContractBlockHeight(ctx);
+    if (contractBlock >= epochLastPulsarBlock) {
+        logger.info("Epoch already settled on Mina, skipping TX send", {
+            epochLastPulsarBlock,
+            contractBlockHeight: contractBlock,
+            event: "mina_settlement_send_skipped",
+        });
+        return;
+    }
+
+    const privateKeyBase58 = process.env.MINA_PRIVATE_KEY;
+    if (!privateKeyBase58) throw new Error("MINA_PRIVATE_KEY is not set");
+
+    const sender = PrivateKey.fromBase58(privateKeyBase58);
+
     for (let attempt = 1; attempt <= MAX_RETRY_COUNT; attempt++) {
         try {
-            await fetchAccount({ publicKey: senderPublicKey });
-
-            const tx = await Mina.transaction(
-                { sender: senderPublicKey, fee },
-                async () => {
-                    await ctx.settlementContract.settle(proof);
-                },
-            );
-
-            await tx.prove();
+            const tx = Transaction.fromJSON(JSON.parse(provedTxJson));
             const result = await tx.sign([sender]).send();
             const txHash = result.hash;
 
@@ -72,7 +110,7 @@ export async function submitSettlement(
                 event: "mina_settlement_tx_rejected",
             });
         } catch (error) {
-            logger.error("Settlement TX error", error as Error, {
+            logger.error("Settlement TX send error", error as Error, {
                 attempt,
                 epochLastPulsarBlock,
                 event: "mina_settlement_tx_error",
@@ -81,6 +119,6 @@ export async function submitSettlement(
     }
 
     throw new Error(
-        `Settlement failed after ${MAX_RETRY_COUNT} attempts for block ${epochLastPulsarBlock}`,
+        `Settlement send failed after ${MAX_RETRY_COUNT} attempts for block ${epochLastPulsarBlock}`,
     );
 }

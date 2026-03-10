@@ -1,5 +1,4 @@
 import {
-    PROOF_EPOCH_SETTLEMENT_INDEX,
     WORKER_COUNT,
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
@@ -41,12 +40,11 @@ export class SettlerMaster extends Master<SettlerJob> {
     protected async handleTask(): Promise<void> {
         const epoch = await ProofEpochModel.findOneAndUpdate(
             {
-                [`proofs.${PROOF_EPOCH_SETTLEMENT_INDEX}`]: { $ne: null },
-                kind: { $nin: ["settlement", "done"] as ProofKind[] },
+                kind: { $eq: "settlement" as ProofKind },
                 timeoutAt: { $gt: new Date() },
             },
             {
-                $set: { kind: "settlement" as ProofKind },
+                $set: { kind: "txSending" as ProofKind },
             },
             {
                 sort: { timeoutAt: 1 },
@@ -55,17 +53,9 @@ export class SettlerMaster extends Master<SettlerJob> {
         );
 
         if (epoch) {
-            const settlementProofId =
-                epoch.proofs[PROOF_EPOCH_SETTLEMENT_INDEX];
-            if (!settlementProofId) {
-                await sleep(MASTER_SLEEP_INTERVAL_MS);
-                return;
-            }
-
             try {
                 await settlerQ.add("settler", {
                     height: epoch.height,
-                    settlementProofId: settlementProofId.toString(),
                 });
                 logger.debug(
                     `Pushed settler job to queue for epoch at height ${epoch.height}`,
@@ -73,8 +63,8 @@ export class SettlerMaster extends Master<SettlerJob> {
                 );
             } catch (error) {
                 await ProofEpochModel.updateOne(
-                    { height: epoch.height, kind: "settlement" as ProofKind },
-                    { $set: { kind: epoch.kind } },
+                    { height: epoch.height, kind: "txSending" as ProofKind },
+                    { $set: { kind: "settlement" as ProofKind } },
                 );
                 throw error;
             }

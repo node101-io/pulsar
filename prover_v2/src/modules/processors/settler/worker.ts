@@ -1,17 +1,14 @@
-import { Types } from "mongoose";
 import { PublicKey } from "o1js";
-import { SettlementProof } from "pulsar-contracts";
 
 import logger from "../../../logger.js";
 import { ProofEpochModel } from "../../db/models/proofEpoch/ProofEpoch.js";
-import { getProof } from "../../db/models/proof/utils.js";
 import { ProofKind } from "../../db/types.js";
 import {
     type MinaClientContext,
     type MinaNetwork,
     initMinaClientContext,
 } from "../../mina/client.js";
-import { submitSettlement } from "../../mina/settlement.js";
+import { sendProvedSettlement } from "../../mina/settlement.js";
 import { BLOCK_EPOCH_SIZE } from "../../utils/constants.js";
 import { SettlerJob } from "../utils/jobs.js";
 
@@ -47,19 +44,23 @@ export async function worker(task: SettlerJob) {
         return;
     }
 
-    const settlementProofId = new Types.ObjectId(task.settlementProofId);
-    const settlementProofJson = await getProof(settlementProofId);
-    if (!settlementProofJson) {
-        throw new Error("Settlement proof is missing.");
+    // null means the epoch was already settled on Mina during the proving phase
+    if (epoch.provedTxJson === null) {
+        logger.info(
+            "Skipping settlement send — epoch was already settled on Mina during proving",
+            {
+                epochHeight: task.height,
+                event: "settler_epoch_pre_settled",
+            },
+        );
+        await setProofEpochDone(task.height);
+        return;
     }
 
-    const settlementProof = await SettlementProof.fromJSON(settlementProofJson);
     const ctx = await getMinaContext();
-
-    // epoch.height is the starting block of the epoch
     const epochLastPulsarBlock = epoch.height + BLOCK_EPOCH_SIZE - 1;
 
-    await submitSettlement(ctx, settlementProof, epochLastPulsarBlock);
+    await sendProvedSettlement(ctx, epoch.provedTxJson, epochLastPulsarBlock);
 
     await setProofEpochDone(task.height);
 }
@@ -68,7 +69,7 @@ async function setProofEpochDone(height: number) {
     const result = await ProofEpochModel.findOneAndUpdate(
         {
             height,
-            kind: "settlement" as ProofKind,
+            kind: { $in: ["txSending", "settlement"] as ProofKind[] },
         },
         {
             $set: { kind: "done" as ProofKind },
@@ -77,7 +78,7 @@ async function setProofEpochDone(height: number) {
 
     if (!result) {
         throw new Error(
-            `Proof epoch at height ${height} not found or not in settlement state.`,
+            `Proof epoch at height ${height} not found or not in txSending/settlement state.`,
         );
     }
 

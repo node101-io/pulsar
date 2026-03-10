@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Types } from "mongoose";
-import {
-    MASTER_SLEEP_INTERVAL_MS,
-    PROOF_EPOCH_SETTLEMENT_INDEX,
-} from "../../utils/constants.js";
+import { MASTER_SLEEP_INTERVAL_MS } from "../../utils/constants.js";
 
 vi.mock("../../db/index.js", () => ({
     ProofEpochModel: {
@@ -50,15 +46,10 @@ describe("settler master", () => {
         vi.clearAllMocks();
     });
 
-    it("queues settlement job when epoch found", async () => {
-        const settlementProofId = new Types.ObjectId();
-        const proofs = Array(PROOF_EPOCH_SETTLEMENT_INDEX + 1).fill(null);
-        proofs[PROOF_EPOCH_SETTLEMENT_INDEX] = settlementProofId;
-
+    it("queues settler job when epoch in settlement state found", async () => {
         vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({
             height: 20,
-            proofs,
-            kind: "blockProof",
+            kind: "settlement",
         } as any);
 
         const m = new SettlerMaster() as any;
@@ -66,12 +57,11 @@ describe("settler master", () => {
 
         expect(settlerQ.add).toHaveBeenCalledWith("settler", {
             height: 20,
-            settlementProofId: settlementProofId.toString(),
         });
         expect(sleep).not.toHaveBeenCalled();
     });
 
-    it("sleeps when no epoch", async () => {
+    it("sleeps when no epoch in settlement state", async () => {
         vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue(null as any);
 
         const m = new SettlerMaster() as any;
@@ -81,15 +71,10 @@ describe("settler master", () => {
         expect(sleep).toHaveBeenCalledWith(MASTER_SLEEP_INTERVAL_MS);
     });
 
-    it("rolls back kind when queue add fails", async () => {
-        const settlementProofId = new Types.ObjectId();
-        const proofs = Array(PROOF_EPOCH_SETTLEMENT_INDEX + 1).fill(null);
-        proofs[PROOF_EPOCH_SETTLEMENT_INDEX] = settlementProofId;
-
+    it("rolls back kind to settlement when queue add fails", async () => {
         vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({
             height: 20,
-            proofs,
-            kind: "blockProof",
+            kind: "settlement",
         } as any);
         vi.mocked(settlerQ.add).mockRejectedValueOnce(new Error("queue error"));
 
@@ -97,23 +82,8 @@ describe("settler master", () => {
         await expect(m.handleTask()).rejects.toThrow("queue error");
 
         expect(ProofEpochModel.updateOne).toHaveBeenCalledWith(
-            { height: 20, kind: "settlement" },
-            { $set: { kind: "blockProof" } },
+            { height: 20, kind: "txSending" },
+            { $set: { kind: "settlement" } },
         );
     });
-
-    it("sleeps when settlement proof id is missing", async () => {
-        const proofs = Array(PROOF_EPOCH_SETTLEMENT_INDEX + 1).fill(null);
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({
-            height: 20,
-            proofs,
-        } as any);
-
-        const m = new SettlerMaster() as any;
-        await m.handleTask();
-
-        expect(settlerQ.add).not.toHaveBeenCalled();
-        expect(sleep).toHaveBeenCalledWith(MASTER_SLEEP_INTERVAL_MS);
-    });
 });
-
