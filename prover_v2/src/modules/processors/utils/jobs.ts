@@ -11,10 +11,13 @@ interface AggregatorJob {
     right: string;
 }
 
-interface SettlerJob {
+interface SettlementProverJob {
     height: number;
-    /** Settlement proof Mongo ObjectId (hex string after Redis round-trip). */
     settlementProofId: string;
 }
 
-export type { BlockProverJob, AggregatorJob, SettlerJob };
+interface SettlerJob {
+    height: number;
+}
+
+export type { BlockProverJob, AggregatorJob, SettlementProverJob, SettlerJob };

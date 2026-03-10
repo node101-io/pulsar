@@ -8,6 +8,7 @@ export interface IProofEpoch extends Document {
     timeoutAt: Date;
     kind: ProofKind;
     failCount: number;
+    provedTxJson: string | null;
 }
 
 const ProofEpochSchema = new Schema<IProofEpoch>(
@@ -29,10 +30,11 @@ const ProofEpochSchema = new Schema<IProofEpoch>(
         timeoutAt: { type: Date, required: true },
         kind: {
             type: String,
-            enum: ["blockProof", "aggregation", "settlement", "done"],
+            enum: ["blockProof", "aggregation", "txProving", "settlement", "txSending", "done"],
             required: true,
         },
         failCount: { type: Number, default: 0 },
+        provedTxJson: { type: String, default: null },
     },
     { timestamps: true },
 );
