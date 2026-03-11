@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 import {
     BLOCK_EPOCH_SIZE,
+    PROOF_TTL_SECONDS,
     WORKER_TIMEOUT_MS,
 } from "../../../utils/constants.js";
 import { BlockStatus } from "../../types.js";
@@ -42,6 +43,8 @@ const BlockEpochSchema = new Schema<IBlockEpoch>(
     },
     { timestamps: true },
 );
+
+BlockEpochSchema.index({ createdAt: 1 }, { expireAfterSeconds: PROOF_TTL_SECONDS });
 
 export const BlockEpochModel = mongoose.model<IBlockEpoch>(
     "BlockEpoch",

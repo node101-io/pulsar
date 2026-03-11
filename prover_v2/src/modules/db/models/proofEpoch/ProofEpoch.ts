@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 import { ProofKind, ProofStatus } from "../../types.js";
+import { PROOF_TTL_SECONDS } from "../../../utils/constants.js";
 
 export interface IProofEpoch extends Document {
     height: number;
@@ -38,6 +39,8 @@ const ProofEpochSchema = new Schema<IProofEpoch>(
     },
     { timestamps: true },
 );
+
+ProofEpochSchema.index({ createdAt: 1 }, { expireAfterSeconds: PROOF_TTL_SECONDS });
 
 export const ProofEpochModel = mongoose.model<IProofEpoch>(
     "ProofEpoch",

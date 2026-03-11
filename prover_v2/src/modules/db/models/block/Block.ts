@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 import { VoteExt } from "../../../utils/interfaces";
 import { BlockStatus } from "../../types.js";
+import { BLOCKS_TO_KEEP } from "../../../utils/constants.js";
 
 export interface IBlock extends Document {
     height: number;
@@ -38,5 +39,20 @@ const BlockSchema = new Schema<IBlock>(
     },
     { timestamps: true },
 );
+
+BlockSchema.post("save", async function () {
+    const Model = this.constructor as typeof BlockModel;
+    const count = await Model.countDocuments();
+    if (count > BLOCKS_TO_KEEP) {
+        const cutoff = await Model.findOne({})
+            .sort({ height: -1 })
+            .skip(BLOCKS_TO_KEEP - 1)
+            .select("height")
+            .lean(); // lean function returns a plain JavaScript object instead of a Mongoose document
+        if (cutoff) {
+            await Model.deleteMany({ height: { $lt: cutoff.height } });
+        }
+    }
+});
 
 export const BlockModel = mongoose.model<IBlock>("Block", BlockSchema);

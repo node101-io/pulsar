@@ -1,6 +1,6 @@
 import { BlockModel, IBlock } from "./Block.js";
 import { BlockData } from "../../../utils/interfaces.js";
-import { TIMEOUT_TIME_MS } from "../../../utils/constants.js";
+import { WORKER_TIMEOUT_MS } from "../../../utils/constants.js";
 import logger from "../../../../logger.js";
 import { Signature } from "o1js";
 
@@ -16,7 +16,7 @@ export async function storeBlock(block: BlockData) {
             },
             $setOnInsert: {
                 status: "waiting",
-                timeoutAt: new Date(Date.now() + TIMEOUT_TIME_MS),
+                timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS),
             },
         },
         { upsert: true },
