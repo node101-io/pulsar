@@ -252,6 +252,9 @@ const MultisigVerifierProgram = ZkProgram({
             afterProof.publicOutput.numberOfSettlementProofs
           );
 
+        // Limit is AGGREGATE_THRESHOLD. Without this cap,
+        // concurrent settlement submissions cause race conditions on Mina
+        // before the previous transaction is finalized onchain.
         numberOfSettlementProofs.assertLessThanOrEqual(
           Field(AGGREGATE_THRESHOLD),
           'Number of settlement proofs exceeds limit'
