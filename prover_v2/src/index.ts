@@ -1,3 +1,6 @@
+import { setBackend } from "o1js";
+setBackend("native");
+
 import { initDb } from "./modules/db/index.js";
 import { runStartup } from "./startup.js";
 import logger from "./logger.js";
