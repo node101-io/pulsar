@@ -150,7 +150,29 @@ Reconstructs the pre-proved transaction, signs it, and broadcasts it to Mina. It
 
 ## Processor Pipeline
 
-![Processor Pipeline](svg/processor_pipeline.svg)
+```mermaid
+flowchart TD
+    A([Pulsar Blockchain]) -->|gRPC poll every POLL_INTERVAL_MS| B[startPulsarSync]
+    B -->|fetch block + validator keys, parse signatures| C[(Block Collection)]
+
+    C -->|BLOCK_EPOCH_SIZE consecutive blocks stored| D[(BlockEpoch epochStatus=waiting)]
+
+    D -->|BlockProverMaster polls epochStatus=waiting| E[block-prover queue - WORKER_COUNT workers]
+    E --> F[Block Prover Worker GenerateSettlementProof]
+    F -->|BLOCK_EPOCH_SIZE blocks to 1 proof| G[(ProofEpoch kind=blockProof/aggregation)]
+
+    G -->|AggregatorMaster polls adjacent proofs ready| H[aggregator queue - WORKER_COUNT workers]
+    H --> I[Aggregator Worker MergeSettlementProofs]
+    I -->|2 proofs to 1 proof| G
+
+    G -->|proofs SETTLEMENT_INDEX filled| J[settlement-prover queue - WORKER_COUNT workers]
+    J --> K[Settlement Prover Worker proveSettlementTx]
+    K -->|embed zk proof into Mina tx| L[(ProofEpoch kind=settlement)]
+
+    L -->|SettlerMaster polls kind=settlement| M[settler queue - 1 worker serialized]
+    M --> N[Settler Worker sendProvedSettlement]
+    N -->|sign and broadcast| O([Mina SettlementContract blockHeight updated])
+```
 
 ---
 
@@ -232,7 +254,23 @@ Each `ProofEpoch` contains a complete binary proof tree. The number of leaves is
 
 The diagram below shows the tree for the current value of `PROOF_EPOCH_LEAF_COUNT`:
 
-![Proof Aggregation Tree](svg/aggregation_tree.svg)
+```mermaid
+graph BT
+    S[proofs_6 - Settlement Root - status_2_done]
+    N1[proofs_4 - Aggregated L1-A - status_0_done]
+    N2[proofs_5 - Aggregated L1-B - status_1_done]
+    L0[proofs_0 - Leaf 0 block-prover]
+    L1[proofs_1 - Leaf 1 block-prover]
+    L2[proofs_2 - Leaf 2 block-prover]
+    L3[proofs_3 - Leaf 3 block-prover]
+
+    L0 --> N1
+    L1 --> N1
+    L2 --> N2
+    L3 --> N2
+    N1 --> S
+    N2 --> S
+```
 
 **Index formula:**
 
@@ -256,15 +294,46 @@ The diagram below shows the tree for the current value of `PROOF_EPOCH_LEAF_COUN
 
 ### ProofKind (ProofEpoch lifecycle)
 
-![ProofKind](svg/proofKind.svg)
+```mermaid
+stateDiagram-v2
+    [*] --> blockProof : block-prover creates ProofEpoch
+
+    blockProof --> aggregation : leaf proofs filling
+    aggregation --> txProving : SettlementProverMaster claims proofs filled
+    blockProof --> txProving : shortcut if tree completes without update
+
+    txProving --> aggregation : restart recovery resetStuckEpochs
+    txProving --> settlement : settlement TX proved success
+    txProving --> settlement : already settled on-chain provedTxJson null
+
+    settlement --> txSending : SettlerMaster claims
+
+    txSending --> settlement : restart recovery resetStuckEpochs
+    txSending --> done : TX confirmed on Mina or no tx needed
+
+    done --> [*]
+```
 
 ### BlockStatus (BlockEpoch.epochStatus)
 
-![BlockStatus](svg/blockStatus.svg)
+```mermaid
+stateDiagram-v2
+    [*] --> waiting : BlockEpoch created
+    waiting --> processing : BlockProverMaster claims findOneAndUpdate atomic
+    processing --> waiting : restart recovery resetStuckEpochs
+    processing --> done : block-prover worker success
+    processing --> failed : failCount greater than MAX_FAIL_COUNT
+```
 
 ### ProofStatus (ProofEpoch.status[n] — per aggregation slot)
 
-![ProofStatus](svg/proofStatus.svg)
+```mermaid
+stateDiagram-v2
+    [*] --> waiting : ProofEpoch created all slots initialized
+    waiting --> processing : AggregatorMaster claims slot
+    processing --> done : aggregator worker success
+    processing --> failed : failCount greater than MAX_FAIL_COUNT
+```
 
 ---
 
