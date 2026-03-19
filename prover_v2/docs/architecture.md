@@ -36,7 +36,93 @@
 
 ## System Architecture
 
-![System Architecture](svg/system_architecture.svg)
+```mermaid
+graph LR
+
+    %% SYNC BLOCK
+    subgraph Sync
+        direction TB
+        connectMina[connectMina]
+        syncMina[sync]
+
+        connectPulsar[connectPulsar]
+        syncPulsar[sync]
+
+        connectMina --> syncMina
+        connectPulsar --> syncPulsar
+    end
+
+    %% DB
+    mongoDB[(mongoDB)]
+
+    %% SETTLER (top feel)
+    settler[Settler]
+
+    %% PROCESSORS (each with workers inline)
+    subgraph Processors
+        direction TB
+
+        subgraph BP[ ]
+            direction LR
+            blockProver[Block Prover]
+            bpw1[worker]
+            bpw2[worker]
+            blockProver --> bpw1
+            blockProver --> bpw2
+        end
+
+        subgraph AGG[ ]
+            direction LR
+            aggregator[Aggregator]
+            aggw1[worker]
+            aggw2[worker]
+            aggregator --> aggw1
+            aggregator --> aggw2
+        end
+
+        subgraph SP[ ]
+            direction LR
+            settlementProver[Settlement Prover]
+            spw1[worker]
+            spw2[worker]
+            settlementProver --> spw1
+            settlementProver --> spw2
+        end
+    end
+
+    %% FLOWS
+    syncMina --> mongoDB
+    syncPulsar --> mongoDB
+    mongoDB --> syncMina
+    mongoDB --> syncPulsar
+
+    mongoDB --> blockProver
+    blockProver --> mongoDB
+
+    mongoDB --> aggregator
+    aggregator --> mongoDB
+
+    mongoDB --> settlementProver
+    settlementProver --> mongoDB
+
+    %% SETTLER LINKS
+    settler --> mongoDB
+    mongoDB --> settler
+    settler --> connectMina
+
+    %% COLORS
+    classDef sync fill:#8ecae6,stroke:#333
+    classDef db fill:#e6a4a4,stroke:#333
+    classDef processor fill:#ffe08a,stroke:#333
+    classDef worker fill:#ddd,stroke:#333
+    classDef settler fill:#f7c59f,stroke:#333
+
+    class connectMina,connectPulsar,syncMina,syncPulsar sync
+    class mongoDB db
+    class blockProver,aggregator,settlementProver processor
+    class bpw1,bpw2,aggw1,aggw2,spw1,spw2 worker
+    class settler settler
+```
 
 **External service dependencies:**
 
@@ -178,7 +264,7 @@ flowchart TD
 
 ## Data Models & ERD
 
-```
+```mermaid
 erDiagram
     Block {
         ObjectId _id PK
