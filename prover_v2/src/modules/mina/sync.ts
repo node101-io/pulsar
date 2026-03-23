@@ -51,7 +51,8 @@ export async function startMinaSync(): Promise<void> {
                 lastSeenMinaHeight = currentHeight;
             }
         } catch (error) {
-            logger.error("Error during Mina sync loop", error as Error, {
+            logger.error("Error during Mina sync loop", {
+                error,
                 lastSeenMinaHeight,
                 network,
                 event: "mina_sync_error",

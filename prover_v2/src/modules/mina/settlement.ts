@@ -110,7 +110,8 @@ export async function sendProvedSettlement(
                 event: "mina_settlement_tx_rejected",
             });
         } catch (error) {
-            logger.error("Settlement TX send error", error as Error, {
+            logger.error("Settlement TX send error", {
+                error,
                 attempt,
                 epochLastPulsarBlock,
                 event: "mina_settlement_tx_error",

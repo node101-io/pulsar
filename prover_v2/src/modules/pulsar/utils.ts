@@ -191,8 +191,8 @@ async function getMinaPubKeyFromCosmosAddress(
                 } catch (error) {
                     logger.error(
                         "Failed to parse Mina public key response",
-                        error,
                         {
+                            error,
                             event: "parse_error",
                             cosmosAddress,
                         },
@@ -247,8 +247,8 @@ async function getValidatorSet(
             } catch (error) {
                 logger.error(
                     `Error retrieving Mina public key for validator ${validator}`,
-                    error,
                     {
+                        error,
                         validator,
                         blockHeight: height,
                         event: "validator_key_retrieval_error",
@@ -260,8 +260,8 @@ async function getValidatorSet(
     } catch (error) {
         logger.error(
             `Error retrieving validator set for height ${height}`,
-            error,
             {
+                error,
                 blockHeight: height,
                 event: "validator_set_retrieval_error",
             },
@@ -323,7 +323,8 @@ async function parseVoteExtResponse(
             voteExt.push(parsedVoteExt);
         }
     } catch (error) {
-        logger.error("Error parsing vote extension response", error, {
+        logger.error("Error parsing vote extension response", {
+            error,
             blockHeight: res?.voteExt?.[0]?.height,
             event: "vote_extension_parse_error",
         });
@@ -345,8 +346,8 @@ async function recoverPubkeyFromEncoded(
                     if (err) {
                         logger.error(
                             "Error retrieving Mina public key",
-                            err,
                             {
+                                error: err,
                                 encodedAddress: encoded,
                                 event: "mina_pubkey_retrieval_error",
                             },
@@ -364,8 +365,8 @@ async function recoverPubkeyFromEncoded(
                     } catch (parseError) {
                         logger.error(
                             "Error parsing public key",
-                            parseError,
                             {
+                                error: parseError,
                                 encodedAddress: encoded,
                                 responseData: res,
                                 event: "pubkey_parse_error",
@@ -376,7 +377,8 @@ async function recoverPubkeyFromEncoded(
                 },
             );
         } catch (error) {
-            logger.error("Error recovering public key", error, {
+            logger.error("Error recovering public key", {
+                error,
                 encodedAddress: encoded,
                 event: "pubkey_recovery_error",
             });

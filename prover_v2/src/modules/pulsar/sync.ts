@@ -67,7 +67,8 @@ export async function startPulsarSync() {
                 }
             }
         } catch (error) {
-            logger.error("Error during Pulsar sync loop", error as Error, {
+            logger.error("Error during Pulsar sync loop", {
+                error,
                 currentHeight,
                 event: "pulsar_sync_error",
             });

@@ -15,6 +15,6 @@ async function main() {
 }
 
 main().catch((err) => {
-    logger.error("Fatal error during initialization", err);
+    logger.error("Fatal error during initialization", { error: err });
     process.exit(1);
 });
