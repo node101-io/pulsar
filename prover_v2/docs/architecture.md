@@ -479,6 +479,16 @@ The settlement-prover runs with `WORKER_COUNT` concurrent workers. Without the o
 
 Mina transactions are nonce-based and sequential. Running two settlement sends in parallel would cause a nonce conflict and a failed transaction. One serialized worker is the correct design.
 
+### Settler queue size is capped at 1 — approach is architecture-dependent
+
+`SettlerMaster.handleTask()` checks `settlerQ.getJobCounts()` before claiming an epoch. If the queue already has a waiting or active job, the master sleeps and returns. It effectively blocks the producer loop until the worker finishes.
+
+**Why this works here:** There is exactly one settler master instance and it runs a sequential `while(true)` loop. The `getJobCounts → add` window has no meaningful race risk in this setup.
+
+**Why this would break with multiple pushers:** If multiple masters or services could push to the settler queue concurrently, the poll-then-add pattern would not be race-safe; e.g. two callers could both see `queueSize = 0` and both enqueue. In that scenario, an atomic primitive (Redis script, BullMQ Pro `maxSize`, or a distributed lock) would be required instead.
+
+Do not remove or relax this check without revisiting the assumption that a single sequential master is the only producer.
+
 ### Aggregation tree depth is configurable
 
 `PROOF_EPOCH_LEAF_COUNT` in `constants.ts` controls the entire tree shape — the size of `proofs[]`, the size of `status[]`, and the settlement root index all derive from it. The aggregator's 15 hardcoded patterns support up to `PROOF_EPOCH_LEAF_COUNT = 16` without any code changes. Increasing this constant is the only thing required to scale the tree depth.
