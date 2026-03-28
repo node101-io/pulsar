@@ -5,9 +5,10 @@
     "scripts": {
         "test": "vitest run",
         "test:watch": "vitest",
-        "build": "tsc",
+        "build": "tsc && mkdir -p dist/src/mock/proto && cp src/mock/proto/*.proto dist/src/mock/proto/",
+        "start": "npm run build && node dist/src/index.js",
         "proto:gen": "buf generate ../chain/proto",
-        "start-mock": "npm run build && node dist/src/mock/pulsarNode.js",
+        "start-mock": "npm run build && node dist/src/mock/index.js",
         "worker:settlement": "npm run build && node --experimental-vm-modules dist/src/worker/settlementWorker.js",
         "worker:merge": "npm run build && node --experimental-vm-modules dist/src/worker/mergeWorker.js",
         "worker:reduce": "npm run build && node --experimental-vm-modules dist/src/worker/reducerWorker.js",
