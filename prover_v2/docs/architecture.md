@@ -52,7 +52,7 @@ graph TD
         MinaGroup[Mina] --> syncMina[Mina Sync]
         PulsarGroup[Pulsar] --> syncPulsar[Pulsar Sync]
     end
-    
+
     settler[Settler]
 
     %% CENTER: The Database Hub
@@ -61,7 +61,7 @@ graph TD
     %% BOTTOM SECTION: Processing
     subgraph Processors [Processors]
         direction LR
-        
+
         subgraph BP [Block Prover]
             blockProver --> bpw1[worker 1]
             blockProver --> bpw2[worker 2]
@@ -82,7 +82,7 @@ graph TD
     syncMina <--> mongoDB
     syncPulsar <--> mongoDB
     settler <--> mongoDB
-    
+
     %% Connections to Processors
     mongoDB <--> blockProver
     mongoDB <--> aggregator
@@ -435,12 +435,14 @@ The block-prover checks whether the `ProofEpoch` already has proofs before regen
 
 On start, the application:
 
-1. Connects to MongoDB and seeds a genesis `BlockEpoch` at height 0 if one does not yet exist (requires `Block` documents at heights 0 and 1 to be present)
+1. Connects to MongoDB
 2. Obliterates all BullMQ queues to clear any leftover jobs from a previous run
 3. Resets stuck epoch states so crashed workers don't permanently lock an epoch
 4. Marks any epochs that exceeded `MAX_FAIL_COUNT` as permanently failed
 
 After these steps, processors and sync loops are started separately.
+
+> **Note:** Database seeding (genesis blocks at heights 0 and 1, and the initial `BlockEpoch`) is **not** done automatically on startup. It must be run once before the first start via `npm run seed`. See the [README](../README.md) for details.
 
 ---
 
@@ -478,4 +480,4 @@ When the settlement-prover finds the epoch already settled on-chain, it stores `
 
 ### Genesis seed requirement
 
-The startup seed step requires `Block` documents at heights `0` and `1` to already exist in MongoDB. These must be inserted before the first application start (e.g., via a migration or seed script).
+`Block` documents at heights `0` and `1` and an initial `BlockEpoch` at height `0` must exist in MongoDB before the first application start. Run `npm run seed` once to create them. The seed script is idempotent; it is safe to run multiple times.

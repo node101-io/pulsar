@@ -6,8 +6,6 @@ import "./models/proof/Proof.js";
 import "./models/proofEpoch/ProofEpoch.js";
 import "./models/blockEpoch/BlockEpoch.js";
 
-import { seedInitialBlocks } from "./models/block/utils.js";
-
 let initialized = false;
 
 export async function initDb() {
@@ -24,6 +22,4 @@ export async function initDb() {
     initialized = true;
 
     logger.info(`Connected to MongoDB via Mongoose (db: "${dbName}").`);
-
-    await seedInitialBlocks();
 }

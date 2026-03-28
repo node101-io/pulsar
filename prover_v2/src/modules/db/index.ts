@@ -7,7 +7,6 @@ export {
     getBlock,
     fetchBlockRange,
     fetchLastStoredBlock,
-    seedInitialBlocks,
 } from "./models/block/utils.js";
 
 // Proof
