@@ -37,87 +37,62 @@
 ## System Architecture
 
 ```mermaid
-graph LR
+graph TD
+    %% Global Styling
+    classDef sync fill:#8ecae6,stroke:#333,stroke-width:2px
+    classDef db fill:#e6a4a4,stroke:#333,stroke-width:2px,shape:cylinder
+    classDef processor fill:#ffe08a,stroke:#333,stroke-width:2px
+    classDef worker fill:#eee,stroke:#999,stroke-dasharray: 5 5
+    classDef settler fill:#f7c59f,stroke:#333,stroke-width:2px
 
-    %% SYNC BLOCK
-    subgraph Sync
+    %% TOP SECTION: Input & Control
+    direction LR
+    subgraph Sync [Sync]
         direction TB
-        connectMina[connectMina]
-        syncMina[sync]
-
-        connectPulsar[connectPulsar]
-        syncPulsar[sync]
-
-        connectMina --> syncMina
-        connectPulsar --> syncPulsar
+        MinaGroup[Mina] --> syncMina[Mina Sync]
+        PulsarGroup[Pulsar] --> syncPulsar[Pulsar Sync]
     end
-
-    %% DB
-    mongoDB[(mongoDB)]
-
-    %% SETTLER (top feel)
+    
     settler[Settler]
 
-    %% PROCESSORS (each with workers inline)
-    subgraph Processors
-        direction TB
+    %% CENTER: The Database Hub
+    mongoDB[(MongoDB)]
 
-        subgraph BP[ ]
-            direction LR
-            blockProver[Block Prover]
-            bpw1[worker]
-            bpw2[worker]
-            blockProver --> bpw1
-            blockProver --> bpw2
+    %% BOTTOM SECTION: Processing
+    subgraph Processors [Processors]
+        direction LR
+        
+        subgraph BP [Block Prover]
+            blockProver --> bpw1[worker 1]
+            blockProver --> bpw2[worker 2]
         end
 
-        subgraph AGG[ ]
-            direction LR
-            aggregator[Aggregator]
-            aggw1[worker]
-            aggw2[worker]
-            aggregator --> aggw1
-            aggregator --> aggw2
+        subgraph AGG [Aggregator]
+            aggregator --> aggw1[worker 1]
+            aggregator --> aggw2[worker 2]
         end
 
-        subgraph SP[ ]
-            direction LR
-            settlementProver[Settlement Prover]
-            spw1[worker]
-            spw2[worker]
-            settlementProver --> spw1
-            settlementProver --> spw2
+        subgraph SP [Settlement Prover]
+            settlementProver --> spw1[worker 1]
+            settlementProver --> spw2[worker 2]
         end
     end
 
-    %% FLOWS
-    syncMina --> mongoDB
-    syncPulsar --> mongoDB
-    mongoDB --> syncMina
-    mongoDB --> syncPulsar
+    %% LOGICAL FLOWS (Bi-directional)
+    syncMina <--> mongoDB
+    syncPulsar <--> mongoDB
+    settler <--> mongoDB
+    
+    %% Connections to Processors
+    mongoDB <--> blockProver
+    mongoDB <--> aggregator
+    mongoDB <--> settlementProver
 
-    mongoDB --> blockProver
-    blockProver --> mongoDB
+    %% Settler specific trigger
+    settler -.-> MinaGroup
 
-    mongoDB --> aggregator
-    aggregator --> mongoDB
-
-    mongoDB --> settlementProver
-    settlementProver --> mongoDB
-
-    %% SETTLER LINKS
-    settler --> mongoDB
-    mongoDB --> settler
-    settler --> connectMina
-
-    %% COLORS
-    classDef sync fill:#8ecae6,stroke:#333
-    classDef db fill:#e6a4a4,stroke:#333
-    classDef processor fill:#ffe08a,stroke:#333
-    classDef worker fill:#ddd,stroke:#333
-    classDef settler fill:#f7c59f,stroke:#333
-
-    class connectMina,connectPulsar,syncMina,syncPulsar sync
+    %% Applying Classes
+    class MinaGroup,PulsarGroup,syncMina,syncPulsar sync
     class mongoDB db
     class blockProver,aggregator,settlementProver processor
     class bpw1,bpw2,aggw1,aggw2,spw1,spw2 worker
