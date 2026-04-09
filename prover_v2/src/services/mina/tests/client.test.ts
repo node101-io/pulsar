@@ -22,7 +22,7 @@ vi.mock("pulsar-contracts", () => ({
     },
 }));
 
-vi.mock("../../common/logger.js", () => ({
+vi.mock("../../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
         error: vi.fn(),
@@ -42,7 +42,7 @@ import {
     initMinaClientContext,
     getCurrentMinaBlockHeight,
     getContractBlockHeight,
-} from "./client.js";
+} from "../client.js";
 
 const mockAddress = { toBase58: () => "B62qtest" } as any;
 

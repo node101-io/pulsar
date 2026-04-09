@@ -8,7 +8,7 @@ vi.mock("mongoose", () => {
     return { default: { startSession }, startSession };
 });
 
-vi.mock("../../db/index.js", () => ({
+vi.mock("../../../db/index.js", () => ({
     ProofEpochModel: {
         findOne: vi.fn(),
     },
@@ -20,7 +20,7 @@ vi.mock("../../db/index.js", () => ({
     fetchBlockRange: vi.fn(),
 }));
 
-vi.mock("../../common/logger.js", () => ({
+vi.mock("../../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
         error: vi.fn(),
@@ -29,8 +29,8 @@ vi.mock("../../common/logger.js", () => ({
     },
 }));
 
-import { BlockEpochModel, ProofEpochModel, fetchBlockRange, storeProof } from "../../db/index.js";
-import { worker } from "./worker.js";
+import { BlockEpochModel, ProofEpochModel, fetchBlockRange, storeProof } from "../../../db/index.js";
+import { worker } from "../worker.js";
 
 describe("block-prover worker", () => {
     beforeEach(() => {

@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Types } from "mongoose";
-import { PROOF_EPOCH_LEAF_COUNT } from "../../config/constants.js";
+import { PROOF_EPOCH_LEAF_COUNT } from "../../../config/constants.js";
 
-vi.mock("../../db/models/ProofEpoch.js", () => ({
+vi.mock("../../../db/models/ProofEpoch.js", () => ({
     ProofEpochModel: {
         findOneAndUpdate: vi.fn(),
     },
 }));
 
-vi.mock("../../db/models/Proof.js", () => ({
+vi.mock("../../../db/models/Proof.js", () => ({
     getProof: vi.fn(),
     storeProof: vi.fn(),
 }));
@@ -22,7 +22,7 @@ vi.mock("pulsar-contracts", () => ({
     })),
 }));
 
-vi.mock("../../common/logger.js", () => ({
+vi.mock("../../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
         error: vi.fn(),
@@ -31,9 +31,9 @@ vi.mock("../../common/logger.js", () => ({
     },
 }));
 
-import { ProofEpochModel } from "../../db/models/ProofEpoch.js";
-import { getProof, storeProof } from "../../db/models/Proof.js";
-import { worker } from "./worker.js";
+import { ProofEpochModel } from "../../../db/models/ProofEpoch.js";
+import { getProof, storeProof } from "../../../db/models/Proof.js";
+import { worker } from "../worker.js";
 
 describe("aggregator worker", () => {
     beforeEach(() => {

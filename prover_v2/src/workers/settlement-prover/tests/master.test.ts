@@ -3,9 +3,9 @@ import { Types } from "mongoose";
 import {
     MASTER_SLEEP_INTERVAL_MS,
     PROOF_EPOCH_SETTLEMENT_INDEX,
-} from "../../config/constants.js";
+} from "../../../config/constants.js";
 
-vi.mock("../../db/index.js", () => ({
+vi.mock("../../../db/index.js", () => ({
     ProofEpochModel: {
         findOneAndUpdate: vi.fn(),
         updateOne: vi.fn(),
@@ -13,7 +13,7 @@ vi.mock("../../db/index.js", () => ({
     incrementProofEpochFailCount: vi.fn(),
 }));
 
-vi.mock("../queue.js", () => ({
+vi.mock("../../queue.js", () => ({
     settlementProverQ: {
         add: vi.fn(),
     },
@@ -23,15 +23,15 @@ vi.mock("../redis.js", () => ({
     connection: {},
 }));
 
-vi.mock("./worker.js", () => ({
+vi.mock("../worker.js", () => ({
     worker: vi.fn(),
 }));
 
-vi.mock("../../common/sleep.js", () => ({
+vi.mock("../../../common/sleep.js", () => ({
     sleep: vi.fn(),
 }));
 
-vi.mock("../../common/logger.js", () => ({
+vi.mock("../../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
         error: vi.fn(),
@@ -40,10 +40,10 @@ vi.mock("../../common/logger.js", () => ({
     },
 }));
 
-import { ProofEpochModel } from "../../db/index.js";
-import { settlementProverQ } from "../queue.js";
-import { sleep } from "../../common/sleep.js";
-import { SettlementProverMaster } from "./master.js";
+import { ProofEpochModel } from "../../../db/index.js";
+import { settlementProverQ } from "../../queue.js";
+import { sleep } from "../../../common/sleep.js";
+import { SettlementProverMaster } from "../master.js";
 
 describe("settlement-prover master", () => {
     beforeEach(() => {

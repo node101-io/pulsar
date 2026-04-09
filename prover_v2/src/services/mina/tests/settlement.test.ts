@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./client.js", () => ({
+vi.mock("../client.js", () => ({
     getContractBlockHeight: vi.fn(),
 }));
 
@@ -35,7 +35,7 @@ vi.mock("pulsar-contracts", () => ({
     waitForTransaction: vi.fn(),
 }));
 
-vi.mock("../../common/logger.js", () => ({
+vi.mock("../../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
         warn: vi.fn(),
@@ -44,8 +44,8 @@ vi.mock("../../common/logger.js", () => ({
     },
 }));
 
-import { proveSettlementTx, sendProvedSettlement } from "./settlement.js";
-import { getContractBlockHeight } from "./client.js";
+import { proveSettlementTx, sendProvedSettlement } from "../settlement.js";
+import { getContractBlockHeight } from "../client.js";
 import { waitForTransaction } from "pulsar-contracts";
 import { Transaction } from "o1js";
 

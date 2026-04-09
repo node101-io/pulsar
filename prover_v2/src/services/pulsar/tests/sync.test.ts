@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { startPulsarSync } from "./sync.js";
-import * as client from "./client.js";
-import * as db from "../../db/index.js";
-import * as sleepModule from "../../common/sleep.js";
-import { BlockData } from "../../common/types.js";
+import { startPulsarSync } from "../sync.js";
+import * as client from "../client.js";
+import * as db from "../../../db/index.js";
+import * as sleepModule from "../../../common/sleep.js";
+import { BlockData } from "../../../common/types.js";
 
-vi.mock("./client.js");
-vi.mock("../../db/index.js");
-vi.mock("../../common/sleep.js");
-vi.mock("../../common/logger.js", () => ({
+vi.mock("../client.js");
+vi.mock("../../../db/index.js");
+vi.mock("../../../common/sleep.js");
+vi.mock("../../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
         error: vi.fn(),

@@ -1,13 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
     storeBlock,
     getBlock,
     fetchBlockRange,
     fetchLastStoredBlock,
+    BlockModel,
 } from "../models/Block.js";
-import { BlockModel } from "../models/Block.js";
 
-vi.mock("../models/Block.js");
 vi.mock("../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
@@ -22,8 +21,12 @@ describe("db block utils", () => {
         vi.clearAllMocks();
     });
 
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it("storeBlock upserts block with timeout and waiting status on insert", async () => {
-        vi.mocked(BlockModel.updateOne).mockResolvedValue({} as any);
+        vi.spyOn(BlockModel, "updateOne").mockResolvedValue({} as any);
 
         const block = {
             height: 10,
@@ -55,7 +58,7 @@ describe("db block utils", () => {
 
     it("getBlock finds block by height", async () => {
         const mockBlock = { height: 5 } as any;
-        vi.mocked(BlockModel.findOne).mockResolvedValue(mockBlock);
+        vi.spyOn(BlockModel, "findOne").mockResolvedValue(mockBlock);
 
         const result = await getBlock(5);
 
@@ -70,7 +73,7 @@ describe("db block utils", () => {
             { height: 3 },
         ] as any[];
         const sortMock = vi.fn().mockResolvedValue(mockBlocks);
-        vi.mocked(BlockModel.find).mockReturnValue({ sort: sortMock } as any);
+        vi.spyOn(BlockModel, "find").mockReturnValue({ sort: sortMock } as any);
 
         const result = await fetchBlockRange(1, 3);
 
@@ -84,7 +87,7 @@ describe("db block utils", () => {
     it("fetchBlockRange duplicates first block when rangeLow < 0", async () => {
         const mockBlocks = [{ height: 0 }, { height: 1 }] as any[];
         const sortMock = vi.fn().mockResolvedValue([...mockBlocks]);
-        vi.mocked(BlockModel.find).mockReturnValue({ sort: sortMock } as any);
+        vi.spyOn(BlockModel, "find").mockReturnValue({ sort: sortMock } as any);
 
         const result = await fetchBlockRange(-1, 1);
 
@@ -95,7 +98,7 @@ describe("db block utils", () => {
     });
 
     it("fetchLastStoredBlock returns null and logs warn when no block", async () => {
-        vi.mocked(BlockModel.findOne).mockReturnValue({
+        vi.spyOn(BlockModel, "findOne").mockReturnValue({
             sort: vi.fn().mockResolvedValue(null),
         } as any);
 
@@ -110,7 +113,7 @@ describe("db block utils", () => {
 
     it("fetchLastStoredBlock returns last block and logs info", async () => {
         const mockBlock = { height: 42 } as any;
-        vi.mocked(BlockModel.findOne).mockReturnValue({
+        vi.spyOn(BlockModel, "findOne").mockReturnValue({
             sort: vi.fn().mockResolvedValue(mockBlock),
         } as any);
 

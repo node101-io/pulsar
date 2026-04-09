@@ -1,18 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Types } from "mongoose";
 import {
     getProofEpoch,
     storeProofInProofEpoch,
     deleteProofEpoch,
     incrementProofEpochFailCount,
+    ProofEpochModel,
 } from "../models/ProofEpoch.js";
-import { ProofEpochModel } from "../models/ProofEpoch.js";
 import {
     PROOF_EPOCH_LEAF_COUNT,
     PROOF_EPOCH_SETTLEMENT_INDEX,
 } from "../../config/constants.js";
 
-vi.mock("../models/ProofEpoch.js");
 vi.mock("../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
@@ -27,9 +26,13 @@ describe("db proofEpoch utils", () => {
         vi.clearAllMocks();
     });
 
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it("getProofEpoch finds epoch by height", async () => {
         const mockEpoch = { height: 16 } as any;
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue(mockEpoch);
+        vi.spyOn(ProofEpochModel, "findOne").mockResolvedValue(mockEpoch);
 
         const result = await getProofEpoch(16);
 
@@ -56,7 +59,9 @@ describe("db proofEpoch utils", () => {
     it("storeProofInProofEpoch sets proof at index and marks status as done for internal nodes", async () => {
         const height = 10;
         const proofId = new Types.ObjectId();
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({} as any);
+        vi.spyOn(ProofEpochModel, "findOneAndUpdate").mockResolvedValue(
+            {} as any,
+        );
 
         const leafIndex = 1;
         await storeProofInProofEpoch(height, proofId, leafIndex);
@@ -86,7 +91,7 @@ describe("db proofEpoch utils", () => {
     });
 
     it("deleteProofEpoch deletes epoch by height", async () => {
-        vi.mocked(ProofEpochModel.deleteOne).mockResolvedValue({} as any);
+        vi.spyOn(ProofEpochModel, "deleteOne").mockResolvedValue({} as any);
 
         await deleteProofEpoch(8);
 
@@ -94,11 +99,12 @@ describe("db proofEpoch utils", () => {
     });
 
     it("incrementProofEpochFailCount increments failCount and updates timeoutAt", async () => {
-        vi.mocked(ProofEpochModel.updateOne).mockResolvedValue({} as any);
+        vi.spyOn(ProofEpochModel, "updateOne").mockResolvedValue({} as any);
 
         await incrementProofEpochFailCount(8);
 
-        const call = vi.mocked(ProofEpochModel.updateOne).mock.calls[0][1] as any;
+        const call = vi.mocked(ProofEpochModel.updateOne).mock
+            .calls[0][1] as any;
         expect(call.$inc).toEqual({ failCount: 1 });
         expect(call.$set.timeoutAt).toBeInstanceOf(Date);
     });

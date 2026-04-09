@@ -3,7 +3,7 @@ import {
     parseTendermintBlockResponse,
     decodeMinaSignature,
     parseValidatorSetResponse,
-} from "./parser.js";
+} from "../parser.js";
 
 describe("pulsar parser", () => {
     describe("parseTendermintBlockResponse", () => {

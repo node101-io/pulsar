@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./client.js", () => ({
+vi.mock("../client.js", () => ({
     initMinaClientContext: vi.fn(),
     getCurrentMinaBlockHeight: vi.fn(),
     getContractBlockHeight: vi.fn(),
 }));
 
-vi.mock("../../db/index.js", () => ({
+vi.mock("../../../db/index.js", () => ({
     saveMinaState: vi.fn(),
 }));
 
-vi.mock("../../common/sleep.js", () => ({
+vi.mock("../../../common/sleep.js", () => ({
     sleep: vi.fn(),
 }));
 
-vi.mock("../../config/constants.js", () => ({
+vi.mock("../../../config/constants.js", () => ({
     POLL_INTERVAL_MS: 5000,
 }));
 
@@ -24,7 +24,7 @@ vi.mock("o1js", () => ({
     },
 }));
 
-vi.mock("../../common/logger.js", () => ({
+vi.mock("../../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
         error: vi.fn(),
@@ -33,14 +33,14 @@ vi.mock("../../common/logger.js", () => ({
     },
 }));
 
-import { startMinaSync } from "./sync.js";
+import { startMinaSync } from "../sync.js";
 import {
     initMinaClientContext,
     getCurrentMinaBlockHeight,
     getContractBlockHeight,
-} from "./client.js";
-import { saveMinaState } from "../../db/index.js";
-import { sleep } from "../../common/sleep.js";
+} from "../client.js";
+import { saveMinaState } from "../../../db/index.js";
+import { sleep } from "../../../common/sleep.js";
 
 const mockCtx = {
     network: "lightnet",
@@ -119,7 +119,7 @@ describe("mina sync - startMinaSync", () => {
 
         await expect(startMinaSync()).rejects.toThrow("stop");
 
-        const logger = await import("../../common/logger.js");
+        const logger = await import("../../../common/logger.js");
         expect(logger.default.error).toHaveBeenCalled();
     });
 

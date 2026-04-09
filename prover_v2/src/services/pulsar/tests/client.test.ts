@@ -9,11 +9,11 @@ import {
     getValidatorSet,
     getVoteExt,
     storePulsarBlock,
-} from "./client.js";
-import * as db from "../../db/index.js";
+} from "../client.js";
+import * as db from "../../../db/index.js";
 
-vi.mock("../../db/index.js");
-vi.mock("../../common/logger.js", () => ({
+vi.mock("../../../db/index.js");
+vi.mock("../../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
         error: vi.fn(),
@@ -442,7 +442,7 @@ describe("pulsar client", () => {
                 voteExt: [],
             };
 
-            vi.mocked(db.storeBlock).mockResolvedValue(undefined);
+            vi.mocked(db.storeBlock).mockResolvedValue(undefined as any);
 
             await storePulsarBlock(blockData);
 
@@ -467,7 +467,7 @@ describe("pulsar client", () => {
                 voteExt: [],
             };
 
-            vi.mocked(db.storeBlock).mockResolvedValue(undefined);
+            vi.mocked(db.storeBlock).mockResolvedValue(undefined as any);
 
             await storePulsarBlock(blockData);
 

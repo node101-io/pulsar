@@ -1,19 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { saveMinaState, getMinaState } from "../models/MinaState.js";
-import { MinaStateModel } from "../models/MinaState.js";
-
-vi.mock("../models/MinaState.js");
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { saveMinaState, getMinaState, MinaStateModel } from "../models/MinaState.js";
 
 describe("db minaState utils", () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
 
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     describe("saveMinaState", () => {
         it("upserts lastSettledPulsarBlock", async () => {
-            vi.mocked(MinaStateModel.findOneAndUpdate).mockResolvedValue(
-                {} as any,
-            );
+            vi.spyOn(MinaStateModel, "findOneAndUpdate").mockResolvedValue({} as any);
 
             await saveMinaState(800);
 
@@ -25,9 +24,7 @@ describe("db minaState utils", () => {
         });
 
         it("upserts with value 0", async () => {
-            vi.mocked(MinaStateModel.findOneAndUpdate).mockResolvedValue(
-                {} as any,
-            );
+            vi.spyOn(MinaStateModel, "findOneAndUpdate").mockResolvedValue({} as any);
 
             await saveMinaState(0);
 
@@ -41,7 +38,7 @@ describe("db minaState utils", () => {
 
     describe("getMinaState", () => {
         it("returns lastSettledPulsarBlock when state exists", async () => {
-            vi.mocked(MinaStateModel.findOne).mockResolvedValue({
+            vi.spyOn(MinaStateModel, "findOne").mockResolvedValue({
                 lastSettledPulsarBlock: 800,
             } as any);
 
@@ -52,7 +49,7 @@ describe("db minaState utils", () => {
         });
 
         it("returns null when no state found", async () => {
-            vi.mocked(MinaStateModel.findOne).mockResolvedValue(null as any);
+            vi.spyOn(MinaStateModel, "findOne").mockResolvedValue(null as any);
 
             const result = await getMinaState();
 
@@ -60,7 +57,7 @@ describe("db minaState utils", () => {
         });
 
         it("returns 0 when lastSettledPulsarBlock is 0", async () => {
-            vi.mocked(MinaStateModel.findOne).mockResolvedValue({
+            vi.spyOn(MinaStateModel, "findOne").mockResolvedValue({
                 lastSettledPulsarBlock: 0,
             } as any);
 

@@ -1,13 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Types } from "mongoose";
-import {
-    storeProof,
-    getProof,
-    deleteProof,
-} from "../models/Proof.js";
-import { ProofModel } from "../models/Proof.js";
+import { storeProof, getProof, deleteProof, ProofModel } from "../models/Proof.js";
 
-vi.mock("../models/Proof.js");
 vi.mock("../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
@@ -22,11 +16,13 @@ describe("db proof utils", () => {
         vi.clearAllMocks();
     });
 
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it("storeProof creates proof and returns id", async () => {
         const id = new Types.ObjectId();
-        vi.mocked(ProofModel.create).mockResolvedValue({
-            _id: id,
-        } as any);
+        vi.spyOn(ProofModel, "create").mockResolvedValue({ _id: id } as any);
 
         const result = await storeProof("{\"a\":1}");
 
@@ -36,7 +32,7 @@ describe("db proof utils", () => {
 
     it("getProof returns parsed JSON and logs", async () => {
         const id = new Types.ObjectId();
-        vi.mocked(ProofModel.findById).mockResolvedValue({
+        vi.spyOn(ProofModel, "findById").mockResolvedValue({
             _id: id,
             data: "{\"x\":42}",
         } as any);
@@ -53,21 +49,21 @@ describe("db proof utils", () => {
 
     it("getProof throws when proof not found", async () => {
         const id = new Types.ObjectId();
-        vi.mocked(ProofModel.findById).mockResolvedValue(null as any);
+        vi.spyOn(ProofModel, "findById").mockResolvedValue(null as any);
 
         await expect(getProof(id)).rejects.toThrow("Proof not found");
     });
 
     it("getProof throws when data is missing", async () => {
         const id = new Types.ObjectId();
-        vi.mocked(ProofModel.findById).mockResolvedValue({ _id: id } as any);
+        vi.spyOn(ProofModel, "findById").mockResolvedValue({ _id: id } as any);
 
         await expect(getProof(id)).rejects.toThrow("Proof not found");
     });
 
     it("deleteProof deletes proof by id and logs", async () => {
         const id = new Types.ObjectId();
-        vi.mocked(ProofModel.deleteOne).mockResolvedValue({} as any);
+        vi.spyOn(ProofModel, "deleteOne").mockResolvedValue({} as any);
 
         await deleteProof(id);
 

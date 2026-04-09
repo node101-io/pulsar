@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { MASTER_SLEEP_INTERVAL_MS } from "../../config/constants.js";
+import { MASTER_SLEEP_INTERVAL_MS } from "../../../config/constants.js";
 
-vi.mock("../../db/index.js", () => ({
+vi.mock("../../../db/index.js", () => ({
     BlockEpochModel: {
         findOneAndUpdate: vi.fn(),
         updateOne: vi.fn(),
@@ -9,7 +9,7 @@ vi.mock("../../db/index.js", () => ({
     incrementBlockEpochFailCount: vi.fn(),
 }));
 
-vi.mock("../queue.js", () => ({
+vi.mock("../../queue.js", () => ({
     blockProverQ: {
         add: vi.fn(),
     },
@@ -19,15 +19,15 @@ vi.mock("../redis.js", () => ({
     connection: {},
 }));
 
-vi.mock("./worker.js", () => ({
+vi.mock("../worker.js", () => ({
     worker: vi.fn(),
 }));
 
-vi.mock("../../common/sleep.js", () => ({
+vi.mock("../../../common/sleep.js", () => ({
     sleep: vi.fn(),
 }));
 
-vi.mock("../../common/logger.js", () => ({
+vi.mock("../../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
         error: vi.fn(),
@@ -36,10 +36,10 @@ vi.mock("../../common/logger.js", () => ({
     },
 }));
 
-import { BlockEpochModel } from "../../db/index.js";
-import { blockProverQ } from "../queue.js";
-import { sleep } from "../../common/sleep.js";
-import { BlockProverMaster } from "./master.js";
+import { BlockEpochModel } from "../../../db/index.js";
+import { blockProverQ } from "../../queue.js";
+import { sleep } from "../../../common/sleep.js";
+import { BlockProverMaster } from "../master.js";
 
 describe("block-prover master", () => {
     beforeEach(() => {

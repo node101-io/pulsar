@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../../db/models/ProofEpoch.js", () => ({
+vi.mock("../../../db/models/ProofEpoch.js", () => ({
     ProofEpochModel: {
         findOne: vi.fn(),
         findOneAndUpdate: vi.fn(),
@@ -13,15 +13,15 @@ vi.mock("o1js", () => ({
     },
 }));
 
-vi.mock("../../services/mina/client.js", () => ({
+vi.mock("../../../services/mina/client.js", () => ({
     initMinaClientContext: vi.fn(async () => ({ network: "lightnet" })),
 }));
 
-vi.mock("../../services/mina/settlement.js", () => ({
+vi.mock("../../../services/mina/settlement.js", () => ({
     sendProvedSettlement: vi.fn(),
 }));
 
-vi.mock("../../common/logger.js", () => ({
+vi.mock("../../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
         error: vi.fn(),
@@ -30,9 +30,9 @@ vi.mock("../../common/logger.js", () => ({
     },
 }));
 
-import { ProofEpochModel } from "../../db/models/ProofEpoch.js";
-import { sendProvedSettlement } from "../../services/mina/settlement.js";
-import { worker } from "./worker.js";
+import { ProofEpochModel } from "../../../db/models/ProofEpoch.js";
+import { sendProvedSettlement } from "../../../services/mina/settlement.js";
+import { worker } from "../worker.js";
 
 describe("settler worker", () => {
     beforeEach(() => {

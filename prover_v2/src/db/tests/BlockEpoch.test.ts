@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Types } from "mongoose";
 import {
     getBlockEpoch,
@@ -6,11 +6,10 @@ import {
     updateBlockStatusInEpoch,
     deleteBlockEpoch,
     incrementBlockEpochFailCount,
+    BlockEpochModel,
 } from "../models/BlockEpoch.js";
-import { BlockEpochModel } from "../models/BlockEpoch.js";
 import { BLOCK_EPOCH_SIZE } from "../../config/constants.js";
 
-vi.mock("../models/BlockEpoch.js");
 vi.mock("../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
@@ -25,9 +24,13 @@ describe("db blockEpoch utils", () => {
         vi.clearAllMocks();
     });
 
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it("getBlockEpoch finds epoch by height", async () => {
         const mockEpoch = { height: 16 } as any;
-        vi.mocked(BlockEpochModel.findOne).mockResolvedValue(mockEpoch);
+        vi.spyOn(BlockEpochModel, "findOne").mockResolvedValue(mockEpoch);
 
         const result = await getBlockEpoch(16);
 
@@ -50,7 +53,7 @@ describe("db blockEpoch utils", () => {
     it("storeBlockInBlockEpoch upserts epoch and stores block at computed epoch height", async () => {
         const height = 10;
         const blockId = new Types.ObjectId();
-        vi.mocked(BlockEpochModel.findOneAndUpdate).mockResolvedValue({
+        vi.spyOn(BlockEpochModel, "findOneAndUpdate").mockResolvedValue({
             height: 8,
         } as any);
 
@@ -78,7 +81,7 @@ describe("db blockEpoch utils", () => {
     });
 
     it("updateBlockStatusInEpoch updates status at given index", async () => {
-        vi.mocked(BlockEpochModel.findOneAndUpdate).mockResolvedValue({} as any);
+        vi.spyOn(BlockEpochModel, "findOneAndUpdate").mockResolvedValue({} as any);
 
         await updateBlockStatusInEpoch(8, 1, "processing");
 
@@ -102,7 +105,7 @@ describe("db blockEpoch utils", () => {
     });
 
     it("deleteBlockEpoch deletes epoch by height", async () => {
-        vi.mocked(BlockEpochModel.deleteOne).mockResolvedValue({} as any);
+        vi.spyOn(BlockEpochModel, "deleteOne").mockResolvedValue({} as any);
 
         await deleteBlockEpoch(8);
 
@@ -110,7 +113,7 @@ describe("db blockEpoch utils", () => {
     });
 
     it("incrementBlockEpochFailCount increments failCount and updates timeoutAt", async () => {
-        vi.mocked(BlockEpochModel.updateOne).mockResolvedValue({} as any);
+        vi.spyOn(BlockEpochModel, "updateOne").mockResolvedValue({} as any);
 
         await incrementBlockEpochFailCount(8);
 

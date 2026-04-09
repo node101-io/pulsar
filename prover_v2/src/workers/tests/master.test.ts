@@ -19,7 +19,7 @@ vi.mock("bullmq", () => {
     return { Worker: WorkerMock };
 });
 
-vi.mock("../common/logger.js", () => ({
+vi.mock("../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
         error: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock("../common/logger.js", () => ({
 }));
 
 import { Worker } from "bullmq";
-import { Master } from "./master.js";
+import { Master } from "../master.js";
 
 class TestMaster extends Master<{ a: number }> {
     public async init() {
