@@ -60,7 +60,7 @@ export const BlockModel = mongoose.model<IBlock>("Block", BlockSchema);
 // Utils
 
 export async function storeBlock(block: BlockData) {
-    await BlockModel.updateOne(
+    const result = await BlockModel.findOneAndUpdate(
         { height: block.height },
         {
             $set: {
@@ -74,10 +74,11 @@ export async function storeBlock(block: BlockData) {
                 timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS),
             },
         },
-        { upsert: true },
+        { upsert: true, new: true },
     );
 
     logger.info(`Stored block at height ${block.height}.`);
+    return result!;
 }
 
 export async function getBlock(height: number) {

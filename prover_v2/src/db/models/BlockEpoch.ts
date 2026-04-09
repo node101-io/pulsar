@@ -70,7 +70,7 @@ export async function storeBlockInBlockEpoch(
     const blockEpochHeight =
         Math.floor(height / BLOCK_EPOCH_SIZE) * BLOCK_EPOCH_SIZE;
 
-    const result = await BlockEpochModel.findOneAndUpdate(
+    await BlockEpochModel.updateOne(
         { height: blockEpochHeight },
         {
             $setOnInsert: {
@@ -80,11 +80,18 @@ export async function storeBlockInBlockEpoch(
                 failCount: 0,
                 timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS),
             },
+        },
+        { upsert: true },
+    );
+
+    const result = await BlockEpochModel.findOneAndUpdate(
+        { height: blockEpochHeight },
+        {
             $set: {
                 [`blocks.${index}`]: blockId,
             },
         },
-        { upsert: true, new: true },
+        { new: true },
     );
 
     logger.info(
