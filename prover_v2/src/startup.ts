@@ -1,10 +1,10 @@
 import { Queue } from "bullmq";
-import { connection } from "./modules/processors/utils/workerConnection.js";
-import { BlockEpochModel } from "./modules/db/models/blockEpoch/BlockEpoch.js";
-import { ProofEpochModel } from "./modules/db/models/proofEpoch/ProofEpoch.js";
-import { MAX_FAIL_COUNT } from "./modules/utils/constants.js";
-import { BlockStatus, ProofStatus } from "./modules/db/types.js";
-import logger from "./logger.js";
+import { connection } from "./workers/redis.js";
+import { BlockEpochModel } from "./db/models/BlockEpoch.js";
+import { ProofEpochModel } from "./db/models/ProofEpoch.js";
+import { MAX_FAIL_COUNT } from "./config/constants.js";
+import { BlockStatus, ProofStatus } from "./common/types.js";
+import logger from "./common/logger.js";
 
 const QUEUE_NAMES = [
     "block-prover",

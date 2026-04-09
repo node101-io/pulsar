@@ -1,14 +1,14 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import { Signature } from "o1js";
-import logger from "../logger.js";
-import { BlockModel } from "../modules/db/models/block/Block.js";
-import { BlockEpochModel } from "../modules/db/models/blockEpoch/BlockEpoch.js";
-import { BLOCK_EPOCH_SIZE } from "../modules/utils/constants.js";
-import { BlockStatus } from "../modules/db/types.js";
+import logger from "../common/logger.js";
+import { BlockModel } from "../db/models/Block.js";
+import { BlockEpochModel } from "../db/models/BlockEpoch.js";
+import { BLOCK_EPOCH_SIZE } from "../config/constants.js";
+import { BlockStatus } from "../common/types.js";
 
-import "../modules/db/models/proof/Proof.js";
-import "../modules/db/models/proofEpoch/ProofEpoch.js";
+import "../db/models/Proof.js";
+import "../db/models/ProofEpoch.js";
 
 async function seedBlocks() {
     const exists = await BlockModel.exists({ height: 0 });
