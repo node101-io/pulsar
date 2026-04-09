@@ -97,7 +97,6 @@ const MOCK_PROTO_PATH = join(
     __dirname,
     "..",
     "..",
-    "..",
     "mock",
     "proto",
     "voteexthandler.proto",

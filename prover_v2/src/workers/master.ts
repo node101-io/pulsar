@@ -77,14 +77,14 @@ export abstract class Master<JobData> {
             if (onJobFailed && job) await onJobFailed(job);
             logger.error(
                 `${workerLabel} worker ${workerId} failed job ${job?.id}`,
-                { error: err, jobId: job?.id, data: job?.data },
+                { errorMessage: err?.message, stack: err?.stack, jobId: job?.id, data: job?.data },
             );
         });
 
         worker.on("error", (err) => {
             logger.error(
                 `${workerLabel} worker ${workerId} error`,
-                { error: err },
+                { errorMessage: err?.message, stack: err?.stack },
             );
         });
 

@@ -4,6 +4,7 @@ export const WORKER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 export const STALLED_INTERVAL_MS = 5000; // 5 seconds
 export const BLOCK_EPOCH_SIZE = 8;
 export const PROOF_EPOCH_LEAF_COUNT = 4;
+export const PROOF_EPOCH_SIZE = BLOCK_EPOCH_SIZE * PROOF_EPOCH_LEAF_COUNT; // 32 blocks per proof epoch
 export const WORKER_COUNT = 10;
 // Settlement proof index in ProofEpoch.proofs[]
 export const PROOF_EPOCH_SETTLEMENT_INDEX = PROOF_EPOCH_LEAF_COUNT * 2 - 2;

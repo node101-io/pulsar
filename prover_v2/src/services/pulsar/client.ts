@@ -4,8 +4,9 @@ import { Poseidon, PublicKey } from "o1js";
 import { List } from "pulsar-contracts";
 
 import logger from "../../common/logger.js";
-import { storeBlock } from "../../db/index.js";
+import { storeBlock, storeBlockInBlockEpoch } from "../../db/index.js";
 import { BlockData, VoteExt } from "../../common/types.js";
+import { BLOCK_EPOCH_SIZE } from "../../config/constants.js";
 import { decodeMinaSignature, parseTendermintBlockResponse, parseValidatorSetResponse } from "./parser.js";
 
 export async function createClient(
@@ -123,11 +124,14 @@ export async function storePulsarBlock(blockData: BlockData) {
 
     const validatorListHash = computeValidatorListHash(validators);
 
-    await storeBlock({
+    const block = await storeBlock({
         ...rest,
         validators,
         validatorListHash,
     });
+
+    const index = blockData.height % BLOCK_EPOCH_SIZE;
+    await storeBlockInBlockEpoch(blockData.height, block._id, index);
 
     logger.info("Stored Pulsar block", {
         blockHeight: blockData.height,

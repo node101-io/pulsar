@@ -11,6 +11,7 @@ import {
     WORKER_TIMEOUT_MS,
     BLOCK_EPOCH_SIZE,
     PROOF_EPOCH_LEAF_COUNT,
+    PROOF_EPOCH_SIZE,
 } from "../../config/constants.js";
 import { BlockStatus, ProofKind, ProofStatus } from "../../common/types.js";
 import logger from "../../common/logger.js";
@@ -19,8 +20,17 @@ import {
     GeneratePulsarBlock,
     GenerateSettlementProof,
     SignaturePublicKeyList,
+    MultisigVerifierProgram,
 } from "pulsar-contracts";
 import { Field, PublicKey, Signature } from "o1js";
+
+let compiled = false;
+async function ensureCompiled() {
+    if (!compiled) {
+        await MultisigVerifierProgram.compile();
+        compiled = true;
+    }
+}
 
 export async function worker(task: BlockProverJob) {
     const blockEpochHeight = task.height;
@@ -40,8 +50,10 @@ export async function worker(task: BlockProverJob) {
             }
 
             if (epoch.failCount > 0) {
+                const proofEpochHeight =
+                    Math.floor(blockEpochHeight / PROOF_EPOCH_SIZE) * PROOF_EPOCH_SIZE;
                 const proofEpoch = await ProofEpochModel.findOne({
-                    height: blockEpochHeight,
+                    height: proofEpochHeight,
                     kind: "blockProof" as ProofKind,
                 });
 
@@ -53,6 +65,7 @@ export async function worker(task: BlockProverJob) {
                 }
             }
 
+            await ensureCompiled();
             const proofId = await createProof(blockEpochHeight);
 
             await createOrUpdateProofEpoch(epoch.height, proofId);
@@ -72,18 +85,14 @@ export async function worker(task: BlockProverJob) {
 }
 
 async function createProof(height: number) {
-    const rangeLow = height;
+    const rangeLow = height - 1; // include previous block as context for first pair
     const rangeHigh = height + BLOCK_EPOCH_SIZE - 1;
 
     const blockDocs = await fetchBlockRange(rangeLow, rangeHigh);
 
-    if (blockDocs.length !== BLOCK_EPOCH_SIZE) {
+    if (blockDocs.length !== BLOCK_EPOCH_SIZE + 1) {
         throw new Error(
-            `Expected ${
-                BLOCK_EPOCH_SIZE
-            } blocks for proof starting at height ${height}, but got ${
-                blockDocs.length
-            }`,
+            `Expected ${BLOCK_EPOCH_SIZE + 1} blocks for proof starting at height ${height}, but got ${blockDocs.length}`,
         );
     }
 
@@ -128,17 +137,23 @@ async function createProof(height: number) {
 }
 
 /**
- * Creates a new block epoch document if it does not exist and sets the block at the given height
+ * Creates a new proof epoch document if it does not exist and sets the block proof at the correct leaf index.
+ * Multiple block epochs (PROOF_EPOCH_LEAF_COUNT of them) contribute leaf proofs to a single proof epoch.
  */
 async function createOrUpdateProofEpoch(
-    height: number,
+    blockEpochHeight: number,
     proofId: Types.ObjectId,
 ) {
-    const result = await ProofEpochModel.findOneAndUpdate(
-        { height: height },
+    const proofEpochHeight =
+        Math.floor(blockEpochHeight / PROOF_EPOCH_SIZE) * PROOF_EPOCH_SIZE;
+    const leafIndex =
+        Math.floor(blockEpochHeight / BLOCK_EPOCH_SIZE) % PROOF_EPOCH_LEAF_COUNT;
+
+    await ProofEpochModel.updateOne(
+        { height: proofEpochHeight },
         {
             $setOnInsert: {
-                height: height,
+                height: proofEpochHeight,
                 kind: "blockProof" as ProofKind,
                 proofs: Array(PROOF_EPOCH_LEAF_COUNT * 2 - 1).fill(null),
                 status: Array(PROOF_EPOCH_LEAF_COUNT - 1).fill(
@@ -147,15 +162,18 @@ async function createOrUpdateProofEpoch(
                 failCount: 0,
                 timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS),
             },
-            $set: {
-                [`proofs.${height % BLOCK_EPOCH_SIZE}`]: proofId,
-            },
         },
-        { upsert: true, new: true },
+        { upsert: true },
+    );
+
+    const result = await ProofEpochModel.findOneAndUpdate(
+        { height: proofEpochHeight },
+        { $set: { [`proofs.${leafIndex}`]: proofId } },
+        { new: true },
     );
 
     logger.info(
-        `Created proof epoch for first height ${height} with proof for block ${height}`,
+        `Stored block proof in proof epoch at height ${proofEpochHeight}, leaf index ${leafIndex}`,
     );
 
     return result;
