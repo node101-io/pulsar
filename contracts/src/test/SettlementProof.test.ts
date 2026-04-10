@@ -23,6 +23,7 @@ describe('SettlementProof tests', () => {
   let settlementPublicInputs: SettlementPublicInputs[] = [];
   let settlementProofs: SettlementProof[] = [];
   let vk: VerificationKey;
+
   if (process.env.LOGS_ENABLED === '1') {
     enableLogs();
   }
@@ -35,20 +36,19 @@ describe('SettlementProof tests', () => {
     ).verificationKey;
 
     merkleList = List.empty();
-
     for (let i = 0; i < VALIDATOR_NUMBER; i++) {
       const [, publicKey] = validatorSet[i];
       merkleList.push(Poseidon.hash(publicKey.toFields()));
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // Peripherals
+  // ---------------------------------------------------------------------------
+
   describe('Peripherals', () => {
     it('should create a valid SettlementPublicInputs', () => {
-      blocks = TestUtils.GenerateTestBlocks(
-        Field(1),
-        merkleList.hash,
-        Field(1)
-      );
+      blocks = TestUtils.GenerateTestBlocks(Field(1), merkleList.hash, Field(1));
 
       const publicInput = GenerateSettlementPublicInput(
         blocks[0].InitialMerkleListRoot,
@@ -63,19 +63,19 @@ describe('SettlementProof tests', () => {
       expect(publicInput.InitialStateRoot).toEqual(Field.from(1));
       expect(publicInput.InitialBlockHeight).toEqual(Field.from(1));
       expect(publicInput.NewMerkleListRoot).toEqual(merkleList.hash);
-      expect(publicInput.NewStateRoot).toEqual(
-        Field.from(SETTLEMENT_MATRIX_SIZE + 1)
-      );
-      expect(publicInput.NewBlockHeight).toEqual(
-        Field.from(SETTLEMENT_MATRIX_SIZE + 1)
-      );
+      expect(publicInput.NewStateRoot).toEqual(Field.from(SETTLEMENT_MATRIX_SIZE + 1));
+      expect(publicInput.NewBlockHeight).toEqual(Field.from(SETTLEMENT_MATRIX_SIZE + 1));
 
       settlementPublicInputs.push(publicInput);
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // verifySignatures — stable validator set (4 epochs → merge)
+  // ---------------------------------------------------------------------------
+
   describe('verifySignatures method', () => {
-    it('should verify signatures and create a valid SettlementProof', async () => {
+    it('should verify signatures and create a valid SettlementProof (epoch 1)', async () => {
       const signerMatrix = TestUtils.GenerateSignaturePubKeyMatrix(
         blocks,
         Array.from({ length: SETTLEMENT_MATRIX_SIZE }, () => validatorSet)
@@ -92,40 +92,27 @@ describe('SettlementProof tests', () => {
       );
     });
 
-    it('should verify the generated proof', async () => {
+    it('should verify the generated proof (epoch 1)', async () => {
       if (!proofsEnabled) {
         log('Skipping proof verification');
         return;
       }
-
-      const isValid = await verify(
-        settlementProofs[settlementProofs.length],
-        vk
-      );
-
+      const isValid = await verify(settlementProofs[settlementProofs.length - 1], vk);
       expect(isValid).toBe(true);
     });
 
-    it('should create another valid SettlementProof', async () => {
-      blocks = TestUtils.GenerateTestBlocks(
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewBlockHeight,
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewMerkleListRoot,
-        settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot
-      );
+    it('should create a valid SettlementProof (epoch 2)', async () => {
+      const prev = settlementPublicInputs[settlementPublicInputs.length - 1];
+      blocks = TestUtils.GenerateTestBlocks(prev.NewBlockHeight, prev.NewMerkleListRoot, prev.NewStateRoot);
 
       const publicInput = GenerateSettlementPublicInput(
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewMerkleListRoot,
-        settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot,
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewBlockHeight,
+        prev.NewMerkleListRoot,
+        prev.NewStateRoot,
+        prev.NewBlockHeight,
         blocks[blocks.length - 1].NewMerkleListRoot,
         blocks[blocks.length - 1].NewStateRoot,
         blocks[blocks.length - 1].NewBlockHeight
       );
-
       settlementPublicInputs.push(publicInput);
 
       const signerMatrix = TestUtils.GenerateSignaturePubKeyMatrix(
@@ -136,7 +123,7 @@ describe('SettlementProof tests', () => {
       settlementProofs.push(
         (
           await MultisigVerifierProgram.verifySignatures(
-            settlementPublicInputs[settlementPublicInputs.length - 1],
+            publicInput,
             signerMatrix,
             BlockList.fromArray(blocks)
           )
@@ -144,40 +131,27 @@ describe('SettlementProof tests', () => {
       );
     });
 
-    it('should verify the generated proof', async () => {
+    it('should verify the generated proof (epoch 2)', async () => {
       if (!proofsEnabled) {
         log('Skipping proof verification');
         return;
       }
-
-      const isValid = await verify(
-        settlementProofs[settlementProofs.length - 1],
-        vk
-      );
-
+      const isValid = await verify(settlementProofs[settlementProofs.length - 1], vk);
       expect(isValid).toBe(true);
     });
 
-    it('should create a third valid SettlementProof', async () => {
-      blocks = TestUtils.GenerateTestBlocks(
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewBlockHeight,
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewMerkleListRoot,
-        settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot
-      );
+    it('should create a valid SettlementProof (epoch 3)', async () => {
+      const prev = settlementPublicInputs[settlementPublicInputs.length - 1];
+      blocks = TestUtils.GenerateTestBlocks(prev.NewBlockHeight, prev.NewMerkleListRoot, prev.NewStateRoot);
 
       const publicInput = GenerateSettlementPublicInput(
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewMerkleListRoot,
-        settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot,
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewBlockHeight,
+        prev.NewMerkleListRoot,
+        prev.NewStateRoot,
+        prev.NewBlockHeight,
         blocks[blocks.length - 1].NewMerkleListRoot,
         blocks[blocks.length - 1].NewStateRoot,
         blocks[blocks.length - 1].NewBlockHeight
       );
-
       settlementPublicInputs.push(publicInput);
 
       const signerMatrix = TestUtils.GenerateSignaturePubKeyMatrix(
@@ -188,7 +162,7 @@ describe('SettlementProof tests', () => {
       settlementProofs.push(
         (
           await MultisigVerifierProgram.verifySignatures(
-            settlementPublicInputs[settlementPublicInputs.length - 1],
+            publicInput,
             signerMatrix,
             BlockList.fromArray(blocks)
           )
@@ -196,40 +170,27 @@ describe('SettlementProof tests', () => {
       );
     });
 
-    it('should verify the generated proof', async () => {
+    it('should verify the generated proof (epoch 3)', async () => {
       if (!proofsEnabled) {
         log('Skipping proof verification');
         return;
       }
-
-      const isValid = await verify(
-        settlementProofs[settlementProofs.length - 1],
-        vk
-      );
-
+      const isValid = await verify(settlementProofs[settlementProofs.length - 1], vk);
       expect(isValid).toBe(true);
     });
 
-    it('should create a fourth valid SettlementProof', async () => {
-      blocks = TestUtils.GenerateTestBlocks(
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewBlockHeight,
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewMerkleListRoot,
-        settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot
-      );
+    it('should create a valid SettlementProof (epoch 4)', async () => {
+      const prev = settlementPublicInputs[settlementPublicInputs.length - 1];
+      blocks = TestUtils.GenerateTestBlocks(prev.NewBlockHeight, prev.NewMerkleListRoot, prev.NewStateRoot);
 
       const publicInput = GenerateSettlementPublicInput(
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewMerkleListRoot,
-        settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot,
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewBlockHeight,
+        prev.NewMerkleListRoot,
+        prev.NewStateRoot,
+        prev.NewBlockHeight,
         blocks[blocks.length - 1].NewMerkleListRoot,
         blocks[blocks.length - 1].NewStateRoot,
         blocks[blocks.length - 1].NewBlockHeight
       );
-
       settlementPublicInputs.push(publicInput);
 
       const signerMatrix = TestUtils.GenerateSignaturePubKeyMatrix(
@@ -240,7 +201,7 @@ describe('SettlementProof tests', () => {
       settlementProofs.push(
         (
           await MultisigVerifierProgram.verifySignatures(
-            settlementPublicInputs[settlementPublicInputs.length - 1],
+            publicInput,
             signerMatrix,
             BlockList.fromArray(blocks)
           )
@@ -248,15 +209,14 @@ describe('SettlementProof tests', () => {
       );
     });
 
-    it('should merge the proofs', async () => {
+    it('should merge the four proofs', async () => {
       const mergedProof = await MergeSettlementProofs(settlementProofs);
 
       expect(mergedProof.publicInput.NewBlockHeight).toEqual(
         settlementPublicInputs[settlementPublicInputs.length - 1].NewBlockHeight
       );
       expect(mergedProof.publicInput.NewMerkleListRoot).toEqual(
-        settlementPublicInputs[settlementPublicInputs.length - 1]
-          .NewMerkleListRoot
+        settlementPublicInputs[settlementPublicInputs.length - 1].NewMerkleListRoot
       );
       expect(mergedProof.publicInput.NewStateRoot).toEqual(
         settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot
@@ -279,10 +239,72 @@ describe('SettlementProof tests', () => {
         log('Skipping proof verification');
         return;
       }
-
       const isValid = await verify(settlementProofs[0], vk);
-
       expect(isValid).toBe(true);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // verifySignatures — validator rotation within an epoch
+  //
+  // This test specifically validates the bug fix in SettlementProof.ts where
+  // the validator hash check was incorrectly using publicInputs.InitialMerkleListRoot
+  // (epoch-wide) instead of pulsarBlocks.list[i].InitialMerkleListRoot (per-block).
+  //
+  // Scenario:
+  //   Block 0: Initial=initialHash → New=newHash  (rotation happens here)
+  //   Block 1-7: Initial=newHash   → New=newHash  (new set stable)
+  //
+  //   Signers for block 0: initial validator set
+  //   Signers for blocks 1-7: new validator set
+  // ---------------------------------------------------------------------------
+
+  describe('verifySignatures with validator rotation', () => {
+    it('should accept signatures when validator set rotates mid-epoch', async () => {
+      const initialValidators = validatorSet.slice(0, VALIDATOR_NUMBER);
+      const newValidators = validatorSet.slice(VALIDATOR_NUMBER, VALIDATOR_NUMBER * 2);
+
+      const initialMerkleList = TestUtils.CreateValidatorMerkleList(initialValidators);
+      const newMerkleList = TestUtils.CreateValidatorMerkleList(newValidators);
+
+      // Rotation happens at block index 0: that block transitions from initial → new set.
+      // All subsequent blocks are already on the new set.
+      const rotationBlocks = TestUtils.GenerateTestBlocksWithRotation(
+        Field(1),
+        initialMerkleList.hash,
+        newMerkleList.hash,
+        0,
+        Field(1)
+      );
+
+      const publicInput = GenerateSettlementPublicInput(
+        rotationBlocks[0].InitialMerkleListRoot,
+        rotationBlocks[0].InitialStateRoot,
+        rotationBlocks[0].InitialBlockHeight,
+        rotationBlocks[rotationBlocks.length - 1].NewMerkleListRoot,
+        rotationBlocks[rotationBlocks.length - 1].NewStateRoot,
+        rotationBlocks[rotationBlocks.length - 1].NewBlockHeight
+      );
+
+      // Each block is signed by whoever was in its InitialMerkleListRoot:
+      //   block 0 → initial validators, blocks 1-7 → new validators
+      const signersPerBlock = Array.from({ length: SETTLEMENT_MATRIX_SIZE }, (_, i) =>
+        i === 0 ? initialValidators : newValidators
+      );
+      const signerMatrix = TestUtils.GenerateSignaturePubKeyMatrix(rotationBlocks, signersPerBlock);
+
+      const proof = (
+        await MultisigVerifierProgram.verifySignatures(
+          publicInput,
+          signerMatrix,
+          BlockList.fromArray(rotationBlocks)
+        )
+      ).proof;
+
+      expect(proof.publicInput.InitialMerkleListRoot).toEqual(initialMerkleList.hash);
+      expect(proof.publicInput.NewMerkleListRoot).toEqual(newMerkleList.hash);
+      expect(proof.publicInput.InitialBlockHeight).toEqual(Field(1));
+      expect(proof.publicInput.NewBlockHeight).toEqual(Field(SETTLEMENT_MATRIX_SIZE + 1));
     });
   });
 });

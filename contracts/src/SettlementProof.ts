@@ -216,7 +216,7 @@ const MultisigVerifierProgram = ZkProgram({
           }
 
           list.hash.assertEquals(
-            publicInputs.InitialMerkleListRoot,
+            pulsarBlocks.list[i].InitialMerkleListRoot,
             "Validator MerkleList hash doesn't match"
           );
           counter.assertGreaterThanOrEqual(
