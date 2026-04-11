@@ -3,6 +3,7 @@ import {
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
     MASTER_SLEEP_INTERVAL_MS,
+    BLOCK_EPOCH_SIZE,
 } from "../../config/constants.js";
 import { BlockEpochModel, incrementBlockEpochFailCount } from "../../db/index.js";
 import { Master } from "../master.js";
@@ -50,9 +51,14 @@ export class BlockProverMaster extends Master<BlockProverJob> {
 
         if (epoch) {
             try {
-                await blockProverQ.add("block-prover", { height: epoch.height });
+                for (let i = 0; i < BLOCK_EPOCH_SIZE; i++) {
+                    await blockProverQ.add("block-prover", {
+                        height: epoch.height,
+                        blockIndex: i,
+                    });
+                }
                 logger.debug(
-                    `Pushed epoch task to queue: epoch starting at height ${epoch.height}`,
+                    `Pushed ${BLOCK_EPOCH_SIZE} block tasks to queue for epoch at height ${epoch.height}`,
                     { epochHeight: epoch.height, event: "epoch_task_queued" },
                 );
             } catch (error) {

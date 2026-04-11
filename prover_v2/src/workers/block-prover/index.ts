@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { setBackend } from "o1js";
-setBackend("native");
+setBackend("wasm");
 
 import { initDb } from "../../db/index.js";
 import { masterRunner } from "./master.js";

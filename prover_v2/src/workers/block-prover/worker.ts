@@ -1,9 +1,9 @@
 import { Types } from "mongoose";
-import mongoose from "mongoose";
 
 import {
     ProofEpochModel,
     BlockEpochModel,
+    BlockModel,
     storeProof,
     fetchBlockRange,
 } from "../../db/index.js";
@@ -33,55 +33,83 @@ async function ensureCompiled() {
 }
 
 export async function worker(task: BlockProverJob) {
-    const blockEpochHeight = task.height;
+    const { height: epochHeight, blockIndex } = task;
+    const blockHeight = epochHeight + blockIndex;
 
-    const session = await mongoose.startSession();
-    try {
-        await session.withTransaction(async () => {
-            const epoch = await BlockEpochModel.findOne({
-                height: blockEpochHeight,
-                epochStatus: { $eq: "processing" as BlockStatus },
-            });
+    // Mark the individual Block as done
+    await BlockModel.findOneAndUpdate(
+        { height: blockHeight },
+        { $set: { status: "done" as BlockStatus } },
+    );
 
-            if (!epoch) {
-                throw new Error(
-                    `BlockEpoch at height ${blockEpochHeight} not found.`,
-                );
-            }
+    const updatedEpoch = await BlockEpochModel.findOneAndUpdate(
+        { height: epochHeight, epochStatus: "processing" as BlockStatus },
+        { $set: { [`status.${blockIndex}`]: "done" as BlockStatus } },
+        { new: true },
+    );
 
-            if (epoch.failCount > 0) {
-                const proofEpochHeight =
-                    Math.floor(blockEpochHeight / PROOF_EPOCH_SIZE) * PROOF_EPOCH_SIZE;
-                const proofEpoch = await ProofEpochModel.findOne({
-                    height: proofEpochHeight,
-                    kind: "blockProof" as ProofKind,
-                });
+    if (!updatedEpoch) {
+        logger.warn(
+            `BlockEpoch ${epochHeight} not found or not in processing state, skipping block ${blockHeight}`,
+        );
+        return;
+    }
 
-                if (proofEpoch && proofEpoch.proofs.some((p) => p !== null)) {
-                    logger.info(
-                        `Skipping block proof generation for epoch starting at height ${blockEpochHeight} because proofs already exist after previous failures.`,
-                    );
-                    return;
-                }
-            }
+    logger.info(
+        `Block ${blockHeight} (index ${blockIndex}) marked done in epoch ${epochHeight}`,
+        { epochHeight, blockIndex, blockHeight, event: "block_marked_done" },
+    );
 
-            await ensureCompiled();
-            const proofId = await createProof(blockEpochHeight);
+    // Check if we are the last worker to finish (all slots are "done")
+    const allDone = (updatedEpoch.status as string[]).every(
+        (s) => s === "done",
+    );
+    if (!allDone) return;
 
-            await createOrUpdateProofEpoch(epoch.height, proofId);
+    // --- All blocks in epoch are done: generate the settlement ZK proof ---
+    logger.info(
+        `All blocks done for epoch ${epochHeight}, generating settlement proof`,
+        { epochHeight, event: "all_blocks_done" },
+    );
 
+    // Skip proof generation if a proof already exists (re-run after failure)
+    if (updatedEpoch.failCount > 0) {
+        const proofEpochHeight =
+            Math.floor(epochHeight / PROOF_EPOCH_SIZE) * PROOF_EPOCH_SIZE;
+        const proofEpoch = await ProofEpochModel.findOne({
+            height: proofEpochHeight,
+            kind: "blockProof" as ProofKind,
+        });
+
+        if (proofEpoch && proofEpoch.proofs.some((p) => p !== null)) {
+            logger.info(
+                `Skipping proof generation for epoch ${epochHeight} — proof already exists after previous failure`,
+            );
             await BlockEpochModel.findOneAndUpdate(
-                { height: blockEpochHeight },
+                { height: epochHeight },
                 { $set: { epochStatus: "done" as BlockStatus } },
             );
-
-            logger.info(
-                `Processed block epoch starting at height ${blockEpochHeight} and stored proofs in proof epochs.`,
-            );
-        });
-    } finally {
-        await session.endSession();
+            return;
+        }
     }
+
+    await ensureCompiled();
+    const proofId = await createProof(epochHeight);
+    await createOrUpdateProofEpoch(epochHeight, proofId);
+
+    await BlockEpochModel.findOneAndUpdate(
+        { height: epochHeight },
+        { $set: { epochStatus: "done" as BlockStatus } },
+    );
+
+    logger.info(
+        `Settlement proof generated for epoch ${epochHeight}, epoch marked done`,
+        {
+            epochHeight,
+            proofId: proofId.toHexString(),
+            event: "epoch_proof_done",
+        },
+    );
 }
 
 async function createProof(height: number) {
@@ -92,7 +120,11 @@ async function createProof(height: number) {
 
     if (blockDocs.length !== BLOCK_EPOCH_SIZE + 1) {
         throw new Error(
-            `Expected ${BLOCK_EPOCH_SIZE + 1} blocks for proof starting at height ${height}, but got ${blockDocs.length}`,
+            `Expected ${
+                BLOCK_EPOCH_SIZE + 1
+            } blocks for proof starting at height ${height}, but got ${
+                blockDocs.length
+            }`,
         );
     }
 
@@ -122,6 +154,29 @@ async function createProof(height: number) {
         signaturePubKeyLists.push(sigList);
     }
 
+    // // !DEBUG: verify signer hash matches prev.validatorListHash for each block pair
+    // for (let i = 1; i < blockDocs.length; i++) {
+    //     const prev = blockDocs[i - 1];
+    //     const cur = blockDocs[i];
+    //     const signerList = List.empty();
+    //     for (const ext of cur.voteExt) {
+    //         signerList.push(
+    //             Poseidon.hash(
+    //                 PublicKey.fromBase58(ext.validatorAddr).toFields(),
+    //             ),
+    //         );
+    //     }
+    //     const signerHash = signerList.hash.toString();
+    //     logger.debug(`Validator hash check ${prev.height}→${cur.height}`, {
+    //         prevValidatorListHash: prev.validatorListHash,
+    //         signerHash,
+    //         match: prev.validatorListHash === signerHash,
+    //         prevValidators: prev.validators,
+    //         curVoteExtSigners: cur.voteExt.map((e) => e.validatorAddr),
+    //         event: "validator_hash_debug",
+    //     });
+    // }
+
     const settlementProof = await GenerateSettlementProof(
         blocks,
         signaturePubKeyLists,
@@ -147,7 +202,8 @@ async function createOrUpdateProofEpoch(
     const proofEpochHeight =
         Math.floor(blockEpochHeight / PROOF_EPOCH_SIZE) * PROOF_EPOCH_SIZE;
     const leafIndex =
-        Math.floor(blockEpochHeight / BLOCK_EPOCH_SIZE) % PROOF_EPOCH_LEAF_COUNT;
+        Math.floor(blockEpochHeight / BLOCK_EPOCH_SIZE) %
+        PROOF_EPOCH_LEAF_COUNT;
 
     await ProofEpochModel.updateOne(
         { height: proofEpochHeight },
