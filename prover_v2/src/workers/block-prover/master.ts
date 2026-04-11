@@ -5,7 +5,10 @@ import {
     MASTER_SLEEP_INTERVAL_MS,
     BLOCK_EPOCH_SIZE,
 } from "../../config/constants.js";
-import { BlockEpochModel, incrementBlockEpochFailCount } from "../../db/index.js";
+import {
+    BlockEpochModel,
+    incrementBlockEpochFailCount,
+} from "../../db/index.js";
 import { Master } from "../master.js";
 import { connection } from "../redis.js";
 import { blockProverQ } from "../queue.js";
@@ -24,7 +27,10 @@ export class BlockProverMaster extends Master<BlockProverJob> {
             lockDurationMs: WORKER_TIMEOUT_MS,
             stalledIntervalMs: STALLED_INTERVAL_MS,
             processJob: async (_, job) => {
-                await processTask({ height: job.data.height });
+                await processTask({
+                    height: job.data.height,
+                    blockIndex: job.data.blockIndex,
+                });
             },
             onJobFailed: async (job) => {
                 if (job?.data.height) {
