@@ -1,18 +1,28 @@
 import "dotenv/config";
 import mongoose from "mongoose";
-import { Signature } from "o1js";
 import logger from "../common/logger.js";
 import { BlockModel } from "../db/models/Block.js";
-import { BlockEpochModel } from "../db/models/BlockEpoch.js";
-import { BLOCK_EPOCH_SIZE } from "../config/constants.js";
-import { BlockStatus } from "../common/types.js";
 
 import "../db/models/Proof.js";
 import "../db/models/ProofEpoch.js";
+import "../db/models/BlockEpoch.js";
 
-async function seedBlocks() {
+/**
+ * Seeds the genesis block (height 0) for production use.
+ *
+ * In TEST_MODE the mock block producer starts at height 0 and stores its own
+ * genesis block, so this seed is not needed and would be overwritten anyway.
+ *
+ * Block 1+ are never seeded — they come from the chain (prod) or the mock.
+ * The BlockEpoch documents are created automatically by storeBlockInBlockEpoch
+ * as blocks arrive, so they do not need to be seeded either.
+ */
+async function seedGenesisBlock() {
     const exists = await BlockModel.exists({ height: 0 });
-    if (exists) return;
+    if (exists) {
+        logger.info("Genesis block already exists, skipping seed.");
+        return;
+    }
 
     await BlockModel.create({
         height: 0,
@@ -30,68 +40,7 @@ async function seedBlocks() {
         voteExt: [],
     });
 
-    await BlockModel.create({
-        height: 1,
-        status: "done",
-        stateRoot: BigInt(
-            "0x" +
-                Buffer.from(
-                    "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
-                    "base64",
-                ).toString("hex"),
-        ).toString(),
-        validators: ["B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb"],
-        validatorListHash:
-            "6310558633462665370159457076080992493592463962672742685757201873330974620505",
-        voteExt: [
-            {
-                index: "0",
-                height: 1,
-                validatorAddr:
-                    "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
-                signature: Signature.fromValue({
-                    r: 1252644915096851551329970336594686639171015300754931693803244151631871298454n,
-                    s: 20663247868890391450363957100878086376161396675631391829127242325233880313431n,
-                }).toBase58(),
-            },
-        ],
-    });
-
-    logger.info("Seeded initial blocks (height 0 and 1).");
-}
-
-async function seedBlockEpochs() {
-    const exists = await BlockEpochModel.exists({ height: 0 });
-    if (exists) return;
-
-    const genesisBlock = await BlockModel.findOne({ height: 0 });
-    const firstBlock = await BlockModel.findOne({ height: 1 });
-
-    if (!genesisBlock || !firstBlock) {
-        throw new Error(
-            "Seed block epochs: required blocks at heights 0 and 1 not found in Block collection.",
-        );
-    }
-
-    const blocks = [
-        genesisBlock._id,
-        firstBlock._id,
-        ...Array(BLOCK_EPOCH_SIZE - 2).fill(null),
-    ];
-
-    const status: BlockStatus[] = [
-        "done",
-        "done",
-        ...Array(BLOCK_EPOCH_SIZE - 2).fill("waiting" as BlockStatus),
-    ];
-
-    await BlockEpochModel.create({
-        height: 0,
-        blocks,
-        status,
-    });
-
-    logger.info("Seeded initial block epoch (height 0).");
+    logger.info("Seeded genesis block (height 0).");
 }
 
 async function main() {
@@ -104,8 +53,7 @@ async function main() {
     await mongoose.connect(uri, { dbName });
     logger.info(`Connected to MongoDB (db: "${dbName}").`);
 
-    await seedBlocks();
-    await seedBlockEpochs();
+    await seedGenesisBlock();
 
     await mongoose.disconnect();
     logger.info("Seeding complete.");

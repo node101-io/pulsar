@@ -60,13 +60,11 @@ export async function worker(task: BlockProverJob) {
         { epochHeight, blockIndex, blockHeight, event: "block_marked_done" },
     );
 
-    // Check if we are the last worker to finish (all slots are "done")
     const allDone = (updatedEpoch.status as string[]).every(
         (s) => s === "done",
     );
     if (!allDone) return;
 
-    // --- All blocks in epoch are done: generate the settlement ZK proof ---
     logger.info(
         `All blocks done for epoch ${epochHeight}, generating settlement proof`,
         { epochHeight, event: "all_blocks_done" },

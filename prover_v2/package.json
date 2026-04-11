@@ -5,8 +5,12 @@
     "scripts": {
         "test": "vitest run",
         "test:watch": "vitest",
-        "build": "tsc && mkdir -p dist/src/mock/proto && cp src/mock/proto/*.proto dist/src/mock/proto/",
+        "build": "npm run build --prefix ../contracts && tsc && mkdir -p dist/src/mock/proto && cp src/mock/proto/*.proto dist/src/mock/proto/",
         "start": "npm run build && node dist/src/index.js",
+        "worker:block-prover": "npm run build && node --max-old-space-size=8192 dist/src/workers/block-prover/index.js",
+        "worker:aggregator": "npm run build && node --max-old-space-size=8192 dist/src/workers/aggregator/index.js",
+        "worker:settlement-prover": "npm run build && node --max-old-space-size=8192 dist/src/workers/settlement-prover/index.js",
+        "worker:settler": "npm run build && node --max-old-space-size=8192 dist/src/workers/settler/index.js",
         "proto:gen": "buf generate ../chain/proto",
         "start-mock": "npm run build && node dist/src/mock/index.js",
         "worker:settlement": "npm run build && node --experimental-vm-modules dist/src/worker/settlementWorker.js",
@@ -46,7 +50,7 @@
         "mongoose": "^9.1.6",
         "node-fetch": "^3.3.2",
         "o1js": "2.10.0-dev.be63f",
-        "pulsar-contracts": "^0.4.31",
+        "pulsar-contracts": "file:../contracts",
         "rimraf": "^6.0.1",
         "winston": "^3.17.0"
     },
@@ -58,6 +62,9 @@
         "vitest": "^4.0.18"
     },
     "peerDependencies": {
+        "o1js": "2.10.0-dev.be63f"
+    },
+    "overrides": {
         "o1js": "2.10.0-dev.be63f"
     }
 }
