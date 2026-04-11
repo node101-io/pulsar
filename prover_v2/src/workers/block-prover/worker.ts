@@ -65,6 +65,11 @@ export async function worker(task: BlockProverJob) {
     );
     if (!allDone) return;
 
+    await BlockEpochModel.findOneAndUpdate(
+        { height: epochHeight },
+        { $set: { epochStatus: "done" as BlockStatus } },
+    );
+
     logger.info(
         `All blocks done for epoch ${epochHeight}, generating settlement proof`,
         { epochHeight, event: "all_blocks_done" },

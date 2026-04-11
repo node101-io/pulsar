@@ -7,7 +7,11 @@ import logger from "../../common/logger.js";
 import { storeBlock, storeBlockInBlockEpoch } from "../../db/index.js";
 import { BlockData, VoteExt } from "../../common/types.js";
 import { BLOCK_EPOCH_SIZE } from "../../config/constants.js";
-import { decodeMinaSignature, parseTendermintBlockResponse, parseValidatorSetResponse } from "./parser.js";
+import {
+    decodeMinaSignature,
+    parseTendermintBlockResponse,
+    parseValidatorSetResponse,
+} from "./parser.js";
 
 export async function createClient(
     serviceName: string,
@@ -15,8 +19,9 @@ export async function createClient(
     credentials: grpc.ChannelCredentials,
 ) {
     const reflectionClient = new GrpcReflection(rpcAddress, credentials);
-    const serviceDescriptor =
-        await reflectionClient.getDescriptorBySymbol(serviceName);
+    const serviceDescriptor = await reflectionClient.getDescriptorBySymbol(
+        serviceName,
+    );
 
     const packageObject = serviceDescriptor.getPackageObject({
         keepCase: true,
@@ -90,7 +95,10 @@ export async function getCosmosValidatorSet(
     });
 }
 
-export async function getVoteExt(mkClient: any, height: number): Promise<VoteExt[]> {
+export async function getVoteExt(
+    mkClient: any,
+    height: number,
+): Promise<VoteExt[]> {
     let voteExt: VoteExt[] = [];
 
     const pageReq: any = {
@@ -100,13 +108,10 @@ export async function getVoteExt(mkClient: any, height: number): Promise<VoteExt
 
     for (;;) {
         const page = await new Promise<any>((resolve, reject) => {
-            mkClient.VoteExtByHeight(
-                pageReq,
-                (err: unknown, res: any) => {
-                    if (err) return reject(err);
-                    resolve(res);
-                },
-            );
+            mkClient.VoteExtByHeight(pageReq, (err: unknown, res: any) => {
+                if (err) return reject(err);
+                resolve(res);
+            });
         });
 
         voteExt = await parseVoteExtResponse(mkClient, page);
@@ -130,8 +135,12 @@ export async function storePulsarBlock(blockData: BlockData) {
         validatorListHash,
     });
 
-    const index = blockData.height % BLOCK_EPOCH_SIZE;
-    await storeBlockInBlockEpoch(blockData.height, block._id, index);
+    // Block 0 is the genesis/context block. It cannot be proved (no predecessor
+    // exists), so it is never assigned to a BlockEpoch. Epochs start at height 1.
+    if (blockData.height > 0) {
+        const index = (blockData.height - 1) % BLOCK_EPOCH_SIZE;
+        await storeBlockInBlockEpoch(blockData.height, block._id, index);
+    }
 
     logger.info("Stored Pulsar block", {
         blockHeight: blockData.height,
@@ -167,14 +176,11 @@ async function getMinaPubKeyFromCosmosAddress(
                         .then((pubkey) => resolve(pubkey))
                         .catch((error) => reject(error));
                 } catch (error) {
-                    logger.error(
-                        "Failed to parse Mina public key response",
-                        {
-                            error,
-                            event: "parse_error",
-                            cosmosAddress,
-                        },
-                    );
+                    logger.error("Failed to parse Mina public key response", {
+                        error,
+                        event: "parse_error",
+                        cosmosAddress,
+                    });
                     reject(
                         new Error(
                             "Failed to parse Mina public key from response",
@@ -219,14 +225,11 @@ async function getValidatorSet(
         }
         return minaPubKeys;
     } catch (error) {
-        logger.error(
-            `Error retrieving validator set for height ${height}`,
-            {
-                error,
-                blockHeight: height,
-                event: "validator_set_retrieval_error",
-            },
-        );
+        logger.error(`Error retrieving validator set for height ${height}`, {
+            error,
+            blockHeight: height,
+            event: "validator_set_retrieval_error",
+        });
         throw error;
     }
 }
@@ -276,14 +279,11 @@ async function recoverPubkeyFromEncoded(
                 { validatorAddr: encoded },
                 (err: unknown, res: any) => {
                     if (err) {
-                        logger.error(
-                            "Error retrieving Mina public key",
-                            {
-                                error: err,
-                                encodedAddress: encoded,
-                                event: "mina_pubkey_retrieval_error",
-                            },
-                        );
+                        logger.error("Error retrieving Mina public key", {
+                            error: err,
+                            encodedAddress: encoded,
+                            event: "mina_pubkey_retrieval_error",
+                        });
                         reject(err);
                         return;
                     }
@@ -295,15 +295,12 @@ async function recoverPubkeyFromEncoded(
                         }).toBase58();
                         resolve(publicKey);
                     } catch (parseError) {
-                        logger.error(
-                            "Error parsing public key",
-                            {
-                                error: parseError,
-                                encodedAddress: encoded,
-                                responseData: res,
-                                event: "pubkey_parse_error",
-                            },
-                        );
+                        logger.error("Error parsing public key", {
+                            error: parseError,
+                            encodedAddress: encoded,
+                            responseData: res,
+                            event: "pubkey_parse_error",
+                        });
                         reject(parseError);
                     }
                 },
@@ -331,4 +328,8 @@ function computeValidatorListHash(validators: string[]): string {
     return validatorsList.hash.toString();
 }
 
-export { getMinaPubKeyFromCosmosAddress, getValidatorSet, computeValidatorListHash };
+export {
+    getMinaPubKeyFromCosmosAddress,
+    getValidatorSet,
+    computeValidatorListHash,
+};
