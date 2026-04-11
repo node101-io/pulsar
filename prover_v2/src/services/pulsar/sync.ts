@@ -4,7 +4,12 @@ import { fileURLToPath } from "url";
 import { join, dirname } from "path";
 
 import logger from "../../common/logger.js";
-import { fetchLastStoredBlock } from "../../db/index.js";
+import {
+    fetchLastStoredBlock,
+    BlockModel,
+    BlockEpochModel,
+    ProofEpochModel,
+} from "../../db/index.js";
 import { BlockData, VoteExt } from "../../common/types.js";
 import {
     POLL_INTERVAL_MS,
@@ -163,7 +168,8 @@ async function startMockPulsarSync(): Promise<void> {
         process.env.MOCK_GRPC_ENDPOINT || "localhost:50052";
 
     const lastStored = await fetchLastStoredBlock();
-    let currentHeight = lastStored?.height ?? 0;
+    // Start from -1 when DB is empty so that block 0 (genesis) gets synced.
+    let currentHeight = lastStored?.height ?? -1;
 
     logger.info("Starting mock Pulsar sync loop", {
         mockGrpcEndpoint,
@@ -176,6 +182,18 @@ async function startMockPulsarSync(): Promise<void> {
     while (true) {
         try {
             const latestHeight = await getMockLatestHeight(client);
+
+            if (latestHeight < currentHeight) {
+                logger.warn("Mock server restarted — clearing DB and resyncing from scratch", {
+                    mockLatest: latestHeight,
+                    currentHeight,
+                    event: "mock_restart_detected",
+                });
+                await BlockModel.deleteMany({});
+                await BlockEpochModel.deleteMany({});
+                await ProofEpochModel.deleteMany({});
+                currentHeight = -1;
+            }
 
             if (latestHeight > currentHeight) {
                 logger.info("New mock blocks detected", {
