@@ -3,11 +3,19 @@ import {
     ProofEpochModel,
 } from "../../db/models/ProofEpoch.js";
 import { getProof, storeProof } from "../../db/models/Proof.js";
-import { ProofKind, ProofStatus } from "../../common/types.js";
+import { ProofStatus } from "../../common/types.js";
 import logger from "../../common/logger.js";
 import { Aggregation } from "./master.js";
 import { PROOF_EPOCH_LEAF_COUNT } from "../../config/constants.js";
-import { MergeSettlementProofs, SettlementProof } from "pulsar-contracts";
+import { MergeSettlementProofs, SettlementProof, MultisigVerifierProgram } from "pulsar-contracts";
+
+let compiled = false;
+async function ensureCompiled() {
+    if (!compiled) {
+        await MultisigVerifierProgram.compile();
+        compiled = true;
+    }
+}
 
 export async function worker(task: IProofEpoch, aggregation: Aggregation) {
     if (task.failCount > 0 && task.status[aggregation.index] === "done") {
@@ -23,6 +31,8 @@ export async function worker(task: IProofEpoch, aggregation: Aggregation) {
     if (!leftProofJson || !rightProofJson) {
         throw new Error("One of the proofs to aggregate is missing.");
     }
+
+    await ensureCompiled();
 
     const aggregatedProofJson = await generateAggregatedProof(
         leftProofJson,
