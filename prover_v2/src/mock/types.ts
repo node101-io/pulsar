@@ -5,11 +5,11 @@ export interface MockValidator {
 }
 
 export interface MockVoteExtBody {
-    initialValidatorSetRoot: Buffer;
-    initialStateRoot: Buffer;
+    initialValidatorListHash: bigint;
+    initialStateRoot: bigint;
     initialBlockHeight: number;
-    newValidatorSetRoot: Buffer;
-    newStateRoot: Buffer;
+    newValidatorListHash: bigint;
+    newStateRoot: bigint;
     newBlockHeight: number;
 }
 
@@ -23,8 +23,8 @@ export interface MockVoteExt {
 
 export interface MockBlock {
     height: number;
-    stateRoot: Buffer;
-    validatorSetRoot: Buffer;
+    stateRoot: bigint;
+    validatorListHash: bigint;
     validators: MockValidator[];
     voteExts: MockVoteExt[];
 }

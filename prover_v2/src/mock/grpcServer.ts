@@ -6,6 +6,10 @@ import { join, dirname } from "path";
 import { MOCK_GRPC_PORT } from "./constants.js";
 import { getBlocks, getLatestHeight } from "./blockProducer.js";
 
+function fieldToBuffer(v: bigint): Buffer {
+    return Buffer.from(v.toString(16).padStart(64, "0"), "hex");
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -50,18 +54,18 @@ function handleGetAllVoteExtsByHeight(
         validator_addr: ve.validatorAddr,
         signature: ve.signature,
         body: {
-            initial_validator_set_root: ve.body.initialValidatorSetRoot,
-            initial_state_root: ve.body.initialStateRoot,
+            initial_validator_set_root: fieldToBuffer(ve.body.initialValidatorListHash),
+            initial_state_root: fieldToBuffer(ve.body.initialStateRoot),
             initial_block_height: ve.body.initialBlockHeight.toString(),
-            new_validator_set_root: ve.body.newValidatorSetRoot,
-            new_state_root: ve.body.newStateRoot,
+            new_validator_set_root: fieldToBuffer(ve.body.newValidatorListHash),
+            new_state_root: fieldToBuffer(ve.body.newStateRoot),
             new_block_height: ve.body.newBlockHeight.toString(),
         },
     }));
 
     callback(null, {
         vote_exts,
-        validator_set_root: block.validatorSetRoot,
+        validator_set_root: fieldToBuffer(block.validatorListHash),
     });
 }
 
@@ -82,8 +86,8 @@ function handleGetStateAtHeight(
 
     callback(null, {
         height: block.height.toString(),
-        state_root: block.stateRoot,
-        validator_set_root: block.validatorSetRoot,
+        state_root: fieldToBuffer(block.stateRoot),
+        validator_set_root: fieldToBuffer(block.validatorListHash),
         validators: block.validators.map((v) => v.address),
     });
 }

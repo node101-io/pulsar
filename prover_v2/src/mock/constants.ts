@@ -2,12 +2,14 @@ export const MOCK_BLOCK_PRODUCE_INTERVAL_MS = Number(
     process.env.MOCK_BLOCK_PRODUCE_INTERVAL_MS ?? 3000,
 );
 
+import { VALIDATOR_NUMBER } from "pulsar-contracts";
+
 export const MOCK_VALIDATOR_POOL_SIZE = Number(
-    process.env.MOCK_VALIDATOR_POOL_SIZE ?? 15,
+    process.env.MOCK_VALIDATOR_POOL_SIZE ?? Math.max(VALIDATOR_NUMBER * 3, 5),
 );
 
 export const MOCK_ACTIVE_VALIDATOR_COUNT = Number(
-    process.env.MOCK_ACTIVE_VALIDATOR_COUNT ?? 10,
+    process.env.MOCK_ACTIVE_VALIDATOR_COUNT ?? VALIDATOR_NUMBER,
 );
 
 export const MOCK_VALIDATORS_CHANGE_PER_BLOCK = Number(
@@ -16,7 +18,7 @@ export const MOCK_VALIDATORS_CHANGE_PER_BLOCK = Number(
 
 export const MOCK_GRPC_PORT = Number(process.env.MOCK_GRPC_PORT ?? 50052);
 
-export const MOCK_START_HEIGHT = Number(process.env.MOCK_START_HEIGHT ?? 1);
+export const MOCK_START_HEIGHT = Number(process.env.MOCK_START_HEIGHT ?? 0);
 
 // Stake simulation
 // Initial stake assigned to each validator (nanomina, uniform [min, max])

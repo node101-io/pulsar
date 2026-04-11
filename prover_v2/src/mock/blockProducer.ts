@@ -1,5 +1,5 @@
-import crypto from "crypto";
-import { PrivateKey, Signature, Field } from "o1js";
+import { PrivateKey, Signature, Field, Poseidon, PublicKey } from "o1js";
+import { List } from "pulsar-contracts";
 
 import {
     MOCK_VALIDATOR_POOL_SIZE,
@@ -42,32 +42,31 @@ export function getLatestHeight(): number {
     return latestHeight;
 }
 
-function computeValidatorSetRoot(validators: MockValidator[]): Buffer {
-    const sorted = [...validators].sort((a, b) =>
-        a.address.localeCompare(b.address),
-    );
-    const hash = crypto.createHash("sha256");
-    for (const v of sorted) hash.update(v.address);
-    return hash.digest();
+// Compute poseidon based validator list hash, it matches computeValidatorListHash in client.ts
+function computeValidatorListHash(validators: MockValidator[]): bigint {
+    const list = List.empty();
+    for (const v of validators) {
+        list.push(Poseidon.hash(PublicKey.fromBase58(v.address).toFields()));
+    }
+    return list.hash.toBigInt();
 }
 
-function signBody(privKeyBase58: string, body: MockVoteExtBody): Buffer {
+// Sign over Block.hash() = Poseidon.hash([6 fields]) — matches SettlementProof.js
+function signBlock(privKeyBase58: string, body: MockVoteExtBody): Buffer {
     const privKey = PrivateKey.fromBase58(privKeyBase58);
 
-    // Pack body fields into Field array for signing
-    const fields = [
-        ...Array.from(body.initialValidatorSetRoot).map((b) => Field(b)),
-        ...Array.from(body.initialStateRoot).map((b) => Field(b)),
+    const blockHash = Poseidon.hash([
+        Field(body.initialValidatorListHash),
+        Field(body.initialStateRoot),
         Field(body.initialBlockHeight),
-        ...Array.from(body.newValidatorSetRoot).map((b) => Field(b)),
-        ...Array.from(body.newStateRoot).map((b) => Field(b)),
+        Field(body.newValidatorListHash),
+        Field(body.newStateRoot),
         Field(body.newBlockHeight),
-    ];
+    ]);
 
-    const sig = Signature.create(privKey, fields);
+    const sig = Signature.create(privKey, blockHash.toFields());
     const sigValue = Signature.toValue(sig);
 
-    // Encode r (32 bytes) + s (32 bytes)
     const rBuf = Buffer.from(sigValue.r.toString(16).padStart(64, "0"), "hex");
     const sBuf = Buffer.from(sigValue.s.toString(16).padStart(64, "0"), "hex");
     return Buffer.concat([rBuf, sBuf]);
@@ -86,7 +85,6 @@ function randomInitialStake(): number {
 }
 
 function updateStake(current: number): number {
-    // Uniform distribution in -max, +max
     const delta =
         Math.floor(Math.random() * (2 * MOCK_VALIDATOR_STAKE_CHANGE_MAX + 1)) -
         MOCK_VALIDATOR_STAKE_CHANGE_MAX;
@@ -111,36 +109,43 @@ export function produceNextBlock(): MockBlock {
     const prevBlock = blocks.get(latestHeight);
 
     const height = latestHeight + 1;
-    const stateRoot = crypto.randomBytes(32);
-    const validatorSetRoot = computeValidatorSetRoot(activeValidators);
 
-    const prevStateRoot = prevBlock?.stateRoot ?? crypto.randomBytes(32);
-    const prevValidatorSetRoot =
-        prevBlock?.validatorSetRoot ??
-        computeValidatorSetRoot(activeValidators);
+    // Use Field.random() to stay within field modulus
+    const stateRoot = Field.random().toBigInt();
+    const validatorListHash = computeValidatorListHash(activeValidators);
+
+    const prevStateRoot = prevBlock?.stateRoot ?? Field.random().toBigInt();
+    const prevValidatorListHash =
+        prevBlock?.validatorListHash ??
+        computeValidatorListHash(activeValidators);
     const prevHeight = prevBlock?.height ?? 0;
 
     const body: MockVoteExtBody = {
-        initialValidatorSetRoot: prevValidatorSetRoot,
+        initialValidatorListHash: prevValidatorListHash,
         initialStateRoot: prevStateRoot,
         initialBlockHeight: prevHeight,
-        newValidatorSetRoot: validatorSetRoot,
+        newValidatorListHash: validatorListHash,
         newStateRoot: stateRoot,
         newBlockHeight: height,
     };
 
-    const voteExts: MockVoteExt[] = activeValidators.map((v) => ({
+    // Tendermint semantics: the validators from the PREVIOUS block sign the
+    // current block. The new validator set (activeValidators) is recorded in
+    // this block's validatorListHash but doesn't sign until the next block.
+    const signers = prevBlock?.validators ?? activeValidators;
+
+    const voteExts: MockVoteExt[] = signers.map((v) => ({
         index: `${height}/${v.address}`,
         height,
         validatorAddr: v.address,
-        signature: signBody(v.privateKeyBase58, body),
+        signature: signBlock(v.privateKeyBase58, body),
         body,
     }));
 
     const block: MockBlock = {
         height,
         stateRoot,
-        validatorSetRoot,
+        validatorListHash,
         validators: [...activeValidators],
         voteExts,
     };
@@ -148,7 +153,6 @@ export function produceNextBlock(): MockBlock {
     blocks.set(height, block);
     latestHeight = height;
 
-    // Update stake for all active validators
     for (const v of activeValidators) {
         v.stake = updateStake(v.stake);
     }
@@ -156,7 +160,6 @@ export function produceNextBlock(): MockBlock {
     const next: MockValidator[] = [];
     for (const v of activeValidators) {
         if (Math.random() < MOCK_VALIDATOR_EXIT_PROBABILITY) {
-            // Replace with next from pool
             next.push(validatorPool[poolCursor]);
             poolCursor = (poolCursor + 1) % MOCK_VALIDATOR_POOL_SIZE;
         } else {
