@@ -1,5 +1,6 @@
 interface BlockProverJob {
-    height: number;
+    height: number; // epochHeight
+    blockIndex: number;
 }
 
 interface AggregatorJob {
