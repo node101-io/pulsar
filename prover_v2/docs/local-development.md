@@ -97,6 +97,52 @@ Both files are written atomically (write to `.tmp` then rename) so a crash mid-w
 
 ---
 
+## Running with PM2
+
+PM2 manages each process independently — you can monitor, restart, and inspect logs per process.
+
+### Install PM2
+
+```bash
+npm install -g pm2
+```
+
+### Test mode (mock chain + prover)
+
+```bash
+npm run build
+pm2 start ecosystem.test.config.cjs
+```
+
+### Production mode (real Pulsar node)
+
+```bash
+npm run build
+pm2 start ecosystem.config.cjs
+```
+
+### Common PM2 commands
+
+```bash
+pm2 list                        # show all processes and their status
+pm2 logs                        # stream logs from all processes
+pm2 logs mock-chain             # logs for a specific process
+pm2 restart pulsar-block-prover # restart one process
+pm2 stop all                    # stop everything
+pm2 delete all                  # remove all from PM2 registry
+pm2 save                        # persist process list (survives server reboot)
+pm2 startup                     # generate systemd/launchd startup script
+```
+
+### After deploying new code
+
+```bash
+npm run build
+pm2 restart all
+```
+
+---
+
 ## Full Reset
 
 To start completely from scratch — fresh validator pool, empty database, cleared sync state:
