@@ -2,14 +2,10 @@ import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
 import { fileURLToPath } from "url";
 import { join, dirname } from "path";
+import { readFile, writeFile, rename } from "fs/promises";
 
 import logger from "../../common/logger.js";
-import {
-    fetchLastStoredBlock,
-    BlockModel,
-    BlockEpochModel,
-    ProofEpochModel,
-} from "../../db/index.js";
+import { fetchLastStoredBlock } from "../../db/index.js";
 import { BlockData, VoteExt } from "../../common/types.js";
 import {
     POLL_INTERVAL_MS,
@@ -95,6 +91,35 @@ async function startRealPulsarSync(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Mock sync state
+// ---------------------------------------------------------------------------
+
+interface MockSyncState {
+    height: number;
+    validators: string[];
+}
+
+function getMockSyncStatePath(): string {
+    return process.env.MOCK_SYNC_STATE_PATH || "./mock-sync-state.json";
+}
+
+async function readMockSyncState(): Promise<MockSyncState | null> {
+    try {
+        const raw = await readFile(getMockSyncStatePath(), "utf8");
+        return JSON.parse(raw) as MockSyncState;
+    } catch {
+        return null;
+    }
+}
+
+async function writeMockSyncState(state: MockSyncState): Promise<void> {
+    const target = getMockSyncStatePath();
+    const tmp = target + ".tmp";
+    await writeFile(tmp, JSON.stringify(state, null, 2));
+    await rename(tmp, target); // atomic on same filesystem, no corruption
+}
+
+// ---------------------------------------------------------------------------
 // Mock (TEST_MODE) helpers
 // ---------------------------------------------------------------------------
 
@@ -167,9 +192,9 @@ async function startMockPulsarSync(): Promise<void> {
     const mockGrpcEndpoint =
         process.env.MOCK_GRPC_ENDPOINT || "localhost:50052";
 
-    const lastStored = await fetchLastStoredBlock();
-    // Start from -1 when DB is empty so that block 0 (genesis) gets synced.
-    let currentHeight = lastStored?.height ?? -1;
+    const savedState = await readMockSyncState();
+    let currentHeight = savedState?.height ?? -1;
+    let currentValidators: string[] = savedState?.validators ?? [];
 
     logger.info("Starting mock Pulsar sync loop", {
         mockGrpcEndpoint,
@@ -184,15 +209,17 @@ async function startMockPulsarSync(): Promise<void> {
             const latestHeight = await getMockLatestHeight(client);
 
             if (latestHeight < currentHeight) {
-                logger.warn("Mock server restarted — clearing DB and resyncing from scratch", {
-                    mockLatest: latestHeight,
-                    currentHeight,
-                    event: "mock_restart_detected",
-                });
-                await BlockModel.deleteMany({});
-                await BlockEpochModel.deleteMany({});
-                await ProofEpochModel.deleteMany({});
+                logger.warn(
+                    "Mock server restarted — resuming from mock's latest block",
+                    {
+                        mockLatest: latestHeight,
+                        previousHeight: currentHeight,
+                        event: "mock_restart_detected",
+                    },
+                );
                 currentHeight = -1;
+                currentValidators = [];
+                await writeMockSyncState({ height: -1, validators: [] });
             }
 
             if (latestHeight > currentHeight) {
@@ -207,6 +234,11 @@ async function startMockPulsarSync(): Promise<void> {
                     const blockData = await getMockBlockData(client, h);
                     await storePulsarBlock(blockData);
                     currentHeight = h;
+                    currentValidators = blockData.validators;
+                    await writeMockSyncState({
+                        height: currentHeight,
+                        validators: currentValidators,
+                    });
                 }
             }
         } catch (error) {

@@ -1,5 +1,124 @@
 import { PrivateKey, Signature, Field, Poseidon, PublicKey } from "o1js";
 import { List } from "pulsar-contracts";
+import { readFile, writeFile, rename } from "fs/promises";
+
+// ---------------------------------------------------------------------------
+// State persistence
+// ---------------------------------------------------------------------------
+
+// How many recent blocks to persist
+const PERSIST_BLOCK_WINDOW = BLOCK_EPOCH_SIZE * 3;
+
+interface PersistedState {
+    validatorPool: MockValidator[];
+    activeValidators: MockValidator[];
+    poolCursor: number;
+    latestHeight: number;
+    blocks: Record<string, PersistedBlock>;
+}
+
+interface PersistedBlock {
+    height: number;
+    stateRoot: string;
+    validatorListHash: string;
+    validators: MockValidator[];
+    voteExts: PersistedVoteExt[];
+}
+
+interface PersistedVoteExt {
+    index: string;
+    height: number;
+    validatorAddr: string;
+    signatureHex: string;
+    body: {
+        initialValidatorListHash: string;
+        initialStateRoot: string;
+        initialBlockHeight: number;
+        newValidatorListHash: string;
+        newStateRoot: string;
+        newBlockHeight: number;
+    };
+}
+
+function getStatePath(): string {
+    return process.env.MOCK_STATE_PATH || "./mock-state.json";
+}
+
+function serializeBlock(b: MockBlock): PersistedBlock {
+    return {
+        height: b.height,
+        stateRoot: b.stateRoot.toString(),
+        validatorListHash: b.validatorListHash.toString(),
+        validators: b.validators,
+        voteExts: b.voteExts.map((ve) => ({
+            index: ve.index,
+            height: ve.height,
+            validatorAddr: ve.validatorAddr,
+            signatureHex: ve.signature.toString("hex"),
+            body: {
+                initialValidatorListHash:
+                    ve.body.initialValidatorListHash.toString(),
+                initialStateRoot: ve.body.initialStateRoot.toString(),
+                initialBlockHeight: ve.body.initialBlockHeight,
+                newValidatorListHash: ve.body.newValidatorListHash.toString(),
+                newStateRoot: ve.body.newStateRoot.toString(),
+                newBlockHeight: ve.body.newBlockHeight,
+            },
+        })),
+    };
+}
+
+function deserializeBlock(p: PersistedBlock): MockBlock {
+    return {
+        height: p.height,
+        stateRoot: BigInt(p.stateRoot),
+        validatorListHash: BigInt(p.validatorListHash),
+        validators: p.validators,
+        voteExts: p.voteExts.map((ve) => ({
+            index: ve.index,
+            height: ve.height,
+            validatorAddr: ve.validatorAddr,
+            signature: Buffer.from(ve.signatureHex, "hex"),
+            body: {
+                initialValidatorListHash: BigInt(
+                    ve.body.initialValidatorListHash,
+                ),
+                initialStateRoot: BigInt(ve.body.initialStateRoot),
+                initialBlockHeight: ve.body.initialBlockHeight,
+                newValidatorListHash: BigInt(ve.body.newValidatorListHash),
+                newStateRoot: BigInt(ve.body.newStateRoot),
+                newBlockHeight: ve.body.newBlockHeight,
+            },
+        })),
+    };
+}
+
+async function loadState(): Promise<PersistedState | null> {
+    try {
+        const raw = await readFile(getStatePath(), "utf8");
+        return JSON.parse(raw) as PersistedState;
+    } catch {
+        return null;
+    }
+}
+
+async function saveState(): Promise<void> {
+    const target = getStatePath();
+    const tmp = target + ".tmp";
+    const state: PersistedState = {
+        validatorPool,
+        activeValidators,
+        poolCursor,
+        latestHeight,
+        blocks: Object.fromEntries(
+            Array.from(blocks.entries())
+                .filter(([h]) => h > latestHeight - PERSIST_BLOCK_WINDOW)
+                .map(([h, b]) => [h, serializeBlock(b)]),
+        ),
+    };
+    await writeFile(tmp, JSON.stringify(state));
+    await rename(tmp, target);
+}
 
 import {
     MOCK_VALIDATOR_POOL_SIZE,
@@ -18,6 +137,7 @@ import {
     MockVoteExt,
     MockVoteExtBody,
 } from "./types.js";
+import { BLOCK_EPOCH_SIZE } from "../config/constants.js";
 
 // In-memory block store (height to MockBlock)
 const blocks = new Map<number, MockBlock>();
@@ -42,7 +162,6 @@ export function getLatestHeight(): number {
     return latestHeight;
 }
 
-// Compute poseidon based validator list hash, it matches computeValidatorListHash in client.ts
 function computeValidatorListHash(validators: MockValidator[]): bigint {
     const list = List.empty();
     for (const v of validators) {
@@ -51,7 +170,6 @@ function computeValidatorListHash(validators: MockValidator[]): bigint {
     return list.hash.toBigInt();
 }
 
-// Sign over Block.hash() = Poseidon.hash([6 fields]) — matches SettlementProof.js
 function signBlock(privKeyBase58: string, body: MockVoteExtBody): Buffer {
     const privKey = PrivateKey.fromBase58(privKeyBase58);
 
@@ -92,6 +210,22 @@ function updateStake(current: number): number {
 }
 
 export async function initBlockProducer(): Promise<void> {
+    const saved = await loadState();
+
+    if (saved) {
+        validatorPool = saved.validatorPool;
+        activeValidators = saved.activeValidators;
+        poolCursor = saved.poolCursor;
+        latestHeight = saved.latestHeight;
+        for (const [h, b] of Object.entries(saved.blocks)) {
+            blocks.set(Number(h), deserializeBlock(b));
+        }
+        console.log(
+            `[mock] Restored state: height=${latestHeight}, validators=${activeValidators.length}`,
+        );
+        return;
+    }
+
     validatorPool = Array.from({ length: MOCK_VALIDATOR_POOL_SIZE }, () => {
         const privKey = PrivateKey.random();
         return {
@@ -110,7 +244,6 @@ export function produceNextBlock(): MockBlock {
 
     const height = latestHeight + 1;
 
-    // Use Field.random() to stay within field modulus
     const stateRoot = Field.random().toBigInt();
     const validatorListHash = computeValidatorListHash(activeValidators);
 
@@ -152,6 +285,9 @@ export function produceNextBlock(): MockBlock {
 
     blocks.set(height, block);
     latestHeight = height;
+    saveState().catch((err) =>
+        console.error("[mock] Failed to save state:", err),
+    );
 
     for (const v of activeValidators) {
         v.stake = updateStake(v.stake);

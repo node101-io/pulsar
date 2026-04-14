@@ -13,12 +13,10 @@
         "worker:settler": "npm run build && node --max-old-space-size=8192 dist/src/workers/settler/index.js",
         "proto:gen": "buf generate ../chain/proto",
         "start-mock": "npm run build && node dist/src/mock/index.js",
-        "worker:settlement": "npm run build && node --experimental-vm-modules dist/src/worker/settlementWorker.js",
-        "worker:merge": "npm run build && node --experimental-vm-modules dist/src/worker/mergeWorker.js",
-        "worker:reduce": "npm run build && node --experimental-vm-modules dist/src/worker/reducerWorker.js",
         "manager": "npm run build && node dist/src/nodeManager.js",
         "cli": "npm run build && node dist/src/cli.js",
         "seed": "npm run build && node dist/src/scripts/seed.js",
+        "reset": "npm run build && node dist/src/scripts/reset.js",
         "clean": "rimraf build coverage node_modules package-lock.json"
     },
     "keywords": [
