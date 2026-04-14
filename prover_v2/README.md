@@ -9,6 +9,7 @@ Off-chain proving service that bridges the Pulsar (Cosmos) chain with the Mina z
 | Document | Description |
 | -------- | ----------- |
 | **[docs/architecture.md](docs/architecture.md)** | Full system architecture — module descriptions, processor pipeline, data models, proof aggregation tree, state machines, failure handling, and developer notes |
+| **[docs/local-development.md](docs/local-development.md)** | Local development guide — running the mock chain, state persistence, restarting safely, full reset, and npm script reference |
 
 ---
 
