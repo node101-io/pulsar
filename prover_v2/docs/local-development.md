@@ -25,7 +25,18 @@ Both processes persist their state to JSON files on disk so they survive restart
 npm install
 ```
 
-### 2. Configure environment
+### 2. Fix o1js module deduplication
+
+`pulsar-contracts` is a local package that ships its own `node_modules/o1js`. Running two instances of o1js in the same Node process causes a "global context inconsistent state" crash during proving. After installing, replace it with a symlink to the single shared instance:
+
+```bash
+rm -rf ../contracts/node_modules/o1js
+ln -s $(pwd)/node_modules/o1js ../contracts/node_modules/o1js
+```
+
+This must be re-run after any `npm install` in either `prover_v2/` or `contracts/`.
+
+### 3. Configure environment
 
 ```bash
 cp .env.example .env
@@ -43,7 +54,7 @@ REDIS_PORT=6379
 
 The mock-specific variables all have sensible defaults and do not need to be set.
 
-### 3. Start MongoDB and Redis
+### 4. Start MongoDB and Redis
 
 Make sure both are running locally before proceeding.
 
@@ -138,6 +149,8 @@ pm2 startup                     # generate systemd/launchd startup script
 
 ```bash
 npm run build
+# If you ran npm install, re-apply the o1js symlink:
+rm -rf ../contracts/node_modules/o1js && ln -s $(pwd)/node_modules/o1js ../contracts/node_modules/o1js
 pm2 restart all
 ```
 
