@@ -21,8 +21,10 @@ import {
     GenerateSettlementProof,
     SignaturePublicKeyList,
     MultisigVerifierProgram,
+    Field,
+    PublicKey,
+    Signature,
 } from "pulsar-contracts";
-import { Field, PublicKey, Signature } from "o1js";
 
 let compiled = false;
 async function ensureCompiled() {

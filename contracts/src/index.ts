@@ -1,3 +1,4 @@
+import { Field, PublicKey, Signature } from 'o1js';
 import {
   ActionStackProof,
   ActionStackQueue,
@@ -94,6 +95,9 @@ import {
 } from './utils/loggers.js';
 
 export {
+  Field,
+  PublicKey,
+  Signature,
   merkleActionsAdd,
   emptyActionListHash,
   actionListAdd,
