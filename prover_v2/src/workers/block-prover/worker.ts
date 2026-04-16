@@ -27,11 +27,24 @@ import {
 } from "pulsar-contracts";
 
 let compiled = false;
+let compileLock: Promise<void> = Promise.resolve();
 async function ensureCompiled() {
-    if (!compiled) {
-        await MultisigVerifierProgram.compile();
-        compiled = true;
-    }
+    compileLock = compileLock.then(async () => {
+        if (!compiled) {
+            await MultisigVerifierProgram.compile();
+            compiled = true;
+        }
+    });
+    await compileLock;
+}
+
+// o1js does not support concurrent proving within the same process.
+// All prove calls must be serialized.
+let provingQueue: Promise<void> = Promise.resolve();
+function serializeProving<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        provingQueue = provingQueue.then(() => fn().then(resolve, reject));
+    });
 }
 
 export async function worker(task: BlockProverJob) {
@@ -98,8 +111,10 @@ export async function worker(task: BlockProverJob) {
         }
     }
 
-    await ensureCompiled();
-    const proofId = await createProof(epochHeight);
+    const proofId = await serializeProving(async () => {
+        await ensureCompiled();
+        return createProof(epochHeight);
+    });
     await createOrUpdateProofEpoch(epochHeight, proofId);
 
     await BlockEpochModel.findOneAndUpdate(
