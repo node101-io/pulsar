@@ -157,7 +157,7 @@ describe('SettlementProof tests', () => {
     const initTx = await Mina.transaction(
       { sender: deployerAccount, fee },
       async () => {
-        await zkapp.initialize(merkleListRoot);
+        await zkapp.initialize(merkleListRoot, Field(0));
       }
     );
 
@@ -176,7 +176,7 @@ describe('SettlementProof tests', () => {
       const tx = await Mina.transaction(
         { sender: deployerAccount, fee },
         async () => {
-          await zkapp.initialize(merkleListRoot);
+          await zkapp.initialize(merkleListRoot, Field(0));
         }
       );
       await waitTransactionAndFetchAccount(tx, [deployerKey]);
@@ -201,7 +201,7 @@ describe('SettlementProof tests', () => {
       async () => {
         AccountUpdate.fundNewAccount(deployerAccount);
         await zkapp.deploy();
-        await zkapp.initialize(merkleListRoot);
+        await zkapp.initialize(merkleListRoot, Field(0));
       }
     );
 

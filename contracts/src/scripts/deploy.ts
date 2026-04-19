@@ -1,6 +1,7 @@
 import {
   AccountUpdate,
   fetchAccount,
+  Field,
   Mina,
   PrivateKey,
   PublicKey,
@@ -110,7 +111,7 @@ async function deployAndInitializeContract(
     async () => {
       AccountUpdate.fundNewAccount(signerPublicKey);
       await contractInstance.deploy();
-      await contractInstance.initialize(validatorList.hash);
+      await contractInstance.initialize(validatorList.hash, Field(0));
     }
   );
 

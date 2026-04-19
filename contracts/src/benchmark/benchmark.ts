@@ -230,7 +230,7 @@ async function deployAndInitializeContract() {
     Mina.transaction({ sender: deployerAccount, fee }, async () => {
       AccountUpdate.fundNewAccount(deployerAccount);
       await zkapp.deploy();
-      await zkapp.initialize(merkleList.hash);
+      await zkapp.initialize(merkleList.hash, Field(0));
     })
   );
 

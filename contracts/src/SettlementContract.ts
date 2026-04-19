@@ -67,9 +67,10 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async initialize(merkleListRoot: Field) {
+  async initialize(merkleListRoot: Field, stateRoot: Field) {
     super.init();
     this.merkleListRoot.set(merkleListRoot);
+    this.stateRoot.set(stateRoot);
     this.actionState.set(Reducer.initialActionState);
   }
 

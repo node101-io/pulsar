@@ -15,7 +15,7 @@ export {
 };
 
 const SETTLEMENT_MATRIX_SIZE = 8;
-const VALIDATOR_NUMBER = 1;
+const VALIDATOR_NUMBER = 10;
 // Max number of blocks aggregated per settlement proof. Capped at 32 to prevent
 // race conditions on Mina. Submitting too many blocks at once can cause
 // competing transactions to collide onchain before finalization.

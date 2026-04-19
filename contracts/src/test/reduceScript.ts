@@ -248,7 +248,7 @@ async function deployAndInitializeContract(
     async () => {
       AccountUpdate.fundNewAccount(deployerAccount);
       await zkapp.deploy();
-      await zkapp.initialize(merkleListRoot);
+      await zkapp.initialize(merkleListRoot, Field(0));
     }
   );
 
