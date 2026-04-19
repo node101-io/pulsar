@@ -1,6 +1,12 @@
 import { Types } from "mongoose";
 import { PublicKey } from "o1js";
-import { SettlementProof } from "pulsar-contracts";
+import {
+    SettlementProof,
+    MultisigVerifierProgram,
+    ValidateReduceProgram,
+    ActionStackProgram,
+    SettlementContract,
+} from "pulsar-contracts";
 
 import logger from "../../common/logger.js";
 import { ProofEpochModel } from "../../db/models/ProofEpoch.js";
@@ -14,6 +20,35 @@ import {
 import { proveSettlementTx } from "../../services/mina/settlement.js";
 import { BLOCK_EPOCH_SIZE } from "../../config/constants.js";
 import { SettlementProverJob } from "../types.js";
+
+let compiled = false;
+let compileLock: Promise<void> = Promise.resolve();
+async function ensureCompiled() {
+    compileLock = compileLock.then(async () => {
+        if (!compiled) {
+            logger.info("Compiling ZK programs for settlement-prover…", {
+                event: "settlement_prover_compile_start",
+            });
+            await MultisigVerifierProgram.compile();
+            await ValidateReduceProgram.compile();
+            await ActionStackProgram.compile();
+            await SettlementContract.compile();
+            compiled = true;
+            logger.info("ZK programs compiled for settlement-prover.", {
+                event: "settlement_prover_compile_done",
+            });
+        }
+    });
+    await compileLock;
+}
+
+// o1js does not support concurrent proving within the same process.
+let provingQueue: Promise<void> = Promise.resolve();
+function serializeProving<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        provingQueue = provingQueue.then(() => fn().then(resolve, reject));
+    });
+}
 
 let minaCtx: MinaClientContext | null = null;
 
@@ -44,11 +79,14 @@ export async function worker(task: SettlementProverJob): Promise<void> {
         epoch.kind === "txSending" ||
         epoch.kind === "done"
     ) {
-        logger.info("Skipping tx proving for epoch already past txProving stage", {
-            epochHeight: task.height,
-            kind: epoch.kind,
-            event: "settlement_prover_epoch_already_advanced",
-        });
+        logger.info(
+            "Skipping tx proving for epoch already past txProving stage",
+            {
+                epochHeight: task.height,
+                kind: epoch.kind,
+                event: "settlement_prover_epoch_already_advanced",
+            },
+        );
         return;
     }
 

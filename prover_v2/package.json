@@ -13,6 +13,7 @@
         "worker:settlement-prover": "npm run build && node --max-old-space-size=8192 dist/src/workers/settlement-prover/index.js",
         "worker:settler": "npm run build && node --max-old-space-size=8192 dist/src/workers/settler/index.js",
         "cli": "npm run build && node dist/src/cli.js",
+        "deploy": "npm run build && node dist/src/scripts/deploy.js",
         "seed": "npm run build && node dist/src/scripts/seed.js",
         "reset": "npm run build && node dist/src/scripts/reset.js",
         "clean": "rimraf build coverage node_modules package-lock.json"

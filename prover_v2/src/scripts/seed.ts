@@ -7,16 +7,6 @@ import "../db/models/Proof.js";
 import "../db/models/ProofEpoch.js";
 import "../db/models/BlockEpoch.js";
 
-/**
- * Seeds the genesis block (height 0) for production use.
- *
- * In TEST_MODE the mock block producer starts at height 0 and stores its own
- * genesis block, so this seed is not needed and would be overwritten anyway.
- *
- * Block 1+ are never seeded — they come from the chain (prod) or the mock.
- * The BlockEpoch documents are created automatically by storeBlockInBlockEpoch
- * as blocks arrive, so they do not need to be seeded either.
- */
 async function seedGenesisBlock() {
     const exists = await BlockModel.exists({ height: 0 });
     if (exists) {
