@@ -97,15 +97,14 @@ export async function worker(task: SettlementProverJob): Promise<void> {
     }
 
     const settlementProof = await SettlementProof.fromJSON(settlementProofJson);
-    const ctx = await getMinaContext();
 
     const epochLastPulsarBlock = epoch.height + BLOCK_EPOCH_SIZE - 1;
 
-    const provedTxJson = await proveSettlementTx(
-        ctx,
-        settlementProof,
-        epochLastPulsarBlock,
-    );
+    const provedTxJson = await serializeProving(async () => {
+        await ensureCompiled();
+        const ctx = await getMinaContext();
+        return proveSettlementTx(ctx, settlementProof, epochLastPulsarBlock);
+    });
 
     await setProofEpochSettlement(task.height, provedTxJson);
 }
