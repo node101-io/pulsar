@@ -87,18 +87,9 @@ class SettlementContract extends SmartContract {
       NewStateRoot,
     } = settlementProof.publicInput;
 
-    InitialBlockHeight.assertEquals(
-      this.blockHeight.getAndRequireEquals(),
-      'Initial block height mismatch with on-chain state'
-    );
-    InitialMerkleListRoot.assertEquals(
-      this.merkleListRoot.getAndRequireEquals(),
-      'Initial MerkleList root mismatch with on-chain state'
-    );
-    InitialStateRoot.assertEquals(
-      this.stateRoot.getAndRequireEquals(),
-      'Initial Pulsar state root mismatch with on-chain state'
-    );
+    this.blockHeight.requireEquals(InitialBlockHeight);
+    this.merkleListRoot.requireEquals(InitialMerkleListRoot);
+    this.stateRoot.requireEquals(InitialStateRoot);
 
     NewBlockHeight.assertEquals(
       InitialBlockHeight.add(Field.from(AGGREGATE_THRESHOLD)),
