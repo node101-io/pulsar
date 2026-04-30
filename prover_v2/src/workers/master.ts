@@ -32,6 +32,8 @@ export abstract class Master<JobData> {
 
     protected abstract handleTask(): Promise<void>;
 
+    protected async onStartup(): Promise<void> {}
+
     protected async createWorker(
         workerId: number,
     ): Promise<Worker<JobData, void, string>> {
@@ -112,6 +114,7 @@ export abstract class Master<JobData> {
     }
 
     async run(): Promise<never> {
+        await this.onStartup();
         await this.initializeWorkers();
         while (true) {
             await this.handleTask();

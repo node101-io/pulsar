@@ -40,6 +40,19 @@ export class BlockProverMaster extends Master<BlockProverJob> {
         });
     }
 
+    protected async onStartup(): Promise<void> {
+        const result = await BlockEpochModel.updateMany(
+            { epochStatus: "processing" },
+            { $set: { epochStatus: "waiting" } },
+        );
+        if (result.modifiedCount > 0) {
+            logger.warn(
+                `Recovered ${result.modifiedCount} stuck epoch(s) from 'processing' to 'waiting' on startup`,
+                { count: result.modifiedCount, event: "epoch_recovery" },
+            );
+        }
+    }
+
     protected async handleTask(): Promise<void> {
         const epoch = await BlockEpochModel.findOneAndUpdate(
             {
