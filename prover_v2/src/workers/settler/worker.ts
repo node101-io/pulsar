@@ -9,7 +9,7 @@ import {
     initMinaClientContext,
 } from "../../services/mina/client.js";
 import { sendProvedSettlement } from "../../services/mina/settlement.js";
-import { BLOCK_EPOCH_SIZE } from "../../config/constants.js";
+import { PROOF_EPOCH_SIZE } from "../../config/constants.js";
 import { SettlerJob } from "../types.js";
 
 let minaCtx: MinaClientContext | null = null;
@@ -58,7 +58,7 @@ export async function worker(task: SettlerJob) {
     }
 
     const ctx = await getMinaContext();
-    const epochLastPulsarBlock = epoch.height + BLOCK_EPOCH_SIZE - 1;
+    const epochLastPulsarBlock = epoch.height + PROOF_EPOCH_SIZE;
 
     await sendProvedSettlement(ctx, epoch.provedTxJson, epochLastPulsarBlock);
 

@@ -1,7 +1,7 @@
 import { PublicKey } from "o1js";
 
 import {
-    BLOCK_EPOCH_SIZE,
+    PROOF_EPOCH_SIZE,
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
     MASTER_SLEEP_INTERVAL_MS,
@@ -61,6 +61,40 @@ export class SettlerMaster extends Master<SettlerJob> {
         });
     }
 
+    protected async onStartup(): Promise<void> {
+        // Refresh timeoutAt for settlement-ready epochs that may have expired
+        // while the node was offline (rejoin scenario)
+        const refreshed = await ProofEpochModel.updateMany(
+            {
+                kind: "settlement" as ProofKind,
+                timeoutAt: { $lte: new Date() },
+            },
+            { $set: { timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS) } },
+        );
+        if (refreshed.modifiedCount > 0) {
+            logger.warn(
+                `Refreshed timeoutAt for ${refreshed.modifiedCount} expired settlement epoch(s) on startup`,
+                {
+                    count: refreshed.modifiedCount,
+                    event: "settlement_timeout_refresh",
+                },
+            );
+        }
+
+        // Re-queue any epochs stuck in txSending without resetting kind,
+        // so the worker can confirm or re-send the tx safely
+        const stuckEpochs = await ProofEpochModel.find({
+            kind: "txSending" as ProofKind,
+        });
+        for (const epoch of stuckEpochs) {
+            await settlerQ.add("settler", { height: epoch.height });
+            logger.warn(
+                `Re-queued stuck txSending epoch at height ${epoch.height} on startup`,
+                { epochHeight: epoch.height, event: "tx_sending_requeue" },
+            );
+        }
+    }
+
     protected async handleTask(): Promise<void> {
         // Step 3a: is there an in-flight tx? if so, wait for it to land
         const inFlight = await ProofEpochModel.findOne({
@@ -99,7 +133,7 @@ export class SettlerMaster extends Master<SettlerJob> {
             {
                 kind: { $eq: "settlement" as ProofKind },
                 timeoutAt: { $gt: new Date() },
-                height: { $gt: contractBlockHeight - BLOCK_EPOCH_SIZE + 1 },
+                height: { $gt: contractBlockHeight - PROOF_EPOCH_SIZE },
             },
             {
                 $set: { kind: "txSending" as ProofKind },
