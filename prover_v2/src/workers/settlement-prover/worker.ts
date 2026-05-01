@@ -18,7 +18,7 @@ import {
     initMinaClientContext,
 } from "../../services/mina/client.js";
 import { proveSettlementTx } from "../../services/mina/settlement.js";
-import { BLOCK_EPOCH_SIZE } from "../../config/constants.js";
+import { PROOF_EPOCH_SIZE } from "../../config/constants.js";
 import { SettlementProverJob } from "../types.js";
 
 let compiled = false;
@@ -98,7 +98,7 @@ export async function worker(task: SettlementProverJob): Promise<void> {
 
     const settlementProof = await SettlementProof.fromJSON(settlementProofJson);
 
-    const epochLastPulsarBlock = epoch.height + BLOCK_EPOCH_SIZE - 1;
+    const epochLastPulsarBlock = epoch.height + PROOF_EPOCH_SIZE;
 
     const provedTxJson = await serializeProving(async () => {
         await ensureCompiled();

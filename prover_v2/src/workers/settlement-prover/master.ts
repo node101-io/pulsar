@@ -40,6 +40,19 @@ export class SettlementProverMaster extends Master<SettlementProverJob> {
         });
     }
 
+    protected async onStartup(): Promise<void> {
+        const result = await ProofEpochModel.updateMany(
+            { kind: "txProving" as ProofKind },
+            { $set: { kind: "blockProof" as ProofKind } },
+        );
+        if (result.modifiedCount > 0) {
+            logger.warn(
+                `Recovered ${result.modifiedCount} epoch(s) stuck in 'txProving' back to 'blockProof' on startup`,
+                { count: result.modifiedCount, event: "tx_proving_recovery" },
+            );
+        }
+    }
+
     protected async handleTask(): Promise<void> {
         const epoch = await ProofEpochModel.findOneAndUpdate(
             {
