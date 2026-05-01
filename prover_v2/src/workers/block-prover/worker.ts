@@ -231,15 +231,21 @@ async function createOrUpdateProofEpoch(
                     "waiting" as ProofStatus,
                 ),
                 failCount: 0,
-                timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS),
             },
         },
         { upsert: true },
     );
 
+    // Refresh timeoutAt on every leaf addition so the aggregator's timeout
+    // filter doesn't expire before all leaves are ready
     const result = await ProofEpochModel.findOneAndUpdate(
         { height: proofEpochHeight },
-        { $set: { [`proofs.${leafIndex}`]: proofId } },
+        {
+            $set: {
+                [`proofs.${leafIndex}`]: proofId,
+                timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS),
+            },
+        },
         { new: true },
     );
 

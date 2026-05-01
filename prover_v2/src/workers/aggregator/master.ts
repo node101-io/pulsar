@@ -75,6 +75,20 @@ export class AggregatorMaster extends Master<AggregatorJob> {
         });
     }
 
+    protected async onStartup(): Promise<void> {
+        const result = await ProofEpochModel.updateMany(
+            { status: "processing" },
+            { $set: { "status.$[elem]": "waiting" } },
+            { arrayFilters: [{ elem: { $eq: "processing" } }] },
+        );
+        if (result.modifiedCount > 0) {
+            logger.warn(
+                `Recovered ${result.modifiedCount} epoch(s) with stuck 'processing' aggregation slots on startup`,
+                { count: result.modifiedCount, event: "aggregation_slot_recovery" },
+            );
+        }
+    }
+
     protected async handleTask(): Promise<void> {
         const orClauses = patterns.map((p) => ({
             $and: [
