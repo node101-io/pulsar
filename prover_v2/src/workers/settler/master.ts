@@ -56,6 +56,10 @@ export class SettlerMaster extends Master<SettlerJob> {
             onJobFailed: async (job) => {
                 if (job?.data.height) {
                     await incrementProofEpochFailCount(job.data.height);
+                    await ProofEpochModel.updateOne(
+                        { height: job.data.height, kind: "txSending" as ProofKind },
+                        { $set: { kind: "settlement" as ProofKind } },
+                    );
                 }
             },
         });
