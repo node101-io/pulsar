@@ -54,7 +54,7 @@ export class SettlerMaster extends Master<SettlerJob> {
                 await processSettlement(job.data);
             },
             onJobFailed: async (job) => {
-                if (job?.data.height) {
+                if (job?.data.height !== undefined) {
                     await incrementProofEpochFailCount(job.data.height);
                     await ProofEpochModel.updateOne(
                         {

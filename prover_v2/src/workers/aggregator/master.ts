@@ -68,7 +68,7 @@ export class AggregatorMaster extends Master<AggregatorJob> {
                 await processAggregation(epoch, aggregation);
             },
             onJobFailed: async (job) => {
-                if (job?.data.height) {
+                if (job?.data.height !== undefined) {
                     await incrementProofEpochFailCount(job.data.height);
                 }
             },

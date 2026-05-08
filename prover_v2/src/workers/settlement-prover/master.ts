@@ -33,7 +33,7 @@ export class SettlementProverMaster extends Master<SettlementProverJob> {
                 await processSettlementProof(job.data);
             },
             onJobFailed: async (job) => {
-                if (job?.data.height) {
+                if (job?.data.height !== undefined) {
                     await incrementProofEpochFailCount(job.data.height);
                 }
             },

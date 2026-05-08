@@ -33,7 +33,7 @@ export class BlockProverMaster extends Master<BlockProverJob> {
                 });
             },
             onJobFailed: async (job) => {
-                if (job?.data.height) {
+                if (job?.data.height !== undefined) {
                     await incrementBlockEpochFailCount(job.data.height);
                 }
             },
