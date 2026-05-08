@@ -87,6 +87,7 @@ export async function sendProvedSettlement(
 
             const txData = JSON.parse(provedTxJson);
             txData.feePayer.body.nonce = currentNonce;
+            txData.feePayer.authorization = "";
 
             const tx = Transaction.fromJSON(txData);
             const result = await tx.sign([sender]).send();
