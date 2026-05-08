@@ -5,12 +5,10 @@ import {
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
     MASTER_SLEEP_INTERVAL_MS,
+    MAX_FAIL_COUNT,
 } from "../../config/constants.js";
 import { ProofKind } from "../../common/types.js";
-import {
-    incrementProofEpochFailCount,
-    ProofEpochModel,
-} from "../../db/index.js";
+import { ProofEpochModel } from "../../db/index.js";
 import { Master } from "../master.js";
 import { settlerQ } from "../queue.js";
 import { SettlerJob } from "../types.js";
@@ -55,14 +53,36 @@ export class SettlerMaster extends Master<SettlerJob> {
             },
             onJobFailed: async (job) => {
                 if (job?.data.height !== undefined) {
-                    await incrementProofEpochFailCount(job.data.height);
-                    await ProofEpochModel.updateOne(
+                    const updated = await ProofEpochModel.findOneAndUpdate(
                         {
                             height: job.data.height,
                             kind: "txSending" as ProofKind,
                         },
-                        { $set: { kind: "settlement" as ProofKind } },
+                        {
+                            $inc: { failCount: 1 },
+                        },
+                        { new: true },
                     );
+                    if (!updated) return;
+
+                    if (updated.failCount >= MAX_FAIL_COUNT) {
+                        // Stale proof — re-prove with fresh nonce and reset counter
+                        await ProofEpochModel.updateOne(
+                            { height: job.data.height },
+                            {
+                                $set: {
+                                    kind: "aggregation" as ProofKind,
+                                    provedTxJson: null,
+                                    failCount: 0,
+                                },
+                            },
+                        );
+                    } else {
+                        await ProofEpochModel.updateOne(
+                            { height: job.data.height },
+                            { $set: { kind: "settlement" as ProofKind } },
+                        );
+                    }
                 }
             },
         });

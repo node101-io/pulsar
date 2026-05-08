@@ -78,7 +78,17 @@ export async function sendProvedSettlement(
 
     for (let attempt = 1; attempt <= MAX_RETRY_COUNT; attempt++) {
         try {
-            const tx = Transaction.fromJSON(JSON.parse(provedTxJson));
+            // refresh the fee payer nonce so the signature is valid even if
+            // the account nonce changed since the TX was proved
+            const senderPublicKey = sender.toPublicKey();
+            await fetchAccount({ publicKey: senderPublicKey });
+            const currentNonce =
+                Mina.getAccount(senderPublicKey).nonce.toString();
+
+            const txData = JSON.parse(provedTxJson);
+            txData.feePayer.body.nonce = currentNonce;
+
+            const tx = Transaction.fromJSON(txData);
             const result = await tx.sign([sender]).send();
             const txHash = result.hash;
 
@@ -111,7 +121,8 @@ export async function sendProvedSettlement(
             });
         } catch (error) {
             logger.error("Settlement TX send error", {
-                errorMessage: error instanceof Error ? error.message : String(error),
+                errorMessage:
+                    error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
                 attempt,
                 epochLastPulsarBlock,
