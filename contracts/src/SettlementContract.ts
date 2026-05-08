@@ -46,8 +46,7 @@ class SettlementContract extends SmartContract {
   @state(Field) stateRoot = State<Field>();
   @state(Field) blockHeight = State<Field>();
 
-  @state(Field) depositListHash = State<Field>();
-  @state(Field) withdrawalListHash = State<Field>();
+  @state(Field) actionListHash = State<Field>();
 
   reducer = Reducer({ actionType: PulsarAction });
 
@@ -145,9 +144,7 @@ class SettlementContract extends SmartContract {
     mask: ReduceMask,
     validateReduceProof: ValidateReduceProof
   ) {
-    let merkleListRoot = this.merkleListRoot.getAndRequireEquals();
-    let depositListHash = this.depositListHash.getAndRequireEquals();
-    let withdrawalListHash = this.withdrawalListHash.getAndRequireEquals();
+    let actionListHash = this.actionListHash.getAndRequireEquals();
 
     let initialActionState = this.actionState.getAndRequireEquals();
     let actionState = initialActionState;
@@ -165,34 +162,26 @@ class SettlementContract extends SmartContract {
         )
       );
 
-      const shouldDeposit = PulsarAction.isDeposit(action)
+      const shouldProcess = PulsarAction.isDeposit(action)
+        .or(PulsarAction.isWithdrawal(action))
         .and(isDummy.not())
         .and(mask.list[i]);
 
-      const shouldWithdraw = PulsarAction.isWithdrawal(action)
-        .and(isDummy.not())
-        .and(mask.list[i]);
-
-      depositListHash = Provable.if(
-        shouldDeposit,
+      actionListHash = Provable.if(
+        shouldProcess,
         Poseidon.hash([
-          depositListHash,
+          actionListHash,
+          action.type,
           ...action.account.toFields(),
           action.amount,
           ...action.pulsarAuth.toFields(),
         ]),
-        depositListHash
+        actionListHash
       );
 
-      withdrawalListHash = Provable.if(
-        shouldWithdraw,
-        Poseidon.hash([
-          withdrawalListHash,
-          ...action.account.toFields(),
-          action.amount,
-        ]),
-        withdrawalListHash
-      );
+      const shouldWithdraw = PulsarAction.isWithdrawal(action)
+        .and(isDummy.not())
+        .and(mask.list[i]);
 
       const to = Provable.if(
         shouldWithdraw,
@@ -209,21 +198,15 @@ class SettlementContract extends SmartContract {
         UInt64.from(0)
       );
 
-      this.send({
-        to,
-        amount,
-      });
+      this.send({ to, amount });
     }
 
     validateReduceProof.verify();
 
-    merkleListRoot.assertEquals(validateReduceProof.publicInput.merkleListRoot);
-    depositListHash.assertEquals(
-      validateReduceProof.publicInput.depositListHash
+    this.merkleListRoot.requireEquals(
+      validateReduceProof.publicInput.merkleListRoot
     );
-    withdrawalListHash.assertEquals(
-      validateReduceProof.publicInput.withdrawalListHash
-    );
+    actionListHash.assertEquals(validateReduceProof.publicInput.actionListHash);
 
     actionStackProof.verifyIf(useActionStack);
     Provable.assertEqualIf(
@@ -247,7 +230,6 @@ class SettlementContract extends SmartContract {
     );
 
     this.actionState.set(actionState);
-    this.depositListHash.set(depositListHash);
-    this.withdrawalListHash.set(withdrawalListHash);
+    this.actionListHash.set(actionListHash);
   }
 }
