@@ -87,9 +87,11 @@ export async function sendProvedSettlement(
 
             const txData = JSON.parse(provedTxJson);
             txData.feePayer.body.nonce = currentNonce;
-            txData.feePayer.authorization = "";
 
             const tx = Transaction.fromJSON(txData);
+            (tx as any).transaction.feePayer.lazyAuthorization = {
+                kind: "lazy-signature",
+            };
             const result = await tx.sign([sender]).send();
             const txHash = result.hash;
 
