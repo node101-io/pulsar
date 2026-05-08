@@ -111,7 +111,8 @@ export async function sendProvedSettlement(
             });
         } catch (error) {
             logger.error("Settlement TX send error", {
-                error,
+                errorMessage: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
                 attempt,
                 epochLastPulsarBlock,
                 event: "mina_settlement_tx_error",
