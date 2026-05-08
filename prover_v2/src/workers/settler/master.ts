@@ -57,7 +57,10 @@ export class SettlerMaster extends Master<SettlerJob> {
                 if (job?.data.height) {
                     await incrementProofEpochFailCount(job.data.height);
                     await ProofEpochModel.updateOne(
-                        { height: job.data.height, kind: "txSending" as ProofKind },
+                        {
+                            height: job.data.height,
+                            kind: "txSending" as ProofKind,
+                        },
                         { $set: { kind: "settlement" as ProofKind } },
                     );
                 }
@@ -101,16 +104,30 @@ export class SettlerMaster extends Master<SettlerJob> {
 
     protected async handleTask(): Promise<void> {
         // Step 3a: is there an in-flight tx? if so, wait for it to land
-        const inFlight = await ProofEpochModel.findOne({
-            kind: { $eq: "txSending" as ProofKind },
-        });
-        if (inFlight) {
-            logger.debug("Settlement tx in-flight, waiting", {
-                epochHeight: inFlight.height,
-                event: "settler_waiting_in_flight",
+        const counts = await settlerQ.getJobCounts(
+            "waiting",
+            "active",
+            "delayed",
+        );
+        const queueSize = counts.waiting + counts.active + counts.delayed;
+
+        if (queueSize === 0) {
+            await ProofEpochModel.updateMany(
+                { kind: { $eq: "txSending" as ProofKind } },
+                { $set: { kind: "settlement" as ProofKind } },
+            );
+        } else {
+            const inFlight = await ProofEpochModel.findOne({
+                kind: { $eq: "txSending" as ProofKind },
             });
-            await sleep(MASTER_SLEEP_INTERVAL_MS);
-            return;
+            if (inFlight) {
+                logger.debug("Settlement tx in-flight, waiting", {
+                    epochHeight: inFlight.height,
+                    event: "settler_waiting_in_flight",
+                });
+                await sleep(MASTER_SLEEP_INTERVAL_MS);
+                return;
+            }
         }
 
         // Fast path: any settlement-ready epochs at all?
