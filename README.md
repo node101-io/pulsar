@@ -11,3 +11,4 @@ Pulsar is an application layer on top of the Mina Protocol using the Cosmos SDK,
 In short, it is designed as a side-chain for Mina for fast throughput zkApps.
 
 For more information, you can reach out from [hello@node101.io](mailto:hello@node101.io) or write from Telegram (@ygurlek).
+
