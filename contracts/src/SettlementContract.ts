@@ -67,6 +67,7 @@ class SettlementContract extends SmartContract {
 
   @method
   async initialize(merkleListRoot: Field) {
+    this.account.provedState.requireEquals(Bool(false));
     super.init();
     this.merkleListRoot.set(merkleListRoot);
     this.actionState.set(Reducer.initialActionState);
