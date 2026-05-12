@@ -40,16 +40,14 @@ describe('ValidateReduceProof tests', () => {
       publicInputs.push(
         new ValidateReducePublicInput({
           merkleListRoot: merkleList.hash,
-          depositListHash: Field(0),
-          withdrawalListHash: Field(0),
+          actionListHash: Field(0),
         })
       );
 
       expect(publicInputs[0].hash()).toEqual(
         Poseidon.hash([
           publicInputs[0].merkleListRoot,
-          publicInputs[0].depositListHash,
-          publicInputs[0].withdrawalListHash,
+          publicInputs[0].actionListHash,
         ])
       );
     });
@@ -94,8 +92,7 @@ describe('ValidateReduceProof tests', () => {
       publicInputs.push(
         new ValidateReducePublicInput({
           merkleListRoot: merkleList.hash,
-          depositListHash: Field(1),
-          withdrawalListHash: Field(1),
+          actionListHash: Field(1),
         })
       );
 
@@ -136,8 +133,7 @@ describe('ValidateReduceProof tests', () => {
       publicInputs.push(
         new ValidateReducePublicInput({
           merkleListRoot: merkleList.hash,
-          depositListHash: Field(2),
-          withdrawalListHash: Field(2),
+          actionListHash: Field(2),
         })
       );
 

@@ -629,8 +629,7 @@ describe('SettlementProof tests', () => {
       expect(zkapp.merkleListRoot.get()).toEqual(merkleList.hash);
       expect(zkapp.stateRoot.get()).toEqual(Field(0));
       expect(zkapp.blockHeight.get()).toEqual(Field.from(0));
-      expect(zkapp.depositListHash.get()).toEqual(Field(0));
-      expect(zkapp.withdrawalListHash.get()).toEqual(Field(0));
+      expect(zkapp.actionListHash.get()).toEqual(Field(0));
     });
 
     it('Reject contract initialization again', async () => {
@@ -726,14 +725,15 @@ describe('SettlementProof tests', () => {
     });
 
     it('Reduce actions', async () => {
-      const depositListHash = zkapp.depositListHash.get();
-      log(`Deposit list hash before: ${depositListHash.toString()}`);
+      const actionListHash = zkapp.actionListHash.get();
+      log(`Action list hash before: ${actionListHash.toString()}`);
       await reduce(feePayerKey);
-      log(`Deposit list hash after: ${zkapp.depositListHash.get().toString()}`);
+      log(`Action list hash after: ${zkapp.actionListHash.get().toString()}`);
 
-      expect(zkapp.depositListHash.get()).toEqual(
+      expect(zkapp.actionListHash.get()).toEqual(
         Poseidon.hash([
-          depositListHash,
+          actionListHash,
+          Field(1),
           ...feePayerAccount.toFields(),
           Field(1e10),
           ...PulsarAuth.from(Field(0), CosmosSignature.empty()).toFields(),
@@ -751,20 +751,18 @@ describe('SettlementProof tests', () => {
       await withdraw(feePayerKey, UInt64.from(1e9));
     });
     it('Reduce actions', async () => {
-      const withdrawalListHash = zkapp.withdrawalListHash.get();
-      log(`Withdrawal list hash before: ${withdrawalListHash.toString()}`);
+      const actionListHash = zkapp.actionListHash.get();
+      log(`Action list hash before: ${actionListHash.toString()}`);
       await reduce(feePayerKey);
-      log(
-        `Withdrawal list hash after: ${zkapp.withdrawalListHash
-          .get()
-          .toString()}`
-      );
+      log(`Action list hash after: ${zkapp.actionListHash.get().toString()}`);
 
-      expect(zkapp.withdrawalListHash.get()).toEqual(
+      expect(zkapp.actionListHash.get()).toEqual(
         Poseidon.hash([
-          withdrawalListHash,
+          actionListHash,
+          Field(2),
           ...feePayerAccount.toFields(),
           Field(1e9),
+          ...PulsarAuth.empty().toFields(),
         ])
       );
     });
@@ -782,8 +780,7 @@ describe('SettlementProof tests', () => {
       await withdraw(feePayerKey, UInt64.from(1e9 + 123));
     });
     it('Reduce actions', async () => {
-      const depositListHash = zkapp.depositListHash.get();
-      const withdrawalListHash = zkapp.withdrawalListHash.get();
+      const actionListHashBefore = zkapp.actionListHash.get();
 
       const actions = await fetchRawActions(
         zkapp.address,
@@ -793,42 +790,23 @@ describe('SettlementProof tests', () => {
 
       if (!actions) throw new Error('No actions found');
 
-      console.log(emptyActionListHash.toString());
-      console.log(
-        Poseidon.hash(
-          PulsarAction.fromRawAction(actions[0].actions[0]).toFields()
-        ).toString()
-      );
-
-      console.log(
-        Poseidon.hash([
-          emptyActionListHash,
-          ...PulsarAction.fromRawAction(actions[0].actions[0]).toFields(),
-        ]).toString()
-      );
-      console.log(
-        actionListAdd(
-          emptyActionListHash,
-          PulsarAction.fromRawAction(actions[0].actions[0])
-        ).toString()
-      );
-
       await reduce(feePayerKey);
 
-      expect(zkapp.depositListHash.get()).toEqual(
-        Poseidon.hash([
-          depositListHash,
-          ...feePayerAccount.toFields(),
-          Field(1e10 + 123),
-          ...PulsarAuth.from(Field(0), CosmosSignature.empty()).toFields(),
-        ])
-      );
+      const expectedAfterDeposit = Poseidon.hash([
+        actionListHashBefore,
+        Field(1),
+        ...feePayerAccount.toFields(),
+        Field(1e10 + 123),
+        ...PulsarAuth.from(Field(0), CosmosSignature.empty()).toFields(),
+      ]);
 
-      expect(zkapp.withdrawalListHash.get()).toEqual(
+      expect(zkapp.actionListHash.get()).toEqual(
         Poseidon.hash([
-          withdrawalListHash,
+          expectedAfterDeposit,
+          Field(2),
           ...feePayerAccount.toFields(),
           Field(1e9 + 123),
+          ...PulsarAuth.empty().toFields(),
         ])
       );
     });

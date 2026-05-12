@@ -10,7 +10,7 @@ export default {
   },
   testTimeout: 60 * 60 * 1000,
   transform: {
-    '^.+\\.(t)s$': 'ts-jest',
+    '^.+\\.(t)s$': ['ts-jest', { useESM: true }],
     '^.+\\.(j)s$': 'babel-jest',
   },
   resolver: '<rootDir>/jest-resolver.cjs',
