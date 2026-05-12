@@ -2,6 +2,7 @@ import { PublicKey } from "o1js";
 
 import logger from "../../common/logger.js";
 import { ProofEpochModel } from "../../db/models/ProofEpoch.js";
+import { BlockModel } from "../../db/models/Block.js";
 import { ProofKind } from "../../common/types.js";
 import {
     type MinaClientContext,
@@ -85,5 +86,15 @@ async function setProofEpochDone(height: number) {
     logger.info("Proof epoch marked as done after settlement", {
         epochHeight: height,
         event: "settler_epoch_done",
+    });
+
+    const deleted = await BlockModel.deleteMany({
+        height: { $gte: height, $lt: height + PROOF_EPOCH_SIZE },
+    });
+
+    logger.info(`Deleted ${deleted.deletedCount} proved blocks for epoch at height ${height}`, {
+        epochHeight: height,
+        deletedCount: deleted.deletedCount,
+        event: "settler_blocks_deleted",
     });
 }

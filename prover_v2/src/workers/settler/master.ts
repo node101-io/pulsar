@@ -141,10 +141,6 @@ export class SettlerMaster extends Master<SettlerJob> {
                 kind: { $eq: "txSending" as ProofKind },
             });
             if (inFlight) {
-                logger.debug("Settlement tx in-flight, waiting", {
-                    epochHeight: inFlight.height,
-                    event: "settler_waiting_in_flight",
-                });
                 await sleep(MASTER_SLEEP_INTERVAL_MS);
                 return;
             }
