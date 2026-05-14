@@ -10,7 +10,7 @@ import {
     getBridgeState,
     BridgeStateModel,
 } from "../../db/models/BridgeState.js";
-import { getCurrentMinaHeight } from "../../services/pulsar/txSender.js";
+import { getLatestMinaHeight } from "../../services/mina/client.js";
 import {
     MASTER_SLEEP_INTERVAL_MS,
     WORKER_TIMEOUT_MS,
@@ -30,7 +30,7 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
             queueName: "bridge-tx-sender",
             workerLabel: "BridgeTxSender",
             connection,
-            workerCount: 1, // sequential — each TX's finalRoot becomes next TX's initialRoot
+            workerCount: 1, // sıralı çalışmalı, her reduce bir sonraki için actionState'i güncelliyor
             lockDurationMs: WORKER_TIMEOUT_MS,
             stalledIntervalMs: STALLED_INTERVAL_MS,
             processJob: async (_workerId, job) => {
@@ -70,7 +70,6 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
     }
 
     async onStartup(): Promise<void> {
-        // Re-queue any blocks stuck in "submitted" state from a previous crash
         const stuckBlocks = await MinaActionModel.find({ status: "submitted" });
         for (const block of stuckBlocks) {
             await MinaActionModel.updateOne(
@@ -83,14 +82,12 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
             });
         }
 
-        // Clear any leftover jobs in the queue
         const queue = new Queue("bridge-tx-sender", { connection });
         await queue.obliterate({ force: true });
         await queue.close();
     }
 
     async handleTask(): Promise<void> {
-        // Don't enqueue while there's an active or waiting job, enforce sequential order
         const counts = await bridgeTxSenderQ.getJobCounts(
             "waiting",
             "active",
@@ -103,7 +100,7 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
 
         let currentMinaHeight: number;
         try {
-            currentMinaHeight = await getCurrentMinaHeight();
+            currentMinaHeight = await getLatestMinaHeight();
         } catch (error) {
             logger.error("Failed to get current Mina height", {
                 error,
@@ -116,7 +113,6 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
         const state = await getBridgeState();
         const nextHeight = state.lastSubmittedHeight + 1;
 
-        // Find the next block in order that has passed hard finality
         const block = await MinaActionModel.findOne({
             blockHeight: nextHeight,
             status: "pending",

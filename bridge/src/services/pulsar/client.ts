@@ -1,6 +1,11 @@
 import * as grpc from "@grpc/grpc-js";
 import { GrpcReflection } from "grpc-js-reflection-client";
 
+export interface ValidatorSignature {
+    publicKey: string;
+    signature: string;
+}
+
 export async function createClient(
     serviceName: string,
     rpcAddress: string,
@@ -25,11 +30,9 @@ export async function createClient(
     return new serviceClass(rpcAddress, credentials);
 }
 
-export async function getLatestPulsarHeight(tmClient: any): Promise<number> {
-    return new Promise<number>((resolve, reject) => {
-        tmClient.GetLatestBlock({}, (err: unknown, res: any) => {
-            if (err) return reject(err as Error);
-            resolve(Number(res?.block?.header?.height ?? 0));
-        });
-    });
+export async function requestSignatures(
+    _minaBlockHeight: number,
+): Promise<ValidatorSignature[]> {
+    // pulsar grpc'den verilen height için validator signature'larını al
+    throw new Error("Not implemented: requestSignatures");
 }

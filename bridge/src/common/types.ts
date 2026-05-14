@@ -1,9 +1,9 @@
 export type MinaActionStatus = "pending" | "submitted" | "done" | "failed";
 
-export interface MinaAction {
-    type: number;
-    accountX: string;
-    accountIsOdd: boolean;
+export interface PulsarActionData {
+    action_type: string;
+    public_key: string;
     amount: string;
-    sender: string;
+    cosmos_address: string;
+    cosmos_signature: string;
 }

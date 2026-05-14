@@ -1,21 +1,36 @@
-// TODO: Implement once Mina archive node API/format is confirmed
-// The archive node endpoint and query format need to be determined
+import { fetchBlockHeight, setMinaNetwork } from "pulsar-contracts";
+import type { PulsarActionData } from "../../common/types.js";
+
+type MinaNetwork = "devnet" | "mainnet" | "lightnet";
+
+export function initMinaNetwork(): void {
+    const network = (process.env.MINA_NETWORK ?? "lightnet") as MinaNetwork;
+    setMinaNetwork(network);
+}
 
 export interface MinaActionEntry {
     blockHeight: number;
-    actions: object[];
+    actions: PulsarActionData[];
 }
 
 export async function getLatestMinaHeight(): Promise<number> {
-    // TODO: query Mina archive node for latest block height
-    throw new Error("Not implemented: getLatestMinaHeight");
+    const network = (process.env.MINA_NETWORK ?? "lightnet") as MinaNetwork;
+    return fetchBlockHeight(network);
 }
 
 export async function fetchActionsByHeight(
-    fromHeight: number,
-    toHeight: number,
+    _fromHeight: number,
+    _toHeight: number,
 ): Promise<MinaActionEntry[]> {
-    // TODO: fetch all actions from Mina archive node in [fromHeight, toHeight]
-    // grouped by block height, returning one entry per block that has actions
+    // archive node'dan block bazlı action sorgusu nasıl yapılacak henüz belli değil
     throw new Error("Not implemented: fetchActionsByHeight");
+}
+
+export async function getContractMerkleRoot(): Promise<string> {
+    // mina graphql'den contract state'i çek
+    throw new Error("Not implemented: getContractMerkleRoot");
+}
+
+export async function getContractActionState(): Promise<string> {
+    throw new Error("Not implemented: getContractActionState");
 }
