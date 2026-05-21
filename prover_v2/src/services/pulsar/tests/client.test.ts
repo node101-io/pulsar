@@ -4,10 +4,7 @@ import {
     computeValidatorListHash,
     getLatestHeight,
     getBlockData,
-    getMinaPubKeyFromCosmosAddress,
-    getCosmosValidatorSet,
-    getValidatorSet,
-    getVoteExt,
+    getVoteExtsByHeight,
     storePulsarBlock,
 } from "../client.js";
 import * as db from "../../../db/index.js";
@@ -21,6 +18,15 @@ vi.mock("../../../common/logger.js", () => ({
         debug: vi.fn(),
     },
 }));
+
+// 33-byte Mina pubkey bytes: X[32] || isOdd[1]
+function makePubkeyBytes(pubkey: PublicKey): Buffer {
+    const fields = pubkey.toFields();
+    const xBig = BigInt(fields[0].toString());
+    const xHex = xBig.toString(16).padStart(64, "0");
+    const isOdd = fields[1].toString() === "1" ? 1 : 0;
+    return Buffer.concat([Buffer.from(xHex, "hex"), Buffer.from([isOdd])]);
+}
 
 describe("pulsar client", () => {
     describe("computeValidatorListHash", () => {
@@ -87,280 +93,88 @@ describe("pulsar client", () => {
         });
     });
 
-    describe("getCosmosValidatorSet", () => {
-        it("returns validator addresses from Tendermint client", async () => {
-            const mockTmClient = {
-                GetValidatorSetByHeight: vi.fn((req, callback) => {
-                    callback(null, {
-                        validators: [
-                            { address: "cosmos1addr1" },
-                            { address: "cosmos1addr2" },
-                        ],
-                    });
-                }),
-            };
-
-            const validators = await getCosmosValidatorSet(mockTmClient, 100);
-
-            expect(validators).toEqual(["cosmos1addr1", "cosmos1addr2"]);
-            expect(mockTmClient.GetValidatorSetByHeight).toHaveBeenCalledWith(
-                { height: "100" },
-                expect.any(Function),
-            );
-        });
-
-        it("rejects on gRPC error", async () => {
-            const mockTmClient = {
-                GetValidatorSetByHeight: vi.fn((req, callback) => {
-                    callback(new Error("gRPC error"), null);
-                }),
-            };
-
-            await expect(
-                getCosmosValidatorSet(mockTmClient, 100),
-            ).rejects.toThrow("gRPC error");
-        });
-    });
-
-    describe("getMinaPubKeyFromCosmosAddress", () => {
-        it("retrieves Mina public key for Cosmos address", async () => {
+    describe("getVoteExtsByHeight", () => {
+        it("returns vote extensions for given height via x-cosmos-block-height header", async () => {
             const mockPubkey = PublicKey.fromBase58(
                 "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
             );
-            const mockMkClient = {
-                KeyStore: vi.fn((req, callback) => {
+            const pubkeyBytes = makePubkeyBytes(mockPubkey);
+            const sigBytes = Buffer.alloc(64, 0);
+
+            const mockVpClient = {
+                VoteExtensions: vi.fn((req, metadata, callback) => {
                     callback(null, {
-                        keyStore: {
-                            minaPublicKey: "encoded_address",
-                        },
-                    });
-                }),
-                GetMinaPubkey: vi.fn((req, callback) => {
-                    callback(null, {
-                        x: mockPubkey.toFields()[0].toString(),
-                        is_odd:
-                            mockPubkey.toFields()[1].toString() === "1"
-                                ? "true"
-                                : "false",
-                    });
-                }),
-            };
-
-            const pubkey = await getMinaPubKeyFromCosmosAddress(
-                mockMkClient,
-                "cosmos1addr",
-            );
-
-            expect(typeof pubkey).toBe("string");
-            expect(pubkey.length).toBeGreaterThan(0);
-            expect(mockMkClient.KeyStore).toHaveBeenCalledWith(
-                { index: "cosmos1addr" },
-                expect.any(Function),
-            );
-        });
-
-        it("rejects when no Mina public key found", async () => {
-            const mockMkClient = {
-                KeyStore: vi.fn((req, callback) => {
-                    callback(null, {
-                        keyStore: {},
-                    });
-                }),
-            };
-
-            await expect(
-                getMinaPubKeyFromCosmosAddress(mockMkClient, "cosmos1addr"),
-            ).rejects.toThrow("No Mina public key found");
-        });
-    });
-
-    describe("getValidatorSet", () => {
-        beforeEach(() => {
-            vi.clearAllMocks();
-        });
-
-        it("converts Cosmos validators to Mina public keys", async () => {
-            const mockPubkey = PublicKey.fromBase58(
-                "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
-            );
-            const mockTmClient = {
-                GetValidatorSetByHeight: vi.fn((req, callback) => {
-                    callback(null, {
-                        validators: [
-                            { address: "cosmos1addr1" },
-                            { address: "cosmos1addr2" },
-                        ],
-                    });
-                }),
-            };
-            const mockMkClient = {
-                KeyStore: vi.fn((req, callback) => {
-                    callback(null, {
-                        keyStore: {
-                            minaPublicKey: "encoded_address",
-                        },
-                    });
-                }),
-                GetMinaPubkey: vi.fn((req, callback) => {
-                    callback(null, {
-                        x: mockPubkey.toFields()[0].toString(),
-                        is_odd:
-                            mockPubkey.toFields()[1].toString() === "1"
-                                ? "true"
-                                : "false",
-                    });
-                }),
-            };
-
-            const validators = await getValidatorSet(
-                mockTmClient,
-                mockMkClient,
-                100,
-            );
-
-            expect(validators).toHaveLength(2);
-            expect(validators.every((v) => typeof v === "string")).toBe(true);
-        });
-
-        it("throws error when no validators found", async () => {
-            const mockTmClient = {
-                GetValidatorSetByHeight: vi.fn((req, callback) => {
-                    callback(null, {
-                        validators: [],
-                    });
-                }),
-            };
-            const mockMkClient = {};
-
-            await expect(
-                getValidatorSet(mockTmClient, mockMkClient, 100),
-            ).rejects.toThrow("No validators found");
-        });
-
-        it("continues when individual validator key retrieval fails", async () => {
-            const mockPubkey = PublicKey.fromBase58(
-                "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
-            );
-            const mockTmClient = {
-                GetValidatorSetByHeight: vi.fn((req, callback) => {
-                    callback(null, {
-                        validators: [
-                            { address: "cosmos1addr1" },
-                            { address: "cosmos1addr2" },
-                        ],
-                    });
-                }),
-            };
-            const mockMkClient = {
-                KeyStore: vi.fn((req, callback) => {
-                    if (req.index === "cosmos1addr1") {
-                        callback(new Error("Key not found"), null);
-                    } else {
-                        callback(null, {
-                            keyStore: {
-                                minaPublicKey: "encoded_address",
+                        persisted_vote_extensions_block_height: "100",
+                        vote_extensions: [
+                            {
+                                mina_public_key: pubkeyBytes.toString("base64"),
+                                vote_extension: sigBytes.toString("base64"),
                             },
-                        });
-                    }
-                }),
-                GetMinaPubkey: vi.fn((req, callback) => {
-                    callback(null, {
-                        x: mockPubkey.toFields()[0].toString(),
-                        is_odd:
-                            mockPubkey.toFields()[1].toString() === "1"
-                                ? "true"
-                                : "false",
+                        ],
                     });
                 }),
             };
 
-            const validators = await getValidatorSet(
-                mockTmClient,
-                mockMkClient,
-                100,
-            );
+            const voteExt = await getVoteExtsByHeight(mockVpClient, 100);
 
-            expect(validators.length).toBeGreaterThanOrEqual(0);
-        });
-    });
-
-    describe("getVoteExt", () => {
-        it("retrieves vote extensions with pagination", async () => {
-            const mockPubkey = PublicKey.fromBase58(
-                "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
-            );
-            let callCount = 0;
-            const mockMkClient = {
-                VoteExtByHeight: vi.fn((req, callback) => {
-                    callCount++;
-                    if (callCount === 1) {
-                        callback(null, {
-                            voteExt: [
-                                {
-                                    index: "0",
-                                    height: "100",
-                                    validatorAddr: "encoded1",
-                                    signature: "0".repeat(128),
-                                },
-                            ],
-                            pagination: { next_key: Buffer.from("next") },
-                        });
-                    } else {
-                        callback(null, {
-                            voteExt: [
-                                {
-                                    index: "1",
-                                    height: "100",
-                                    validatorAddr: "encoded2",
-                                    signature: "1".repeat(128),
-                                },
-                            ],
-                            pagination: { next_key: null },
-                        });
-                    }
-                }),
-                GetMinaPubkey: vi.fn((req, callback) => {
-                    callback(null, {
-                        x: mockPubkey.toFields()[0].toString(),
-                        is_odd:
-                            mockPubkey.toFields()[1].toString() === "1"
-                                ? "true"
-                                : "false",
-                    });
-                }),
-            };
-
-            const voteExt = await getVoteExt(mockMkClient, 100);
-
-            expect(voteExt.length).toBeGreaterThanOrEqual(1);
-            expect(mockMkClient.VoteExtByHeight).toHaveBeenCalledTimes(2);
+            expect(voteExt).toHaveLength(1);
+            expect(voteExt[0].height).toBe(100);
+            expect(typeof voteExt[0].validatorAddr).toBe("string");
+            expect(typeof voteExt[0].signature).toBe("string");
         });
 
-        it("handles empty vote extensions", async () => {
-            const mockMkClient = {
-                VoteExtByHeight: vi.fn((req, callback) => {
+        it("returns empty array when persisted height does not match (vote exts not available yet)", async () => {
+            const mockVpClient = {
+                VoteExtensions: vi.fn((req, metadata, callback) => {
                     callback(null, {
-                        voteExt: [],
-                        pagination: { next_key: null },
+                        persisted_vote_extensions_block_height: "99",
+                        vote_extensions: [],
                     });
                 }),
             };
 
-            const voteExt = await getVoteExt(mockMkClient, 100);
+            const result = await getVoteExtsByHeight(mockVpClient, 100);
+            expect(result).toEqual([]);
+        });
 
-            expect(voteExt).toEqual([]);
+        it("returns empty array when persisted height is absent (early block)", async () => {
+            const mockVpClient = {
+                VoteExtensions: vi.fn((req, metadata, callback) => {
+                    // Only query_block_height present, no persisted field
+                    callback(null, { query_block_height: "3" });
+                }),
+            };
+
+            const result = await getVoteExtsByHeight(mockVpClient, 1);
+            expect(result).toEqual([]);
         });
 
         it("rejects on gRPC error", async () => {
-            const mockMkClient = {
-                VoteExtByHeight: vi.fn((req, callback) => {
+            const mockVpClient = {
+                VoteExtensions: vi.fn((req, metadata, callback) => {
                     callback(new Error("gRPC error"), null);
                 }),
             };
 
-            await expect(getVoteExt(mockMkClient, 100)).rejects.toThrow(
+            await expect(getVoteExtsByHeight(mockVpClient, 100)).rejects.toThrow(
                 "gRPC error",
             );
+        });
+
+        it("passes x-cosmos-block-height: H+2 in metadata", async () => {
+            const mockVpClient = {
+                VoteExtensions: vi.fn((req, metadata, callback) => {
+                    callback(null, {
+                        persisted_vote_extensions_block_height: "50",
+                        vote_extensions: [],
+                    });
+                }),
+            };
+
+            await getVoteExtsByHeight(mockVpClient, 50);
+
+            const [, metadata] = mockVpClient.VoteExtensions.mock.calls[0];
+            expect(metadata.get("x-cosmos-block-height")).toEqual(["52"]);
         });
     });
 
@@ -369,6 +183,9 @@ describe("pulsar client", () => {
             const mockPubkey = PublicKey.fromBase58(
                 "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
             );
+            const pubkeyBytes = makePubkeyBytes(mockPubkey);
+            const sigBytes = Buffer.alloc(64, 0);
+
             const mockTmClient = {
                 GetBlockByHeight: vi.fn((req, callback) => {
                     callback(null, {
@@ -385,38 +202,39 @@ describe("pulsar client", () => {
                 }),
                 GetValidatorSetByHeight: vi.fn((req, callback) => {
                     callback(null, {
-                        validators: [{ address: "cosmos1addr" }],
+                        validators: [
+                            { pub_key: { key: pubkeyBytes.toString("base64") } },
+                        ],
                     });
                 }),
             };
-            const mockMkClient = {
-                KeyStore: vi.fn((req, callback) => {
+
+            const mockVpClient = {
+                VoteExtensions: vi.fn((req, metadata, callback) => {
                     callback(null, {
-                        keyStore: {
-                            minaPublicKey: "encoded_address",
-                        },
+                        persisted_vote_extensions_block_height: "100",
+                        vote_extensions: [
+                            {
+                                mina_public_key: pubkeyBytes.toString("base64"),
+                                vote_extension: sigBytes.toString("base64"),
+                            },
+                        ],
                     });
                 }),
-                GetMinaPubkey: vi.fn((req, callback) => {
+            };
+
+            const mockKrClient = {
+                GetValidatorMinaPubKey: vi.fn((req, callback) => {
                     callback(null, {
-                        x: mockPubkey.toFields()[0].toString(),
-                        is_odd:
-                            mockPubkey.toFields()[1].toString() === "1"
-                                ? "true"
-                                : "false",
-                    });
-                }),
-                VoteExtByHeight: vi.fn((req, callback) => {
-                    callback(null, {
-                        voteExt: [],
-                        pagination: { next_key: null },
+                        validator_mina_pub_key: pubkeyBytes,
                     });
                 }),
             };
 
             const blockData = await getBlockData(
                 mockTmClient,
-                mockMkClient,
+                mockVpClient,
+                mockKrClient,
                 100,
             );
 
@@ -442,7 +260,8 @@ describe("pulsar client", () => {
                 voteExt: [],
             };
 
-            vi.mocked(db.storeBlock).mockResolvedValue(undefined as any);
+            vi.mocked(db.storeBlock).mockResolvedValue({ _id: "mock_id" } as any);
+            vi.mocked(db.storeBlockInBlockEpoch).mockResolvedValue(undefined as any);
 
             await storePulsarBlock(blockData);
 
@@ -467,7 +286,8 @@ describe("pulsar client", () => {
                 voteExt: [],
             };
 
-            vi.mocked(db.storeBlock).mockResolvedValue(undefined as any);
+            vi.mocked(db.storeBlock).mockResolvedValue({ _id: "mock_id" } as any);
+            vi.mocked(db.storeBlockInBlockEpoch).mockResolvedValue(undefined as any);
 
             await storePulsarBlock(blockData);
 

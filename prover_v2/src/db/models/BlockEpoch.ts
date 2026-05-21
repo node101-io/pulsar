@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 import {
     BLOCK_EPOCH_SIZE,
+    EPOCH_START_HEIGHT,
     PROOF_TTL_SECONDS,
     WORKER_TIMEOUT_MS,
 } from "../../config/constants.js";
@@ -70,9 +71,9 @@ export async function storeBlockInBlockEpoch(
         throw new Error(`Index must be between 0 and ${BLOCK_EPOCH_SIZE - 1}`);
     }
 
-    // Epochs start at height 1 (block 0 is genesis context, not provable)
     const blockEpochHeight =
-        Math.floor((height - 1) / BLOCK_EPOCH_SIZE) * BLOCK_EPOCH_SIZE + 1;
+        EPOCH_START_HEIGHT +
+        Math.floor((height - EPOCH_START_HEIGHT) / BLOCK_EPOCH_SIZE) * BLOCK_EPOCH_SIZE;
 
     await BlockEpochModel.updateOne(
         { height: blockEpochHeight },

@@ -10,9 +10,13 @@ export const WORKER_COUNT = 10;
 export const PROOF_EPOCH_SETTLEMENT_INDEX = PROOF_EPOCH_LEAF_COUNT * 2 - 2;
 
 // Pulsar client constants
-export const POLL_INTERVAL_MS = 5_000;
+export const POLL_INTERVAL_MS = 3_000;
+// first epoch 1-9
+export const EPOCH_START_HEIGHT = 2;
 export const TENDERMINT_SERVICE_NAME = "cosmos.base.tendermint.v1beta1.Service";
-export const MINA_KEYS_SERVICE_NAME = "interchain_security.minakeys.Query";
+export const VOTE_PERSISTENCE_SERVICE_NAME =
+    "pulsarchain.votepersistence.v1.Query";
+export const MINA_KEYS_SERVICE_NAME = "pulsarchain.keyregistry.v1.Query";
 
 // Monitor constants
 export const MAX_FAIL_COUNT = 3;

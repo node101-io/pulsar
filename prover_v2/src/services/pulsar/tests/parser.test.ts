@@ -1,8 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
+import { PublicKey } from "o1js";
 import {
     parseTendermintBlockResponse,
     decodeMinaSignature,
     parseValidatorSetResponse,
+    parseMinaPubkeyFromBytes,
+    parseValidatorSetPubkeys,
 } from "../parser.js";
 
 describe("pulsar parser", () => {
@@ -80,6 +83,58 @@ describe("pulsar parser", () => {
             const res = { validators: [] };
             const result = parseValidatorSetResponse(res);
             expect(result).toEqual([]);
+        });
+    });
+
+    describe("parseMinaPubkeyFromBytes", () => {
+        it("decodes 33-byte buffer to base58 public key", () => {
+            const pubkey = PublicKey.fromBase58(
+                "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+            );
+            const fields = pubkey.toFields();
+            const xBig = BigInt(fields[0].toString());
+            const xHex = xBig.toString(16).padStart(64, "0");
+            const isOdd = fields[1].toString() === "1" ? 1 : 0;
+            const bytes = Buffer.concat([
+                Buffer.from(xHex, "hex"),
+                Buffer.from([isOdd]),
+            ]);
+
+            const result = parseMinaPubkeyFromBytes(bytes);
+
+            expect(result).toBe(
+                "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+            );
+        });
+    });
+
+    describe("parseValidatorSetPubkeys", () => {
+        it("extracts pub_key.key fields from validators", () => {
+            const res = {
+                validators: [
+                    { pub_key: { key: "base64key1" } },
+                    { pub_key: { key: "base64key2" } },
+                ],
+            };
+
+            const result = parseValidatorSetPubkeys(res);
+
+            expect(result).toEqual(["base64key1", "base64key2"]);
+        });
+
+        it("returns empty string for missing pub_key", () => {
+            const res = {
+                validators: [{ pub_key: {} }, {}],
+            };
+
+            const result = parseValidatorSetPubkeys(res);
+
+            expect(result).toEqual(["", ""]);
+        });
+
+        it("returns empty array for empty validators", () => {
+            expect(parseValidatorSetPubkeys({ validators: [] })).toEqual([]);
+            expect(parseValidatorSetPubkeys({})).toEqual([]);
         });
     });
 

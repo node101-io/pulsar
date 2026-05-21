@@ -5,17 +5,25 @@ import { join, dirname } from "path";
 import { readFile, writeFile, rename } from "fs/promises";
 
 import logger from "../../common/logger.js";
-import { fetchLastStoredBlock } from "../../db/index.js";
+import {
+    fetchLastStoredBlock,
+    BlockModel,
+    BlockEpochModel,
+} from "../../db/index.js";
 import { BlockData, VoteExt } from "../../common/types.js";
 import {
     POLL_INTERVAL_MS,
+    BLOCK_EPOCH_SIZE,
+    EPOCH_START_HEIGHT,
     TENDERMINT_SERVICE_NAME,
+    VOTE_PERSISTENCE_SERVICE_NAME,
     MINA_KEYS_SERVICE_NAME,
 } from "../../config/constants.js";
 import {
     createClient,
     getLatestHeight,
     getBlockData,
+    getVoteExtsByHeight,
     storePulsarBlock,
 } from "./client.js";
 import { decodeMinaSignature } from "./parser.js";
@@ -28,14 +36,99 @@ const __dirname = dirname(__filename);
 // Real sync
 // ---------------------------------------------------------------------------
 
-type TmClient = any;
-type MkClient = any;
+async function backfillMissingVoteExtensions(
+    vpClient: any,
+    maxHeight: number,
+): Promise<void> {
+    const blocks = await BlockModel.find({
+        height: { $gt: 0, $lte: maxHeight },
+        voteExt: { $size: 0 },
+    }).sort({ height: 1 });
+
+    if (blocks.length === 0) return;
+
+    logger.info(`Backfilling vote extensions for ${blocks.length} blocks`, {
+        heights: blocks.map((b) => b.height),
+        event: "vote_ext_backfill_start",
+    });
+
+    const epochsToReset = new Set<number>();
+
+    for (const block of blocks) {
+        try {
+            const voteExt = await getVoteExtsByHeight(vpClient, block.height);
+            if (voteExt.length === 0) continue;
+
+            await BlockModel.updateOne(
+                { height: block.height },
+                { $set: { voteExt } },
+            );
+
+            const epochHeight =
+                EPOCH_START_HEIGHT +
+                Math.floor((block.height - EPOCH_START_HEIGHT) / BLOCK_EPOCH_SIZE) *
+                    BLOCK_EPOCH_SIZE;
+            epochsToReset.add(epochHeight);
+
+            logger.info(
+                `Backfilled vote extensions for block ${block.height}`,
+                {
+                    voteExtCount: voteExt.length,
+                    event: "vote_ext_backfilled",
+                },
+            );
+        } catch (err) {
+            logger.warn(
+                `Could not backfill vote extensions for block ${block.height}`,
+                {
+                    error: (err as any)?.message,
+                    event: "vote_ext_backfill_error",
+                },
+            );
+        }
+    }
+
+    for (const epochHeight of epochsToReset) {
+        await BlockEpochModel.updateOne(
+            { height: epochHeight },
+            { $set: { epochStatus: "waiting", failCount: 0 } },
+        );
+        logger.info(
+            `Reset block epoch ${epochHeight} to waiting for re-proof`,
+            {
+                event: "epoch_reset",
+            },
+        );
+    }
+}
 
 async function startRealPulsarSync(): Promise<void> {
     const lastStored = await fetchLastStoredBlock();
+    // currentHeight = 0 means nothing stored yet; loop will start at h = 1.
+    // We only process block H when latestHeight >= H + 2 so that
+    // x-cosmos-block-height: H+2 is guaranteed to return vote extensions for H.
     let currentHeight = lastStored?.height ?? 0;
 
-    const rpcAddress = process.env.PULSAR_GRPC_ENDPOINT || "localhost:50051";
+    const rpcAddress = process.env.PULSAR_GRPC_ENDPOINT || "localhost:9090";
+    const credentials = grpc.credentials.createInsecure();
+
+    const tmClient = await createClient(
+        TENDERMINT_SERVICE_NAME,
+        rpcAddress,
+        credentials,
+    );
+    const vpClient = await createClient(
+        VOTE_PERSISTENCE_SERVICE_NAME,
+        rpcAddress,
+        credentials,
+    );
+    const krClient = await createClient(
+        MINA_KEYS_SERVICE_NAME,
+        rpcAddress,
+        credentials,
+    );
+
+    await backfillMissingVoteExtensions(vpClient, currentHeight);
 
     logger.info("Starting Pulsar sync loop", {
         rpcAddress,
@@ -43,35 +136,25 @@ async function startRealPulsarSync(): Promise<void> {
         event: "pulsar_sync_start",
     });
 
-    const credentials = grpc.credentials.createInsecure();
-
-    const tmClient = (await createClient(
-        TENDERMINT_SERVICE_NAME,
-        rpcAddress,
-        credentials,
-    )) as TmClient;
-    const mkClient = (await createClient(
-        MINA_KEYS_SERVICE_NAME,
-        rpcAddress,
-        credentials,
-    )) as MkClient;
-
     while (true) {
         try {
             const latestHeight = await getLatestHeight(tmClient);
+            // VoteExtensions for H requires x-cosmos-block-height: H+3, so H+3 must exist
+            const processUpTo = latestHeight - 3;
 
-            if (latestHeight > currentHeight) {
+            if (processUpTo > currentHeight) {
                 logger.info("New Pulsar blocks detected", {
                     fromHeight: currentHeight + 1,
-                    toHeight: latestHeight,
-                    count: latestHeight - currentHeight,
+                    toHeight: processUpTo,
+                    count: processUpTo - currentHeight,
                     event: "pulsar_new_blocks",
                 });
 
-                for (let h = currentHeight + 1; h <= latestHeight; h++) {
+                for (let h = currentHeight + 1; h <= processUpTo; h++) {
                     const blockData: BlockData = await getBlockData(
                         tmClient,
-                        mkClient,
+                        vpClient,
+                        krClient,
                         h,
                     );
                     await storePulsarBlock(blockData);
@@ -79,8 +162,12 @@ async function startRealPulsarSync(): Promise<void> {
                 }
             }
         } catch (error) {
+            const err = error as any;
             logger.error("Error during Pulsar sync loop", {
-                error,
+                message: err?.message ?? String(error),
+                code: err?.code,
+                details: err?.details,
+                stack: err?.stack,
                 currentHeight,
                 event: "pulsar_sync_error",
             });

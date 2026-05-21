@@ -10,6 +10,7 @@ import {
 import {
     WORKER_TIMEOUT_MS,
     BLOCK_EPOCH_SIZE,
+    EPOCH_START_HEIGHT,
     PROOF_EPOCH_LEAF_COUNT,
     PROOF_EPOCH_SIZE,
 } from "../../config/constants.js";
@@ -88,7 +89,9 @@ export async function worker(task: BlockProverJob) {
     // Skip proof generation if a proof already exists (re-run after failure)
     if (updatedEpoch.failCount > 0) {
         const proofEpochHeight =
-            Math.floor(epochHeight / PROOF_EPOCH_SIZE) * PROOF_EPOCH_SIZE;
+            EPOCH_START_HEIGHT +
+            Math.floor((epochHeight - EPOCH_START_HEIGHT) / PROOF_EPOCH_SIZE) *
+                PROOF_EPOCH_SIZE;
         const proofEpoch = await ProofEpochModel.findOne({
             height: proofEpochHeight,
             kind: "blockProof" as ProofKind,
@@ -106,10 +109,20 @@ export async function worker(task: BlockProverJob) {
         }
     }
 
-    const proofId = await serializeProving(async () => {
-        await ensureCompiled();
-        return createProof(epochHeight);
-    });
+    let proofId;
+    try {
+        proofId = await serializeProving(async () => {
+            await ensureCompiled();
+            return createProof(epochHeight);
+        });
+    } catch (err) {
+        await BlockEpochModel.findOneAndUpdate(
+            { height: epochHeight },
+            { $set: { epochStatus: "waiting" as BlockStatus } },
+        );
+        throw err;
+    }
+
     await createOrUpdateProofEpoch(epochHeight, proofId);
 
     await BlockEpochModel.findOneAndUpdate(
@@ -160,8 +173,22 @@ async function createProof(height: number) {
         );
         blocks.push(block);
 
+        // Reorder voteExt to match prev.validators order so the MerkleList
+        // hash equals prev.validatorListHash as the circuit expects
+        const voteExtByAddr = new Map(
+            cur.voteExt.map((ext) => [ext.validatorAddr, ext]),
+        );
+        const orderedVoteExt = prev.validators.map((addr) => {
+            const ext = voteExtByAddr.get(addr);
+            if (!ext)
+                throw new Error(
+                    `Missing voteExt for validator ${addr} in block ${cur.height}`,
+                );
+            return ext;
+        });
+
         const sigList = SignaturePublicKeyList.fromArray(
-            cur.voteExt.map((ext) => [
+            orderedVoteExt.map((ext) => [
                 Signature.fromBase58(ext.signature),
                 PublicKey.fromBase58(ext.validatorAddr),
             ]),
@@ -215,9 +242,11 @@ async function createOrUpdateProofEpoch(
     proofId: Types.ObjectId,
 ) {
     const proofEpochHeight =
-        Math.floor(blockEpochHeight / PROOF_EPOCH_SIZE) * PROOF_EPOCH_SIZE;
+        EPOCH_START_HEIGHT +
+        Math.floor((blockEpochHeight - EPOCH_START_HEIGHT) / PROOF_EPOCH_SIZE) *
+            PROOF_EPOCH_SIZE;
     const leafIndex =
-        Math.floor(blockEpochHeight / BLOCK_EPOCH_SIZE) %
+        Math.floor((blockEpochHeight - EPOCH_START_HEIGHT) / BLOCK_EPOCH_SIZE) %
         PROOF_EPOCH_LEAF_COUNT;
 
     await ProofEpochModel.updateOne(

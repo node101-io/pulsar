@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { startPulsarSync } from "../sync.js";
 import * as client from "../client.js";
 import * as db from "../../../db/index.js";
@@ -6,8 +6,17 @@ import * as sleepModule from "../../../common/sleep.js";
 import { BlockData } from "../../../common/types.js";
 
 vi.mock("../client.js");
-vi.mock("../../../db/index.js");
 vi.mock("../../../common/sleep.js");
+vi.mock("../../../db/index.js", () => ({
+    fetchLastStoredBlock: vi.fn(),
+    BlockModel: {
+        find: vi.fn().mockReturnValue({ sort: vi.fn().mockResolvedValue([]) }),
+        updateOne: vi.fn().mockResolvedValue({}),
+    },
+    BlockEpochModel: {
+        updateOne: vi.fn().mockResolvedValue({}),
+    },
+}));
 vi.mock("../../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
@@ -19,7 +28,8 @@ vi.mock("../../../common/logger.js", () => ({
 
 describe("pulsar sync", () => {
     let mockTmClient: any;
-    let mockMkClient: any;
+    let mockVpClient: any;
+    let mockKrClient: any;
     let sleepCallCount: number;
 
     beforeEach(() => {
@@ -31,17 +41,17 @@ describe("pulsar sync", () => {
             GetBlockByHeight: vi.fn(),
             GetValidatorSetByHeight: vi.fn(),
         };
-        mockMkClient = {
-            KeyStore: vi.fn(),
-            VoteExtByHeight: vi.fn(),
-            GetMinaPubkey: vi.fn(),
+        mockVpClient = {
+            VoteExtensions: vi.fn(),
+        };
+        mockKrClient = {
+            GetValidatorMinaPubKey: vi.fn(),
         };
 
         vi.mocked(client.createClient).mockImplementation(async (serviceName) => {
-            if (serviceName.includes("tendermint")) {
-                return mockTmClient;
-            }
-            return mockMkClient;
+            if (serviceName.includes("tendermint")) return mockTmClient;
+            if (serviceName.includes("votepersistence")) return mockVpClient;
+            return mockKrClient;
         });
 
         vi.mocked(sleepModule.sleep).mockImplementation(async () => {
@@ -61,11 +71,11 @@ describe("pulsar sync", () => {
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
         expect(db.fetchLastStoredBlock).toHaveBeenCalled();
-        expect(client.createClient).toHaveBeenCalledTimes(2);
+        expect(client.createClient).toHaveBeenCalledTimes(3);
         expect(client.getLatestHeight).toHaveBeenCalledWith(mockTmClient);
     });
 
-    it("processes new blocks when latestHeight > currentHeight", async () => {
+    it("processes new blocks up to latestHeight - 2", async () => {
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue({ height: 5 } as any);
 
         const mockBlockData: BlockData = {
@@ -77,12 +87,45 @@ describe("pulsar sync", () => {
 
         vi.mocked(client.getBlockData).mockResolvedValue(mockBlockData);
         vi.mocked(client.storePulsarBlock).mockResolvedValue();
-        vi.mocked(client.getLatestHeight).mockResolvedValue(7);
+        // latestHeight=9 → processUpTo=7 → h=6,7 (2 blocks)
+        vi.mocked(client.getLatestHeight).mockResolvedValue(9);
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
         expect(client.getBlockData).toHaveBeenCalledTimes(2);
         expect(client.storePulsarBlock).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not process blocks when latestHeight - 2 <= currentHeight", async () => {
+        vi.mocked(db.fetchLastStoredBlock).mockResolvedValue({ height: 10 } as any);
+        // latestHeight=12 → processUpTo=10, not > currentHeight(10) → no blocks
+        vi.mocked(client.getLatestHeight).mockResolvedValue(12);
+
+        await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
+
+        expect(client.getBlockData).not.toHaveBeenCalled();
+        expect(client.storePulsarBlock).not.toHaveBeenCalled();
+    });
+
+    it("passes all 3 clients to getBlockData", async () => {
+        vi.mocked(db.fetchLastStoredBlock).mockResolvedValue({ height: 5 } as any);
+        vi.mocked(client.getLatestHeight).mockResolvedValue(8);
+        vi.mocked(client.getBlockData).mockResolvedValue({
+            height: 6,
+            stateRoot: "0x1",
+            validators: [],
+            voteExt: [],
+        });
+        vi.mocked(client.storePulsarBlock).mockResolvedValue();
+
+        await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
+
+        expect(client.getBlockData).toHaveBeenCalledWith(
+            mockTmClient,
+            mockVpClient,
+            mockKrClient,
+            expect.any(Number),
+        );
     });
 
     it("handles errors gracefully and continues loop", async () => {
@@ -97,7 +140,7 @@ describe("pulsar sync", () => {
         expect(sleepModule.sleep).toHaveBeenCalled();
     });
 
-    it("uses default rpcAddress when PULSAR_GRPC_ENDPOINT not set", async () => {
+    it("uses default rpcAddress localhost:9090 when PULSAR_GRPC_ENDPOINT not set", async () => {
         const originalEnv = process.env.PULSAR_GRPC_ENDPOINT;
         delete process.env.PULSAR_GRPC_ENDPOINT;
 
@@ -108,7 +151,7 @@ describe("pulsar sync", () => {
 
         expect(client.createClient).toHaveBeenCalledWith(
             expect.any(String),
-            "localhost:50051",
+            "localhost:9090",
             expect.any(Object),
         );
 

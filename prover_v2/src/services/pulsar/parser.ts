@@ -1,4 +1,4 @@
-import { Signature } from "o1js";
+import { Bool, Field, PublicKey, Signature } from "o1js";
 import { BlockParserResult } from "../../common/types.js";
 
 export function parseTendermintBlockResponse(res: any): BlockParserResult {
@@ -62,8 +62,8 @@ export function parseTendermintBlockResponse(res: any): BlockParserResult {
 
 export function decodeMinaSignature(signatureHex: string): string {
     const sigBuffer = Buffer.from(signatureHex, "hex");
-    const rHex = sigBuffer.slice(0, 32).toString("hex");
-    const sHex = sigBuffer.slice(32, 64).toString("hex");
+    const rHex = sigBuffer.subarray(0, 32).toString("hex");
+    const sHex = sigBuffer.subarray(32, 64).toString("hex");
 
     return Signature.fromValue({
         r: BigInt("0x" + rHex),
@@ -73,4 +73,15 @@ export function decodeMinaSignature(signatureHex: string): string {
 
 export function parseValidatorSetResponse(res: any): string[] {
     return res?.validators.map((v: any) => v.address);
+}
+
+export function parseMinaPubkeyFromBytes(data: Buffer | Uint8Array): string {
+    const bytes = Buffer.from(data);
+    const x = BigInt("0x" + bytes.subarray(0, 32).toString("hex"));
+    const isOdd = bytes[32] === 1;
+    return PublicKey.from({ x: Field(x), isOdd: Bool(isOdd) }).toBase58();
+}
+
+export function parseValidatorSetPubkeys(res: any): string[] {
+    return (res?.validators ?? []).map((v: any) => v.pub_key?.key ?? "");
 }
