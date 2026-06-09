@@ -231,10 +231,24 @@ describe("pulsar client", () => {
                 }),
             };
 
+            const mockAbciClient = {
+                VoteExtBodyByHeight: vi.fn((req, callback) => {
+                    callback(null, {
+                        voteExtBody: {
+                            next_validator_set_hash: pubkeyBytes,
+                            current_state_root: Buffer.alloc(32, 0),
+                            current_block_height: "100",
+                            actions_reduced_root: "pulsar",
+                        },
+                    });
+                }),
+            };
+
             const blockData = await getBlockData(
                 mockTmClient,
                 mockVpClient,
                 mockKrClient,
+                mockAbciClient,
                 100,
             );
 
@@ -257,6 +271,7 @@ describe("pulsar client", () => {
                 validators: [
                     "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
                 ],
+                actionsReducedRoot: "0",
                 voteExt: [],
             };
 
@@ -283,6 +298,7 @@ describe("pulsar client", () => {
                 height: 100,
                 stateRoot: "0x123",
                 validators,
+                actionsReducedRoot: "0",
                 voteExt: [],
             };
 

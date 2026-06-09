@@ -17,6 +17,7 @@ export const TENDERMINT_SERVICE_NAME = "cosmos.base.tendermint.v1beta1.Service";
 export const VOTE_PERSISTENCE_SERVICE_NAME =
     "pulsarchain.votepersistence.v1.Query";
 export const MINA_KEYS_SERVICE_NAME = "pulsarchain.keyregistry.v1.Query";
+export const ABCI_SERVICE_NAME = "pulsarchain.abci.Query";
 
 // Monitor constants
 export const MAX_FAIL_COUNT = 3;

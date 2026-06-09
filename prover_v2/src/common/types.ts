@@ -22,6 +22,7 @@ export interface BlockData {
     stateRoot: string;
     validators: string[];
     validatorListHash?: string;
+    actionsReducedRoot: string;
     voteExt: VoteExt[];
 }
 

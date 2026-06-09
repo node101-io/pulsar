@@ -18,6 +18,7 @@ import {
     TENDERMINT_SERVICE_NAME,
     VOTE_PERSISTENCE_SERVICE_NAME,
     MINA_KEYS_SERVICE_NAME,
+    ABCI_SERVICE_NAME,
 } from "../../config/constants.js";
 import {
     createClient,
@@ -127,6 +128,11 @@ async function startRealPulsarSync(): Promise<void> {
         rpcAddress,
         credentials,
     );
+    const abciClient = await createClient(
+        ABCI_SERVICE_NAME,
+        rpcAddress,
+        credentials,
+    );
 
     await backfillMissingVoteExtensions(vpClient, currentHeight);
 
@@ -155,6 +161,7 @@ async function startRealPulsarSync(): Promise<void> {
                         tmClient,
                         vpClient,
                         krClient,
+                        abciClient,
                         h,
                     );
                     await storePulsarBlock(blockData);
@@ -268,7 +275,7 @@ async function getMockBlockData(
         ),
     }));
 
-    return { height, stateRoot, validators, voteExt };
+    return { height, stateRoot, validators, actionsReducedRoot: "0", voteExt };
 }
 
 async function startMockPulsarSync(): Promise<void> {

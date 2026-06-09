@@ -30,6 +30,7 @@ describe("pulsar sync", () => {
     let mockTmClient: any;
     let mockVpClient: any;
     let mockKrClient: any;
+    let mockAbciClient: any;
     let sleepCallCount: number;
 
     beforeEach(() => {
@@ -47,10 +48,14 @@ describe("pulsar sync", () => {
         mockKrClient = {
             GetValidatorMinaPubKey: vi.fn(),
         };
+        mockAbciClient = {
+            VoteExtBodyByHeight: vi.fn(),
+        };
 
         vi.mocked(client.createClient).mockImplementation(async (serviceName) => {
             if (serviceName.includes("tendermint")) return mockTmClient;
             if (serviceName.includes("votepersistence")) return mockVpClient;
+            if (serviceName.includes("abci")) return mockAbciClient;
             return mockKrClient;
         });
 
@@ -71,7 +76,7 @@ describe("pulsar sync", () => {
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
         expect(db.fetchLastStoredBlock).toHaveBeenCalled();
-        expect(client.createClient).toHaveBeenCalledTimes(3);
+        expect(client.createClient).toHaveBeenCalledTimes(4);
         expect(client.getLatestHeight).toHaveBeenCalledWith(mockTmClient);
     });
 
@@ -82,6 +87,7 @@ describe("pulsar sync", () => {
             height: 6,
             stateRoot: "0x123",
             validators: ["B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb"],
+            actionsReducedRoot: "0",
             voteExt: [],
         };
 
@@ -107,13 +113,14 @@ describe("pulsar sync", () => {
         expect(client.storePulsarBlock).not.toHaveBeenCalled();
     });
 
-    it("passes all 3 clients to getBlockData", async () => {
+    it("passes all 4 clients to getBlockData", async () => {
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue({ height: 5 } as any);
         vi.mocked(client.getLatestHeight).mockResolvedValue(8);
         vi.mocked(client.getBlockData).mockResolvedValue({
             height: 6,
             stateRoot: "0x1",
             validators: [],
+            actionsReducedRoot: "0",
             voteExt: [],
         });
         vi.mocked(client.storePulsarBlock).mockResolvedValue();
@@ -124,6 +131,7 @@ describe("pulsar sync", () => {
             mockTmClient,
             mockVpClient,
             mockKrClient,
+            mockAbciClient,
             expect.any(Number),
         );
     });
