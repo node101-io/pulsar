@@ -9,6 +9,7 @@ export interface IBlock extends Document {
     stateRoot: string;
     validators: string[];
     validatorListHash: string;
+    actionsReducedRoot: string;
     voteExt: VoteExt[];
     timeoutAt?: Date;
 }
@@ -34,6 +35,7 @@ const BlockSchema = new Schema<IBlock>(
         stateRoot: { type: String, required: true },
         validators: [{ type: String }],
         validatorListHash: { type: String, required: true },
+        actionsReducedRoot: { type: String, required: true, default: "0" },
         voteExt: [VoteExtSchema],
         timeoutAt: { type: Date },
     },
@@ -67,6 +69,7 @@ export async function storeBlock(block: BlockData) {
                 stateRoot: block.stateRoot,
                 validators: block.validators,
                 validatorListHash: block.validatorListHash,
+                actionsReducedRoot: block.actionsReducedRoot,
                 voteExt: block.voteExt,
             },
             $setOnInsert: {

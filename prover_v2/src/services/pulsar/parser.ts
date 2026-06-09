@@ -77,8 +77,17 @@ export function parseValidatorSetResponse(res: any): string[] {
 
 export function parseMinaPubkeyFromBytes(data: Buffer | Uint8Array): string {
     const bytes = Buffer.from(data);
-    const x = BigInt("0x" + bytes.subarray(0, 32).toString("hex"));
-    const isOdd = bytes[32] === 1;
+    if (bytes.length === 33) {
+        // Legacy 33-byte format: 32 bytes big-endian x + 1 byte isOdd
+        const x = BigInt("0x" + bytes.subarray(0, 32).toString("hex"));
+        const isOdd = bytes[32] === 1;
+        return PublicKey.from({ x: Field(x), isOdd: Bool(isOdd) }).toBase58();
+    }
+    // 32-byte little-endian compressed format: buf[31] MSB = isOdd, remaining = x
+    const isOdd = (bytes[31] & 0x80) !== 0;
+    const xBuf = Buffer.from(bytes);
+    xBuf[31] &= 0x7f;
+    const x = BigInt("0x" + Buffer.from(xBuf).reverse().toString("hex"));
     return PublicKey.from({ x: Field(x), isOdd: Bool(isOdd) }).toBase58();
 }
 
