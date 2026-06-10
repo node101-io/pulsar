@@ -22,7 +22,7 @@ import { devnetTestAccounts, validatorSet, testAccounts } from './mock';
 import { TestUtils } from '../utils/testUtils';
 import { ValidateReduceProgram } from '../ValidateReduce';
 import { List } from '../types/common';
-import { ActionStackProgram } from '../ActionStack';
+import { ActionStackProgram, ActionStackProof } from '../ActionStack';
 import { MapFromArray, PrepareBatch } from '../utils/reduceWitness';
 import {
   analyzeMethods,
@@ -153,11 +153,11 @@ describe('SettlementProof tests', () => {
     merkleListRoot: Field
   ) {
     const deployerAccount = deployerKey.toPublicKey();
-
+    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     const initTx = await Mina.transaction(
       { sender: deployerAccount, fee },
       async () => {
-        await zkapp.initialize(merkleListRoot, Field(0));
+        await zkapp.initialize(merkleListRoot, Field(0), dummyProof);
       }
     );
 
@@ -171,12 +171,12 @@ describe('SettlementProof tests', () => {
     expectedMsg: string = 'Transaction failed'
   ) {
     const deployerAccount = deployerKey.toPublicKey();
-
+    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     try {
       const tx = await Mina.transaction(
         { sender: deployerAccount, fee },
         async () => {
-          await zkapp.initialize(merkleListRoot, Field(0));
+          await zkapp.initialize(merkleListRoot, Field(0), dummyProof);
         }
       );
       await waitTransactionAndFetchAccount(tx, [deployerKey]);
@@ -196,12 +196,13 @@ describe('SettlementProof tests', () => {
   ) {
     const deployerAccount = deployerKey.toPublicKey();
 
+    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     const tx = await Mina.transaction(
       { sender: deployerAccount, fee },
       async () => {
         AccountUpdate.fundNewAccount(deployerAccount);
         await zkapp.deploy();
-        await zkapp.initialize(merkleListRoot, Field(0));
+        await zkapp.initialize(merkleListRoot, Field(0), dummyProof);
       }
     );
 
@@ -282,12 +283,14 @@ describe('SettlementProof tests', () => {
     log(
       `Balance before deposit: ${balanceBefore.toBigInt() / BigInt(1e9)} MINA`
     );
+    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     const tx = await Mina.transaction(
       { sender: senderKey.toPublicKey(), fee },
       async () => {
         await zkapp.deposit(
           amount,
-          PulsarAuth.from(Field(0), CosmosSignature.empty())
+          PulsarAuth.from(Field(0), CosmosSignature.empty()),
+          dummyProof
         );
       }
     );
@@ -315,13 +318,15 @@ describe('SettlementProof tests', () => {
     amount: UInt64,
     expectedMsg: string = 'Transaction failed'
   ) {
+    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     try {
       const tx = await Mina.transaction(
         { sender: senderKey.toPublicKey(), fee },
         async () => {
           await zkapp.deposit(
             amount,
-            PulsarAuth.from(Field(0), CosmosSignature.empty())
+            PulsarAuth.from(Field(0), CosmosSignature.empty()),
+            dummyProof
           );
         }
       );
@@ -344,10 +349,11 @@ describe('SettlementProof tests', () => {
     log(
       `Balance before withdraw: ${balanceBefore.toBigInt() / BigInt(1e9)} MINA`
     );
+    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     const tx = await Mina.transaction(
       { sender: senderKey.toPublicKey(), fee },
       async () => {
-        await zkapp.withdraw(amount);
+        await zkapp.withdraw(amount, dummyProof);
       }
     );
 
@@ -373,11 +379,12 @@ describe('SettlementProof tests', () => {
     amount: UInt64,
     expectedMsg: string = 'Transaction failed'
   ) {
+    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     try {
       const tx = await Mina.transaction(
         { sender: senderKey.toPublicKey(), fee },
         async () => {
-          await zkapp.withdraw(amount);
+          await zkapp.withdraw(amount, dummyProof);
         }
       );
       await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);

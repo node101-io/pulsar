@@ -67,7 +67,8 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async initialize(merkleListRoot: Field, stateRoot: Field) {
+  async initialize(merkleListRoot: Field, stateRoot: Field, _dummy: ActionStackProof) {
+    _dummy.verifyIf(Bool(false));
     super.init();
     this.merkleListRoot.set(merkleListRoot);
     this.stateRoot.set(stateRoot);
@@ -102,7 +103,8 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async deposit(amount: UInt64, pulsarAuth: PulsarAuth) {
+  async deposit(amount: UInt64, pulsarAuth: PulsarAuth, _dummy: ActionStackProof) {
+    _dummy.verifyIf(Bool(false));
     amount.assertGreaterThanOrEqual(
       UInt64.from(MINIMUM_DEPOSIT_AMOUNT),
       `At least ${Number(MINIMUM_DEPOSIT_AMOUNT / 1e9)} MINA is required`
@@ -117,7 +119,8 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async withdraw(amount: UInt64) {
+  async withdraw(amount: UInt64, _dummy: ActionStackProof) {
+    _dummy.verifyIf(Bool(false));
     const account = this.sender.getUnconstrained();
     const withdrawalUpdate = AccountUpdate.createSigned(account);
 

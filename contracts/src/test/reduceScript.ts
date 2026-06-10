@@ -23,7 +23,7 @@ import { devnetTestAccounts, validatorSet, testAccounts } from './mock.js';
 import { TestUtils } from '../utils/testUtils.js';
 import { ValidateReduceProgram } from '../ValidateReduce.js';
 import { List } from '../types/common.js';
-import { ActionStackProgram } from '../ActionStack.js';
+import { ActionStackProgram, ActionStackProof } from '../ActionStack.js';
 import { MapFromArray, PrepareBatch } from '../utils/reduceWitness.js';
 import { analyzeMethods, enableLogs, log } from '../utils/loggers.js';
 import { DeployScripts } from '../scripts/deploy.js';
@@ -243,12 +243,13 @@ async function deployAndInitializeContract(
 ) {
   const deployerAccount = deployerKey.toPublicKey();
 
+  const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
   const tx = await Mina.transaction(
     { sender: deployerAccount, fee },
     async () => {
       AccountUpdate.fundNewAccount(deployerAccount);
       await zkapp.deploy();
-      await zkapp.initialize(merkleListRoot, Field(0));
+      await zkapp.initialize(merkleListRoot, Field(0), dummyProof);
     }
   );
 
