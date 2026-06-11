@@ -10,7 +10,11 @@ import {
     getBridgeState,
     BridgeStateModel,
 } from "../../db/models/BridgeState.js";
-import { getLatestMinaHeight } from "../../services/mina/client.js";
+import {
+    type MinaClientContext,
+    initMinaClientContext,
+    getLatestMinaHeight,
+} from "../../services/mina/client.js";
 import {
     MASTER_SLEEP_INTERVAL_MS,
     WORKER_TIMEOUT_MS,
@@ -25,6 +29,9 @@ export interface BridgeTxJob {
 }
 
 export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
+    private ctx!: MinaClientContext;
+    private halted = false;
+
     constructor() {
         super({
             queueName: "bridge-tx-sender",
@@ -70,6 +77,8 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
     }
 
     async onStartup(): Promise<void> {
+        this.ctx = await initMinaClientContext();
+
         const stuckBlocks = await MinaActionModel.find({ status: "submitted" });
         for (const block of stuckBlocks) {
             await MinaActionModel.updateOne(
@@ -88,6 +97,11 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
     }
 
     async handleTask(): Promise<void> {
+        if (this.halted) {
+            await sleep(MASTER_SLEEP_INTERVAL_MS * 60);
+            return;
+        }
+
         const counts = await bridgeTxSenderQ.getJobCounts(
             "waiting",
             "active",
@@ -100,7 +114,7 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
 
         let currentMinaHeight: number;
         try {
-            currentMinaHeight = await getLatestMinaHeight();
+            currentMinaHeight = await getLatestMinaHeight(this.ctx);
         } catch (error) {
             logger.error("Failed to get current Mina height", {
                 error,
@@ -125,6 +139,21 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
         });
 
         if (!block) {
+            const failedBlock = await MinaActionModel.findOne({
+                blockHeight: nextHeight,
+                status: "failed",
+            });
+
+            if (failedBlock) {
+                this.halted = true;
+                logger.error("Next height is permanently failed — halting master. Manual intervention required.", {
+                    blockHeight: nextHeight,
+                    failCount: failedBlock.failCount,
+                    event: "master_halted_failed_block",
+                });
+                return;
+            }
+
             await sleep(MASTER_SLEEP_INTERVAL_MS);
             return;
         }
