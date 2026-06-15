@@ -3,12 +3,16 @@
     "version": "1.0.0",
     "type": "module",
     "scripts": {
+        "test": "vitest run",
+        "test:watch": "vitest",
         "build": "npm run build --prefix ../contracts && tsc",
         "start": "npm run build && node dist/src/nodeManager.js",
         "worker:bridge-tx-sender": "npm run build && node dist/src/workers/bridge-tx-sender/index.js",
         "clean": "rimraf dist node_modules package-lock.json"
     },
-    "keywords": ["pulsar"],
+    "keywords": [
+        "pulsar"
+    ],
     "author": "",
     "license": "MIT",
     "description": "",
@@ -32,7 +36,8 @@
     },
     "devDependencies": {
         "@types/node": "^24.3.1",
-        "typescript": "^5.9.2"
+        "typescript": "^5.9.2",
+        "vitest": "^4.1.8"
     },
     "peerDependencies": {
         "o1js": "2.10.0-dev.be63f"

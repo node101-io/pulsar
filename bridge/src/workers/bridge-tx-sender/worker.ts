@@ -134,7 +134,7 @@ export async function worker(task: BridgeTxJob): Promise<void> {
     logger.info("Reduce TX done", { blockHeight, event: "reduce_tx_done" });
 }
 
-function computeActionListHash(startHash: Field, batch: Batch, mask: ReduceMask): Field {
+export function computeActionListHash(startHash: Field, batch: Batch, mask: ReduceMask): Field {
     let hash = startHash;
     for (let i = 0; i < BATCH_SIZE; i++) {
         const action = batch.actions[i];
@@ -145,7 +145,7 @@ function computeActionListHash(startHash: Field, batch: Batch, mask: ReduceMask)
     return hash;
 }
 
-function buildSignatureList(
+export function buildSignatureList(
     signatures: Awaited<ReturnType<typeof requestSignatures>>,
 ): SignaturePublicKeyList {
     // pad to VALIDATOR_NUMBER slots; unused slots get null-filled entries
@@ -164,7 +164,7 @@ function buildSignatureList(
     });
 }
 
-function buildBatchAndMask(pulsarActions: PulsarAction[]): {
+export function buildBatchAndMask(pulsarActions: PulsarAction[]): {
     batch: Batch;
     mask: ReduceMask;
 } {
