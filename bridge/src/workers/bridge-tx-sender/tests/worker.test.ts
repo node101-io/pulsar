@@ -46,9 +46,9 @@ const {
     mockMinaActionUpdateOne: vi.fn(),
     mockBridgeStateUpdateOne: vi.fn(),
     mockInitCtx: vi.fn(),
-    mockGetMerkleRoot: vi.fn().mockResolvedValue("100"),
-    mockGetActionState: vi.fn().mockResolvedValue("200"),
-    mockGetActionListHash: vi.fn().mockResolvedValue("0"),
+    mockGetMerkleRoot: vi.fn().mockReturnValue("100"),
+    mockGetActionState: vi.fn().mockReturnValue("200"),
+    mockGetActionListHash: vi.fn().mockReturnValue("0"),
     mockRequestSignatures: vi.fn().mockResolvedValue([
         { validatorPublicKey: "B62qVal1", signature: "sig1" },
     ]),
@@ -244,9 +244,9 @@ describe("worker()", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockInitCtx.mockResolvedValue(mockCtx);
-        mockGetMerkleRoot.mockResolvedValue("100");
-        mockGetActionState.mockResolvedValue("200");
-        mockGetActionListHash.mockResolvedValue("0");
+        mockGetMerkleRoot.mockReturnValue("100");
+        mockGetActionState.mockReturnValue("200");
+        mockGetActionListHash.mockReturnValue("0");
         mockMinaActionUpdateOne.mockResolvedValue({});
         mockBridgeStateUpdateOne.mockResolvedValue({});
     });
@@ -299,7 +299,7 @@ describe("worker()", () => {
 
     it("calls requestSignatures with the on-chain initial action state", async () => {
         mockMinaActionFindOne.mockResolvedValue({ status: "pending", failCount: 0 });
-        mockGetActionState.mockResolvedValue("12345");
+        mockGetActionState.mockReturnValue("12345");
 
         await worker({ blockHeight: 50, actions: [rawAction] });
 

@@ -1,28 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// paths relative to src/services/mina/tests/
-// bridge-internal:  ../../../X     (3 up = src/)
-// contracts:        ../../../../../contracts/build/src/X  (5 up = pulsar/)
-
 vi.mock("o1js", () => ({
     fetchAccount: vi.fn(),
+    Mina: {
+        Network: vi.fn(() => ({})),
+        setActiveInstance: vi.fn(),
+    },
     PublicKey: {
         fromBase58: vi.fn((s: string) => ({ toBase58: () => s })),
     },
 }));
 
 vi.mock("../../../../../contracts/build/src/SettlementContract.js", () => ({
-    SettlementContract: vi.fn().mockImplementation(() => ({
-        merkleListRoot: { get: vi.fn().mockReturnValue({ toString: () => "111" }) },
-        actionState: { get: vi.fn().mockReturnValue({ toString: () => "222" }) },
-        actionListHash: { get: vi.fn().mockReturnValue({ toString: () => "333" }) },
-    })),
+    SettlementContract: vi.fn().mockImplementation(() => ({})),
 }));
 
 vi.mock("../../../../../contracts/build/src/utils/fetch.js", () => ({
     setMinaNetwork: vi.fn(),
-    fetchBlockHeight: vi.fn().mockResolvedValue(500),
-    waitForTransaction: vi.fn(),
 }));
 
 vi.mock("../../../../../contracts/build/src/utils/constants.js", async (importOriginal) => {
@@ -49,11 +43,12 @@ const {
     getLatestMinaHeight,
 } = await import("../client.js");
 
-// --- fetchActionsByHeight ---
+// --- fetchActionsByHeight (devnet — uses zkapps query) ---
 
 describe("fetchActionsByHeight", () => {
     function makeCtx() {
         return {
+            network: "devnet",
             contractAddress: { toBase58: () => CONTRACT_ADDR },
             archiveEndpoint: "https://archive.devnet",
         } as any;
@@ -201,37 +196,52 @@ describe("fetchActionsByHeight", () => {
 // --- getLatestMinaHeight ---
 
 describe("getLatestMinaHeight", () => {
-    it("delegates to fetchBlockHeight with network from ctx", async () => {
-        const ctx = { network: "devnet" } as any;
+    it("returns blockchainLength from daemonStatus response", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: { daemonStatus: { blockchainLength: 500 } } }),
+        }));
+
+        const ctx = { nodeEndpoint: "http://127.0.0.1:8080/graphql" } as any;
         const result = await getLatestMinaHeight(ctx);
         expect(result).toBe(500);
     });
+
+    it("throws when daemonStatus returns no blockchainLength", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: { daemonStatus: {} } }),
+        }));
+
+        const ctx = { nodeEndpoint: "http://127.0.0.1:8080/graphql" } as any;
+        await expect(getLatestMinaHeight(ctx)).rejects.toThrow("blockchainLength");
+    });
+
+    it("throws when node returns HTTP error", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+
+        const ctx = { nodeEndpoint: "http://127.0.0.1:8080/graphql" } as any;
+        await expect(getLatestMinaHeight(ctx)).rejects.toThrow("HTTP 503");
+    });
 });
 
-// --- contract state getters ---
+// --- contract state getters (sync, read from zkappState cache) ---
 
 describe("getContractMerkleRoot / ActionState / ActionListHash", () => {
-    it("reads merkleListRoot from on-chain contract state", async () => {
-        const ctx = {
-            contractAddress: {},
-            contract: { merkleListRoot: { get: () => ({ toString: () => "111" }) } },
-        } as any;
-        expect(await getContractMerkleRoot(ctx)).toBe("111");
+    // zkappState indices: actionState=0, merkleListRoot=1, stateRoot=2, blockHeight=3, actionListHash=4
+    const mockCtx = {
+        zkappState: ["222", "111", "0", "0", "333", "0", "0", "0"],
+    } as any;
+
+    it("reads merkleListRoot from zkappState[1]", () => {
+        expect(getContractMerkleRoot(mockCtx)).toBe("111");
     });
 
-    it("reads actionState from on-chain contract state", async () => {
-        const ctx = {
-            contractAddress: {},
-            contract: { actionState: { get: () => ({ toString: () => "222" }) } },
-        } as any;
-        expect(await getContractActionState(ctx)).toBe("222");
+    it("reads actionState from zkappState[0]", () => {
+        expect(getContractActionState(mockCtx)).toBe("222");
     });
 
-    it("reads actionListHash from on-chain contract state", async () => {
-        const ctx = {
-            contractAddress: {},
-            contract: { actionListHash: { get: () => ({ toString: () => "333" }) } },
-        } as any;
-        expect(await getContractActionListHash(ctx)).toBe("333");
+    it("reads actionListHash from zkappState[4]", () => {
+        expect(getContractActionListHash(mockCtx)).toBe("333");
     });
 });

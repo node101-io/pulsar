@@ -65,9 +65,9 @@ export async function worker(task: BridgeTxJob): Promise<void> {
 
     const ctx = await getCtx();
 
-    const merkleListRoot = Field(await getContractMerkleRoot(ctx));
-    const initialActionState = Field(await getContractActionState(ctx));
-    const initialActionListHash = Field(await getContractActionListHash(ctx));
+    const merkleListRoot = Field(getContractMerkleRoot(ctx));
+    const initialActionState = Field(getContractActionState(ctx));
+    const initialActionListHash = Field(getContractActionListHash(ctx));
 
     // convert raw field arrays from archive into typed PulsarAction structs
     const rawActions = actions as string[][];
