@@ -60,6 +60,9 @@ export async function getBlockData(
     abciClient: any,
     height: number,
 ): Promise<BlockData> {
+    // VoteExtBody for block H is stored at H+2.
+    // Contains the stateRoot, nextValidatorSetHash, and actionsReducedRoot
+    // that validators actually signed — authoritative source.
     let body: {
         stateRoot: string;
         nextValidatorSetHash: string;
@@ -68,6 +71,9 @@ export async function getBlockData(
     try {
         body = await getVoteExtBody(abciClient, height);
     } catch (err) {
+        // VoteExtBodyByHeight(H+2) fails for very early blocks because Cosmos SDK
+        // staking has no historical info before the chain's first staking snapshot.
+        // Fall back to app_hash from GetBlockByHeight as stateRoot.
         logger.warn(
             "VoteExtBody unavailable, falling back to block header for stateRoot",
             {
@@ -103,6 +109,9 @@ export async function getBlockData(
 
     const voteExt = await getVoteExtsByHeight(vpClient, height);
 
+    // Validators needed for ordering vote extensions in worker.ts.
+    // Sorted by Mina pubkey X coordinate ascending to match the chain's
+    // nextValidatorSetHash computation order.
     const validators = await getValidatorSet(tmClient, krClient, height);
     const sortedValidators = sortValidatorsByX(validators);
 
@@ -151,6 +160,7 @@ async function getVoteExtBody(
                     body.next_validator_set_hash ?? body.nextValidatorSetHash;
                 const nextValidatorSetHash = protoBufferToDecStr(nextValSetRaw);
 
+                // actionsReducedRoot is a string in the proto — convert to BigInt via UTF-8 bytes
                 const actionsRootStr: string =
                     body.actions_reduced_root ?? body.actionsReducedRoot ?? "";
                 const actionsRootBytes = Buffer.from(actionsRootStr, "utf-8");
@@ -227,6 +237,7 @@ export async function getVoteExtsByHeight(
                 res.persistedVoteExtensionsBlockHeight;
             const persisted = Number(persistedRaw);
 
+            // Expected: persistedH = height (the signed state height, not persistence height)
             if (persisted !== height) {
                 logger.warn(
                     "VoteExtensions not available for block, storing empty",
@@ -243,6 +254,7 @@ export async function getVoteExtsByHeight(
             const extensions: any[] =
                 res.vote_extensions ?? res.voteExtensions ?? [];
             const voteExt: VoteExt[] = extensions.map((v: any) => {
+                // proto bytes fields arrive as Buffer from gRPC; guard against base64 string
                 const pubKeyRaw = v.mina_public_key ?? v.minaPublicKey;
                 const pubKeyBuf = Buffer.isBuffer(pubKeyRaw)
                     ? pubKeyRaw
@@ -267,6 +279,8 @@ export async function getVoteExtsByHeight(
 export async function storePulsarBlock(blockData: BlockData) {
     const { validators, ...rest } = blockData;
 
+    // validatorListHash comes from VoteExtBodyByHeight (nextValidatorSetHash).
+    // Fall back to computing it locally only if not provided.
     const validatorListHash =
         blockData.validatorListHash ?? computeValidatorListHash(validators);
 

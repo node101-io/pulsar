@@ -89,16 +89,15 @@ class Block extends Struct({
   NewMerkleListRoot: Field,
   NewStateRoot: Field,
   NewBlockHeight: Field,
+  actionsReducedRoot: Field,
 }) {
   hash() {
-    return Poseidon.hash([
-      this.InitialMerkleListRoot,
-      this.InitialStateRoot,
-      this.InitialBlockHeight,
+    const innerHash = Poseidon.hash([
       this.NewMerkleListRoot,
       this.NewStateRoot,
       this.NewBlockHeight,
     ]);
+    return Poseidon.hash([innerHash, this.actionsReducedRoot]);
   }
 
   toJSON() {

@@ -48,7 +48,11 @@ describe('SettlementProof tests', () => {
 
   describe('Peripherals', () => {
     it('should create a valid SettlementPublicInputs', () => {
-      blocks = TestUtils.GenerateTestBlocks(Field(1), merkleList.hash, Field(1));
+      blocks = TestUtils.GenerateTestBlocks(
+        Field(1),
+        merkleList.hash,
+        Field(1)
+      );
 
       const publicInput = GenerateSettlementPublicInput(
         blocks[0].InitialMerkleListRoot,
@@ -63,8 +67,12 @@ describe('SettlementProof tests', () => {
       expect(publicInput.InitialStateRoot).toEqual(Field.from(1));
       expect(publicInput.InitialBlockHeight).toEqual(Field.from(1));
       expect(publicInput.NewMerkleListRoot).toEqual(merkleList.hash);
-      expect(publicInput.NewStateRoot).toEqual(Field.from(SETTLEMENT_MATRIX_SIZE + 1));
-      expect(publicInput.NewBlockHeight).toEqual(Field.from(SETTLEMENT_MATRIX_SIZE + 1));
+      expect(publicInput.NewStateRoot).toEqual(
+        Field.from(SETTLEMENT_MATRIX_SIZE + 1)
+      );
+      expect(publicInput.NewBlockHeight).toEqual(
+        Field.from(SETTLEMENT_MATRIX_SIZE + 1)
+      );
 
       settlementPublicInputs.push(publicInput);
     });
@@ -97,13 +105,20 @@ describe('SettlementProof tests', () => {
         log('Skipping proof verification');
         return;
       }
-      const isValid = await verify(settlementProofs[settlementProofs.length - 1], vk);
+      const isValid = await verify(
+        settlementProofs[settlementProofs.length - 1],
+        vk
+      );
       expect(isValid).toBe(true);
     });
 
     it('should create a valid SettlementProof (epoch 2)', async () => {
       const prev = settlementPublicInputs[settlementPublicInputs.length - 1];
-      blocks = TestUtils.GenerateTestBlocks(prev.NewBlockHeight, prev.NewMerkleListRoot, prev.NewStateRoot);
+      blocks = TestUtils.GenerateTestBlocks(
+        prev.NewBlockHeight,
+        prev.NewMerkleListRoot,
+        prev.NewStateRoot
+      );
 
       const publicInput = GenerateSettlementPublicInput(
         prev.NewMerkleListRoot,
@@ -136,13 +151,20 @@ describe('SettlementProof tests', () => {
         log('Skipping proof verification');
         return;
       }
-      const isValid = await verify(settlementProofs[settlementProofs.length - 1], vk);
+      const isValid = await verify(
+        settlementProofs[settlementProofs.length - 1],
+        vk
+      );
       expect(isValid).toBe(true);
     });
 
     it('should create a valid SettlementProof (epoch 3)', async () => {
       const prev = settlementPublicInputs[settlementPublicInputs.length - 1];
-      blocks = TestUtils.GenerateTestBlocks(prev.NewBlockHeight, prev.NewMerkleListRoot, prev.NewStateRoot);
+      blocks = TestUtils.GenerateTestBlocks(
+        prev.NewBlockHeight,
+        prev.NewMerkleListRoot,
+        prev.NewStateRoot
+      );
 
       const publicInput = GenerateSettlementPublicInput(
         prev.NewMerkleListRoot,
@@ -175,13 +197,20 @@ describe('SettlementProof tests', () => {
         log('Skipping proof verification');
         return;
       }
-      const isValid = await verify(settlementProofs[settlementProofs.length - 1], vk);
+      const isValid = await verify(
+        settlementProofs[settlementProofs.length - 1],
+        vk
+      );
       expect(isValid).toBe(true);
     });
 
     it('should create a valid SettlementProof (epoch 4)', async () => {
       const prev = settlementPublicInputs[settlementPublicInputs.length - 1];
-      blocks = TestUtils.GenerateTestBlocks(prev.NewBlockHeight, prev.NewMerkleListRoot, prev.NewStateRoot);
+      blocks = TestUtils.GenerateTestBlocks(
+        prev.NewBlockHeight,
+        prev.NewMerkleListRoot,
+        prev.NewStateRoot
+      );
 
       const publicInput = GenerateSettlementPublicInput(
         prev.NewMerkleListRoot,
@@ -216,7 +245,8 @@ describe('SettlementProof tests', () => {
         settlementPublicInputs[settlementPublicInputs.length - 1].NewBlockHeight
       );
       expect(mergedProof.publicInput.NewMerkleListRoot).toEqual(
-        settlementPublicInputs[settlementPublicInputs.length - 1].NewMerkleListRoot
+        settlementPublicInputs[settlementPublicInputs.length - 1]
+          .NewMerkleListRoot
       );
       expect(mergedProof.publicInput.NewStateRoot).toEqual(
         settlementPublicInputs[settlementPublicInputs.length - 1].NewStateRoot
@@ -244,31 +274,18 @@ describe('SettlementProof tests', () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // verifySignatures — validator rotation within an epoch
-  //
-  // This test specifically validates the bug fix in SettlementProof.ts where
-  // the validator hash check was incorrectly using publicInputs.InitialMerkleListRoot
-  // (epoch-wide) instead of pulsarBlocks.list[i].InitialMerkleListRoot (per-block).
-  //
-  // Scenario:
-  //   Block 0: Initial=initialHash → New=newHash  (rotation happens here)
-  //   Block 1-7: Initial=newHash   → New=newHash  (new set stable)
-  //
-  //   Signers for block 0: initial validator set
-  //   Signers for blocks 1-7: new validator set
-  // ---------------------------------------------------------------------------
-
   describe('verifySignatures with validator rotation', () => {
     it('should accept signatures when validator set rotates mid-epoch', async () => {
       const initialValidators = validatorSet.slice(0, VALIDATOR_NUMBER);
-      const newValidators = validatorSet.slice(VALIDATOR_NUMBER, VALIDATOR_NUMBER * 2);
+      const newValidators = validatorSet.slice(
+        VALIDATOR_NUMBER,
+        VALIDATOR_NUMBER * 2
+      );
 
-      const initialMerkleList = TestUtils.CreateValidatorMerkleList(initialValidators);
+      const initialMerkleList =
+        TestUtils.CreateValidatorMerkleList(initialValidators);
       const newMerkleList = TestUtils.CreateValidatorMerkleList(newValidators);
 
-      // Rotation happens at block index 0: that block transitions from initial → new set.
-      // All subsequent blocks are already on the new set.
       const rotationBlocks = TestUtils.GenerateTestBlocksWithRotation(
         Field(1),
         initialMerkleList.hash,
@@ -286,12 +303,14 @@ describe('SettlementProof tests', () => {
         rotationBlocks[rotationBlocks.length - 1].NewBlockHeight
       );
 
-      // Each block is signed by whoever was in its InitialMerkleListRoot:
-      //   block 0 → initial validators, blocks 1-7 → new validators
-      const signersPerBlock = Array.from({ length: SETTLEMENT_MATRIX_SIZE }, (_, i) =>
-        i === 0 ? initialValidators : newValidators
+      const signersPerBlock = Array.from(
+        { length: SETTLEMENT_MATRIX_SIZE },
+        (_, i) => (i === 0 ? initialValidators : newValidators)
       );
-      const signerMatrix = TestUtils.GenerateSignaturePubKeyMatrix(rotationBlocks, signersPerBlock);
+      const signerMatrix = TestUtils.GenerateSignaturePubKeyMatrix(
+        rotationBlocks,
+        signersPerBlock
+      );
 
       const proof = (
         await MultisigVerifierProgram.verifySignatures(
@@ -301,10 +320,14 @@ describe('SettlementProof tests', () => {
         )
       ).proof;
 
-      expect(proof.publicInput.InitialMerkleListRoot).toEqual(initialMerkleList.hash);
+      expect(proof.publicInput.InitialMerkleListRoot).toEqual(
+        initialMerkleList.hash
+      );
       expect(proof.publicInput.NewMerkleListRoot).toEqual(newMerkleList.hash);
       expect(proof.publicInput.InitialBlockHeight).toEqual(Field(1));
-      expect(proof.publicInput.NewBlockHeight).toEqual(Field(SETTLEMENT_MATRIX_SIZE + 1));
+      expect(proof.publicInput.NewBlockHeight).toEqual(
+        Field(SETTLEMENT_MATRIX_SIZE + 1)
+      );
     });
   });
 });

@@ -170,6 +170,7 @@ async function createProof(height: number) {
             Field.from(cur.validatorListHash),
             Field.from(cur.stateRoot),
             Field.from(cur.height),
+            Field.from(cur.actionsReducedRoot ?? "0"),
         );
         blocks.push(block);
 
