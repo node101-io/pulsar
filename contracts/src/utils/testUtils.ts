@@ -323,10 +323,12 @@ function CalculateFromMockActions(
 
       publicInput = new ValidateReducePublicInput({
         ...publicInput,
-        depositListHash: Poseidon.hash([
-          publicInput.depositListHash,
+        actionListHash: Poseidon.hash([
+          publicInput.actionListHash,
+          pack.action.type,
           ...pack.action.account.toFields(),
           pack.action.amount,
+          ...pack.action.pulsarAuth.toFields(),
         ]),
       });
     } else if (PulsarAction.isWithdrawal(pack.action).toBoolean()) {
@@ -337,10 +339,12 @@ function CalculateFromMockActions(
 
       publicInput = new ValidateReducePublicInput({
         ...publicInput,
-        withdrawalListHash: Poseidon.hash([
-          publicInput.withdrawalListHash,
+        actionListHash: Poseidon.hash([
+          publicInput.actionListHash,
+          pack.action.type,
           ...pack.action.account.toFields(),
           pack.action.amount,
+          ...pack.action.pulsarAuth.toFields(),
         ]),
       });
     }

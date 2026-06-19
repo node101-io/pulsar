@@ -11,40 +11,28 @@ export {
 
 class ValidateReducePublicInput extends Struct({
   merkleListRoot: Field,
-  depositListHash: Field,
-  withdrawalListHash: Field,
+  actionListHash: Field,
 }) {
   static default = new this({
     merkleListRoot: Field(0),
-    depositListHash: Field(0),
-    withdrawalListHash: Field(0),
+    actionListHash: Field(0),
   });
 
   hash() {
-    return Poseidon.hash([
-      this.merkleListRoot,
-      this.depositListHash,
-      this.withdrawalListHash,
-    ]);
+    return Poseidon.hash([this.merkleListRoot, this.actionListHash]);
   }
 
-  static fromJSON(json: {
-    merkleListRoot: string;
-    depositListHash: string;
-    withdrawalListHash: string;
-  }) {
+  static fromJSON(json: { merkleListRoot: string; actionListHash: string }) {
     return new ValidateReducePublicInput({
       merkleListRoot: Field(json.merkleListRoot),
-      depositListHash: Field(json.depositListHash),
-      withdrawalListHash: Field(json.withdrawalListHash),
+      actionListHash: Field(json.actionListHash),
     });
   }
 
   toJSON() {
     return {
       merkleListRoot: this.merkleListRoot.toString(),
-      depositListHash: this.depositListHash.toString(),
-      withdrawalListHash: this.withdrawalListHash.toString(),
+      actionListHash: this.actionListHash.toString(),
     };
   }
 }

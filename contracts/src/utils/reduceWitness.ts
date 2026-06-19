@@ -54,8 +54,7 @@ function CalculateMax(
   let mask = new Array<boolean>(BATCH_SIZE).fill(false);
   let publicInput = new ValidateReducePublicInput({
     merkleListRoot: contractInstance.merkleListRoot.get(),
-    depositListHash: contractInstance.depositListHash.get(),
-    withdrawalListHash: contractInstance.withdrawalListHash.get(),
+    actionListHash: contractInstance.actionListHash.get(),
   });
 
   for (const [i, pack] of packedActions.entries()) {
@@ -77,8 +76,9 @@ function CalculateMax(
 
       publicInput = new ValidateReducePublicInput({
         ...publicInput,
-        depositListHash: Poseidon.hash([
-          publicInput.depositListHash,
+        actionListHash: Poseidon.hash([
+          publicInput.actionListHash,
+          pack.action.type,
           ...pack.action.account.toFields(),
           pack.action.amount,
           ...pack.action.pulsarAuth.toFields(),
@@ -99,10 +99,12 @@ function CalculateMax(
 
       publicInput = new ValidateReducePublicInput({
         ...publicInput,
-        withdrawalListHash: Poseidon.hash([
-          publicInput.withdrawalListHash,
+        actionListHash: Poseidon.hash([
+          publicInput.actionListHash,
+          pack.action.type,
           ...pack.action.account.toFields(),
           pack.action.amount,
+          ...pack.action.pulsarAuth.toFields(),
         ]),
       });
     }
@@ -133,8 +135,7 @@ function CalculateMaxWithBalances(
   let mask = new Array<boolean>(BATCH_SIZE).fill(false);
   let publicInput = new ValidateReducePublicInput({
     merkleListRoot: contractInstance.merkleListRoot.get(),
-    depositListHash: contractInstance.depositListHash.get(),
-    withdrawalListHash: contractInstance.withdrawalListHash.get(),
+    actionListHash: contractInstance.actionListHash.get(),
   });
 
   for (const [i, pack] of packedActions.entries()) {
@@ -154,8 +155,9 @@ function CalculateMaxWithBalances(
 
       publicInput = new ValidateReducePublicInput({
         ...publicInput,
-        depositListHash: Poseidon.hash([
-          publicInput.depositListHash,
+        actionListHash: Poseidon.hash([
+          publicInput.actionListHash,
+          pack.action.type,
           ...pack.action.account.toFields(),
           pack.action.amount,
           ...pack.action.pulsarAuth.toFields(),
@@ -199,10 +201,12 @@ function CalculateMaxWithBalances(
 
       publicInput = new ValidateReducePublicInput({
         ...publicInput,
-        withdrawalListHash: Poseidon.hash([
-          publicInput.withdrawalListHash,
+        actionListHash: Poseidon.hash([
+          publicInput.actionListHash,
+          pack.action.type,
           ...pack.action.account.toFields(),
           pack.action.amount,
+          ...pack.action.pulsarAuth.toFields(),
         ]),
       });
     }
