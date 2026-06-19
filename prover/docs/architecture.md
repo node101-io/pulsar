@@ -21,7 +21,7 @@
 
 ## Overview
 
-`prover_v2` is the off-chain proving service that bridges the Pulsar blockchain and the Mina blockchain. It continuously reads blocks from Pulsar, generates zero-knowledge proofs over batches of blocks, aggregates those proofs into a single settlement proof, and submits the proven settlement transaction to the Mina `SettlementContract`.
+`prover` is the off-chain proving service that bridges the Pulsar blockchain and the Mina blockchain. It continuously reads blocks from Pulsar, generates zero-knowledge proofs over batches of blocks, aggregates those proofs into a single settlement proof, and submits the proven settlement transaction to the Mina `SettlementContract`.
 
 **Key responsibilities:**
 

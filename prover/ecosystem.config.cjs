@@ -1,6 +1,6 @@
 // Production PM2 ecosystem — real Pulsar node, no mock chain.
 // Usage: pm2 start ecosystem.config.cjs
-// All processes read .env from the prover_v2 directory via dotenv.
+// All processes read .env from the prover directory via dotenv.
 
 "use strict";
 

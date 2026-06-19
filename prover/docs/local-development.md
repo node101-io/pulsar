@@ -34,7 +34,7 @@ rm -rf ../contracts/node_modules/o1js
 ln -s $(pwd)/node_modules/o1js ../contracts/node_modules/o1js
 ```
 
-This must be re-run after any `npm install` in either `prover_v2/` or `contracts/`.
+This must be re-run after any `npm install` in either `prover/` or `contracts/`.
 
 ### 3. Configure environment
 
