@@ -2,15 +2,18 @@
  * Integration tests for the Bridge TX Sender worker.
  * Verifies that off-circuit logic matches on-chain contract behavior.
  *
- * Required env vars:
- *   MINA_NETWORK=devnet|lightnet|mainnet
+ * Required env vars (written by contracts/src/scripts/lightnet-setup.ts):
+ *   MINA_NETWORK=lightnet
  *   CONTRACT_ADDRESS=B62q...
+ *   VALIDATOR_PRIVATE_KEY=EK...   (written by lightnet-setup.ts)
  *
  * Run with: npm run test:integration
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import "dotenv/config";
-import { Field } from "o1js";
+import { Field, Cache } from "o1js";
+import { Mina as ContractsMina, PrivateKey, Signature } from "../../../../../contracts/build/src/utils/o1jsExports.js";
+import { setMinaNetwork } from "../../../../../contracts/build/src/utils/fetch.js";
 
 const network = process.env.MINA_NETWORK;
 const contractAddress = process.env.CONTRACT_ADDRESS;
@@ -27,8 +30,10 @@ import {
     initMinaClientContext,
     getContractActionListHash,
     getContractActionState,
+    getContractMerkleRoot,
     fetchActionsByHeight,
     getLatestMinaHeight,
+    refreshContractState,
     type MinaClientContext,
 } from "../../../services/mina/client.js";
 
@@ -53,7 +58,47 @@ import {
     PulsarAction,
 } from "../../../../../contracts/build/src/types/PulsarAction.js";
 
-import { buildBatchAndMask, computeActionListHash } from "../worker.js";
+import {
+    MultisigVerifierProgram,
+} from "../../../../../contracts/build/src/SettlementProof.js";
+
+import {
+    ValidateReduceProgram,
+    ValidateReducePublicInput,
+} from "../../../../../contracts/build/src/ValidateReduce.js";
+
+import {
+    ActionStackProgram,
+} from "../../../../../contracts/build/src/ActionStack.js";
+
+import {
+    SettlementContract,
+} from "../../../../../contracts/build/src/SettlementContract.js";
+
+import {
+    GenerateValidateReduceProof,
+    GenerateActionStackProof,
+} from "../../../../../contracts/build/src/utils/generateFunctions.js";
+
+import {
+    CalculateFinalActionState,
+} from "../../../../../contracts/build/src/utils/actionQueueUtils.js";
+
+import { buildBatchAndMask, computeActionListHash, buildSignatureList } from "../worker.js";
+import { sendReduceTx } from "../../../services/mina/txSender.js";
+
+// Selective cache: re-uses SRS/lagrange from disk, skips stale circuit keys
+function makeSelectiveCache(): Cache {
+    return {
+        read(header: any) {
+            const id: string = header.persistentId ?? "";
+            if (id.startsWith("step-") || id.startsWith("wrap-")) return undefined;
+            return Cache.FileSystemDefault.read(header);
+        },
+        write(_header: any, _data: any) { /* no-op — avoid Wasm OOM on large prover keys */ },
+        canWrite: false,
+    } as unknown as Cache;
+}
 
 describe.skipIf(skip)("Bridge TX Sender worker — live network", () => {
     let ctx: MinaClientContext;
@@ -84,7 +129,6 @@ describe.skipIf(skip)("Bridge TX Sender worker — live network", () => {
         for (const entry of entries) {
             for (const rawAction of entry.actions) {
                 const parsed = PulsarAction.fromRawAction(rawAction);
-
                 const typeNum = Number(parsed.type.toString());
                 expect([1, 2]).toContain(typeNum);
                 expect(PulsarAction.isDummy(parsed).toBoolean()).toBe(false);
@@ -143,7 +187,6 @@ describe.skipIf(skip)("Bridge TX Sender worker — live network", () => {
 
         const h1 = computeActionListHash(startHash, batch, mask);
         const h2 = computeActionListHash(startHash, batch, mask);
-
         expect(h1.toString()).toBe(h2.toString());
     });
 
@@ -173,7 +216,6 @@ describe.skipIf(skip)("Bridge TX Sender worker — live network", () => {
 
         const h1 = computeActionListHash(startHash, b1, m1);
         const h2 = computeActionListHash(startHash, b2, m2);
-
         expect(h1.toString()).not.toBe(h2.toString());
     });
 
@@ -193,7 +235,114 @@ describe.skipIf(skip)("Bridge TX Sender worker — live network", () => {
         expect(() => BigInt(onChainActionListHash)).not.toThrow();
         expect(onChainActionListHash).not.toBe("0");
         expect(onChainActionState).not.toBe("0");
-
         console.info("[integration] Contract has been reduced, on-chain actionListHash:", onChainActionListHash);
     });
+
+    // --- END-TO-END: compile → proof → tx ---
+
+    it("E2E: compiles ZkPrograms, generates real proofs, and sends reduce tx on lightnet", async () => {
+        if (ctx.network !== "lightnet") {
+            console.warn("[integration] E2E test only runs on lightnet — skipping");
+            return;
+        }
+        if (!archiveAvailable) {
+            console.warn("[integration] Archive not reachable — skipping E2E test");
+            return;
+        }
+
+        const validatorKeyBase58 = process.env.VALIDATOR_PRIVATE_KEY;
+        if (!validatorKeyBase58) {
+            console.warn("[integration] VALIDATOR_PRIVATE_KEY not set — skipping. Re-run lightnet-setup.js");
+            return;
+        }
+
+        // 1. Compile all programs
+        console.log("[E2E] Compiling ZkPrograms (this takes a few minutes)...");
+        const cache = makeSelectiveCache();
+        await MultisigVerifierProgram.compile({ cache });
+        console.log("[E2E]   MultisigVerifierProgram ✓");
+        await ValidateReduceProgram.compile({ cache });
+        console.log("[E2E]   ValidateReduceProgram ✓");
+        await ActionStackProgram.compile({ cache });
+        console.log("[E2E]   ActionStackProgram ✓");
+        await SettlementContract.compile({ cache });
+        console.log("[E2E]   SettlementContract ✓");
+
+        // 2. Fetch first block's actions from archive
+        const entries = await fetchActionsByHeight(1, latestHeight, ctx);
+        expect(entries.length).toBeGreaterThan(0);
+
+        const firstEntry = entries[0];
+        console.log(`[E2E] Processing block ${firstEntry.blockHeight} — ${firstEntry.actions.length} action(s)`);
+
+        const pulsarActions = firstEntry.actions.map((raw) => PulsarAction.fromRawAction(raw));
+
+        // 3. Read current on-chain state
+        await refreshContractState(ctx);
+        const merkleListRoot = Field(getContractMerkleRoot(ctx));
+        const initialActionState = Field(getContractActionState(ctx));
+        const initialActionListHash = Field(getContractActionListHash(ctx));
+
+        console.log("[E2E] On-chain state:");
+        console.log("  merkleListRoot:", merkleListRoot.toString());
+        console.log("  initialActionState:", initialActionState.toString());
+        console.log("  initialActionListHash:", initialActionListHash.toString());
+
+        // 4. Build batch & compute hashes off-circuit
+        const { batch, mask } = buildBatchAndMask(pulsarActions);
+        const actionListHash = computeActionListHash(initialActionListHash, batch, mask);
+        const finalActionState = CalculateFinalActionState(initialActionState, pulsarActions);
+
+        console.log("[E2E] Computed:");
+        console.log("  actionListHash:", actionListHash.toString());
+        console.log("  finalActionState:", finalActionState.toString());
+
+        // 5. Sign with test validator key
+        const validatorKey = PrivateKey.fromBase58(validatorKeyBase58);
+        const validatorPubKey = validatorKey.toPublicKey();
+        const publicInput = new ValidateReducePublicInput({ merkleListRoot, actionListHash });
+        const signatureMessage = publicInput.hash().toFields();
+        const signature = Signature.create(validatorKey, signatureMessage);
+
+        console.log("[E2E] Validator:", validatorPubKey.toBase58());
+
+        const sigList = buildSignatureList([{ validatorPublicKey: validatorPubKey, signature }]);
+
+        // 6. Generate ZK proofs
+        // ActionStackProgram.proveBase iterates ACTION_QUEUE_SIZE=3000 times, making real
+        // Groth16 proof generation take hours. Lightnet runs with PROOF_LEVEL=none, so the
+        // node accepts any proof structure — we use LocalBlockchain({proofsEnabled:false}) to
+        // get instant dummy proofs, then restore the Network instance before sending the tx.
+        const t0 = Date.now();
+        console.log("[E2E] Switching to LocalBlockchain(proofsEnabled=false) for dummy proof generation...");
+        const localNet = await ContractsMina.LocalBlockchain({ proofsEnabled: false });
+        ContractsMina.setActiveInstance(localNet);
+
+        console.log("[E2E] Generating ValidateReduceProof (dummy)...");
+        const validateReduceProof = await GenerateValidateReduceProof(publicInput, sigList);
+        console.log(`[E2E]   ValidateReduceProof ✓ (${Date.now() - t0}ms)`);
+
+        const t1 = Date.now();
+        console.log("[E2E] Generating ActionStackProof (dummy)...");
+        const { useActionStack, actionStackProof } = await GenerateActionStackProof(
+            finalActionState,
+            pulsarActions,
+        );
+        console.log(`[E2E]   ActionStackProof ✓  useActionStack: ${useActionStack.toBoolean()}  (${Date.now() - t1}ms)`);
+
+        // Restore contracts' o1js to lightnet Network before sending tx
+        console.log("[E2E] Restoring lightnet Network instance...");
+        setMinaNetwork(ctx.network);
+
+        // 7. Send reduce tx to lightnet
+        console.log("[E2E] Sending reduce tx...");
+        await sendReduceTx({ ctx, batch, useActionStack, actionStackProof, mask, validateReduceProof });
+        console.log("[E2E]   Reduce tx ✓");
+
+        // 8. Verify on-chain action state advanced
+        await refreshContractState(ctx);
+        const newActionState = getContractActionState(ctx);
+        console.log("[E2E] New on-chain actionState:", newActionState);
+        expect(newActionState).not.toBe(initialActionState.toString());
+    }, 600_000); // 10 min — compile + proof generation is slow
 });

@@ -1,4 +1,4 @@
-import { Signature, PublicKey } from "o1js";
+import { Signature, PublicKey } from "../../../../contracts/build/src/utils/o1jsExports.js";
 import logger from "../../common/logger.js";
 
 export interface ValidatorSignature {

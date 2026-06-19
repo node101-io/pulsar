@@ -5,7 +5,8 @@
     "scripts": {
         "test": "vitest run",
         "test:watch": "vitest",
-        "test:integration": "vitest run --config vitest.integration.config.ts",
+        "test:integration": "NODE_OPTIONS=--max-old-space-size=8192 vitest run --config vitest.integration.config.ts",
+        "test:e2e": "node --max-old-space-size=8192 ../contracts/build/src/scripts/e2e-reduce-test.js",
         "build": "npm run build --prefix ../contracts && tsc",
         "start": "npm run build && node dist/src/nodeManager.js",
         "worker:bridge-tx-sender": "npm run build && node dist/src/workers/bridge-tx-sender/index.js",
