@@ -1,0 +1,12 @@
+{
+  "contractAddress": "B62qjAt47EqwwE4axCHdjzDVvAioT9qh2UB7c861NDzefbNFCgHusE6",
+  "contractPrivateKey": "EKE4Q8xjBRdy2WbCBG2gb9FhQv7qAR6wST1RWrRaMa5iiKJuFGFh",
+  "deployerAddress": "B62qj4vMzsTs3CS9c8QouhFPCL1Dww5VKaGLCQPqBufwvTeJWdFxoGU",
+  "validatorPublicKey": "B62qr6Q8fwBbh65QrLfsmkCnywSn2kYpkhYo6MLb6ZV5PLwPhkuvhHV",
+  "merkleListRoot": "10555430106369919734569135362458187014045863682048949017776594254178199632989",
+  "deployedAt": "2026-06-17T20:01:40.351Z",
+  "network": "lightnet",
+  "nodeUrl": "http://127.0.0.1:8080/graphql",
+  "archiveUrl": "http://127.0.0.1:8282",
+  "verificationKeyHash": "1170144880797363490641701816634090434526712738700780310406401239815055100571"
+}
