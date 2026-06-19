@@ -6,6 +6,7 @@ import type { ActionStackProof } from "../../../../contracts/build/src/ActionSta
 import type { Batch } from "../../../../contracts/build/src/types/PulsarAction.js";
 import type { ReduceMask } from "../../../../contracts/build/src/types/common.js";
 import type { MinaClientContext } from "./client.js";
+import { getContractBlockHeight } from "./client.js";
 import logger from "../../common/logger.js";
 
 const MAX_RETRY = 3;
@@ -17,10 +18,27 @@ export interface ReduceTxParams {
     actionStackProof: ActionStackProof;
     mask: ReduceMask;
     validateReduceProof: Proof<ValidateReducePublicInput, void>;
+    /** The Mina block height up to which this batch covers — used for on-chain skip check. */
+    upToMinaHeight: number;
 }
 
-export async function sendReduceTx(params: ReduceTxParams): Promise<void> {
-    const { ctx, batch, useActionStack, actionStackProof, mask, validateReduceProof } = params;
+/**
+ * Creates and proves the reduce transaction.
+ * Returns the serialised proved TX JSON, or null if the contract has
+ * already processed this height on-chain (safe to skip).
+ */
+export async function proveReduceTx(params: ReduceTxParams): Promise<string | null> {
+    const { ctx, batch, useActionStack, actionStackProof, mask, validateReduceProof, upToMinaHeight } = params;
+
+    const contractHeight = await getContractBlockHeight(ctx);
+    if (contractHeight >= upToMinaHeight) {
+        logger.info("Reduce TX skipped — already processed on-chain", {
+            upToMinaHeight,
+            contractHeight,
+            event: "reduce_tx_skipped",
+        });
+        return null;
+    }
 
     const privateKeyBase58 = process.env.MINA_PRIVATE_KEY;
     if (!privateKeyBase58) throw new Error("MINA_PRIVATE_KEY is not set");
@@ -44,15 +62,44 @@ export async function sendReduceTx(params: ReduceTxParams): Promise<void> {
 
     await tx.prove();
 
-    logger.info("Reduce TX proved", { event: "reduce_tx_proved" });
+    logger.info("Reduce TX proved", { upToMinaHeight, event: "reduce_tx_proved" });
+
+    return tx.toJSON();
+}
+
+/**
+ * Reconstructs a pre-proved TX from JSON, then signs and sends it.
+ * Does NOT call tx.prove() — the proof must already be embedded in the JSON.
+ * Returns early if the contract has already processed this height on-chain.
+ */
+export async function sendProvedReduceTx(
+    ctx: MinaClientContext,
+    provedTxJson: string,
+    upToMinaHeight: number,
+): Promise<void> {
+    const contractHeight = await getContractBlockHeight(ctx);
+    if (contractHeight >= upToMinaHeight) {
+        logger.info("Reduce TX send skipped — already processed on-chain", {
+            upToMinaHeight,
+            contractHeight,
+            event: "reduce_tx_send_skipped",
+        });
+        return;
+    }
+
+    const privateKeyBase58 = process.env.MINA_PRIVATE_KEY;
+    if (!privateKeyBase58) throw new Error("MINA_PRIVATE_KEY is not set");
+
+    const senderKey = PrivateKey.fromBase58(privateKeyBase58);
 
     for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
         try {
-            // refresh nonce in case it changed since prove()
+            // Refresh nonce in case it changed since prove()
+            const sender = senderKey.toPublicKey();
             await fetchAccount({ publicKey: sender });
             const currentNonce = Mina.getAccount(sender).nonce.toString();
 
-            const txData = JSON.parse(tx.toJSON());
+            const txData = JSON.parse(provedTxJson);
             txData.feePayer.body.nonce = currentNonce;
 
             const signedTx = Mina.Transaction.fromJSON(txData);
@@ -66,6 +113,7 @@ export async function sendReduceTx(params: ReduceTxParams): Promise<void> {
             logger.info("Reduce TX sent", {
                 txHash,
                 attempt,
+                upToMinaHeight,
                 event: "reduce_tx_sent",
             });
 
@@ -77,6 +125,7 @@ export async function sendReduceTx(params: ReduceTxParams): Promise<void> {
             if (success) {
                 logger.info("Reduce TX included", {
                     txHash,
+                    upToMinaHeight,
                     event: "reduce_tx_included",
                 });
                 return;
@@ -85,17 +134,19 @@ export async function sendReduceTx(params: ReduceTxParams): Promise<void> {
             logger.warn("Reduce TX rejected, retrying", {
                 txHash,
                 attempt,
+                upToMinaHeight,
                 failureReason,
                 event: "reduce_tx_rejected",
             });
         } catch (error) {
             logger.error("Reduce TX send error", {
                 attempt,
+                upToMinaHeight,
                 error,
                 event: "reduce_tx_error",
             });
         }
     }
 
-    throw new Error(`sendReduceTx failed after ${MAX_RETRY} attempts`);
+    throw new Error(`sendProvedReduceTx failed after ${MAX_RETRY} attempts for height ${upToMinaHeight}`);
 }

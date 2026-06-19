@@ -1,4 +1,4 @@
-import { fetchAccount, Mina, PublicKey } from "o1js";
+import { fetchAccount, PublicKey } from "o1js";
 import { SettlementContract } from "../../../../contracts/build/src/SettlementContract.js";
 import { setMinaNetwork } from "../../../../contracts/build/src/utils/fetch.js";
 import { ENDPOINTS } from "../../../../contracts/build/src/utils/constants.js";
@@ -38,10 +38,8 @@ export async function initMinaClientContext(): Promise<MinaClientContext> {
     const nodeEndpoint = ENDPOINTS.NODE[network];
     const archiveEndpoint = ENDPOINTS.ARCHIVE[network];
 
-    // Configure contracts' o1js instance (needed for SettlementContract methods in txSender)
+    // setMinaNetwork internally calls Mina.setActiveInstance with the correct endpoints
     setMinaNetwork(network);
-    // Configure bridge's o1js instance (needed for fetchAccount in bridge)
-    Mina.setActiveInstance(Mina.Network({ mina: nodeEndpoint, archive: archiveEndpoint }));
 
     logger.info("Mina network configured", { network, nodeEndpoint, archiveEndpoint });
 
@@ -106,6 +104,15 @@ export function getContractActionState(ctx: MinaClientContext): string {
 
 export function getContractActionListHash(ctx: MinaClientContext): string {
     return ctx.zkappState[STATE_INDEX.actionListHash];
+}
+
+/** Fetches the contract's on-chain blockHeight directly (always fresh). */
+export async function getContractBlockHeight(ctx: MinaClientContext): Promise<number> {
+    const result = await fetchAccount({ publicKey: ctx.contractAddress });
+    if (result.error != null) {
+        throw new Error(`fetchAccount failed: ${result.error.statusText}`);
+    }
+    return Number(ctx.contract.blockHeight.get().toString());
 }
 
 export async function fetchActionsByHeight(

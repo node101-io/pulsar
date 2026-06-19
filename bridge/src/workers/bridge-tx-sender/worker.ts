@@ -24,12 +24,13 @@ import { BridgeStateModel } from "../../db/models/BridgeState.js";
 import {
     type MinaClientContext,
     initMinaClientContext,
+    refreshContractState,
     getContractMerkleRoot,
     getContractActionState,
     getContractActionListHash,
 } from "../../services/mina/client.js";
 import { requestSignatures } from "../../services/pulsar/client.js";
-import { sendReduceTx } from "../../services/mina/txSender.js";
+import { proveReduceTx, sendProvedReduceTx } from "../../services/mina/txSender.js";
 import type { BridgeTxJob } from "./master.js";
 
 // context lazily initialized once per worker process
@@ -64,6 +65,9 @@ export async function worker(task: BridgeTxJob): Promise<void> {
     }
 
     const ctx = await getCtx();
+
+    // Always fetch fresh on-chain state before constructing the proof inputs.
+    await refreshContractState(ctx);
 
     const merkleListRoot = Field(getContractMerkleRoot(ctx));
     const initialActionState = Field(getContractActionState(ctx));
@@ -113,14 +117,34 @@ export async function worker(task: BridgeTxJob): Promise<void> {
         event: "proofs_generated",
     });
 
-    await sendReduceTx({
+    const provedTxJson = await proveReduceTx({
         ctx,
         batch,
         useActionStack,
         actionStackProof,
         mask,
         validateReduceProof,
+        upToMinaHeight: blockHeight,
     });
+
+    if (provedTxJson === null) {
+        // Already processed on-chain — mark done and exit.
+        await MinaActionModel.updateOne(
+            { blockHeight },
+            { $set: { status: "done" } },
+        );
+        await BridgeStateModel.updateOne(
+            {},
+            { $set: { lastSubmittedHeight: blockHeight } },
+        );
+        logger.info("Reduce TX already on-chain, marked done", {
+            blockHeight,
+            event: "reduce_tx_already_onchain",
+        });
+        return;
+    }
+
+    await sendProvedReduceTx(ctx, provedTxJson, blockHeight);
 
     await MinaActionModel.updateOne(
         { blockHeight },
