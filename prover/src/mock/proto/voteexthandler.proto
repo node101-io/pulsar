@@ -1,0 +1,53 @@
+syntax = "proto3";
+package pulsarchain.voteexthandler.v1;
+
+option go_package = "github.com/node101-io/pulsar-chain/x/voteexthandler/types";
+
+service Query {
+    rpc GetAllVoteExtsByHeight(QueryGetAllVoteExtsByHeightRequest) returns (QueryGetAllVoteExtsResponse) {}
+    rpc GetStateAtHeight(QueryGetStateAtHeightRequest) returns (QueryGetStateAtHeightResponse) {}
+    rpc GetLatestHeight(QueryGetLatestHeightRequest) returns (QueryGetLatestHeightResponse) {}
+}
+
+message QueryGetAllVoteExtsByHeightRequest {
+    int64 height = 1;
+}
+
+message QueryGetAllVoteExtsResponse {
+    repeated VoteExt vote_exts = 1;
+    bytes validator_set_root = 2;
+}
+
+message VoteExt {
+    string index = 1;
+    uint64 height = 2;
+    string validator_addr = 3;
+    bytes signature = 4;
+    Body body = 5;
+}
+
+message Body {
+    bytes initial_validator_set_root = 1;
+    bytes initial_state_root = 2;
+    int64 initial_block_height = 3;
+    bytes new_validator_set_root = 4;
+    bytes new_state_root = 5;
+    int64 new_block_height = 6;
+}
+
+message QueryGetStateAtHeightRequest {
+    int64 height = 1;
+}
+
+message QueryGetStateAtHeightResponse {
+    int64 height = 1;
+    bytes state_root = 2;
+    bytes validator_set_root = 3;
+    repeated string validators = 4;
+}
+
+message QueryGetLatestHeightRequest {}
+
+message QueryGetLatestHeightResponse {
+    int64 height = 1;
+}

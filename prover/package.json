@@ -3,15 +3,19 @@
     "version": "1.0.0",
     "type": "module",
     "scripts": {
-        "test": "npm run test",
-        "build": "tsc",
-        "proto:gen": "buf generate ../chain/proto",
-        "start-mock": "npm run build && node dist/src/mock/pulsarNode.js",
-        "worker:settlement": "npm run build && node --experimental-vm-modules dist/src/worker/settlementWorker.js",
-        "worker:merge": "npm run build && node --experimental-vm-modules dist/src/worker/mergeWorker.js",
-        "worker:reduce": "npm run build && node --experimental-vm-modules dist/src/worker/reducerWorker.js",
-        "manager": "npm run build && node dist/src/nodeManager.js",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "build": "npm run build --prefix ../contracts && tsc && mkdir -p dist/src/mock/proto && cp src/mock/proto/*.proto dist/src/mock/proto/",
+        "start": "npm run build && node dist/src/nodeManager.js",
+        "start-mock": "npm run build && node dist/src/mock/index.js",
+        "worker:block-prover": "npm run build && node --max-old-space-size=8192 dist/src/workers/block-prover/index.js",
+        "worker:aggregator": "npm run build && node --max-old-space-size=8192 dist/src/workers/aggregator/index.js",
+        "worker:settlement-prover": "npm run build && node --max-old-space-size=8192 dist/src/workers/settlement-prover/index.js",
+        "worker:settler": "npm run build && node --max-old-space-size=8192 dist/src/workers/settler/index.js",
         "cli": "npm run build && node dist/src/cli.js",
+        "deploy": "npm run build && node dist/src/scripts/deploy.js",
+        "seed": "npm run build && node dist/src/scripts/seed.js",
+        "reset": "npm run build && node dist/src/scripts/reset.js",
         "clean": "rimraf build coverage node_modules package-lock.json"
     },
     "keywords": [
@@ -28,6 +32,7 @@
         "@cosmjs/stargate": "^0.36.0",
         "@grpc/grpc-js": "^1.13.4",
         "@grpc/proto-loader": "^0.8.0",
+        "@o1js/native": "^2.10.0-dev.e7f2f",
         "@types/google-protobuf": "^3.15.12",
         "@types/inquirer": "^9.0.9",
         "bullmq": "^5.58.5",
@@ -39,8 +44,10 @@
         "inquirer": "^12.9.4",
         "ioredis": "^5.7.0",
         "mongodb": "^6.19.0",
+        "mongoose": "^9.1.6",
         "node-fetch": "^3.3.2",
-        "pulsar-contracts": "^0.4.31",
+        "o1js": "2.10.0-dev.be63f",
+        "pulsar-contracts": "file:../contracts",
         "rimraf": "^6.0.1",
         "winston": "^3.17.0"
     },
@@ -48,9 +55,13 @@
         "@bufbuild/buf": "^1.57.0",
         "@types/express": "^5.0.3",
         "@types/node": "^24.3.1",
-        "typescript": "^5.9.2"
+        "typescript": "^5.9.2",
+        "vitest": "^4.0.18"
     },
     "peerDependencies": {
-        "o1js": "^2.9.0"
+        "o1js": "2.10.0-dev.be63f"
+    },
+    "overrides": {
+        "o1js": "2.10.0-dev.be63f"
     }
 }

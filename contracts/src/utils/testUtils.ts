@@ -50,6 +50,7 @@ export const TestUtils = {
   GenerateTestActions,
   CalculateActionRoot,
   GenerateTestBlocks,
+  GenerateTestBlocksWithRotation,
   CreateValidatorMerkleList,
   CalculateFromMockActions,
 };
@@ -254,6 +255,44 @@ function GenerateTestBlocks(
     );
     initialBlockHeight = initialBlockHeight.add(Field(1));
     initialStateRoot = initialStateRoot.add(Field(1));
+  }
+
+  return blocks;
+}
+
+/**
+ * Generates SETTLEMENT_MATRIX_SIZE blocks where the validator set rotates at
+ * `rotationIndex`. Block at rotationIndex has NewMerkleListRoot = newMerkleListRoot;
+ * all subsequent blocks use newMerkleListRoot as their InitialMerkleListRoot.
+ * Blocks before rotationIndex keep the initial merkle root throughout.
+ */
+function GenerateTestBlocksWithRotation(
+  initialBlockHeight: Field,
+  initialMerkleListRoot: Field,
+  newMerkleListRoot: Field,
+  rotationIndex: number,
+  initialStateRoot: Field = Field(0)
+): Block[] {
+  const blocks: Block[] = [];
+  let currentMerkleRoot = initialMerkleListRoot;
+
+  for (let i = 0; i < SETTLEMENT_MATRIX_SIZE; i++) {
+    const nextMerkleRoot = i === rotationIndex ? newMerkleListRoot : currentMerkleRoot;
+
+    blocks.push(
+      GeneratePulsarBlock(
+        currentMerkleRoot,
+        initialStateRoot,
+        initialBlockHeight,
+        nextMerkleRoot,
+        initialStateRoot.add(Field(1)),
+        initialBlockHeight.add(Field(1))
+      )
+    );
+
+    initialBlockHeight = initialBlockHeight.add(Field(1));
+    initialStateRoot = initialStateRoot.add(Field(1));
+    currentMerkleRoot = nextMerkleRoot;
   }
 
   return blocks;

@@ -1,109 +1,114 @@
-import { PublicKey } from "o1js";
-import { MinaClient } from "./minaClient.js";
-import dotenv from "dotenv";
-import logger from "./logger.js";
-import { PulsarClient } from "./pulsarClient.js";
-import { collectSignatureQ, settlementQ } from "./workerConnection.js";
-import { fetchLastStoredBlock, initMongo } from "./db.js";
-import { BlockData } from "./interfaces.js";
-dotenv.config();
+import { spawn, ChildProcess } from "child_process";
+import { fileURLToPath } from "url";
+import { join, dirname } from "path";
 
-async function main() {
-    if (!process.env.CONTRACT_ADDRESS) {
-        throw new Error("CONTRACT_ADDRESS is not set in the environment variables");
-    }
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-    await initMongo();
-    const lastSeenBlockHeight = (await fetchLastStoredBlock())?.height || 0;
-
-    let minaClient = new MinaClient(
-        PublicKey.fromBase58(process.env.CONTRACT_ADDRESS),
-        process.env.MINA_NETWORK as "devnet" | "mainnet" | "lightnet",
-        lastSeenBlockHeight,
-        5000
-    );
-
-    minaClient.on("start", (blockHeight) => {
-        logger.info(`Mina client started, watching actions from block height: ${blockHeight}`);
-    });
-
-    minaClient.on("actions", async ({ blockHeight, actions }) => {
-        logger.info(`Actions fetched for block ${blockHeight}: ${JSON.stringify(actions)}`);
-        if (actions.length === 0) {
-            logger.info(`No actions found for block ${blockHeight}, skipping...`);
-            return;
-        }
-        await collectSignatureQ.add(
-            "collect-" + blockHeight,
-            {
-                blockHeight,
-                actions,
-            },
-            {
-                attempts: 5,
-                backoff: {
-                    type: "exponential",
-                    delay: 5_000,
-                },
-                removeOnComplete: true,
-            }
-        );
-    });
-
-    minaClient.on("error", (error) => {
-        logger.error(`Error in Mina client: ${error.message}`);
-
-        minaClient.stop();
-        logger.info("Mina client stopped due to error, restarting in 5 seconds...");
-        setTimeout(() => {
-            minaClient.start();
-        }, 5000);
-    });
-
-    minaClient.on("stop", () => {
-        logger.info("Mina client stopped");
-    });
-
-    const pulsarClient = new PulsarClient(
-        process.env.PULSAR_GRPC_ENDPOINT || "localhost:50051",
-        0,
-        10000
-    );
-
-    pulsarClient.on("start", () => {
-        logger.info("Pulsar client started, listening for new blocks");
-    });
-
-    pulsarClient.on("newPulsarBlock", async ({ blockData }: { blockData: BlockData }) => {
-        // logger.info("New Pulsar block detected: ", blockData.height);
-        await settlementQ.add(
-            "settlement-" + blockData.height,
-            {
-                blockData,
-            },
-            {
-                attempts: 5,
-                backoff: {
-                    type: "exponential",
-                    delay: 5_000,
-                },
-                removeOnComplete: true,
-            }
-        );
-    });
-
-    pulsarClient.on("error", (error) => {
-        logger.error(`Error in Pulsar client: ${error.message}`);
-    });
-
-    pulsarClient.on("stop", () => {
-        logger.info("Pulsar client stopped");
-    });
-
-    await minaClient.start();
-    await pulsarClient.start();
+interface WorkerDef {
+    name: string;
+    script: string;
+    color: string;
+    extraArgs?: string[];
 }
 
-main()
-    .then(() => logger.info("Client is running"))
-    .catch((error) => logger.error(`Error starting client: ${error.message}`));
+const WORKERS: WorkerDef[] = [
+    {
+        name: "main",
+        script: join(__dirname, "index.js"),
+        color: "\x1b[36m", // cyan
+    },
+    {
+        name: "block-prover",
+        script: join(__dirname, "workers/block-prover/index.js"),
+        color: "\x1b[33m", // yellow
+        extraArgs: ["--max-old-space-size=8192"],
+    },
+    {
+        name: "aggregator",
+        script: join(__dirname, "workers/aggregator/index.js"),
+        color: "\x1b[35m", // magenta
+        extraArgs: ["--max-old-space-size=8192"],
+    },
+    {
+        name: "settlement-prover",
+        script: join(__dirname, "workers/settlement-prover/index.js"),
+        color: "\x1b[34m", // blue
+        extraArgs: ["--max-old-space-size=8192"],
+    },
+    {
+        name: "settler",
+        script: join(__dirname, "workers/settler/index.js"),
+        color: "\x1b[32m", // green
+        extraArgs: ["--max-old-space-size=8192"],
+    },
+];
+
+const RESET = "\x1b[0m";
+const RESTART_DELAY_MS = 3000;
+
+function prefix(name: string, color: string): string {
+    const pad = 18;
+    return `${color}[${name.padEnd(pad)}]${RESET} `;
+}
+
+function spawnWorker(def: WorkerDef): ChildProcess {
+    const nodeArgs = [...(def.extraArgs ?? []), def.script];
+    const proc = spawn(process.execPath, nodeArgs, {
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    const pre = prefix(def.name, def.color);
+
+    proc.stdout.on("data", (data: Buffer) => {
+        data.toString()
+            .split("\n")
+            .filter(Boolean)
+            .forEach((line) => {
+                process.stdout.write(pre + line + "\n");
+            });
+    });
+
+    proc.stderr.on("data", (data: Buffer) => {
+        data.toString()
+            .split("\n")
+            .filter(Boolean)
+            .forEach((line) => {
+                process.stderr.write(pre + line + "\n");
+            });
+    });
+
+    proc.on("exit", (code, signal) => {
+        const reason = signal ? `signal ${signal}` : `code ${code}`;
+        process.stdout.write(
+            `${prefix(
+                def.name,
+                def.color,
+            )}process exited (${reason}), restarting in ${
+                RESTART_DELAY_MS / 1000
+            }s...\n`,
+        );
+        setTimeout(() => spawnWorker(def), RESTART_DELAY_MS);
+    });
+
+    process.stdout.write(
+        `${prefix(def.name, def.color)}started (pid ${proc.pid})\n`,
+    );
+    return proc;
+}
+
+// Graceful shutdown
+const procs: ChildProcess[] = [];
+
+function shutdown() {
+    process.stdout.write("\nShutting down all workers...\n");
+    procs.forEach((p) => p.kill("SIGTERM"));
+    process.exit(0);
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
+// Start all workers
+WORKERS.forEach((def) => procs.push(spawnWorker(def)));
