@@ -1,12 +1,14 @@
 import {
   AccountUpdate,
   fetchAccount,
+  Field,
   Mina,
   PrivateKey,
   PublicKey,
   UInt64,
 } from 'o1js';
 import { SettlementContract } from '../SettlementContract.js';
+import { ActionStackProof } from '../ActionStack.js';
 import { List } from '../types/common.js';
 
 export const DeployScripts = {
@@ -105,12 +107,13 @@ async function deployAndInitializeContract(
   );
   const signerPublicKey = signerPrivateKey.toPublicKey();
 
+  const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
   const deployTx = await Mina.transaction(
     { sender: signerPublicKey, fee },
     async () => {
       AccountUpdate.fundNewAccount(signerPublicKey);
       await contractInstance.deploy();
-      await contractInstance.initialize(validatorList.hash);
+      await contractInstance.initialize(validatorList.hash, Field(0), dummyProof);
     }
   );
 

@@ -67,9 +67,11 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async initialize(merkleListRoot: Field) {
+  async initialize(merkleListRoot: Field, stateRoot: Field, _dummy: ActionStackProof) {
+    _dummy.verifyIf(Bool(false));
     super.init();
     this.merkleListRoot.set(merkleListRoot);
+    this.stateRoot.set(stateRoot);
     this.actionState.set(Reducer.initialActionState);
   }
 
@@ -86,18 +88,9 @@ class SettlementContract extends SmartContract {
       NewStateRoot,
     } = settlementProof.publicInput;
 
-    InitialBlockHeight.assertEquals(
-      this.blockHeight.getAndRequireEquals(),
-      'Initial block height mismatch with on-chain state'
-    );
-    InitialMerkleListRoot.assertEquals(
-      this.merkleListRoot.getAndRequireEquals(),
-      'Initial MerkleList root mismatch with on-chain state'
-    );
-    InitialStateRoot.assertEquals(
-      this.stateRoot.getAndRequireEquals(),
-      'Initial Pulsar state root mismatch with on-chain state'
-    );
+    this.blockHeight.requireEquals(InitialBlockHeight);
+    this.merkleListRoot.requireEquals(InitialMerkleListRoot);
+    this.stateRoot.requireEquals(InitialStateRoot);
 
     NewBlockHeight.assertEquals(
       InitialBlockHeight.add(Field.from(AGGREGATE_THRESHOLD)),
@@ -110,7 +103,8 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async deposit(amount: UInt64, pulsarAuth: PulsarAuth) {
+  async deposit(amount: UInt64, pulsarAuth: PulsarAuth, _dummy: ActionStackProof) {
+    _dummy.verifyIf(Bool(false));
     amount.assertGreaterThanOrEqual(
       UInt64.from(MINIMUM_DEPOSIT_AMOUNT),
       `At least ${Number(MINIMUM_DEPOSIT_AMOUNT / 1e9)} MINA is required`
@@ -125,7 +119,8 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async withdraw(amount: UInt64) {
+  async withdraw(amount: UInt64, _dummy: ActionStackProof) {
+    _dummy.verifyIf(Bool(false));
     const account = this.sender.getUnconstrained();
     const withdrawalUpdate = AccountUpdate.createSigned(account);
 

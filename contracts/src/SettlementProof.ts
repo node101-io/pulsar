@@ -89,16 +89,15 @@ class Block extends Struct({
   NewMerkleListRoot: Field,
   NewStateRoot: Field,
   NewBlockHeight: Field,
+  actionsReducedRoot: Field,
 }) {
   hash() {
-    return Poseidon.hash([
-      this.InitialMerkleListRoot,
-      this.InitialStateRoot,
-      this.InitialBlockHeight,
+    const innerHash = Poseidon.hash([
       this.NewMerkleListRoot,
       this.NewStateRoot,
       this.NewBlockHeight,
     ]);
+    return Poseidon.hash([innerHash, this.actionsReducedRoot]);
   }
 
   toJSON() {
@@ -216,7 +215,7 @@ const MultisigVerifierProgram = ZkProgram({
           }
 
           list.hash.assertEquals(
-            publicInputs.InitialMerkleListRoot,
+            pulsarBlocks.list[i].InitialMerkleListRoot,
             "Validator MerkleList hash doesn't match"
           );
           counter.assertGreaterThanOrEqual(
@@ -252,6 +251,9 @@ const MultisigVerifierProgram = ZkProgram({
             afterProof.publicOutput.numberOfSettlementProofs
           );
 
+        // Limit is AGGREGATE_THRESHOLD. Without this cap,
+        // concurrent settlement submissions cause race conditions on Mina
+        // before the previous transaction is finalized onchain.
         numberOfSettlementProofs.assertLessThanOrEqual(
           Field(AGGREGATE_THRESHOLD),
           'Number of settlement proofs exceeds limit'

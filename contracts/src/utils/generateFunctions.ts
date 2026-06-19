@@ -180,7 +180,8 @@ function GeneratePulsarBlock(
   initialBlockHeight: Field,
   newMerkleListRoot: Field,
   newStateRoot: Field,
-  newBlockHeight: Field
+  newBlockHeight: Field,
+  actionsReducedRoot: Field = Field.from(0)
 ) {
   return new Block({
     InitialMerkleListRoot: initialMerkleListRoot,
@@ -189,6 +190,7 @@ function GeneratePulsarBlock(
     NewBlockHeight: newBlockHeight,
     NewMerkleListRoot: newMerkleListRoot,
     NewStateRoot: newStateRoot,
+    actionsReducedRoot,
   });
 }
 

@@ -1,0 +1,67 @@
+{
+    "name": "pulsar-prover",
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "build": "npm run build --prefix ../contracts && tsc && mkdir -p dist/src/mock/proto && cp src/mock/proto/*.proto dist/src/mock/proto/",
+        "start": "npm run build && node dist/src/nodeManager.js",
+        "start-mock": "npm run build && node dist/src/mock/index.js",
+        "worker:block-prover": "npm run build && node --max-old-space-size=8192 dist/src/workers/block-prover/index.js",
+        "worker:aggregator": "npm run build && node --max-old-space-size=8192 dist/src/workers/aggregator/index.js",
+        "worker:settlement-prover": "npm run build && node --max-old-space-size=8192 dist/src/workers/settlement-prover/index.js",
+        "worker:settler": "npm run build && node --max-old-space-size=8192 dist/src/workers/settler/index.js",
+        "cli": "npm run build && node dist/src/cli.js",
+        "deploy": "npm run build && node dist/src/scripts/deploy.js",
+        "seed": "npm run build && node dist/src/scripts/seed.js",
+        "reset": "npm run build && node dist/src/scripts/reset.js",
+        "clean": "rimraf build coverage node_modules package-lock.json"
+    },
+    "keywords": [
+        "pulsar"
+    ],
+    "author": "",
+    "license": "MIT",
+    "description": "",
+    "dependencies": {
+        "@bufbuild/protobuf": "^2.7.0",
+        "@cosmjs/crypto": "^0.36.0",
+        "@cosmjs/encoding": "^0.36.0",
+        "@cosmjs/proto-signing": "^0.36.0",
+        "@cosmjs/stargate": "^0.36.0",
+        "@grpc/grpc-js": "^1.13.4",
+        "@grpc/proto-loader": "^0.8.0",
+        "@o1js/native": "^2.10.0-dev.e7f2f",
+        "@types/google-protobuf": "^3.15.12",
+        "@types/inquirer": "^9.0.9",
+        "bullmq": "^5.58.5",
+        "cosmjs-types": "^0.10.1",
+        "cosmwasm": "^1.1.1",
+        "dotenv": "^17.2.2",
+        "google-protobuf": "^4",
+        "grpc-js-reflection-client": "^1.3.0",
+        "inquirer": "^12.9.4",
+        "ioredis": "^5.7.0",
+        "mongodb": "^6.19.0",
+        "mongoose": "^9.1.6",
+        "node-fetch": "^3.3.2",
+        "o1js": "2.10.0-dev.be63f",
+        "pulsar-contracts": "file:../contracts",
+        "rimraf": "^6.0.1",
+        "winston": "^3.17.0"
+    },
+    "devDependencies": {
+        "@bufbuild/buf": "^1.57.0",
+        "@types/express": "^5.0.3",
+        "@types/node": "^24.3.1",
+        "typescript": "^5.9.2",
+        "vitest": "^4.0.18"
+    },
+    "peerDependencies": {
+        "o1js": "2.10.0-dev.be63f"
+    },
+    "overrides": {
+        "o1js": "2.10.0-dev.be63f"
+    }
+}

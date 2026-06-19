@@ -1,0 +1,211 @@
+import { PublicKey } from "o1js";
+
+import {
+    PROOF_EPOCH_SIZE,
+    WORKER_TIMEOUT_MS,
+    STALLED_INTERVAL_MS,
+    MASTER_SLEEP_INTERVAL_MS,
+    MAX_FAIL_COUNT,
+} from "../../config/constants.js";
+import { ProofKind } from "../../common/types.js";
+import { ProofEpochModel } from "../../db/index.js";
+import { Master } from "../master.js";
+import { settlerQ } from "../queue.js";
+import { SettlerJob } from "../types.js";
+import { connection } from "../redis.js";
+import { worker as processSettlement } from "./worker.js";
+import { sleep } from "../../common/sleep.js";
+import logger from "../../common/logger.js";
+import {
+    type MinaClientContext,
+    type MinaNetwork,
+    initMinaClientContext,
+    getContractBlockHeight,
+} from "../../services/mina/client.js";
+
+let minaCtx: MinaClientContext | null = null;
+
+async function getMinaContext(): Promise<MinaClientContext> {
+    if (!minaCtx) {
+        const contractAddress = process.env.CONTRACT_ADDRESS;
+        if (!contractAddress) throw new Error("CONTRACT_ADDRESS is not set");
+        const network: MinaNetwork =
+            (process.env.MINA_NETWORK as MinaNetwork) || "lightnet";
+        minaCtx = await initMinaClientContext(
+            PublicKey.fromBase58(contractAddress),
+            network,
+        );
+    }
+    return minaCtx;
+}
+
+export class SettlerMaster extends Master<SettlerJob> {
+    constructor() {
+        super({
+            queueName: "settler",
+            workerLabel: "Settler",
+            connection,
+            workerCount: 1,
+            lockDurationMs: WORKER_TIMEOUT_MS,
+            stalledIntervalMs: STALLED_INTERVAL_MS,
+            processJob: async (_workerId, job) => {
+                await processSettlement(job.data);
+            },
+            onJobFailed: async (job) => {
+                if (job?.data.height !== undefined) {
+                    const updated = await ProofEpochModel.findOneAndUpdate(
+                        {
+                            height: job.data.height,
+                            kind: "txSending" as ProofKind,
+                        },
+                        {
+                            $inc: { failCount: 1 },
+                        },
+                        { new: true },
+                    );
+                    if (!updated) return;
+
+                    if (updated.failCount >= MAX_FAIL_COUNT) {
+                        // Stale proof — re-prove with fresh nonce and reset counter
+                        await ProofEpochModel.updateOne(
+                            { height: job.data.height },
+                            {
+                                $set: {
+                                    kind: "aggregation" as ProofKind,
+                                    provedTxJson: null,
+                                    failCount: 0,
+                                },
+                            },
+                        );
+                    } else {
+                        await ProofEpochModel.updateOne(
+                            { height: job.data.height },
+                            { $set: { kind: "settlement" as ProofKind } },
+                        );
+                    }
+                }
+            },
+        });
+    }
+
+    protected async onStartup(): Promise<void> {
+        // Refresh timeoutAt for settlement-ready epochs that may have expired
+        // while the node was offline (rejoin scenario)
+        const refreshed = await ProofEpochModel.updateMany(
+            {
+                kind: "settlement" as ProofKind,
+                timeoutAt: { $lte: new Date() },
+            },
+            { $set: { timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS) } },
+        );
+        if (refreshed.modifiedCount > 0) {
+            logger.warn(
+                `Refreshed timeoutAt for ${refreshed.modifiedCount} expired settlement epoch(s) on startup`,
+                {
+                    count: refreshed.modifiedCount,
+                    event: "settlement_timeout_refresh",
+                },
+            );
+        }
+
+        // Re-queue any epochs stuck in txSending without resetting kind,
+        // so the worker can confirm or re-send the tx safely
+        const stuckEpochs = await ProofEpochModel.find({
+            kind: "txSending" as ProofKind,
+        });
+        for (const epoch of stuckEpochs) {
+            await settlerQ.add("settler", { height: epoch.height });
+            logger.warn(
+                `Re-queued stuck txSending epoch at height ${epoch.height} on startup`,
+                { epochHeight: epoch.height, event: "tx_sending_requeue" },
+            );
+        }
+    }
+
+    protected async handleTask(): Promise<void> {
+        // Step 3a: is there an in-flight tx? if so, wait for it to land
+        const counts = await settlerQ.getJobCounts(
+            "waiting",
+            "active",
+            "delayed",
+        );
+        const queueSize = counts.waiting + counts.active + counts.delayed;
+
+        if (queueSize === 0) {
+            await ProofEpochModel.updateMany(
+                { kind: { $eq: "txSending" as ProofKind } },
+                { $set: { kind: "settlement" as ProofKind } },
+            );
+        } else {
+            const inFlight = await ProofEpochModel.findOne({
+                kind: { $eq: "txSending" as ProofKind },
+            });
+            if (inFlight) {
+                await sleep(MASTER_SLEEP_INTERVAL_MS);
+                return;
+            }
+        }
+
+        // Fast path: any settlement-ready epochs at all?
+        const hasPending = await ProofEpochModel.exists({
+            kind: { $eq: "settlement" as ProofKind },
+            timeoutAt: { $gt: new Date() },
+        });
+        if (!hasPending) {
+            await sleep(MASTER_SLEEP_INTERVAL_MS);
+            return;
+        }
+
+        // Step 2: what is Mina's current onchain state?
+        const ctx = await getMinaContext();
+        const contractBlockHeight = await getContractBlockHeight(ctx);
+
+        logger.debug("Checked on-chain settlement state", {
+            contractBlockHeight,
+            event: "settler_checked_onchain_state",
+        });
+
+        // Step 3b / 4: find the next epoch to settle, lowest height not yet settled on-chain
+        const epoch = await ProofEpochModel.findOneAndUpdate(
+            {
+                kind: { $eq: "settlement" as ProofKind },
+                timeoutAt: { $gt: new Date() },
+                height: { $gt: contractBlockHeight - PROOF_EPOCH_SIZE },
+            },
+            {
+                $set: { kind: "txSending" as ProofKind },
+            },
+            {
+                sort: { height: 1 },
+                new: false,
+            },
+        );
+
+        if (epoch) {
+            try {
+                await settlerQ.add("settler", { height: epoch.height });
+                logger.debug(
+                    `Pushed settler job to queue for epoch at height ${epoch.height}`,
+                    {
+                        epochHeight: epoch.height,
+                        contractBlockHeight,
+                        event: "settler_task_queued",
+                    },
+                );
+            } catch (error) {
+                await ProofEpochModel.updateOne(
+                    { height: epoch.height, kind: "txSending" as ProofKind },
+                    { $set: { kind: "settlement" as ProofKind } },
+                );
+                throw error;
+            }
+        } else {
+            await sleep(MASTER_SLEEP_INTERVAL_MS);
+        }
+    }
+}
+
+export async function masterRunner() {
+    const master = new SettlerMaster();
+    await master.run();
+}

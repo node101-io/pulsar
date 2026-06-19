@@ -1,0 +1,21 @@
+# NodeJS
+node_modules
+build
+dist
+coverage
+
+# Editor
+.vscode
+
+# System
+.DS_Store
+.env
+
+# Mock Chain Artifacts
+mock-state.json
+mock-sync-state.json
+
+logs/
+cache/
+
+.claude/
