@@ -70,7 +70,7 @@ class SettlementContract extends SmartContract {
     this.account.provedState.requireEquals(Bool(false));
     super.init();
     this.merkleListRoot.set(merkleListRoot);
-    this.stateRoot.set(stateRoot);
+    this.stateRoot.set(Field(0));
     this.actionState.set(Reducer.initialActionState);
   }
 

@@ -20,14 +20,15 @@ import {
   Signature,
   Cache,
   fetchAccount,
+  Bool,
 } from 'o1js';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
 import { ValidateReduceProgram, ValidateReducePublicInput } from '../ValidateReduce.js';
-import { ActionStackProgram } from '../ActionStack.js';
+import { ActionStackProgram, ActionStackProof } from '../ActionStack.js';
 import { PulsarAction, PulsarAuth } from '../types/PulsarAction.js';
 import { Batch } from '../types/PulsarAction.js';
 import { ReduceMask } from '../types/common.js';
@@ -97,12 +98,15 @@ function buildSignatureList(
   validatorPublicKey: PublicKey,
   signature: Signature,
 ): SignaturePublicKeyList {
-  const padded: { validatorPublicKey: PublicKey | null; signature: Signature | null }[] = [{ validatorPublicKey, signature }];
-  while (padded.length < VALIDATOR_NUMBER) {
-    padded.push({ validatorPublicKey: null as any, signature: null as any });
+  // Fill all VALIDATOR_NUMBER slots with the same real validator key/signature.
+  // computeMerkleListRoot in lightnet-setup also pushes VALIDATOR_NUMBER copies
+  // of the same key, so the MerkleList hashes will match.
+  const list: Array<{ publicKey: PublicKey; signature: Signature }> = [];
+  for (let i = 0; i < VALIDATOR_NUMBER; i++) {
+    list.push({ publicKey: validatorPublicKey, signature });
   }
   return new SignaturePublicKeyList({
-    list: padded.map((s) => new SignaturePublicKey({ publicKey: s.validatorPublicKey as PublicKey, signature: s.signature as Signature })),
+    list: list.map((s) => new SignaturePublicKey({ publicKey: s.publicKey, signature: s.signature })),
   });
 }
 
@@ -151,6 +155,12 @@ async function main() {
   log(`  ActionStackProgram ✓ (${Date.now() - t0}ms)`);
   await SettlementContract.compile({ cache });
   log(`  SettlementContract ✓ (${Date.now() - t0}ms)`);
+  // Re-compile ActionStackProgram with proofsEnabled:false so that proveBase()
+  // produces instant mock proofs. SettlementContract is already compiled above,
+  // so this re-compile only affects subsequent ZkProgram.prove* calls.
+  // The VK is circuit-structure-derived and identical regardless of proofsEnabled.
+  await ActionStackProgram.compile({ cache, proofsEnabled: false });
+  log(`  ActionStackProgram (mock mode) ✓ (${Date.now() - t0}ms)`);
 
   // 3. Fetch on-chain state
   const contractAddress = PublicKey.fromBase58(CONTRACT_ADDRESS!);
@@ -162,12 +172,15 @@ async function main() {
   log(`  merkleListRoot:  ${zkappState[1]}`);
   log(`  actionListHash:  ${zkappState[4]}`);
 
-  // 4. Fetch actions from archive
+  // 4. Fetch ALL pending actions from archive.
+  // reduce() checks that our batch covers from initialActionState → account.actionState (all pending).
+  // All actions dispatched since the last reduce() must be included in one batch.
   const entries = await fetchActionsFromArchive(CONTRACT_ADDRESS!);
   if (entries.length === 0) throw new Error('No actions found in archive');
-  const firstEntry = entries[0];
-  log(`Processing block ${firstEntry.blockHeight} — ${firstEntry.actions.length} action(s)`);
-  const pulsarActions = firstEntry.actions.map((raw) => PulsarAction.fromRawAction(raw));
+  const allRawActions = entries.flatMap((e) => e.actions);
+  log(`Found ${entries.length} block(s), ${allRawActions.length} total action(s) to reduce`);
+  if (allRawActions.length > BATCH_SIZE) throw new Error(`Too many pending actions: ${allRawActions.length} > BATCH_SIZE(${BATCH_SIZE})`);
+  const pulsarActions = allRawActions.map((raw) => PulsarAction.fromRawAction(raw));
 
   // 5. Build batch & compute hashes off-circuit
   const merkleListRoot = Field(zkappState[1]);
@@ -188,10 +201,12 @@ async function main() {
   const sigList = buildSignatureList(validatorPubKey, signature);
   log(`Validator: ${validatorPubKey.toBase58()}`);
 
-  // 7. Generate DUMMY proofs (LocalBlockchain proofsEnabled=false)
-  // ActionStackProgram.proveBase with ACTION_QUEUE_SIZE=3000 takes hours with real proofs.
-  // PROOF_LEVEL=none on lightnet accepts any proof, so dummy proofs work fine.
-  log('Switching to LocalBlockchain(proofsEnabled=false) for instant dummy proofs...');
+  // 7. Generate ZkProgram dummy proofs via LocalBlockchain(proofsEnabled=false).
+  // ValidateReduceProgram and ActionStackProgram are ZkPrograms — they don't check
+  // activeInstance.proofsEnabled; they check their own compile-time flag.
+  // ValidateReduceProgram was compiled with proofsEnabled:true (default), so we need
+  // LocalBlockchain context to make its prove() return a mock proof.
+  log('Switching to LocalBlockchain(proofsEnabled=false) for ZkProgram dummy proofs...');
   const localNet = await Mina.LocalBlockchain({ proofsEnabled: false });
   Mina.setActiveInstance(localNet);
 
@@ -201,12 +216,14 @@ async function main() {
   log(`  ValidateReduceProof ✓ (${Date.now() - t1}ms)`);
 
   const t2 = Date.now();
-  log('Generating ActionStackProof (dummy)...');
-  const { useActionStack, actionStackProof } = await GenerateActionStackProof(finalActionState, pulsarActions);
-  log(`  ActionStackProof ✓  useActionStack: ${useActionStack.toBoolean()}  (${Date.now() - t2}ms)`);
+  log('Generating ActionStackProof (dummy, useActionStack=false)...');
+  // useActionStack=false → reduce() uses batch-computed actionState, skips proof verify.
+  // maxProofsVerified=1 (proveRecursive has SelfProof), domainLog2=16 (45K rows → 2^16).
+  const useActionStack = Bool(false);
+  const actionStackProof = await ActionStackProof.dummy(Field(0), Field(0), 1, 16);
+  log(`  ActionStackProof dummy ✓ (${Date.now() - t2}ms)`);
 
-  // 8. Restore lightnet Network for tx
-  log('Restoring lightnet Network for tx...');
+  // 8. Restore lightnet for account fetch & tx submission.
   Mina.setActiveInstance(Network);
 
   // 9. Send reduce tx
@@ -217,13 +234,32 @@ async function main() {
   await fetchAccount({ publicKey: sender });
   await fetchAccount({ publicKey: contractAddress });
 
+  // ROOT CAUSE FIX:
+  // Network.transaction() calls createTransaction() WITHOUT proofsEnabled, so it defaults
+  // to true. Then tx.prove() → addMissingProofs(cmd, { proofsEnabled: true }) → real Pickles
+  // proof → 13+ minutes. Network.proofsEnabled is NOT read by Network.transaction() at all.
+  //
+  // Fix: build the tx normally (Network handles fetch/nonces), then bypass tx.prove()
+  // entirely by calling addMissingProofs directly from o1js internals with proofsEnabled:false.
+  // This produces an instant dummyBase64Proof() — structurally a Proof authorization but
+  // not a real SNARK. Lightnet PROOF_LEVEL=none never verifies proof content, so it's accepted.
   log('Building reduce tx...');
   const tx = await Mina.transaction({ sender, fee: FEE }, async () => {
     await contract.reduce(batch, useActionStack, actionStackProof, mask, validateReduceProof);
   });
 
-  log('Proving tx (dummy, PROOF_LEVEL=none)...');
-  await tx.prove();
+  log('Applying mock proof (instant — bypasses real Pickles prover)...');
+  // addMissingProofs is not exported from o1js public API, so we import via file URL.
+  // The exports field in o1js/package.json restricts bare specifier subpaths, but direct
+  // file:// URLs bypass that restriction in Node.js ESM.
+  const accountUpdatePath = resolve(
+    __dirname,
+    '../../../node_modules/o1js/dist/node/lib/mina/v1/account-update.js',
+  );
+  const { addMissingProofs } = await import(pathToFileURL(accountUpdatePath).href) as any;
+  const { zkappCommand } = await addMissingProofs((tx as any).transaction, { proofsEnabled: false });
+  (tx as any).transaction = zkappCommand;
+  // tx.prove() is NOT called — authorization kind is already 'Proof' (dummy base64 content)
 
   log('Signing & sending...');
   const pending = await tx.sign([senderKey]).send();

@@ -29,9 +29,10 @@ import { fileURLToPath } from 'url';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
 import { ValidateReduceProgram } from '../ValidateReduce.js';
-import { ActionStackProgram } from '../ActionStack.js';
+import { ActionStackProgram, ActionStackProof, ActionStackQueue } from '../ActionStack.js';
 import { PulsarAuth } from '../types/PulsarAction.js';
 import { List } from '../types/common.js';
+import { VALIDATOR_NUMBER } from '../utils/constants.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -46,8 +47,9 @@ async function waitForTx(
   tx: Awaited<ReturnType<typeof Mina.transaction>>,
   signingKeys: PrivateKey[],
   label: string,
+  skipProve = false,
 ): Promise<void> {
-  await tx.prove();
+  if (!skipProve) await tx.prove();
   const pending = await tx.sign(signingKeys).send();
   if (pending.status === 'rejected') {
     throw new Error(`${label}: transaction rejected — ${JSON.stringify(pending.errors)}`);
@@ -60,10 +62,14 @@ async function waitForTx(
   console.log(`  ${label} ✓ (block ${(result as any).blockHeight ?? '?'})`);
 }
 
-/** Compute the merkleListRoot for a single validator public key. */
+/** Compute the merkleListRoot by pushing the validator key VALIDATOR_NUMBER times.
+ *  ValidateReduceProgram iterates over all VALIDATOR_NUMBER slots, so the root
+ *  must reflect the full list — even when there is only one real validator. */
 function computeMerkleListRoot(validatorPublicKey: PrivateKey['toPublicKey'] extends () => infer R ? R : never): Field {
   const list = List.empty();
-  list.push(Poseidon.hash(validatorPublicKey.toFields()));
+  for (let i = 0; i < VALIDATOR_NUMBER; i++) {
+    list.push(Poseidon.hash(validatorPublicKey.toFields()));
+  }
   return list.hash;
 }
 
@@ -117,6 +123,12 @@ async function main() {
   console.log('  ValidateReduceProgram ✓');
   await ActionStackProgram.compile({ cache });
   console.log('  ActionStackProgram ✓');
+  // Lightnet runs with PROOF_LEVEL=none — proof content is never verified on-chain.
+  // Use Proof.dummy() for the _dummy parameter in deposit/withdraw (verifyIf(Bool(false))).
+  // maxProofsVerified=1 because proveRecursive verifies a SelfProof.
+  // domainLog2=16 because 45K constraints → 2^16=65536 is the smallest fitting power of 2.
+  const dummyActionProof = await ActionStackProof.dummy(Field(0), Field(0), 1, 16);
+  console.log('  dummy ActionStackProof ✓');
   const { verificationKey } = await SettlementContract.compile({ cache });
   console.log('  SettlementContract ✓  VK:', verificationKey.hash.toString());
 
@@ -145,7 +157,7 @@ async function main() {
       await fetchAccount({ publicKey: contractAddress });
       const amount = UInt64.from(BigInt(i) * BigInt(2e9)); // 2, 4, 6, 8, 10 MINA
       const depositTx = await Mina.transaction({ sender: depositor, fee: FEE }, async () => {
-        await contract.deposit(amount, PulsarAuth.empty());
+        await contract.deposit(amount, PulsarAuth.empty(), dummyActionProof);
       });
       await waitForTx(depositTx, [depositorKey], `deposit ${i * 2} MINA`);
     }
@@ -156,7 +168,7 @@ async function main() {
       await fetchAccount({ publicKey: contractAddress });
       const amount = UInt64.from(BigInt(i) * BigInt(1e9)); // 1, 2 MINA
       const withdrawTx = await Mina.transaction({ sender: depositor, fee: FEE }, async () => {
-        await contract.withdraw(amount);
+        await contract.withdraw(amount, dummyActionProof);
       });
       await waitForTx(withdrawTx, [depositorKey], `withdraw ${i} MINA`);
     }
