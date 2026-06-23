@@ -22,7 +22,7 @@ import { devnetTestAccounts, validatorSet, testAccounts } from './mock';
 import { TestUtils } from '../utils/testUtils';
 import { ValidateReduceProgram } from '../ValidateReduce';
 import { List } from '../types/common';
-import { ActionStackProgram, ActionStackProof } from '../ActionStack';
+import { ActionStackProgram } from '../ActionStack';
 import { MapFromArray, PrepareBatch } from '../utils/reduceWitness';
 import {
   analyzeMethods,
@@ -153,7 +153,6 @@ describe('SettlementProof tests', () => {
     merkleListRoot: Field
   ) {
     const deployerAccount = deployerKey.toPublicKey();
-    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     const initTx = await Mina.transaction(
       { sender: deployerAccount, fee },
       async () => {
@@ -171,7 +170,6 @@ describe('SettlementProof tests', () => {
     expectedMsg: string = 'Transaction failed'
   ) {
     const deployerAccount = deployerKey.toPublicKey();
-    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     try {
       const tx = await Mina.transaction(
         { sender: deployerAccount, fee },
@@ -196,7 +194,6 @@ describe('SettlementProof tests', () => {
   ) {
     const deployerAccount = deployerKey.toPublicKey();
 
-    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     const tx = await Mina.transaction(
       { sender: deployerAccount, fee },
       async () => {
@@ -283,14 +280,12 @@ describe('SettlementProof tests', () => {
     log(
       `Balance before deposit: ${balanceBefore.toBigInt() / BigInt(1e9)} MINA`
     );
-    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     const tx = await Mina.transaction(
       { sender: senderKey.toPublicKey(), fee },
       async () => {
         await zkapp.deposit(
           amount,
           PulsarAuth.from(Field(0), CosmosSignature.empty()),
-          dummyProof
         );
       }
     );
@@ -318,7 +313,6 @@ describe('SettlementProof tests', () => {
     amount: UInt64,
     expectedMsg: string = 'Transaction failed'
   ) {
-    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     try {
       const tx = await Mina.transaction(
         { sender: senderKey.toPublicKey(), fee },
@@ -326,7 +320,6 @@ describe('SettlementProof tests', () => {
           await zkapp.deposit(
             amount,
             PulsarAuth.from(Field(0), CosmosSignature.empty()),
-            dummyProof
           );
         }
       );
@@ -349,11 +342,10 @@ describe('SettlementProof tests', () => {
     log(
       `Balance before withdraw: ${balanceBefore.toBigInt() / BigInt(1e9)} MINA`
     );
-    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     const tx = await Mina.transaction(
       { sender: senderKey.toPublicKey(), fee },
       async () => {
-        await zkapp.withdraw(amount, dummyProof);
+        await zkapp.withdraw(amount);
       }
     );
 
@@ -379,12 +371,11 @@ describe('SettlementProof tests', () => {
     amount: UInt64,
     expectedMsg: string = 'Transaction failed'
   ) {
-    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     try {
       const tx = await Mina.transaction(
         { sender: senderKey.toPublicKey(), fee },
         async () => {
-          await zkapp.withdraw(amount, dummyProof);
+          await zkapp.withdraw(amount);
         }
       );
       await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);

@@ -29,7 +29,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
 import { ValidateReduceProgram } from '../ValidateReduce.js';
-import { ActionStackProgram, ActionStackProof, ActionStackQueue } from '../ActionStack.js';
+import { ActionStackProgram } from '../ActionStack.js';
 import { PulsarAuth } from '../types/PulsarAction.js';
 import { List } from '../types/common.js';
 import { VALIDATOR_NUMBER } from '../utils/constants.js';
@@ -128,15 +128,6 @@ async function main() {
   console.log('  ValidateReduceProgram ✓');
   await ActionStackProgram.compile({ cache });
   console.log('  ActionStackProgram ✓');
-  // The o1js Pickles step circuit always uses domain 2^16 (matches the pre-computed
-  // srs-fp-65536 SRS).  analyzeMethods() returns user-visible rows only and misses
-  // the Pickles recursive-verifier overhead, so we must not derive domainLog2 from
-  // that count — use 16 unconditionally.
-  const domainLog2 = 16;
-  console.log(`  ActionStackProgram domainLog2=${domainLog2} (fixed — Pickles uses 2^16 SRS)`);
-  // maxProofsVerified=1 because proveRecursive verifies a SelfProof.
-  const dummyActionProof = await ActionStackProof.dummy(Field(0), Field(0), 1, domainLog2);
-  console.log('  dummy ActionStackProof ✓');
   const { verificationKey } = await SettlementContract.compile({ cache });
   console.log('  SettlementContract ✓  VK:', verificationKey.hash.toString());
 
@@ -169,7 +160,7 @@ async function main() {
       await fetchAccount({ publicKey: contractAddress });
       const amount = UInt64.from(BigInt(i) * BigInt(2e9)); // 2, 4, 6, 8, 10 MINA
       const depositTx = await Mina.transaction({ sender: depositor, fee: FEE }, async () => {
-        await contract.deposit(amount, PulsarAuth.empty(), dummyActionProof);
+        await contract.deposit(amount, PulsarAuth.empty());
       });
       await waitForTx(depositTx, [depositorKey], `deposit ${i * 2} MINA`);
     }
@@ -180,7 +171,7 @@ async function main() {
       await fetchAccount({ publicKey: contractAddress });
       const amount = UInt64.from(BigInt(i) * BigInt(1e9)); // 1, 2 MINA
       const withdrawTx = await Mina.transaction({ sender: depositor, fee: FEE }, async () => {
-        await contract.withdraw(amount, dummyActionProof);
+        await contract.withdraw(amount);
       });
       await waitForTx(withdrawTx, [depositorKey], `withdraw ${i} MINA`);
     }

@@ -101,8 +101,7 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async deposit(amount: UInt64, pulsarAuth: PulsarAuth, _dummy: ActionStackProof) {
-    _dummy.verifyIf(Bool(false));
+  async deposit(amount: UInt64, pulsarAuth: PulsarAuth) {
     amount.assertGreaterThanOrEqual(
       UInt64.from(MINIMUM_DEPOSIT_AMOUNT),
       `At least ${Number(MINIMUM_DEPOSIT_AMOUNT / 1e9)} MINA is required`
@@ -117,8 +116,7 @@ class SettlementContract extends SmartContract {
   }
 
   @method
-  async withdraw(amount: UInt64, _dummy: ActionStackProof) {
-    _dummy.verifyIf(Bool(false));
+  async withdraw(amount: UInt64) {
     const account = this.sender.getUnconstrained();
     const withdrawalUpdate = AccountUpdate.createSigned(account);
 

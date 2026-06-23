@@ -26,7 +26,7 @@ import { writeFileSync } from 'fs';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
 import { ValidateReduceProgram } from '../ValidateReduce.js';
-import { ActionStackProgram, ActionStackProof } from '../ActionStack.js';
+import { ActionStackProgram } from '../ActionStack.js';
 import { PulsarAuth } from '../types/PulsarAction.js';
 import { List } from '../types/common.js';
 
@@ -127,7 +127,6 @@ async function main() {
 
   // 2 — initialize (verification key önce on-chain'e yazılmalı, ayrı TX)
   console.log('\n[2/2] initializing...');
-  const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
   const initTx = await Mina.transaction(
     { sender: deployer, fee: FEE },
     async () => {
@@ -151,7 +150,7 @@ async function main() {
         { sender: deployer, fee: FEE },
         async () => {
           AccountUpdate.fundNewAccount(deployer, 0);
-          await contract.deposit(amount, PulsarAuth.empty(), dummyProof);
+          await contract.deposit(amount, PulsarAuth.empty());
         }
       );
       await depositTx.prove();
@@ -165,7 +164,7 @@ async function main() {
       const withdrawTx = await Mina.transaction(
         { sender: deployer, fee: FEE },
         async () => {
-          await contract.withdraw(amount, dummyProof);
+          await contract.withdraw(amount);
         }
       );
       await withdrawTx.prove();
