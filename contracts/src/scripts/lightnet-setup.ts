@@ -155,7 +155,7 @@ async function main() {
   const deployTx = await Mina.transaction({ sender: deployer, fee: FEE }, async () => {
     AccountUpdate.fundNewAccount(deployer);
     await contract.deploy();
-    await contract.initialize(merkleListRoot);
+    await contract.initialize(merkleListRoot, Field(0));
   });
   await waitForTx(deployTx, [deployerKey, contractKey], 'deploy+initialize');
 

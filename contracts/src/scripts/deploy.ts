@@ -113,7 +113,7 @@ async function deployAndInitializeContract(
     async () => {
       AccountUpdate.fundNewAccount(signerPublicKey);
       await contractInstance.deploy();
-      await contractInstance.initialize(validatorList.hash, Field(0), dummyProof);
+      await contractInstance.initialize(validatorList.hash, Field(0));
     }
   );
 

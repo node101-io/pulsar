@@ -131,7 +131,7 @@ async function main() {
   const initTx = await Mina.transaction(
     { sender: deployer, fee: FEE },
     async () => {
-      await contract.initialize(List.empty().hash, initialStateRoot, dummyProof);
+      await contract.initialize(List.empty().hash, initialStateRoot);
     }
   );
   await initTx.prove();

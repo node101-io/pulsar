@@ -28,7 +28,7 @@ const BATCH_SIZE = 60;
 const MAX_SETTLEMENT_PER_BATCH = 1;
 const MAX_DEPOSIT_PER_BATCH = BATCH_SIZE;
 const MAX_WITHDRAWAL_PER_BATCH = 9;
-const ACTION_QUEUE_SIZE = 3000;
+const ACTION_QUEUE_SIZE = 10;
 
 function envOrDefault(key: string, fallback: string) {
   return typeof process !== 'undefined' &&
