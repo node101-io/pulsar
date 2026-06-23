@@ -25,7 +25,7 @@ import {
 } from 'o1js';
 import { writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
 import { ValidateReduceProgram } from '../ValidateReduce.js';
@@ -47,9 +47,14 @@ async function waitForTx(
   tx: Awaited<ReturnType<typeof Mina.transaction>>,
   signingKeys: PrivateKey[],
   label: string,
-  skipProve = false,
 ): Promise<void> {
-  if (!skipProve) await tx.prove();
+  // Lightnet runs with PROOF_LEVEL=none — proof content is never verified on-chain.
+  // Use the internal addMissingProofs bypass to generate instant mock proofs instead
+  // of running the full Pickles SNARK (which would take 30-60 min per tx).
+  const auPath = resolve(__dirname, '../../../node_modules/o1js/dist/node/lib/mina/v1/account-update.js');
+  const { addMissingProofs } = await import(pathToFileURL(auPath).href) as any;
+  const { zkappCommand } = await addMissingProofs((tx as any).transaction, { proofsEnabled: false });
+  (tx as any).transaction = zkappCommand;
   const pending = await tx.sign(signingKeys).send();
   if (pending.status === 'rejected') {
     throw new Error(`${label}: transaction rejected — ${JSON.stringify(pending.errors)}`);
@@ -123,11 +128,14 @@ async function main() {
   console.log('  ValidateReduceProgram ✓');
   await ActionStackProgram.compile({ cache });
   console.log('  ActionStackProgram ✓');
-  // Lightnet runs with PROOF_LEVEL=none — proof content is never verified on-chain.
-  // Use Proof.dummy() for the _dummy parameter in deposit/withdraw (verifyIf(Bool(false))).
+  // The o1js Pickles step circuit always uses domain 2^16 (matches the pre-computed
+  // srs-fp-65536 SRS).  analyzeMethods() returns user-visible rows only and misses
+  // the Pickles recursive-verifier overhead, so we must not derive domainLog2 from
+  // that count — use 16 unconditionally.
+  const domainLog2 = 16;
+  console.log(`  ActionStackProgram domainLog2=${domainLog2} (fixed — Pickles uses 2^16 SRS)`);
   // maxProofsVerified=1 because proveRecursive verifies a SelfProof.
-  // domainLog2=16 because 45K constraints → 2^16=65536 is the smallest fitting power of 2.
-  const dummyActionProof = await ActionStackProof.dummy(Field(0), Field(0), 1, 16);
+  const dummyActionProof = await ActionStackProof.dummy(Field(0), Field(0), 1, domainLog2);
   console.log('  dummy ActionStackProof ✓');
   const { verificationKey } = await SettlementContract.compile({ cache });
   console.log('  SettlementContract ✓  VK:', verificationKey.hash.toString());
@@ -139,6 +147,10 @@ async function main() {
 
   console.log('\nDeploying SettlementContract...');
   console.log('  contract address:', contractAddress.toBase58());
+
+  // Re-fetch after compilation (compile can take minutes, cache may have expired)
+  await fetchAccount({ publicKey: deployer });
+  await fetchAccount({ publicKey: depositor });
 
   const deployTx = await Mina.transaction({ sender: deployer, fee: FEE }, async () => {
     AccountUpdate.fundNewAccount(deployer);
@@ -174,8 +186,6 @@ async function main() {
     }
   }
 
-  // Write bridge/.env.lightnet
-  const envPath = resolve(__dirname, '../../../../bridge/.env.lightnet');
   const envContent = [
     `MINA_NETWORK=lightnet`,
     `CONTRACT_ADDRESS=${contractAddress.toBase58()}`,
@@ -184,9 +194,11 @@ async function main() {
     `LIGHTNET_NODE_URL=${NODE_URL}`,
     `LIGHTNET_ARCHIVE_URL=${ARCHIVE_URL}`,
     `VALIDATOR_PRIVATE_KEY=${validatorKey.toBase58()}`,
+    `USE_MOCK_PROOF=true`,
     '',
   ].join('\n');
 
+  const envPath = resolve(__dirname, '../../../.env.lightnet');
   writeFileSync(envPath, envContent);
   console.log(`\nWrote ${envPath}`);
 
