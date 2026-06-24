@@ -185,7 +185,7 @@ async function main() {
     `LIGHTNET_NODE_URL=${NODE_URL}`,
     `LIGHTNET_ARCHIVE_URL=${ARCHIVE_URL}`,
     `VALIDATOR_PRIVATE_KEY=${validatorKey.toBase58()}`,
-    `USE_MOCK_PROOF=true`,
+    `USE_MOCK_PROOF=`,
     '',
   ].join('\n');
 
@@ -213,6 +213,7 @@ async function main() {
   console.log('\n=== DONE ===');
   console.log(`Contract address: ${contractAddress.toBase58()}`);
   console.log(`Validator key written to .env.lightnet`);
+  console.log(`NOTE: Set USE_MOCK_PROOF= in .env.lightnet before running e2e-reduce-test.ts`);
 
   // Release accounts back to the pool
   await Lightnet.releaseKeyPair({ publicKey: depositor.toBase58() });

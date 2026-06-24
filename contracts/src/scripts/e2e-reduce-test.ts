@@ -31,7 +31,11 @@ import {
   ValidateReduceProgram,
   ValidateReducePublicInput,
 } from '../ValidateReduce.js';
-import { ActionStackProgram, ActionStackProof, ActionStackQueue } from '../ActionStack.js';
+import {
+  ActionStackProgram,
+  ActionStackProof,
+  ActionStackQueue,
+} from '../ActionStack.js';
 import { PulsarAction, PulsarAuth } from '../types/PulsarAction.js';
 import { Batch } from '../types/PulsarAction.js';
 import { ReduceMask } from '../types/common.js';
@@ -40,7 +44,10 @@ import {
   SignaturePublicKeyList,
 } from '../types/signaturePubKeyList.js';
 import { CalculateFinalActionState } from '../utils/actionQueueUtils.js';
-import { GenerateValidateReduceProof } from '../utils/generateFunctions.js';
+import {
+  GenerateActionStackProof,
+  GenerateValidateReduceProof,
+} from '../utils/generateFunctions.js';
 import { BATCH_SIZE, VALIDATOR_NUMBER } from '../utils/constants.js';
 import { Poseidon } from 'o1js';
 import { waitForTransaction } from '../utils/fetch.js';
@@ -191,10 +198,6 @@ async function main() {
   await ActionStackProgram.compile({ cache });
   log(`  ActionStackProgram ✓ (${Date.now() - t0}ms)`);
 
-  const actionStackDomainLog2 = 16;
-  log(
-    `  ActionStackProgram domainLog2=${actionStackDomainLog2} (fixed — Pickles uses 2^16 SRS)`
-  );
   await SettlementContract.compile({ cache });
   log(`  SettlementContract ✓ (${Date.now() - t0}ms)`);
 
@@ -272,14 +275,24 @@ async function main() {
   // USE_MOCK_PROOF=false → real Pickles SNARK (for production / devnet)
   const useMockProof = (env.USE_MOCK_PROOF ?? 'true') !== 'false';
 
-  const useActionStack = Bool(false);
+  let useActionStack = Bool(false);
   let actionStackProof: ActionStackProof;
   if (useMockProof) {
-    actionStackProof = await ActionStackProof.dummy(Field(0), Field(0), 0, actionStackDomainLog2);
+    actionStackProof = await ActionStackProof.dummy(
+      Field(0),
+      Field(0),
+      0,
+    );
   } else {
-    log('Generating ActionStackProof (proveBase — real proof required for real tx.prove())...');
+    log(
+      'Generating ActionStackProof (proveBase — real proof required for real tx.prove())...'
+    );
     const t2 = Date.now();
-    actionStackProof = (await ActionStackProgram.proveBase(Field(0), ActionStackQueue.empty())).proof;
+    ({ useActionStack, actionStackProof } = await GenerateActionStackProof(
+      finalActionState,
+      pulsarActions
+    ));
+
     log(`  ActionStackProof ✓ (${Date.now() - t2}ms)`);
   }
 
@@ -296,7 +309,7 @@ async function main() {
     await contract.reduce(
       batch,
       useActionStack,
-      actionStackProof,
+      actionStackProof as ActionStackProof,
       mask,
       validateReduceProof
     );
