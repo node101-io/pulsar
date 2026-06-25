@@ -245,7 +245,7 @@ async function GenerateActionStackProof(
     }
 
     return {
-      useActionStack: Bool(actions.length > ACTION_QUEUE_SIZE),
+      useActionStack: Bool(true),
       actionStackProof: proof,
     };
   } catch (error) {

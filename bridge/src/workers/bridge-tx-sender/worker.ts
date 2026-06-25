@@ -4,21 +4,43 @@ import { Bool, Field, Poseidon } from "o1js";
 // contracts
 import { ActionStackProof } from "../../../../contracts/build/src/ActionStack.js";
 import { ValidateReducePublicInput } from "../../../../contracts/build/src/ValidateReduce.js";
-import { PulsarAction, Batch } from "../../../../contracts/build/src/types/PulsarAction.js";
+import {
+    PulsarAction,
+    Batch,
+} from "../../../../contracts/build/src/types/PulsarAction.js";
 import { ReduceMask } from "../../../../contracts/build/src/types/common.js";
-import { SignaturePublicKey, SignaturePublicKeyList } from "../../../../contracts/build/src/types/signaturePubKeyList.js";
+import {
+    SignaturePublicKey,
+    SignaturePublicKeyList,
+} from "../../../../contracts/build/src/types/signaturePubKeyList.js";
 import { CalculateFinalActionState } from "../../../../contracts/build/src/utils/actionQueueUtils.js";
-import { GenerateValidateReduceProof, GenerateActionStackProof } from "../../../../contracts/build/src/utils/generateFunctions.js";
-import { BATCH_SIZE, VALIDATOR_NUMBER } from "../../../../contracts/build/src/utils/constants.js";
+import {
+    GenerateValidateReduceProof,
+    GenerateActionStackProof,
+} from "../../../../contracts/build/src/utils/generateFunctions.js";
+import {
+    BATCH_SIZE,
+    VALIDATOR_NUMBER,
+} from "../../../../contracts/build/src/utils/constants.js";
 
 // bridge
 import { MAX_FAIL_COUNT } from "../../config/constants.js";
 import logger from "../../common/logger.js";
 import { MinaActionModel } from "../../db/models/MinaAction.js";
 import { BridgeStateModel } from "../../db/models/BridgeState.js";
-import { type MinaClientContext, initMinaClientContext, refreshContractState, getContractMerkleRoot, getContractActionState, getContractActionListHash } from "../../services/mina/client.js";
+import {
+    type MinaClientContext,
+    initMinaClientContext,
+    refreshContractState,
+    getContractMerkleRoot,
+    getContractActionState,
+    getContractActionListHash,
+} from "../../services/mina/client.js";
 import { requestSignatures } from "../../services/pulsar/client.js";
-import { proveReduceTx, sendProvedReduceTx } from "../../services/mina/txSender.js";
+import {
+    proveReduceTx,
+    sendProvedReduceTx,
+} from "../../services/mina/txSender.js";
 import type { BridgeTxJob } from "./master.js";
 
 interface ChunkParams {
@@ -302,6 +324,7 @@ export function computeActionListHash(
     return hash;
 }
 
+// TODO: will be done when pulsar module is completed
 export function buildSignatureList(
     signatures: Awaited<ReturnType<typeof requestSignatures>>,
 ): SignaturePublicKeyList {
