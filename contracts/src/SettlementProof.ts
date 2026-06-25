@@ -206,12 +206,18 @@ const MultisigVerifierProgram = ZkProgram({
           const signatureMessage = pulsarBlocks.list[i].hash().toFields();
 
           for (let j = 0; j < VALIDATOR_NUMBER; j++) {
-            const { signature, publicKey } =
+            const { signature, publicKey, power } =
               signaturePublicKeyMatrix.matrix[i].list[j];
             const isValid = signature.verify(publicKey, signatureMessage);
             counter = Provable.if(isValid, counter.add(1), counter);
 
-            list.push(Poseidon.hash(publicKey.toFields()));
+            // field-form validator-set leaf; byte↔field with the chain still pending
+            list.push(
+              Poseidon.hashWithPrefix('pulsar-validator', [
+                ...publicKey.toFields(),
+                power,
+              ])
+            );
           }
 
           list.hash.assertEquals(

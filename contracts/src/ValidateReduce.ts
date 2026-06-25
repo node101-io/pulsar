@@ -54,11 +54,17 @@ const ValidateReduceProgram = ZkProgram({
         const signatureMessage = publicInputs.hash().toFields();
 
         for (let i = 0; i < VALIDATOR_NUMBER; i++) {
-          const { signature, publicKey } = signaturePublicKeyList.list[i];
+          const { signature, publicKey, power } =
+            signaturePublicKeyList.list[i];
           const isValid = signature.verify(publicKey, signatureMessage);
           counter = Provable.if(isValid, counter.add(1), counter);
 
-          list.push(Poseidon.hash(publicKey.toFields()));
+          list.push(
+            Poseidon.hashWithPrefix('pulsar-validator', [
+              ...publicKey.toFields(),
+              power,
+            ])
+          );
         }
 
         list.hash.assertEquals(
