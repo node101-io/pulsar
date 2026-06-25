@@ -150,11 +150,32 @@ describe("Bridge TX Sender worker — real ActionStackProof generation", () => {
         // one reduce tx prepared per chunk
         expect(mockProveReduceTx).toHaveBeenCalledTimes(2);
 
+        // --- debug: dump each chunk's generated proof so we can eyeball that
+        //     real ActionStackProofs were produced ---
+        console.log(`\n[debug] ${actions.length} actions -> ${mockProveReduceTx.mock.calls.length} reduce tx(s)`);
+        mockProveReduceTx.mock.calls.forEach(([params], i) => {
+            const realActions = params.batch.actions.filter(
+                (a: any) => a.type.toString() !== "0",
+            ).length;
+            console.log(`[debug] chunk #${i}:`);
+            console.log(`[debug]   batch size (padded):   ${params.batch.actions.length}`);
+            console.log(`[debug]   real actions in batch:  ${realActions}`);
+            console.log(`[debug]   useActionStack:         ${params.useActionStack.toBoolean()}`);
+            console.log(`[debug]   actionStackProof.publicInput:  ${params.actionStackProof.publicInput.toString()}`);
+            console.log(`[debug]   actionStackProof.publicOutput: ${params.actionStackProof.publicOutput.toString()}`);
+            console.log(`[debug]   maxProofsVerified:      ${params.actionStackProof.maxProofsVerified}`);
+            const proofLen = params.actionStackProof.proof?.length ?? params.actionStackProof.proof?.toString().length;
+            console.log(`[debug]   proof payload length:   ${proofLen}`);
+        });
+        console.log("");
+
         // each chunk produced a REAL ActionStackProof (has Zk proof public IO)
         for (const [params] of mockProveReduceTx.mock.calls) {
             expect(params.actionStackProof).toBeDefined();
             expect(params.actionStackProof.publicInput).toBeDefined();
             expect(params.actionStackProof.publicOutput).toBeDefined();
+            // a real proof carries a non-empty serialized payload
+            expect(params.actionStackProof.proof).toBeTruthy();
             // batch must be padded to BATCH_SIZE
             expect(params.batch.actions).toHaveLength(BATCH_SIZE);
         }
@@ -176,6 +197,48 @@ describe("Bridge TX Sender worker — real ActionStackProof generation", () => {
         expect(mockBridgeStateUpdateOne).toHaveBeenCalledWith(
             {},
             { $set: { lastSubmittedHeight: 100 } },
+        );
+    }, 600_000);
+
+    it("130 actions -> 3 chunks, exercises proveRecursive and the useActionStack pattern [true, true, false]", async () => {
+        // 130 actions -> chunkArray(130, 60) = [60, 60, 10] -> 3 reduce tx(s)
+        //   chunk #0: 70 remaining -> proveBase + proveRecursive, useActionStack=true
+        //   chunk #1: 10 remaining -> proveBase only,             useActionStack=true
+        //   chunk #2:  0 remaining -> no stack,                   useActionStack=false
+        const actions = Array(130).fill(rawDeposit);
+
+        await worker({ blockHeight: 130, actions });
+
+        expect(mockProveReduceTx).toHaveBeenCalledTimes(3);
+
+        console.log(`\n[debug] ${actions.length} actions -> ${mockProveReduceTx.mock.calls.length} reduce tx(s)`);
+        const remainingPerChunk = [70, 10, 0];
+        mockProveReduceTx.mock.calls.forEach(([params], i) => {
+            const realActions = params.batch.actions.filter(
+                (a: any) => a.type.toString() !== "0",
+            ).length;
+            console.log(`[debug] chunk #${i} (remaining=${remainingPerChunk[i]}):`);
+            console.log(`[debug]   real actions in batch:  ${realActions}`);
+            console.log(`[debug]   useActionStack:         ${params.useActionStack.toBoolean()}`);
+            console.log(`[debug]   actionStackProof.publicInput:  ${params.actionStackProof.publicInput.toString()}`);
+            console.log(`[debug]   actionStackProof.publicOutput: ${params.actionStackProof.publicOutput.toString()}`);
+            console.log(`[debug]   maxProofsVerified:      ${params.actionStackProof.maxProofsVerified}`);
+        });
+        console.log("");
+
+        const flags = mockProveReduceTx.mock.calls.map(
+            ([p]) => p.useActionStack.toBoolean(),
+        );
+        expect(flags).toEqual([true, true, false]);
+
+        for (const [params] of mockProveReduceTx.mock.calls) {
+            expect(params.actionStackProof.proof).toBeTruthy();
+            expect(params.batch.actions).toHaveLength(BATCH_SIZE);
+        }
+
+        expect(mockMinaActionUpdateOne).toHaveBeenCalledWith(
+            { blockHeight: 130 },
+            { $set: { status: "done" } },
         );
     }, 600_000);
 
