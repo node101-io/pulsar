@@ -66,7 +66,8 @@ function GenerateSignaturePubKeyList(
   }
 
   return SignaturePublicKeyList.fromArray(
-    signatures.map((signature, i) => [signature, signerSet[i][1]])
+    // power = Field(1) (uniform in tests; must match CreateValidatorMerkleList)
+    signatures.map((signature, i) => [signature, signerSet[i][1], Field(1)])
   );
 }
 
@@ -83,7 +84,7 @@ function GenerateSignaturePubKeyMatrix(
   }
   return SignaturePublicKeyMatrix.fromArray(
     signatureMatrix.map((list) =>
-      list.list.map((item) => [item.signature, item.publicKey])
+      list.list.map((item) => [item.signature, item.publicKey, item.power])
     )
   );
 }
@@ -101,7 +102,11 @@ function GenerateReducerSignatureList(
   }
 
   return SignaturePublicKeyList.fromArray(
-    signatures.map((signature, i) => [signature, proofGeneratorsList[i][1]])
+    signatures.map((signature, i) => [
+      signature,
+      proofGeneratorsList[i][1],
+      Field(1),
+    ])
   );
 }
 
@@ -112,7 +117,13 @@ function CreateValidatorMerkleList(
 
   for (let i = 0; i < validatorSet.length; i++) {
     const [, publicKey] = validatorSet[i];
-    merkleList.push(Poseidon.hash(publicKey.toFields()));
+    // power = Field(1): must match the sig lists
+    merkleList.push(
+      Poseidon.hashWithPrefix('pulsar-validator', [
+        ...publicKey.toFields(),
+        Field(1),
+      ])
+    );
   }
 
   return merkleList;

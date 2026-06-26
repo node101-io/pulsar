@@ -31,7 +31,12 @@ describe('ValidateReduceProof tests', () => {
 
     for (let i = 0; i < VALIDATOR_NUMBER; i++) {
       const [, publicKey] = validatorSet[i];
-      merkleList.push(Poseidon.hash(publicKey.toFields()));
+      merkleList.push(
+        Poseidon.hashWithPrefix('pulsar-validator', [
+          ...publicKey.toFields(),
+          Field(1),
+        ])
+      );
     }
   });
 
