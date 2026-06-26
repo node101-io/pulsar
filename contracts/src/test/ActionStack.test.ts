@@ -37,7 +37,12 @@ describe('Action Stack Proof tests', () => {
 
     for (let i = 0; i < VALIDATOR_NUMBER; i++) {
       const [, publicKey] = activeSet[i];
-      merkleList.push(Poseidon.hash(publicKey.toFields()));
+      merkleList.push(
+        Poseidon.hashWithPrefix('pulsar-validator', [
+          ...publicKey.toFields(),
+          Field(1),
+        ])
+      );
     }
   });
 

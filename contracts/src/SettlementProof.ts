@@ -201,7 +201,8 @@ const MultisigVerifierProgram = ZkProgram({
             'Skipped block'
           );
 
-          let counter = Field.from(0);
+          let accumulatedPower = Field.from(0);
+          let totalPower = Field.from(0);
           let list = List.empty();
           const signatureMessage = pulsarBlocks.list[i].hash().toFields();
 
@@ -209,7 +210,12 @@ const MultisigVerifierProgram = ZkProgram({
             const { signature, publicKey, power } =
               signaturePublicKeyMatrix.matrix[i].list[j];
             const isValid = signature.verify(publicKey, signatureMessage);
-            counter = Provable.if(isValid, counter.add(1), counter);
+            accumulatedPower = Provable.if(
+              isValid,
+              accumulatedPower.add(power),
+              accumulatedPower
+            );
+            totalPower = totalPower.add(power);
 
             // field-form validator-set leaf; byte↔field with the chain still pending
             list.push(
@@ -224,11 +230,13 @@ const MultisigVerifierProgram = ZkProgram({
             pulsarBlocks.list[i].InitialMerkleListRoot,
             "Validator MerkleList hash doesn't match"
           );
-          counter.assertGreaterThanOrEqual(
-            // Field.from((VALIDATOR_NUMBER * 2) / 3),
-            Field(VALIDATOR_NUMBER),
-            'Not enough valid signatures'
-          );
+          // 2/3 voting-power quorum: signed power / total power >= 2/3
+          accumulatedPower
+            .mul(3)
+            .assertGreaterThanOrEqual(
+              totalPower.mul(2),
+              'Not enough signed voting power (< 2/3)'
+            );
         }
 
         return {

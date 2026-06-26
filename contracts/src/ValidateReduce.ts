@@ -49,7 +49,8 @@ const ValidateReduceProgram = ZkProgram({
         publicInputs: ValidateReducePublicInput,
         signaturePublicKeyList: SignaturePublicKeyList
       ) {
-        let counter = Field.from(0);
+        let accumulatedPower = Field.from(0);
+        let totalPower = Field.from(0);
         let list = List.empty();
         const signatureMessage = publicInputs.hash().toFields();
 
@@ -57,7 +58,12 @@ const ValidateReduceProgram = ZkProgram({
           const { signature, publicKey, power } =
             signaturePublicKeyList.list[i];
           const isValid = signature.verify(publicKey, signatureMessage);
-          counter = Provable.if(isValid, counter.add(1), counter);
+          accumulatedPower = Provable.if(
+            isValid,
+            accumulatedPower.add(power),
+            accumulatedPower
+          );
+          totalPower = totalPower.add(power);
 
           list.push(
             Poseidon.hashWithPrefix('pulsar-validator', [
@@ -71,11 +77,13 @@ const ValidateReduceProgram = ZkProgram({
           publicInputs.merkleListRoot,
           "Validator MerkleList hash doesn't match"
         );
-        counter.assertGreaterThanOrEqual(
-          // Field.from((VALIDATOR_NUMBER * 2) / 3),
-          Field.from(1),
-          'Not enough valid signatures'
-        );
+        // 2/3 voting-power quorum: signed power / total power >= 2/3
+        accumulatedPower
+          .mul(3)
+          .assertGreaterThanOrEqual(
+            totalPower.mul(2),
+            'Not enough signed voting power (< 2/3)'
+          );
       },
     },
   },
