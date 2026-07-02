@@ -17,3 +17,5 @@ keys
 *.txt
 /logs
 .env
+.env.lightnet
+deploy-result.json
