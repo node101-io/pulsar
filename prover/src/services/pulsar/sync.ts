@@ -25,8 +25,17 @@ import {
     getLatestHeight,
     getBlockData,
     getVoteExtsByHeight,
+    grpcUnary,
+    isServiceError,
     storePulsarBlock,
 } from "./client.js";
+import {
+    AbciQueryService,
+    GrpcCallback,
+    KeyregistryService,
+    TendermintService,
+    VotePersistenceService,
+} from "./grpcTypes.js";
 import { decodeMinaSignature } from "./parser.js";
 import { sleep } from "../../common/sleep.js";
 
@@ -38,7 +47,7 @@ const __dirname = dirname(__filename);
 // ---------------------------------------------------------------------------
 
 async function backfillMissingVoteExtensions(
-    vpClient: any,
+    vpClient: VotePersistenceService,
     maxHeight: number,
 ): Promise<void> {
     const blocks = await BlockModel.find({
@@ -82,7 +91,7 @@ async function backfillMissingVoteExtensions(
             logger.warn(
                 `Could not backfill vote extensions for block ${block.height}`,
                 {
-                    error: (err as any)?.message,
+                    error: err instanceof Error ? err.message : String(err),
                     event: "vote_ext_backfill_error",
                 },
             );
@@ -113,22 +122,22 @@ async function startRealPulsarSync(): Promise<void> {
     const rpcAddress = process.env.PULSAR_GRPC_ENDPOINT || "localhost:9090";
     const credentials = grpc.credentials.createInsecure();
 
-    const tmClient = await createClient(
+    const tmClient = await createClient<TendermintService>(
         TENDERMINT_SERVICE_NAME,
         rpcAddress,
         credentials,
     );
-    const vpClient = await createClient(
+    const vpClient = await createClient<VotePersistenceService>(
         VOTE_PERSISTENCE_SERVICE_NAME,
         rpcAddress,
         credentials,
     );
-    const krClient = await createClient(
+    const krClient = await createClient<KeyregistryService>(
         MINA_KEYS_SERVICE_NAME,
         rpcAddress,
         credentials,
     );
-    const abciClient = await createClient(
+    const abciClient = await createClient<AbciQueryService>(
         ABCI_SERVICE_NAME,
         rpcAddress,
         credentials,
@@ -169,12 +178,11 @@ async function startRealPulsarSync(): Promise<void> {
                 }
             }
         } catch (error) {
-            const err = error as any;
             logger.error("Error during Pulsar sync loop", {
-                message: err?.message ?? String(error),
-                code: err?.code,
-                details: err?.details,
-                stack: err?.stack,
+                message: error instanceof Error ? error.message : String(error),
+                code: isServiceError(error) ? error.code : undefined,
+                details: isServiceError(error) ? error.details : undefined,
+                stack: error instanceof Error ? error.stack : undefined,
                 currentHeight,
                 event: "pulsar_sync_error",
             });
@@ -190,7 +198,6 @@ async function startRealPulsarSync(): Promise<void> {
 
 interface MockSyncState {
     height: number;
-    validators: string[];
 }
 
 function getMockSyncStatePath(): string {
@@ -226,7 +233,36 @@ const MOCK_PROTO_PATH = join(
     "voteexthandler.proto",
 );
 
-function loadMockClient(address: string): any {
+// Shapes served by the mock gRPC server (src/mock/grpcServer.ts).
+interface MockLatestHeightResponse {
+    height: string;
+}
+
+interface MockVoteExtsResponse {
+    vote_exts: { validator_addr: string; signature: Buffer }[];
+}
+
+interface MockStateResponse {
+    state_root: Buffer;
+    validators: string[];
+}
+
+interface MockQueryService {
+    GetLatestHeight(
+        req: Record<string, never>,
+        cb: GrpcCallback<MockLatestHeightResponse>,
+    ): void;
+    GetAllVoteExtsByHeight(
+        req: { height: number },
+        cb: GrpcCallback<MockVoteExtsResponse>,
+    ): void;
+    GetStateAtHeight(
+        req: { height: number },
+        cb: GrpcCallback<MockStateResponse>,
+    ): void;
+}
+
+function loadMockClient(address: string): MockQueryService {
     const packageDef = protoLoader.loadSync(MOCK_PROTO_PATH, {
         keepCase: true,
         longs: String,
@@ -234,45 +270,49 @@ function loadMockClient(address: string): any {
         defaults: true,
         oneofs: true,
     });
+    // Dynamically loaded constructor — the traversal is untyped; the returned
+    // client is pinned to the mock service surface above.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const proto = grpc.loadPackageDefinition(packageDef) as any;
     const ServiceClass = proto.pulsarchain.voteexthandler.v1.Query;
-    return new ServiceClass(address, grpc.credentials.createInsecure());
+    return new ServiceClass(
+        address,
+        grpc.credentials.createInsecure(),
+    ) as MockQueryService;
 }
 
-function grpcCall<T>(client: any, method: string, req: any): Promise<T> {
-    return new Promise((resolve, reject) => {
-        client[method](req, (err: unknown, res: T) => {
-            if (err) return reject(err as Error);
-            resolve(res);
-        });
-    });
-}
-
-async function getMockLatestHeight(client: any): Promise<number> {
-    const res = await grpcCall<any>(client, "GetLatestHeight", {});
+async function getMockLatestHeight(client: MockQueryService): Promise<number> {
+    const res = await grpcUnary<MockLatestHeightResponse>((cb) =>
+        client.GetLatestHeight({}, cb),
+    );
     return Number(res.height);
 }
 
 async function getMockBlockData(
-    client: any,
+    client: MockQueryService,
     height: number,
 ): Promise<BlockData> {
     const [voteExtsRes, stateRes] = await Promise.all([
-        grpcCall<any>(client, "GetAllVoteExtsByHeight", { height }),
-        grpcCall<any>(client, "GetStateAtHeight", { height }),
+        grpcUnary<MockVoteExtsResponse>((cb) =>
+            client.GetAllVoteExtsByHeight({ height }, cb),
+        ),
+        grpcUnary<MockStateResponse>((cb) =>
+            client.GetStateAtHeight({ height }, cb),
+        ),
     ]);
 
-    const stateRootBuf: Buffer = stateRes.state_root;
-    const stateRoot = BigInt("0x" + stateRootBuf.toString("hex")).toString();
-    const validators: string[] = stateRes.validators as string[];
+    const stateRoot = BigInt(
+        "0x" + stateRes.state_root.toString("hex"),
+    ).toString();
+    // The mock chain does not model voting power; weight everyone equally.
+    const validators = stateRes.validators.map((addr) => ({
+        addr,
+        power: "1",
+    }));
 
-    const voteExt: VoteExt[] = (voteExtsRes.vote_exts as any[]).map((ve) => ({
-        index: ve.index,
-        height: Number(ve.height),
+    const voteExt: VoteExt[] = voteExtsRes.vote_exts.map((ve) => ({
         validatorAddr: ve.validator_addr,
-        signature: decodeMinaSignature(
-            (ve.signature as Buffer).toString("hex"),
-        ),
+        signature: decodeMinaSignature(ve.signature),
     }));
 
     return { height, stateRoot, validators, actionsReducedRoot: "0", voteExt };
@@ -288,7 +328,6 @@ async function startMockPulsarSync(): Promise<void> {
 
     const savedState = await readMockSyncState();
     let currentHeight = savedState?.height ?? -1;
-    let currentValidators: string[] = savedState?.validators ?? [];
 
     logger.info("Starting mock Pulsar sync loop", {
         mockGrpcEndpoint,
@@ -312,8 +351,7 @@ async function startMockPulsarSync(): Promise<void> {
                     },
                 );
                 currentHeight = -1;
-                currentValidators = [];
-                await writeMockSyncState({ height: -1, validators: [] });
+                await writeMockSyncState({ height: -1 });
             }
 
             if (latestHeight > currentHeight) {
@@ -328,11 +366,7 @@ async function startMockPulsarSync(): Promise<void> {
                     const blockData = await getMockBlockData(client, h);
                     await storePulsarBlock(blockData);
                     currentHeight = h;
-                    currentValidators = blockData.validators;
-                    await writeMockSyncState({
-                        height: currentHeight,
-                        validators: currentValidators,
-                    });
+                    await writeMockSyncState({ height: currentHeight });
                 }
             }
         } catch (error) {

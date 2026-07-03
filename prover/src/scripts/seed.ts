@@ -24,7 +24,12 @@ async function seedGenesisBlock() {
                     "base64",
                 ).toString("hex"),
         ).toString(),
-        validators: ["B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb"],
+        validators: [
+            {
+                addr: "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+                power: "1",
+            },
+        ],
         validatorListHash:
             "6310558633462665370159457076080992493592463962672742685757201873330974620505",
         voteExt: [],

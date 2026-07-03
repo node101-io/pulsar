@@ -185,8 +185,15 @@ function signBlock(privKeyBase58: string, body: MockVoteExtBody): Buffer {
     const sig = Signature.create(privKey, blockHash.toFields());
     const sigValue = Signature.toValue(sig);
 
-    const rBuf = Buffer.from(sigValue.r.toString(16).padStart(64, "0"), "hex");
-    const sBuf = Buffer.from(sigValue.s.toString(16).padStart(64, "0"), "hex");
+    // Match the real chain's wire format (mina-signer-go): each half little-endian.
+    const rBuf = Buffer.from(
+        sigValue.r.toString(16).padStart(64, "0"),
+        "hex",
+    ).reverse();
+    const sBuf = Buffer.from(
+        sigValue.s.toString(16).padStart(64, "0"),
+        "hex",
+    ).reverse();
     return Buffer.concat([rBuf, sBuf]);
 }
 

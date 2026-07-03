@@ -1,5 +1,10 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { VoteExt, BlockData, BlockStatus } from "../../common/types.js";
+import {
+    VoteExt,
+    ValidatorInfo,
+    BlockData,
+    BlockStatus,
+} from "../../common/types.js";
 import { BLOCKS_TO_KEEP, WORKER_TIMEOUT_MS } from "../../config/constants.js";
 import logger from "../../common/logger.js";
 
@@ -7,7 +12,7 @@ export interface IBlock extends Document {
     height: number;
     status: BlockStatus;
     stateRoot: string;
-    validators: string[];
+    validators: ValidatorInfo[];
     validatorListHash: string;
     actionsReducedRoot: string;
     voteExt: VoteExt[];
@@ -16,10 +21,16 @@ export interface IBlock extends Document {
 
 const VoteExtSchema = new Schema<VoteExt>(
     {
-        index: { type: String, required: true },
-        height: { type: Number, required: true },
         validatorAddr: { type: String, required: true },
         signature: { type: String, required: true },
+    },
+    { _id: false },
+);
+
+const ValidatorInfoSchema = new Schema<ValidatorInfo>(
+    {
+        addr: { type: String, required: true },
+        power: { type: String, required: true },
     },
     { _id: false },
 );
@@ -33,7 +44,7 @@ const BlockSchema = new Schema<IBlock>(
             default: "waiting",
         },
         stateRoot: { type: String, required: true },
-        validators: [{ type: String }],
+        validators: [ValidatorInfoSchema],
         validatorListHash: { type: String, required: true },
         actionsReducedRoot: { type: String, required: true, default: "0" },
         voteExt: [VoteExtSchema],

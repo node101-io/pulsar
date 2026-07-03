@@ -32,7 +32,10 @@ describe("pulsar client", () => {
     describe("computeValidatorListHash", () => {
         it("returns hash string for validator list", () => {
             const validators = [
-                "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+                {
+                    addr: "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+                    power: "1",
+                },
             ];
 
             const result = computeValidatorListHash(validators);
@@ -43,7 +46,10 @@ describe("pulsar client", () => {
 
         it("returns same hash for same validators", () => {
             const validators = [
-                "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+                {
+                    addr: "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+                    power: "1",
+                },
             ];
 
             const a = computeValidatorListHash(validators);
@@ -118,7 +124,6 @@ describe("pulsar client", () => {
             const voteExt = await getVoteExtsByHeight(mockVpClient, 100);
 
             expect(voteExt).toHaveLength(1);
-            expect(voteExt[0].height).toBe(100);
             expect(typeof voteExt[0].validatorAddr).toBe("string");
             expect(typeof voteExt[0].signature).toBe("string");
         });
@@ -161,7 +166,7 @@ describe("pulsar client", () => {
             );
         });
 
-        it("passes x-cosmos-block-height: H+2 in metadata", async () => {
+        it("passes x-cosmos-block-height: H+3 in metadata", async () => {
             const mockVpClient = {
                 VoteExtensions: vi.fn((req, metadata, callback) => {
                     callback(null, {
@@ -174,7 +179,7 @@ describe("pulsar client", () => {
             await getVoteExtsByHeight(mockVpClient, 50);
 
             const [, metadata] = mockVpClient.VoteExtensions.mock.calls[0];
-            expect(metadata.get("x-cosmos-block-height")).toEqual(["52"]);
+            expect(metadata.get("x-cosmos-block-height")).toEqual(["53"]);
         });
     });
 
@@ -269,7 +274,10 @@ describe("pulsar client", () => {
                 height: 100,
                 stateRoot: "0x123",
                 validators: [
-                    "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+                    {
+                        addr: "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+                        power: "1",
+                    },
                 ],
                 actionsReducedRoot: "0",
                 voteExt: [],
@@ -292,7 +300,10 @@ describe("pulsar client", () => {
 
         it("computes validator list hash correctly", async () => {
             const validators = [
-                "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+                {
+                    addr: "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+                    power: "1",
+                },
             ];
             const blockData = {
                 height: 100,
