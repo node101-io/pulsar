@@ -203,3 +203,22 @@ Each processor follows a **Master/Worker** pattern backed by BullMQ:
 | `WORKER_TIMEOUT_MS`      | 300000 | Job lock duration (5 min)                      |
 | `MAX_FAIL_COUNT`         | 3      | Failure threshold before an epoch is abandoned |
 | `POLL_INTERVAL_MS`       | 5000   | Pulsar sync poll interval                      |
+
+## TODO
+
+- **Block pruning never runs.** The `BLOCKS_TO_KEEP` cleanup in `src/db/models/Block.ts` is a `post("save")` hook, but blocks are written via `findOneAndUpdate` (`storeBlock`), which does not fire document `save` middleware — so old blocks are never deleted and the collection grows unbounded. Move the pruning into `storeBlock` (after the upsert) or register it as `post("findOneAndUpdate")` middleware.
+- **Validator set is re-fetched on every block.** `getBlockData` calls `GetValidatorSetByHeight` plus one keyregistry `GetValidatorMinaPubKey` gRPC call *per validator* for every ingested block, although the set rarely changes. Cache the sorted validator list keyed by the vote-ext body's `nextValidatorSetHash` (same hash → reuse, skip all lookups).
+- **Add eslint with `@typescript-eslint/no-explicit-any: error`** to keep the gRPC boundary typed (the few remaining `any`s are documented reflection-boundary casts).
+
+## Proto Types
+
+TypeScript types for the pulsar-chain gRPC messages are generated from the
+chain's protos (pinned to a commit) into `src/generated/` — see `buf.gen.yaml`
+for the pinned ref and update procedure. Regenerate with:
+
+```bash
+npm run proto:gen   # requires the buf CLI (`brew install bufbuild/buf/buf`)
+```
+
+The generated output is committed, so builds never need the buf CLI or network;
+`proto:gen` only runs when bumping the pinned chain commit.
