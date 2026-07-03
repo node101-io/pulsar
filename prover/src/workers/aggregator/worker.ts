@@ -8,6 +8,7 @@ import logger from "../../common/logger.js";
 import { Aggregation } from "./master.js";
 import { PROOF_EPOCH_LEAF_COUNT, PROOF_EPOCH_SETTLEMENT_INDEX, WORKER_TIMEOUT_MS } from "../../config/constants.js";
 import { MergeSettlementProofs, SettlementProof, MultisigVerifierProgram } from "pulsar-contracts";
+import type { JsonProof } from "o1js";
 
 let compiled = false;
 async function ensureCompiled() {
@@ -72,8 +73,8 @@ export async function worker(task: IProofEpoch, aggregation: Aggregation) {
 }
 
 async function generateAggregatedProof(
-    leftJson: any,
-    rightJson: any,
+    leftJson: JsonProof,
+    rightJson: JsonProof,
 ): Promise<string> {
     const left = await SettlementProof.fromJSON(leftJson);
     const right = await SettlementProof.fromJSON(rightJson);

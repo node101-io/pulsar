@@ -1,0 +1,30 @@
+# Generates TypeScript types for the pulsar-chain gRPC messages the prover
+# consumes (see src/services/pulsar/grpcTypes.ts for the service surface).
+#
+# Run:      npm run proto:gen        (requires the buf CLI ≥ 1.32)
+# Update:   bump `ref` below to the new pulsar-chain commit, re-run, and
+#           commit the regenerated src/generated/** diff — chain-side proto
+#           changes then show up as a reviewable diff / compile error.
+version: v2
+clean: true
+inputs:
+  - git_repo: https://github.com/node101-io/pulsar-chain.git
+    branch: refactored-signer
+    ref: 01358b3efc841b4e6b9af4cdaee4cc68b6b6fbbf
+    depth: 50
+    paths:
+      - proto/pulsarchain
+plugins:
+  - remote: buf.build/community/stephenh-ts-proto
+    out: src/generated
+    include_imports: true
+    opt:
+      # Types only: the prover talks gRPC through reflection-built clients, so
+      # no runtime protobuf code is needed.
+      - onlyTypes=true
+      # Match the reflection client options (keepCase: true, longs: String).
+      - snakeToCamel=false
+      - forceLong=string
+      # Reflection responses may omit unset fields; force null-safe access.
+      - useOptionals=all
+      - esModuleInterop=true
