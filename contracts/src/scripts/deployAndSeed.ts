@@ -1,14 +1,17 @@
 /**
- * deploy + (opsiyonel) birkaç deposit/withdraw action dispatch eder, devnet için
+ * deploy + (opsiyonel) birkaç deposit/withdraw action dispatch eder
  *
  * kullanım:
  *   node build/src/scripts/deployAndSeed.js \
  *     <DEPLOYER_PRIVATE_KEY_BASE58> \
  *     [INITIAL_STATE_ROOT] \
+ *     [--network devnet|mainnet] \
  *     [--no-seed]
  *
- * DEPLOYER_PRIVATE_KEY_BASE58: devnet'te bakiyesi olan hesabın private key'i
+ * DEPLOYER_PRIVATE_KEY_BASE58: ilgili ağda bakiyesi olan hesabın private key'i
  * INITIAL_STATE_ROOT          : Pulsar genesis state root (decimal string, varsayılan "0")
+ * --network                   : hedef ağ (varsayılan "devnet"). mainnet'te seeding
+ *                               güvenlik gereği zorunlu olarak kapalıdır.
  * --no-seed                   : deposit/withdraw işlemlerini atla
  *
  * Çıktı: deploy-result.json  ← contract address + private key burada saklanır
@@ -26,22 +29,40 @@ import { writeFileSync } from 'fs';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
 import { ValidateReduceProgram } from '../ValidateReduce.js';
-import { ActionStackProgram, ActionStackProof } from '../ActionStack.js';
+import { ActionStackProgram } from '../ActionStack.js';
 import { PulsarAuth } from '../types/PulsarAction.js';
 import { List } from '../types/common.js';
+import { ENDPOINTS } from '../utils/constants.js';
 
 declare const process: { argv: string[]; exit: (code: number) => void };
 
-const DEVNET_URL = 'https://plain-1-graphql.mesa-mut.minaprotocol.com/graphql';
-const DEVNET_ARCHIVE_URL = 'https://archive-node-api.mesa-mut.minaprotocol.com/';
 const FEE = 1e8;
+
+type DeployNetwork = 'devnet' | 'mainnet';
+
 function parseCliArgs(args: string[]) {
   const positionalArgs = args.filter((a) => !a.startsWith('--'));
   const deployerKeyArg = positionalArgs[0];
   const initialStateRootStr = positionalArgs[1] ?? '0';
-  const noSeed = args.includes('--no-seed');
+  let noSeed = args.includes('--no-seed');
 
-  return { deployerKeyArg, initialStateRootStr, noSeed };
+  const networkIdx = args.indexOf('--network');
+  const networkArg = networkIdx !== -1 ? args[networkIdx + 1] : 'devnet';
+  if (networkArg !== 'devnet' && networkArg !== 'mainnet') {
+    throw new Error(
+      `Invalid --network "${networkArg}". Expected "devnet" or "mainnet".`
+    );
+  }
+  const network = networkArg as DeployNetwork;
+
+  // Güvenlik: mainnet'te gerçek MINA harcayan seeding kazara tetiklenmesin —
+  // sadece açık --seed flag'i verildiğinde seed'le.
+  if (network === 'mainnet' && !args.includes('--seed')) {
+    console.log('mainnet: seeding için açık --seed flag\'i gerekli, atlanıyor.');
+    noSeed = true;
+  }
+
+  return { deployerKeyArg, initialStateRootStr, noSeed, network };
 }
 
 function parseDeployerPrivateKey(input?: string): PrivateKey {
@@ -71,17 +92,25 @@ function parseDeployerPrivateKey(input?: string): PrivateKey {
 
 async function main() {
   const args = process.argv.slice(2);
-  const { deployerKeyArg, initialStateRootStr, noSeed } = parseCliArgs(args);
+  const { deployerKeyArg, initialStateRootStr, noSeed, network } =
+    parseCliArgs(args);
   const deployerKey = parseDeployerPrivateKey(deployerKeyArg);
   const deployer = deployerKey.toPublicKey();
 
   const initialStateRoot = Field(BigInt(initialStateRootStr));
 
+  const nodeUrl = ENDPOINTS.NODE[network];
+  const archiveUrl = ENDPOINTS.ARCHIVE[network];
   const Network = Mina.Network({
-    mina: DEVNET_URL,
-    archive: DEVNET_ARCHIVE_URL,
+    networkId: network === 'mainnet' ? 'mainnet' : 'testnet',
+    mina: nodeUrl,
+    archive: archiveUrl,
   });
   Mina.setActiveInstance(Network);
+
+  console.log(`network: ${network}`);
+  console.log(`  node    : ${nodeUrl}`);
+  console.log(`  archive : ${archiveUrl}`);
 
   await fetchAccount({ publicKey: deployer });
   console.log('deployer:', deployer.toBase58());
@@ -103,7 +132,9 @@ async function main() {
     contractAddress: contractKey.toPublicKey().toBase58(),
     contractPrivateKey: contractKey.toBase58(),
     deployedAt: new Date().toISOString(),
-    network: 'mesa',
+    network,
+    nodeUrl,
+    archiveUrl,
     initialStateRoot: initialStateRootStr,
   };
   writeFileSync('deploy-result.json', JSON.stringify(deployResult, null, 2));
@@ -127,11 +158,10 @@ async function main() {
 
   // 2 — initialize (verification key önce on-chain'e yazılmalı, ayrı TX)
   console.log('\n[2/2] initializing...');
-  const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
   const initTx = await Mina.transaction(
     { sender: deployer, fee: FEE },
     async () => {
-      await contract.initialize(List.empty().hash, initialStateRoot, dummyProof);
+      await contract.initialize(List.empty().hash, initialStateRoot);
     }
   );
   await initTx.prove();
@@ -151,7 +181,7 @@ async function main() {
         { sender: deployer, fee: FEE },
         async () => {
           AccountUpdate.fundNewAccount(deployer, 0);
-          await contract.deposit(amount, PulsarAuth.empty(), dummyProof);
+          await contract.deposit(amount, PulsarAuth.empty());
         }
       );
       await depositTx.prove();
@@ -165,7 +195,7 @@ async function main() {
       const withdrawTx = await Mina.transaction(
         { sender: deployer, fee: FEE },
         async () => {
-          await contract.withdraw(amount, dummyProof);
+          await contract.withdraw(amount);
         }
       );
       await withdrawTx.prove();

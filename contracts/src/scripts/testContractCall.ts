@@ -1,8 +1,8 @@
-import { Mina, PrivateKey, PublicKey, UInt64, fetchAccount, Cache, Field } from 'o1js';
+import { Mina, PrivateKey, PublicKey, UInt64, fetchAccount, Cache } from 'o1js';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
 import { ValidateReduceProgram } from '../ValidateReduce.js';
-import { ActionStackProgram, ActionStackProof } from '../ActionStack.js';
+import { ActionStackProgram } from '../ActionStack.js';
 import { PulsarAuth } from '../types/PulsarAction.js';
 
 declare const process: { argv: string[]; exit: (code: number) => void };
@@ -67,11 +67,10 @@ async function main() {
 
   console.log('\nAttempting deposit(2 MINA, PulsarAuth.empty())...');
   try {
-    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
     const tx = await Mina.transaction(
       { sender: deployer, fee: FEE },
       async () => {
-        await contract.deposit(UInt64.from(2e9), PulsarAuth.empty(), dummyProof);
+        await contract.deposit(UInt64.from(2e9), PulsarAuth.empty());
       }
     );
     await tx.prove();

@@ -227,12 +227,11 @@ async function deployAndInitializeContract() {
 
   const deployerAccount = feePayerKey.toPublicKey();
 
-  const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
   const tx = await bench('Deploy and initialize contract', () =>
     Mina.transaction({ sender: deployerAccount, fee }, async () => {
       AccountUpdate.fundNewAccount(deployerAccount);
       await zkapp.deploy();
-      await zkapp.initialize(merkleList.hash, Field(0), dummyProof);
+      await zkapp.initialize(merkleList.hash, Field(0));
     })
   );
 
@@ -506,13 +505,11 @@ async function deposit(
   pushToStack: boolean = true
 ) {
   await fetchAccounts([senderKey.toPublicKey()]);
-  const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
   const tx = await bench('Deposit transaction', () =>
     Mina.transaction({ sender: senderKey.toPublicKey(), fee }, async () => {
       await zkapp.deposit(
         amount,
         PulsarAuth.from(Field(0), CosmosSignature.empty()),
-        dummyProof
       );
     })
   );
@@ -536,10 +533,9 @@ async function withdraw(
   pushToStack: boolean = true
 ) {
   await fetchAccounts([senderKey.toPublicKey()]);
-  const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
   const tx = await bench('Withdraw transaction', () =>
     Mina.transaction({ sender: senderKey.toPublicKey(), fee }, async () => {
-      await zkapp.withdraw(amount, dummyProof);
+      await zkapp.withdraw(amount);
     })
   );
 
