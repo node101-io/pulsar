@@ -26,6 +26,3 @@ export const MONITOR_INTERVAL_MS = 30_000; // 30 seconds
 // Cleanup constants
 export const PROOF_TTL_SECONDS = 100 * 24 * 60 * 60; // 100 days
 export const BLOCKS_TO_KEEP = 100; // keep last N pulsar blocks
-
-// Mock chain service name
-export const MOCK_VOTEEXT_SERVICE_NAME = "pulsarchain.voteexthandler.v1.Query";

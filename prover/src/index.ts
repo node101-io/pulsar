@@ -15,9 +15,7 @@ async function main() {
     logger.info("Application initialized.");
 
     startPulsarSync();
-    if (process.env.TEST_MODE !== "true") {
-        startMinaSync();
-    }
+    startMinaSync();
 }
 
 main().catch((err) => {

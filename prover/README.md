@@ -9,7 +9,7 @@ Off-chain proving service that bridges the Pulsar (Cosmos) chain with the Mina z
 | Document | Description |
 | -------- | ----------- |
 | **[docs/architecture.md](docs/architecture.md)** | Full system architecture — module descriptions, processor pipeline, data models, proof aggregation tree, state machines, failure handling, and developer notes |
-| **[docs/local-development.md](docs/local-development.md)** | Local development guide — running the mock chain, state persistence, restarting safely, full reset, and npm script reference |
+| **[docs/local-development.md](docs/local-development.md)** | Local development guide — running a real local pulsar-chain testnet, pointing the prover at it, restarting and resetting safely |
 
 ---
 
@@ -67,27 +67,19 @@ This compiles TypeScript and starts all processors concurrently:
 
 ---
 
-## Test Mode (Local Development)
+## Local Development (real chain)
 
-Test mode uses a mock Cosmos chain instead of a real Pulsar node, and targets Mina lightnet.
-
-### 1. Start the mock chain server
-
-```bash
-npm run start-mock
-```
-
-This starts a local gRPC server that produces fake Pulsar blocks at a configurable interval.
-
-### 2. Start the prover in test mode
-
-Set `TEST_MODE=true` in `.env`, then:
+Run a real pulsar-chain testnet locally instead of a mock — same signing code as
+production, so hash/signature mismatches surface immediately:
 
 ```bash
-npm run start
+# in the pulsar-chain repo
+bash scripts/setup_local_testnet.sh 3        # build + init 3 validators
+pulsard start --home ~/.pulsar-node1         # one terminal per node (1..3)
 ```
 
-The prover will connect to `MOCK_GRPC_ENDPOINT` (default `localhost:50052`) instead of a real Pulsar node.
+Then point the prover at it with `PULSAR_GRPC_ENDPOINT=127.0.0.1:9090` in `.env`.
+The validator count must match the circuit's `VALIDATOR_NUMBER` (contracts).
 
 ---
 
@@ -137,28 +129,12 @@ Either set `MONGO_URI` directly, or set the individual fields to construct it.
 | `CONTRACT_PRIVATE_KEY` | Private key of the SettlementContract deployer |
 | `CONTRACT_ADDRESS`     | Deployed SettlementContract address on Mina    |
 
-### Test / Mock Mode
-
-| Variable                           | Default           | Description                         |
-| ---------------------------------- | ----------------- | ----------------------------------- |
-| `TEST_MODE`                        | —                 | Set to `true` to use the mock chain |
-| `MOCK_GRPC_ENDPOINT`               | `localhost:50052` | Mock server gRPC address            |
-| `MOCK_BLOCK_PRODUCE_INTERVAL_MS`   | `3000`            | Block production interval (ms)      |
-| `MOCK_VALIDATOR_POOL_SIZE`         | `15`              | Total validators in the mock pool   |
-| `MOCK_ACTIVE_VALIDATOR_COUNT`      | `10`              | Active validators per block         |
-| `MOCK_VALIDATORS_CHANGE_PER_BLOCK` | `2`               | Validators rotating each block      |
-| `MOCK_GRPC_PORT`                   | `50052`           | Port for the mock gRPC server       |
-| `MOCK_START_HEIGHT`                | `1`               | Starting block height for the mock  |
-
----
-
 ## All npm Scripts
 
 | Script               | Description                                                    |
 | -------------------- | -------------------------------------------------------------- |
 | `npm run start`      | Build and start the main prover node                           |
 | `npm run seed`       | Seed MongoDB with genesis blocks (run once before first start) |
-| `npm run start-mock` | Build and start the mock Cosmos chain server                   |
 | `npm run test`       | Run all tests once                                             |
 | `npm run test:watch` | Run tests in watch mode                                        |
 | `npm run build`      | Compile TypeScript to `dist/`                                  |
