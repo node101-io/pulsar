@@ -135,6 +135,7 @@ Either set `MONGO_URI` directly, or set the individual fields to construct it.
 | -------------------- | -------------------------------------------------------------- |
 | `npm run start`      | Build and start the main prover node                           |
 | `npm run seed`       | Seed MongoDB with genesis blocks (run once before first start) |
+| `npm run smoke`      | One-shot ingest + prove smoke test against the configured node |
 | `npm run test`       | Run all tests once                                             |
 | `npm run test:watch` | Run tests in watch mode                                        |
 | `npm run build`      | Compile TypeScript to `dist/`                                  |

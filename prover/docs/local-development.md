@@ -96,5 +96,6 @@ npm run start
   at `H+3`).
 - Very early heights can miss historical staking info; the prover falls back
   to the block header for those and logs a warning.
-- For a one-shot ingest+prove smoke test without the full worker stack, see
-  the scripts under `src/scripts/`.
+- `npm run smoke` ingests one epoch window from the chain and generates a
+  SettlementProof through the production ingest + proving paths (~15 s) —
+  the fastest way to verify chain ↔ prover ↔ circuit compatibility.

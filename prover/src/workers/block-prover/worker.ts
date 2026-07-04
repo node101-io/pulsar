@@ -143,7 +143,7 @@ export async function worker(task: BlockProverJob) {
     );
 }
 
-async function createProof(height: number) {
+export async function createProof(height: number) {
     const rangeLow = height - 1; // include previous block as context for first pair
     const rangeHigh = height + BLOCK_EPOCH_SIZE - 1;
 
