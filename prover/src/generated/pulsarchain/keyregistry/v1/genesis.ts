@@ -5,8 +5,8 @@
 // source: pulsarchain/keyregistry/v1/genesis.proto
 
 /* eslint-disable */
-import type { Params } from "./params";
-import type { UserPublicKeyPair, ValidatorPublicKeyPair } from "./public_key_pair";
+import type { Params } from "./params.js";
+import type { UserPublicKeyPair, ValidatorPublicKeyPair } from "./public_key_pair.js";
 
 export const protobufPackage = "pulsarchain.keyregistry.v1";
 

@@ -5,7 +5,7 @@
 // source: pulsarchain/keyregistry/v1/query.proto
 
 /* eslint-disable */
-import type { Params } from "./params";
+import type { Params } from "./params.js";
 
 export const protobufPackage = "pulsarchain.keyregistry.v1";
 

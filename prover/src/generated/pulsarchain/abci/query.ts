@@ -5,7 +5,7 @@
 // source: pulsarchain/abci/query.proto
 
 /* eslint-disable */
-import type { VoteExtBody } from "../votepersistence/v1/vote_ext_body";
+import type { VoteExtBody } from "../votepersistence/v1/vote_ext_body.js";
 
 export const protobufPackage = "pulsarchain.abci";
 

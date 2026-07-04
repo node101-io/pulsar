@@ -28,3 +28,5 @@ plugins:
       # Reflection responses may omit unset fields; force null-safe access.
       - useOptionals=all
       - esModuleInterop=true
+      # Emit .js extensions on relative imports (required by nodenext resolution).
+      - importSuffix=.js
