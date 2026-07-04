@@ -86,7 +86,12 @@ describe("pulsar sync", () => {
         const mockBlockData: BlockData = {
             height: 6,
             stateRoot: "0x123",
-            validators: ["B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb"],
+            validators: [
+                {
+                    addr: "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+                    power: "1",
+                },
+            ],
             actionsReducedRoot: "0",
             voteExt: [],
         };

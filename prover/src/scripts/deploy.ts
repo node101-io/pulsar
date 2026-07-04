@@ -4,7 +4,6 @@
  * The initial merkleListRoot (block 0's validatorListHash) is resolved automatically:
  *   1. INITIAL_MERKLE_LIST_ROOT env var  (explicit override)
  *   2. MongoDB Block collection, height=0 (preferred — most accurate)
- *   3. mock-state.json blocks["0"].validatorListHash (fallback)
  *
  * Required env vars:
  *   MINA_PRIVATE_KEY   - Base58 private key of the fee-paying signer account
@@ -16,7 +15,6 @@
  *   INITIAL_MERKLE_LIST_ROOT - override automatic detection
  *   MINA_FEE                 - TX fee in nanomina (default: 100_000_000 = 0.1 MINA)
  *   CONTRACT_PRIVATE_KEY     - reuse an existing contract key instead of a fresh one
- *   MOCK_STATE_PATH          - path to mock-state.json (default: ./mock-state.json)
  *
  * On success prints:
  *   CONTRACT_ADDRESS=...
@@ -24,7 +22,6 @@
  */
 
 import "dotenv/config";
-import { readFile } from "fs/promises";
 import { AccountUpdate, fetchAccount, Field, Mina, PrivateKey } from "o1js";
 import mongoose from "mongoose";
 import {
@@ -54,18 +51,10 @@ async function resolveInitialMerkleListRoot(): Promise<string> {
         return mongoHash;
     }
 
-    // 3. mock-state.json
-    const stateHash = await readFromMockState();
-    if (stateHash) {
-        console.log(`Auto-detected merkleListRoot from mock-state.json block 0: ${stateHash}`);
-        return stateHash;
-    }
-
     throw new Error(
         "Cannot determine INITIAL_MERKLE_LIST_ROOT.\n" +
-        "Make sure the mock chain has produced at least one block and either:\n" +
+        "Make sure the genesis block is ingested and either:\n" +
         "  - MongoDB is reachable (MONGO_URI / MONGO_DB set), or\n" +
-        "  - mock-state.json exists in the current directory, or\n" +
         "  - Set INITIAL_MERKLE_LIST_ROOT explicitly in .env",
     );
 }
@@ -102,18 +91,6 @@ async function readFromMongo(): Promise<string | null> {
     return b?.validatorListHash ?? null;
 }
 
-async function readFromMockState(): Promise<string | null> {
-    const path = process.env.MOCK_STATE_PATH ?? "./mock-state.json";
-    try {
-        const raw = await readFile(path, "utf8");
-        const state = JSON.parse(raw);
-        const hash = state?.blocks?.["0"]?.validatorListHash;
-        return hash ? String(hash) : null;
-    } catch {
-        return null;
-    }
-}
-
 async function resolveInitialStateRoot(): Promise<string> {
     if (process.env.INITIAL_STATE_ROOT) {
         console.log("Using INITIAL_STATE_ROOT from env.");
@@ -126,18 +103,6 @@ async function resolveInitialStateRoot(): Promise<string> {
         console.log(`Auto-detected stateRoot from MongoDB block 0: ${b.stateRoot}`);
         return b.stateRoot;
     }
-
-    // Fallback: mock-state.json
-    const path = process.env.MOCK_STATE_PATH ?? "./mock-state.json";
-    try {
-        const raw = await readFile(path, "utf8");
-        const state = JSON.parse(raw);
-        const sr = state?.blocks?.["0"]?.stateRoot;
-        if (sr) {
-            console.log(`Auto-detected stateRoot from mock-state.json block 0: ${sr}`);
-            return String(sr);
-        }
-    } catch { /* ignore */ }
 
     console.log("stateRoot not found, defaulting to 0.");
     return "0";

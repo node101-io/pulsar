@@ -27,6 +27,9 @@ import {
     Signature,
 } from "pulsar-contracts";
 
+// Well-formed but non-verifying signature (r=s=1) for non-signing validators.
+const DUMMY_SIGNATURE = Signature.fromValue({ r: 1n, s: 1n });
+
 let compiled = false;
 let compileLock: Promise<void> = Promise.resolve();
 async function ensureCompiled() {
@@ -140,7 +143,7 @@ export async function worker(task: BlockProverJob) {
     );
 }
 
-async function createProof(height: number) {
+export async function createProof(height: number) {
     const rangeLow = height - 1; // include previous block as context for first pair
     const rangeHigh = height + BLOCK_EPOCH_SIZE - 1;
 
@@ -174,25 +177,27 @@ async function createProof(height: number) {
         );
         blocks.push(block);
 
-        // Reorder voteExt to match prev.validators order so the MerkleList
-        // hash equals prev.validatorListHash as the circuit expects
+        // prev.validators is the FULL validator set in the chain's fold order
+        // (power ASC, consAddr ASC). Pair each validator with its signature and
+        // power to rebuild the exact leaf list + power-weighted quorum the
+        // circuit checks. A validator that did not sign gets a dummy signature
+        // (fails verify → excluded from accumulatedPower) but still contributes
+        // power + its merkle leaf, so we must NOT drop it or throw.
         const voteExtByAddr = new Map(
             cur.voteExt.map((ext) => [ext.validatorAddr, ext]),
         );
-        const orderedVoteExt = prev.validators.map((addr) => {
-            const ext = voteExtByAddr.get(addr);
-            if (!ext)
-                throw new Error(
-                    `Missing voteExt for validator ${addr} in block ${cur.height}`,
-                );
-            return ext;
-        });
 
         const sigList = SignaturePublicKeyList.fromArray(
-            orderedVoteExt.map((ext) => [
-                Signature.fromBase58(ext.signature),
-                PublicKey.fromBase58(ext.validatorAddr),
-            ]),
+            prev.validators.map(({ addr, power }) => {
+                const ext = voteExtByAddr.get(addr);
+                return [
+                    ext
+                        ? Signature.fromBase58(ext.signature)
+                        : DUMMY_SIGNATURE,
+                    PublicKey.fromBase58(addr),
+                    Field(power),
+                ];
+            }),
         );
         signaturePubKeyLists.push(sigList);
     }

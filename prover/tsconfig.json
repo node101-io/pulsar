@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
         "target": "es2020",
-        "module": "es2022",
+        "module": "nodenext",
         "lib": ["dom", "esnext"],
         "outDir": "./dist",
         "rootDir": ".",
@@ -10,7 +10,7 @@
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "esModuleInterop": true,
-        "moduleResolution": "node",
+        "moduleResolution": "nodenext",
         "experimentalDecorators": true,
         "emitDecoratorMetadata": true,
         "allowJs": true,

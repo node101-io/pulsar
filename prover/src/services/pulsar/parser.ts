@@ -1,82 +1,28 @@
 import { Bool, Field, PublicKey, Signature } from "o1js";
-import { BlockParserResult } from "../../common/types.js";
 
-export function parseTendermintBlockResponse(res: any): BlockParserResult {
-    const header = res?.block?.header;
-    const blockId = res?.block_id?.hash || null;
-    const blockHash = BigInt(
-        "0x" + Buffer.from(header.app_hash, "base64").toString("hex"),
-    ).toString();
-    const height = header?.height ? Number(header.height) : NaN;
-    const chainId = header?.chain_id || "";
-    const proposerAddress = header?.proposer_address || "";
-    const timeSec = Number(header?.time?.seconds || 0);
-    const timeNanos = Number(header?.time?.nanos || 0);
-    const time = new Date(timeSec * 1e3 + timeNanos / 1e6);
-
-    const txs: string[] = res?.block?.data?.txs ?? [];
-    const txsDecoded: string[] = txs.map((t: string) => {
-        try {
-            const decoded = Buffer.from(t, "base64").toString("utf-8");
-            return decoded;
-        } catch {
-            return "";
-        }
-    });
-
-    const signatures = res?.block?.last_commit?.signatures ?? [];
-    const lastCommitSignatures = signatures.map((sig: any) => ({
-        validator_address: sig?.validator_address ?? "",
-        signature: sig?.signature ?? "",
-        block_id_flag: sig?.block_id_flag ?? "",
-        timestamp: sig?.timestamp
-            ? new Date(
-                  Number(sig.timestamp.seconds || 0) * 1e3 +
-                      Number(sig.timestamp.nanos || 0) / 1e6,
-              )
-            : null,
-    }));
-
-    return {
-        blockId,
-        blockHash,
-        height,
-        chainId,
-        proposerAddress,
-        time,
-        txs,
-        txsDecoded,
-        lastCommitSignatures,
-        hashes: {
-            appHash: header?.app_hash || "",
-            dataHash: header?.data_hash || "",
-            validatorsHash: header?.validators_hash || "",
-            consensusHash: header?.consensus_hash || "",
-            evidenceHash: header?.evidence_hash || "",
-            lastCommitHash: header?.last_commit_hash || "",
-            lastResultsHash: header?.last_results_hash || "",
-            nextValidatorsHash: header?.next_validators_hash || "",
-        },
-    };
+function leBytesToBigint(bytes: Uint8Array): bigint {
+    let value = 0n;
+    for (let i = bytes.length - 1; i >= 0; i -= 1) {
+        value = (value << 8n) | BigInt(bytes[i]);
+    }
+    return value;
 }
 
-export function decodeMinaSignature(signatureHex: string): string {
-    const sigBuffer = Buffer.from(signatureHex, "hex");
-    const rHex = sigBuffer.subarray(0, 32).toString("hex");
-    const sHex = sigBuffer.subarray(32, 64).toString("hex");
+export function decodeMinaSignature(sig: Buffer | Uint8Array): string {
+    const bytes = Buffer.isBuffer(sig) ? sig : Buffer.from(sig);
+    if (bytes.length !== 64) {
+        throw new Error(`Mina signature must be 64 bytes, got ${bytes.length}`);
+    }
 
+    // mina-signer-go wire format: (R.x || s), each 32-byte half little-endian.
     return Signature.fromValue({
-        r: BigInt("0x" + rHex),
-        s: BigInt("0x" + sHex),
+        r: leBytesToBigint(bytes.subarray(0, 32)),
+        s: leBytesToBigint(bytes.subarray(32, 64)),
     }).toBase58();
 }
 
-export function parseValidatorSetResponse(res: any): string[] {
-    return res?.validators.map((v: any) => v.address);
-}
-
 export function parseMinaPubkeyFromBytes(data: Buffer | Uint8Array): string {
-    const bytes = Buffer.from(data);
+    const bytes = Buffer.isBuffer(data) ? data : Buffer.from(data);
     if (bytes.length === 33) {
         // Legacy 33-byte format: 32 bytes big-endian x + 1 byte isOdd
         const x = BigInt("0x" + bytes.subarray(0, 32).toString("hex"));
@@ -85,12 +31,10 @@ export function parseMinaPubkeyFromBytes(data: Buffer | Uint8Array): string {
     }
     // 32-byte little-endian compressed format: buf[31] MSB = isOdd, remaining = x
     const isOdd = (bytes[31] & 0x80) !== 0;
-    const xBuf = Buffer.from(bytes);
+    const xBuf = Buffer.from(bytes); // copy before clearing the parity bit
     xBuf[31] &= 0x7f;
-    const x = BigInt("0x" + Buffer.from(xBuf).reverse().toString("hex"));
-    return PublicKey.from({ x: Field(x), isOdd: Bool(isOdd) }).toBase58();
-}
-
-export function parseValidatorSetPubkeys(res: any): string[] {
-    return (res?.validators ?? []).map((v: any) => v.pub_key?.key ?? "");
+    return PublicKey.from({
+        x: Field(leBytesToBigint(xBuf)),
+        isOdd: Bool(isOdd),
+    }).toBase58();
 }
