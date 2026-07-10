@@ -11,25 +11,25 @@ import {
     POLL_INTERVAL_MS,
     BLOCK_EPOCH_SIZE,
     EPOCH_START_HEIGHT,
-    TENDERMINT_SERVICE_NAME,
-    VOTE_PERSISTENCE_SERVICE_NAME,
-    MINA_KEYS_SERVICE_NAME,
-    ABCI_SERVICE_NAME,
 } from "../../config/constants.js";
 import {
     createClient,
     getLatestHeight,
+    isServiceError,
+    TENDERMINT_SERVICE_NAME,
+    VOTE_PERSISTENCE_SERVICE_NAME,
+    MINA_KEYS_SERVICE_NAME,
+    ABCI_SERVICE_NAME,
+    type AbciQueryService,
+    type KeyregistryService,
+    type TendermintService,
+    type VotePersistenceService,
+} from "pulsar-chain-client";
+import {
     getBlockData,
     getVoteExtsByHeight,
-    isServiceError,
     storePulsarBlock,
 } from "./client.js";
-import {
-    AbciQueryService,
-    KeyregistryService,
-    TendermintService,
-    VotePersistenceService,
-} from "./grpcTypes.js";
 import { sleep } from "../../common/sleep.js";
 
 async function backfillMissingVoteExtensions(

@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package pulsarchain.keyregistry.v1;
+
+import "amino/amino.proto";
+import "cosmos/msg/v1/msg.proto";
+import "cosmos_proto/cosmos.proto";
+import "gogoproto/gogo.proto";
+import "pulsarchain/keyregistry/v1/params.proto";
+import "pulsarchain/keyregistry/v1/key_update_type.proto";
+
+option go_package = "github.com/node101-io/pulsar-chain/x/keyregistry/types";
+
+// Msg defines the Msg service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // UpdateParams defines a (governance) operation for updating the module
+  // parameters. The authority defaults to the x/gov module account.
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+
+  // RegisterKeys defines the RegisterKeys RPC.
+  rpc RegisterKeys(MsgRegisterKeys) returns (MsgRegisterKeysResponse);
+
+  // UpdateKeys defines the UpdateKeys RPC.
+  rpc UpdateKeys(MsgUpdateKeys) returns (MsgUpdateKeysResponse);
+}
+
+// MsgUpdateParams is the Msg/UpdateParams request type.
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "pulsarchain/x/keyregistry/MsgUpdateParams";
+
+  // authority is the address that controls the module (defaults to x/gov unless overwritten).
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // params defines the module parameters to update.
+
+  // NOTE: All parameters must be supplied.
+  Params params = 2 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}
+
+// MsgUpdateParamsResponse defines the response structure for executing a
+// MsgUpdateParams message.
+message MsgUpdateParamsResponse {}
+
+// MsgRegisterKeys defines the MsgRegisterKeys message.
+message MsgRegisterKeys {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  bytes cosmos_public_key = 2;
+  bytes mina_public_key = 3;
+  bytes cosmos_signature = 4;
+  bytes mina_signature = 5;
+  ActorType actor_type = 6;
+}
+
+// MsgRegisterKeysResponse defines the MsgRegisterKeysResponse message.
+message MsgRegisterKeysResponse {}
+
+// MsgUpdateKeys defines the MsgUpdateKeys message.
+message MsgUpdateKeys {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  bytes prev_mina_public_key = 2;
+  bytes new_mina_public_key = 3;
+  bytes cosmos_signature = 4;
+  bytes new_mina_signature = 5;
+  ActorType actor_type = 6;
+}
+
+// MsgUpdateKeysResponse defines the MsgUpdateKeysResponse message.
+message MsgUpdateKeysResponse {}

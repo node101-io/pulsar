@@ -31,7 +31,7 @@ The following external services must be running before starting the node:
 ### 1. Install dependencies
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### 2. Configure environment
@@ -47,13 +47,13 @@ Fill in `.env` — see [Environment Variables](#environment-variables) for detai
 This must be done once before the first run. It writes the genesis blocks (height 0 and 1) and the initial block epoch into MongoDB.
 
 ```bash
-npm run seed
+pnpm run seed
 ```
 
 ### 4. Start the node
 
 ```bash
-npm run start
+pnpm run start
 ```
 
 This compiles TypeScript and starts all processors concurrently:
@@ -129,17 +129,17 @@ Either set `MONGO_URI` directly, or set the individual fields to construct it.
 | `CONTRACT_PRIVATE_KEY` | Private key of the SettlementContract deployer |
 | `CONTRACT_ADDRESS`     | Deployed SettlementContract address on Mina    |
 
-## All npm Scripts
+## All Scripts
 
 | Script               | Description                                                    |
 | -------------------- | -------------------------------------------------------------- |
-| `npm run start`      | Build and start the main prover node                           |
-| `npm run seed`       | Seed MongoDB with genesis blocks (run once before first start) |
-| `npm run smoke`      | One-shot ingest + prove smoke test against the configured node |
-| `npm run test`       | Run all tests once                                             |
-| `npm run test:watch` | Run tests in watch mode                                        |
-| `npm run build`      | Compile TypeScript to `dist/`                                  |
-| `npm run clean`      | Remove `dist/`, `coverage/`, and `node_modules/`               |
+| `pnpm run start`      | Build and start the main prover node                           |
+| `pnpm run seed`       | Seed MongoDB with genesis blocks (run once before first start) |
+| `pnpm run smoke`      | One-shot ingest + prove smoke test against the configured node |
+| `pnpm run test`       | Run all tests once                                             |
+| `pnpm run test:watch` | Run tests in watch mode                                        |
+| `pnpm run build`      | Compile TypeScript to `dist/`                                  |
+| `pnpm run clean`      | Remove `dist/`, `coverage/`, and `node_modules/`               |
 
 ---
 
@@ -189,13 +189,15 @@ Each processor follows a **Master/Worker** pattern backed by BullMQ:
 
 ## Proto Types
 
-TypeScript types for the pulsar-chain gRPC messages are generated from the
-chain's protos (pinned to a commit) into `src/generated/` — see `buf.gen.yaml`
-for the pinned ref and update procedure. Regenerate with:
+TypeScript types for the pulsar-chain gRPC messages live in the shared
+**`pulsar-chain-client`** workspace package (`chain-client/`), together with
+the reflection-based transport and wire-format parsers used by both the
+prover and the bridge. Regenerate them there:
 
 ```bash
-npm run proto:gen   # requires the buf CLI (`brew install bufbuild/buf/buf`)
+pnpm --filter pulsar-chain-client proto:gen
 ```
 
-The generated output is committed, so builds never need the buf CLI or network;
-`proto:gen` only runs when bumping the pinned chain commit.
+The generated output is committed, so builds never need the buf CLI or
+network; `proto:gen` only runs when bumping the pinned chain commit (see
+`chain-client/buf.gen.yaml`).

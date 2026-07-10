@@ -1,0 +1,33 @@
+# Generates TypeScript types for the pulsar-chain gRPC messages from the
+# VENDORED proto tree (./proto — the same files the runtime transport loads
+# via @grpc/proto-loader, so types and wire behavior share one source).
+#
+# Run:      pnpm run proto:gen        (requires the buf CLI; no network)
+# Update:   bump the pinned chain commit in scripts/vendor-protos.sh, run
+#           `pnpm run proto:vendor && pnpm run proto:gen`, and commit the
+#           proto/** + src/generated/** diff — chain-side proto changes then
+#           show up as a reviewable diff / compile error.
+version: v2
+clean: true
+inputs:
+  - directory: proto
+    paths:
+      - proto/pulsarchain
+plugins:
+  # Pinned so regeneration is deterministic (only the vendored protos and this
+  # version decide the output).
+  - remote: buf.build/community/stephenh-ts-proto:v2.12.0
+    out: src/generated
+    include_imports: true
+    opt:
+      # Types only: runtime clients are built by @grpc/proto-loader, so no
+      # generated protobuf runtime code is needed.
+      - onlyTypes=true
+      # Match the proto-loader options (keepCase: true, longs: String).
+      - snakeToCamel=false
+      - forceLong=string
+      # Responses may omit unset fields; force null-safe access.
+      - useOptionals=all
+      - esModuleInterop=true
+      # Emit .js extensions on relative imports (required by nodenext resolution).
+      - importSuffix=.js

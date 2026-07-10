@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package pulsarchain.ante.v1;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/node101-io/pulsar-chain/app/ante/types";
+
+// TxAuthMode determines which signature verification path a tx should use.
+enum TxAuthMode {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  TX_AUTH_MODE_UNSPECIFIED = 0;
+  TX_AUTH_MODE_COSMOS = 1;
+  TX_AUTH_MODE_MINA = 2;
+}
+
+// TxAuthModeExtension marks the authentication mode of a transaction.
+message TxAuthModeExtension {
+  option (gogoproto.goproto_getters) = false;
+
+  TxAuthMode tx_auth_mode = 1;
+}
