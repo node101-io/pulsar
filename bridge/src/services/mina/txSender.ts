@@ -1,10 +1,10 @@
 import { Bool, fetchAccount, Mina, PrivateKey } from "o1js";
 import type { Proof } from "o1js";
-import { waitForTransaction } from "../../../../contracts/build/src/utils/fetch.js";
-import type { ValidateReducePublicInput } from "../../../../contracts/build/src/ValidateReduce.js";
-import type { ActionStackProof } from "../../../../contracts/build/src/ActionStack.js";
-import type { Batch } from "../../../../contracts/build/src/types/PulsarAction.js";
-import type { ReduceMask } from "../../../../contracts/build/src/types/common.js";
+import { waitForTransaction } from "pulsar-contracts/build/src/utils/fetch.js";
+import type { ValidateReducePublicInput } from "pulsar-contracts/build/src/ValidateReduce.js";
+import type { ActionStackProof } from "pulsar-contracts/build/src/ActionStack.js";
+import type { Batch } from "pulsar-contracts/build/src/types/PulsarAction.js";
+import type { ReduceMask } from "pulsar-contracts/build/src/types/common.js";
 import type { MinaClientContext } from "./client.js";
 import { getContractBlockHeight } from "./client.js";
 import logger from "../../common/logger.js";

@@ -11,16 +11,16 @@ vi.mock("o1js", () => ({
     },
 }));
 
-vi.mock("../../../../../contracts/build/src/SettlementContract.js", () => ({
+vi.mock("pulsar-contracts/build/src/SettlementContract.js", () => ({
     SettlementContract: vi.fn().mockImplementation(() => ({})),
 }));
 
-vi.mock("../../../../../contracts/build/src/utils/fetch.js", () => ({
+vi.mock("pulsar-contracts/build/src/utils/fetch.js", () => ({
     setMinaNetwork: vi.fn(),
 }));
 
-vi.mock("../../../../../contracts/build/src/utils/constants.js", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../../../../../contracts/build/src/utils/constants.js")>();
+vi.mock("pulsar-contracts/build/src/utils/constants.js", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("pulsar-contracts/build/src/utils/constants.js")>();
     return { ...actual };
 });
 
