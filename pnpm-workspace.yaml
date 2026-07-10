@@ -1,0 +1,10 @@
+packages:
+  - contracts
+  - prover
+  - bridge
+  - chain-client
+
+allowBuilds:
+  '@bufbuild/buf': true # buf CLI for chain-client proto:gen
+  msgpackr-extract: true # bullmq native codec
+  protobufjs: true # grpc reflection client

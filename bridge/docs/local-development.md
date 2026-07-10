@@ -19,35 +19,29 @@ Both processes share the same MongoDB database and Redis instance.
 
 ## First-time Setup
 
-### 1. Build contracts
+### 1. Install dependencies (pnpm workspace)
 
-The bridge imports from `contracts/build/src/`. Always build contracts before the bridge:
+The repo is a pnpm workspace; one install at the repo root covers contracts,
+chain-client, prover and bridge. o1js resolves to a single store copy for all
+of them, so the old "two o1js instances" crash (and its symlink workaround)
+is gone by construction.
 
 ```bash
-cd contracts
-npm install
-npm run build
+# at the repo root
+pnpm install
 ```
 
-### 2. Install bridge dependencies
+### 2. Build
+
+`pnpm run build` in bridge/ builds its workspace dependencies
+(pulsar-contracts, pulsar-chain-client) first, then the bridge itself:
 
 ```bash
 cd bridge
-npm install
+pnpm run build
 ```
 
-### 3. Fix o1js deduplication
-
-If you installed `o1js` both in `bridge/` and `contracts/`, two instances of o1js will end up in the same Node process, causing a "global context inconsistent state" crash during proving. Symlink contracts' o1js to the shared instance:
-
-```bash
-rm -rf ../contracts/node_modules/o1js
-ln -s $(pwd)/node_modules/o1js ../contracts/node_modules/o1js
-```
-
-Re-run this after any `npm install` in either directory.
-
-### 4. Configure environment
+### 3. Configure environment
 
 ```bash
 cp .env.example .env
@@ -70,7 +64,7 @@ PULSAR_VALIDATOR_ENDPOINTS=http://localhost:6000,http://localhost:6001
 
 See the full reference below for all variables.
 
-### 5. Start MongoDB and Redis
+### 4. Start MongoDB and Redis
 
 Make sure both services are running before starting the bridge.
 
@@ -97,7 +91,7 @@ Run each process in a separate terminal:
 
 ```bash
 # Terminal 1 — sync loop
-cd bridge && npm run start
+cd bridge && pnpm run start
 
 # Terminal 2 — TX sender
 cd bridge && node dist/src/workers/bridge-tx-sender/index.js
@@ -107,7 +101,7 @@ cd bridge && node dist/src/workers/bridge-tx-sender/index.js
 
 ```bash
 cd bridge
-npm run build
+pnpm run build
 pm2 start ecosystem.config.cjs
 ```
 
@@ -125,9 +119,7 @@ pm2 delete all
 After deploying new code:
 
 ```bash
-npm run build
-# Re-apply o1js symlink if you ran npm install:
-rm -rf ../contracts/node_modules/o1js && ln -s $(pwd)/node_modules/o1js ../contracts/node_modules/o1js
+pnpm run build
 pm2 restart all
 ```
 
@@ -155,14 +147,14 @@ pm2 restart all
 
 ---
 
-## npm Scripts Reference
+## Scripts Reference
 
 | Script             | Description                                  |
 | ------------------ | -------------------------------------------- |
-| `npm run build`    | Compile TypeScript to `dist/`                |
-| `npm run start`    | Build and start the main process             |
-| `npm run lint`     | Run ESLint                                   |
-| `npm run clean`    | Remove `dist/` and `node_modules/`           |
+| `pnpm run build`    | Compile TypeScript to `dist/`                |
+| `pnpm run start`    | Build and start the main process             |
+| `pnpm run lint`     | Run ESLint                                   |
+| `pnpm run clean`    | Remove `dist/` and `node_modules/`           |
 
 ---
 

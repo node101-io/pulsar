@@ -1,8 +1,0 @@
-node_modules/
-**/.vscode
-yarn-error.log
-dist
-.idea
-
-.env*
-!.env.example

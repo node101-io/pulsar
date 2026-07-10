@@ -7,10 +7,10 @@
         "test:watch": "vitest",
         "test:integration": "NODE_OPTIONS=--max-old-space-size=8192 vitest run --config vitest.integration.config.ts",
         "test:e2e": "node --max-old-space-size=8192 ../contracts/build/src/scripts/e2e-reduce-test.js",
-        "build": "npm run build --prefix ../contracts && tsc",
-        "start": "npm run build && node dist/src/nodeManager.js",
-        "worker:bridge-tx-sender": "npm run build && node dist/src/workers/bridge-tx-sender/index.js",
-        "clean": "rimraf dist node_modules package-lock.json"
+        "build": "pnpm --filter pulsar-contracts --filter pulsar-chain-client build && tsc",
+        "start": "pnpm run build && node dist/src/nodeManager.js",
+        "worker:bridge-tx-sender": "pnpm run build && node dist/src/workers/bridge-tx-sender/index.js",
+        "clean": "rimraf dist node_modules"
     },
     "keywords": [
         "pulsar"
@@ -24,27 +24,21 @@
         "@cosmjs/proto-signing": "^0.36.0",
         "@cosmjs/stargate": "^0.36.0",
         "@grpc/grpc-js": "^1.13.4",
-        "@grpc/proto-loader": "^0.8.0",
         "bullmq": "^5.58.5",
         "cosmjs-types": "^0.10.1",
         "dotenv": "^17.2.2",
-        "grpc-js-reflection-client": "^1.3.0",
-        "ioredis": "^5.7.0",
+        "ioredis": "5.10.1",
         "mongoose": "^9.1.6",
         "o1js": "2.10.0-dev.be63f",
-        "pulsar-contracts": "file:../contracts",
+        "pulsar-contracts": "workspace:*",
         "rimraf": "^6.0.1",
-        "winston": "^3.17.0"
+        "winston": "^3.17.0",
+        "pulsar-chain-client": "workspace:*"
     },
     "devDependencies": {
         "@types/node": "^24.3.1",
         "typescript": "^5.9.2",
         "vitest": "^4.1.8"
     },
-    "peerDependencies": {
-        "o1js": "2.10.0-dev.be63f"
-    },
-    "overrides": {
-        "o1js": "2.10.0-dev.be63f"
-    }
+    "private": true
 }
