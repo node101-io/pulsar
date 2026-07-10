@@ -6,6 +6,7 @@ import {
 } from './utils/constants.js';
 import { SignaturePublicKeyMatrix } from './types/signaturePubKeyList.js';
 import { List } from './types/common.js';
+import { hashValidatorLeaf } from './utils/validatorList.js';
 
 export {
   SettlementProof,
@@ -218,12 +219,7 @@ const MultisigVerifierProgram = ZkProgram({
             totalPower = totalPower.add(power);
 
             // field-form validator-set leaf; byte↔field with the chain still pending
-            list.push(
-              Poseidon.hashWithPrefix('pulsar-validator', [
-                ...publicKey.toFields(),
-                power,
-              ])
-            );
+            list.push(hashValidatorLeaf(publicKey, power));
           }
 
           list.hash.assertEquals(

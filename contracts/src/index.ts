@@ -171,3 +171,9 @@ export {
   analyzeMethods,
   logParams,
 };
+
+export {
+  VALIDATOR_LEAF_PREFIX,
+  hashValidatorLeaf,
+  computeValidatorListHash,
+} from './utils/validatorList.js';

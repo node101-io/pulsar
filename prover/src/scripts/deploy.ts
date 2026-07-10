@@ -30,7 +30,6 @@ import {
     MultisigVerifierProgram,
     ValidateReduceProgram,
     ActionStackProgram,
-    ActionStackProof,
 } from "pulsar-contracts";
 
 type MinaNetwork = "devnet" | "mainnet" | "lightnet";
@@ -154,13 +153,12 @@ async function main() {
 
     console.log(`Deploying with merkleListRoot: ${merkleListRootStr}`);
     console.log(`Deploying with stateRoot:      ${stateRootStr}`);
-    const dummyProof = await ActionStackProof.dummy(Field(0), Field(0), 0);
 
     console.log("Building deploy + initialize transaction…");
     const tx = await Mina.transaction({ sender: signerPublicKey, fee }, async () => {
         AccountUpdate.fundNewAccount(signerPublicKey);
         await contractInstance.deploy();
-        await contractInstance.initialize(merkleListRoot, stateRoot, dummyProof);
+        await contractInstance.initialize(merkleListRoot, stateRoot);
     });
 
     console.log("Proving transaction…");
