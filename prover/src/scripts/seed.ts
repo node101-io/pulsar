@@ -1,11 +1,57 @@
 import "dotenv/config";
 import mongoose from "mongoose";
+import * as grpc from "@grpc/grpc-js";
+import {
+    createClient,
+    getValidatorSet,
+    sortValidatorsByPower,
+    MINA_KEYS_SERVICE_NAME,
+    TENDERMINT_SERVICE_NAME,
+    type KeyregistryService,
+    type TendermintService,
+} from "pulsar-chain-client";
+
 import logger from "../common/logger.js";
 import { BlockModel } from "../db/models/Block.js";
+import { computeValidatorListHash } from "../services/pulsar/client.js";
 
 import "../db/models/Proof.js";
 import "../db/models/ProofEpoch.js";
 import "../db/models/BlockEpoch.js";
+
+// The genesis validator set is whatever signs block 1 — read it from the
+// chain instead of hardcoding, so the seeded hash always matches the network
+// the prover is pointed at.
+async function fetchGenesisValidators() {
+    const endpoint = process.env.PULSAR_GRPC_ENDPOINT;
+    if (!endpoint) {
+        throw new Error(
+            "PULSAR_GRPC_ENDPOINT is not set — seeding reads the genesis " +
+                "validator set from the chain, so the chain must be running",
+        );
+    }
+
+    const creds = grpc.credentials.createInsecure();
+    const tm = createClient<TendermintService>(
+        TENDERMINT_SERVICE_NAME,
+        endpoint,
+        creds,
+    );
+    const kr = createClient<KeyregistryService>(
+        MINA_KEYS_SERVICE_NAME,
+        endpoint,
+        creds,
+    );
+
+    const validators = sortValidatorsByPower(
+        await getValidatorSet(tm, kr, 1, logger),
+    ).map(({ minaPublicKey, power }) => ({ addr: minaPublicKey, power }));
+
+    if (validators.length === 0) {
+        throw new Error("chain returned an empty validator set at height 1");
+    }
+    return validators;
+}
 
 async function seedGenesisBlock() {
     const exists = await BlockModel.exists({ height: 0 });
@@ -13,6 +59,8 @@ async function seedGenesisBlock() {
         logger.info("Genesis block already exists, skipping seed.");
         return;
     }
+
+    const validators = await fetchGenesisValidators();
 
     await BlockModel.create({
         height: 0,
@@ -24,18 +72,15 @@ async function seedGenesisBlock() {
                     "base64",
                 ).toString("hex"),
         ).toString(),
-        validators: [
-            {
-                addr: "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
-                power: "1",
-            },
-        ],
-        validatorListHash:
-            "6310558633462665370159457076080992493592463962672742685757201873330974620505",
+        validators,
+        // Derived with the same leaf convention the circuits verify.
+        validatorListHash: computeValidatorListHash(validators),
         voteExt: [],
     });
 
-    logger.info("Seeded genesis block (height 0).");
+    logger.info("Seeded genesis block (height 0).", {
+        validatorsCount: validators.length,
+    });
 }
 
 async function main() {
