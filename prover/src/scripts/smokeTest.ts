@@ -11,23 +11,21 @@ import { initDb } from "../db/index.js";
 import {
     createClient,
     getLatestHeight,
-    getBlockData,
-    storePulsarBlock,
-} from "../services/pulsar/client.js";
-import {
-    AbciQueryService,
-    KeyregistryService,
-    TendermintService,
-    VotePersistenceService,
-} from "../services/pulsar/grpcTypes.js";
-import { createProof } from "../workers/block-prover/worker.js";
-import {
     TENDERMINT_SERVICE_NAME,
     VOTE_PERSISTENCE_SERVICE_NAME,
     MINA_KEYS_SERVICE_NAME,
     ABCI_SERVICE_NAME,
-    BLOCK_EPOCH_SIZE,
-} from "../config/constants.js";
+    type AbciQueryService,
+    type KeyregistryService,
+    type TendermintService,
+    type VotePersistenceService,
+} from "pulsar-chain-client";
+import {
+    getBlockData,
+    storePulsarBlock,
+} from "../services/pulsar/client.js";
+import { createProof } from "../workers/block-prover/worker.js";
+import { BLOCK_EPOCH_SIZE } from "../config/constants.js";
 import logger from "../common/logger.js";
 
 /**

@@ -1,0 +1,13 @@
+syntax = "proto3";
+package pulsarchain.keyregistry.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/node101-io/pulsar-chain/x/keyregistry/types";
+
+// Params defines the parameters for the module.
+message Params {
+  option (amino.name) = "pulsarchain/x/keyregistry/Params";
+  option (gogoproto.equal) = true;
+}

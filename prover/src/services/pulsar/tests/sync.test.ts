@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { startPulsarSync } from "../sync.js";
+import * as chainClient from "pulsar-chain-client";
 import * as client from "../client.js";
 import * as db from "../../../db/index.js";
 import * as sleepModule from "../../../common/sleep.js";
 import { BlockData } from "../../../common/types.js";
 
+vi.mock("pulsar-chain-client");
 vi.mock("../client.js");
 vi.mock("../../../common/sleep.js");
 vi.mock("../../../db/index.js", () => ({
@@ -52,7 +54,7 @@ describe("pulsar sync", () => {
             VoteExtBodyByHeight: vi.fn(),
         };
 
-        vi.mocked(client.createClient).mockImplementation(async (serviceName) => {
+        vi.mocked(chainClient.createClient).mockImplementation(async (serviceName) => {
             if (serviceName.includes("tendermint")) return mockTmClient;
             if (serviceName.includes("votepersistence")) return mockVpClient;
             if (serviceName.includes("abci")) return mockAbciClient;
@@ -71,13 +73,13 @@ describe("pulsar sync", () => {
     it("starts sync from last stored block height", async () => {
         const mockLastBlock = { height: 10 };
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue(mockLastBlock as any);
-        vi.mocked(client.getLatestHeight).mockResolvedValue(10);
+        vi.mocked(chainClient.getLatestHeight).mockResolvedValue(10);
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
         expect(db.fetchLastStoredBlock).toHaveBeenCalled();
-        expect(client.createClient).toHaveBeenCalledTimes(4);
-        expect(client.getLatestHeight).toHaveBeenCalledWith(mockTmClient);
+        expect(chainClient.createClient).toHaveBeenCalledTimes(4);
+        expect(chainClient.getLatestHeight).toHaveBeenCalledWith(mockTmClient);
     });
 
     it("processes new blocks up to latestHeight - 2", async () => {
@@ -99,7 +101,7 @@ describe("pulsar sync", () => {
         vi.mocked(client.getBlockData).mockResolvedValue(mockBlockData);
         vi.mocked(client.storePulsarBlock).mockResolvedValue();
         // latestHeight=9 → processUpTo=7 → h=6,7 (2 blocks)
-        vi.mocked(client.getLatestHeight).mockResolvedValue(9);
+        vi.mocked(chainClient.getLatestHeight).mockResolvedValue(9);
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
@@ -110,7 +112,7 @@ describe("pulsar sync", () => {
     it("does not process blocks when latestHeight - 2 <= currentHeight", async () => {
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue({ height: 10 } as any);
         // latestHeight=12 → processUpTo=10, not > currentHeight(10) → no blocks
-        vi.mocked(client.getLatestHeight).mockResolvedValue(12);
+        vi.mocked(chainClient.getLatestHeight).mockResolvedValue(12);
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
@@ -120,7 +122,7 @@ describe("pulsar sync", () => {
 
     it("passes all 4 clients to getBlockData", async () => {
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue({ height: 5 } as any);
-        vi.mocked(client.getLatestHeight).mockResolvedValue(8);
+        vi.mocked(chainClient.getLatestHeight).mockResolvedValue(8);
         vi.mocked(client.getBlockData).mockResolvedValue({
             height: 6,
             stateRoot: "0x1",
@@ -143,13 +145,13 @@ describe("pulsar sync", () => {
 
     it("handles errors gracefully and continues loop", async () => {
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue({ height: 0 } as any);
-        vi.mocked(client.getLatestHeight)
+        vi.mocked(chainClient.getLatestHeight)
             .mockRejectedValueOnce(new Error("gRPC error"))
             .mockResolvedValue(0);
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
-        expect(client.getLatestHeight).toHaveBeenCalledTimes(2);
+        expect(chainClient.getLatestHeight).toHaveBeenCalledTimes(2);
         expect(sleepModule.sleep).toHaveBeenCalled();
     });
 
@@ -158,11 +160,11 @@ describe("pulsar sync", () => {
         delete process.env.PULSAR_GRPC_ENDPOINT;
 
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue(null);
-        vi.mocked(client.getLatestHeight).mockResolvedValue(0);
+        vi.mocked(chainClient.getLatestHeight).mockResolvedValue(0);
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
-        expect(client.createClient).toHaveBeenCalledWith(
+        expect(chainClient.createClient).toHaveBeenCalledWith(
             expect.any(String),
             "localhost:9090",
             expect.any(Object),
@@ -175,11 +177,11 @@ describe("pulsar sync", () => {
 
     it("starts from height 0 when no last stored block", async () => {
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue(null);
-        vi.mocked(client.getLatestHeight).mockResolvedValue(0);
+        vi.mocked(chainClient.getLatestHeight).mockResolvedValue(0);
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
         expect(db.fetchLastStoredBlock).toHaveBeenCalled();
-        expect(client.getLatestHeight).toHaveBeenCalled();
+        expect(chainClient.getLatestHeight).toHaveBeenCalled();
     });
 });

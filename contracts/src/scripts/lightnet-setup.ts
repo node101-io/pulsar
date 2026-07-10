@@ -33,6 +33,7 @@ import { ActionStackProgram } from '../ActionStack.js';
 import { PulsarAuth } from '../types/PulsarAction.js';
 import { List } from '../types/common.js';
 import { VALIDATOR_NUMBER } from '../utils/constants.js';
+import { hashValidatorLeaf } from '../utils/validatorList.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -73,7 +74,8 @@ async function waitForTx(
 function computeMerkleListRoot(validatorPublicKey: PrivateKey['toPublicKey'] extends () => infer R ? R : never): Field {
   const list = List.empty();
   for (let i = 0; i < VALIDATOR_NUMBER; i++) {
-    list.push(Poseidon.hash(validatorPublicKey.toFields()));
+    // power = Field(1): must match the sig lists the circuit verifies
+    list.push(hashValidatorLeaf(validatorPublicKey, Field(1)));
   }
   return list.hash;
 }

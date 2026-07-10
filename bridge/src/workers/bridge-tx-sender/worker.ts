@@ -1,27 +1,27 @@
 // o1js
-import { Bool, Field, Poseidon } from "o1js";
+import { Bool, Field, Poseidon, PublicKey, Signature } from "o1js";
 
 // contracts
-import { ActionStackProof } from "../../../../contracts/build/src/ActionStack.js";
-import { ValidateReducePublicInput } from "../../../../contracts/build/src/ValidateReduce.js";
+import { ActionStackProof } from "pulsar-contracts/build/src/ActionStack.js";
+import { ValidateReducePublicInput } from "pulsar-contracts/build/src/ValidateReduce.js";
 import {
     PulsarAction,
     Batch,
-} from "../../../../contracts/build/src/types/PulsarAction.js";
-import { ReduceMask } from "../../../../contracts/build/src/types/common.js";
+} from "pulsar-contracts/build/src/types/PulsarAction.js";
+import { ReduceMask } from "pulsar-contracts/build/src/types/common.js";
 import {
     SignaturePublicKey,
     SignaturePublicKeyList,
-} from "../../../../contracts/build/src/types/signaturePubKeyList.js";
-import { CalculateFinalActionState } from "../../../../contracts/build/src/utils/actionQueueUtils.js";
+} from "pulsar-contracts/build/src/types/signaturePubKeyList.js";
+import { CalculateFinalActionState } from "pulsar-contracts/build/src/utils/actionQueueUtils.js";
 import {
     GenerateValidateReduceProof,
     GenerateActionStackProof,
-} from "../../../../contracts/build/src/utils/generateFunctions.js";
+} from "pulsar-contracts/build/src/utils/generateFunctions.js";
 import {
     BATCH_SIZE,
     VALIDATOR_NUMBER,
-} from "../../../../contracts/build/src/utils/constants.js";
+} from "pulsar-contracts/build/src/utils/constants.js";
 
 // bridge
 import { MAX_FAIL_COUNT } from "../../config/constants.js";
@@ -35,8 +35,13 @@ import {
     getContractMerkleRoot,
     getContractActionState,
     getContractActionListHash,
+    getContractSettledHeight,
 } from "../../services/mina/client.js";
 import { requestSignatures } from "../../services/pulsar/client.js";
+import {
+    type OrderedValidator,
+    resolveValidatorSetForRoot,
+} from "../../services/pulsar/validatorSet.js";
 import {
     proveReduceTx,
     sendProvedReduceTx,
@@ -261,9 +266,24 @@ async function proveAndSendReduceTx({
         event: "signatures_received",
     });
 
+    // The circuit rebuilds the validator MerkleList from ALL slots and asserts
+    // it equals merkleListRoot, so the signature list must carry the full
+    // ordered set (with powers) — not just the validators that signed.
+    // Height comes from the SAME cached snapshot as merkleListRoot: a fresh
+    // fetch could observe a newer settlement than the cached root.
+    const validatorSet = await resolveValidatorSetForRoot(
+        merkleListRoot.toString(),
+        getContractSettledHeight(ctx),
+    );
+
+    // Fail fast with a clear error when quorum is impossible even if every
+    // received signature verifies — proving would only fail in-circuit after
+    // minutes of wasted work ("Not enough signed voting power").
+    assertPossibleQuorum(validatorSet, signatures, { blockHeight, ...logMeta });
+
     const validateReduceProof = await GenerateValidateReduceProof(
         new ValidateReducePublicInput({ merkleListRoot, actionListHash }),
-        buildSignatureList(signatures),
+        buildSignatureList(validatorSet, signatures),
     );
 
     logger.info("Proofs generated", {
@@ -324,23 +344,72 @@ export function computeActionListHash(
     return hash;
 }
 
-// TODO: will be done when pulsar module is completed
+/**
+ * Optimistic 2/3 voting-power pre-check: counts every RECEIVED signature as
+ * valid (the circuit is the real enforcer). If even that upper bound misses
+ * quorum, GenerateValidateReduceProof is guaranteed to fail in-circuit —
+ * throw the clear error up front instead.
+ */
+export function assertPossibleQuorum(
+    validators: OrderedValidator[],
+    signatures: Awaited<ReturnType<typeof requestSignatures>>,
+    logMeta: object = {},
+): void {
+    const signerKeys = new Set(
+        signatures.map((s) => s.validatorPublicKey.toBase58()),
+    );
+
+    let signedPower = 0n;
+    let totalPower = 0n;
+    for (const v of validators) {
+        const power = BigInt(v.power);
+        totalPower += power;
+        if (signerKeys.has(v.minaPublicKey)) signedPower += power;
+    }
+
+    if (signedPower * 3n < totalPower * 2n) {
+        logger.error("Signed voting power below 2/3 quorum", {
+            ...logMeta,
+            signedPower: signedPower.toString(),
+            totalPower: totalPower.toString(),
+            sigCount: signatures.length,
+            event: "quorum_not_reached",
+        });
+        throw new Error(
+            `Signed voting power ${signedPower}/${totalPower} is below the ` +
+                `2/3 quorum even if every received signature is valid`,
+        );
+    }
+}
+
 export function buildSignatureList(
+    validators: OrderedValidator[],
     signatures: Awaited<ReturnType<typeof requestSignatures>>,
 ): SignaturePublicKeyList {
-    const padded = signatures.slice(0, VALIDATOR_NUMBER);
-    while (padded.length < VALIDATOR_NUMBER) {
-        padded.push({
-            validatorPublicKey: null as any,
-            signature: null as any,
-        });
+    if (validators.length !== VALIDATOR_NUMBER) {
+        throw new Error(
+            `validator set size ${validators.length} != VALIDATOR_NUMBER ` +
+                `${VALIDATOR_NUMBER} — the circuit sizes its leaf list to it`,
+        );
     }
+
+    const sigByKey = new Map(
+        signatures.map((s) => [s.validatorPublicKey.toBase58(), s.signature]),
+    );
+
+    // Every validator keeps its (publicKey, power) leaf in the chain's fold
+    // order. A non-signer gets the well-formed dummy signature (r=1, s=1):
+    // it fails signature.verify in the circuit (excluded from accumulated
+    // power) while its leaf + power still reproduce the root and the totals.
     return new SignaturePublicKeyList({
-        list: padded.map(
-            (s) =>
+        list: validators.map(
+            (v) =>
                 new SignaturePublicKey({
-                    publicKey: s.validatorPublicKey,
-                    signature: s.signature,
+                    publicKey: PublicKey.fromBase58(v.minaPublicKey),
+                    signature:
+                        sigByKey.get(v.minaPublicKey) ??
+                        Signature.fromValue({ r: 1n, s: 1n }),
+                    power: Field(v.power),
                 }),
         ),
     });

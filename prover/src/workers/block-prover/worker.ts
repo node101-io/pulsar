@@ -17,14 +17,12 @@ import {
 import { BlockStatus, ProofKind, ProofStatus } from "../../common/types.js";
 import logger from "../../common/logger.js";
 import { BlockProverJob } from "../types.js";
+import { Field, PublicKey, Signature } from "o1js";
 import {
     GeneratePulsarBlock,
     GenerateSettlementProof,
     SignaturePublicKeyList,
     MultisigVerifierProgram,
-    Field,
-    PublicKey,
-    Signature,
 } from "pulsar-contracts";
 
 // Well-formed but non-verifying signature (r=s=1) for non-signing validators.

@@ -1,0 +1,12 @@
+syntax = "proto3";
+package pulsarchain.votepersistence.v1;
+
+option go_package = "github.com/node101-io/pulsar-chain/x/votepersistence/types";
+
+// VoteExtBody defines the VoteExtBody message.
+message VoteExtBody {
+  bytes next_validator_set_hash = 1;
+  bytes current_state_root = 2;
+  int64 current_block_height = 3;
+  string actions_reduced_root = 4;
+}

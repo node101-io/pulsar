@@ -31,7 +31,9 @@ const {
     mockGetMerkleRoot,
     mockGetActionState,
     mockGetActionListHash,
+    mockGetContractBlockHeight,
     mockRequestSignatures,
+    mockResolveValidatorSetForRoot,
     mockProveReduceTx,
     mockSendProvedReduceTx,
     mockGenerateValidateReduceProof,
@@ -44,7 +46,9 @@ const {
     mockGetMerkleRoot: vi.fn(),
     mockGetActionState: vi.fn(),
     mockGetActionListHash: vi.fn(),
+    mockGetContractBlockHeight: vi.fn(),
     mockRequestSignatures: vi.fn(),
+    mockResolveValidatorSetForRoot: vi.fn(),
     mockProveReduceTx: vi.fn(),
     mockSendProvedReduceTx: vi.fn(),
     mockGenerateValidateReduceProof: vi.fn(),
@@ -52,8 +56,8 @@ const {
 
 // Keep GenerateActionStackProof REAL — only stub the pulsar-dependent
 // GenerateValidateReduceProof.
-vi.mock("../../../../../contracts/build/src/utils/generateFunctions.js", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../../../../../contracts/build/src/utils/generateFunctions.js")>();
+vi.mock("pulsar-contracts/build/src/utils/generateFunctions.js", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("pulsar-contracts/build/src/utils/generateFunctions.js")>();
     return {
         ...actual,
         GenerateValidateReduceProof: mockGenerateValidateReduceProof,
@@ -81,10 +85,16 @@ vi.mock("../../../services/mina/client.js", () => ({
     getContractMerkleRoot: mockGetMerkleRoot,
     getContractActionState: mockGetActionState,
     getContractActionListHash: mockGetActionListHash,
+    getContractSettledHeight: mockGetContractBlockHeight,
 }));
 
 vi.mock("../../../services/pulsar/client.js", () => ({
     requestSignatures: mockRequestSignatures,
+}));
+
+// gRPC IO boundary — the real resolver needs a running chain node.
+vi.mock("../../../services/pulsar/validatorSet.js", () => ({
+    resolveValidatorSetForRoot: mockResolveValidatorSetForRoot,
 }));
 
 vi.mock("../../../services/mina/txSender.js", () => ({
@@ -97,9 +107,12 @@ vi.mock("../../../config/constants.js", () => ({
 }));
 
 import { worker } from "../worker.js";
-import { ActionStackProgram } from "../../../../../contracts/build/src/ActionStack.js";
-import { BATCH_SIZE } from "../../../../../contracts/build/src/utils/constants.js";
-import { PublicKey, Signature } from "o1js";
+import { ActionStackProgram } from "pulsar-contracts/build/src/ActionStack.js";
+import {
+    BATCH_SIZE,
+    VALIDATOR_NUMBER,
+} from "pulsar-contracts/build/src/utils/constants.js";
+import { PrivateKey, PublicKey, Signature } from "o1js";
 
 // [type, x, isOdd, amount, cosmosAddress, r, s]
 const rawDeposit = ["1", "0", "0", "1000000000", "42", "1", "2"];
@@ -131,9 +144,26 @@ describe("Bridge TX Sender worker — real ActionStackProof generation", () => {
         mockGetActionListHash.mockReturnValue("0");
         mockMinaActionUpdateOne.mockResolvedValue({});
         mockBridgeStateUpdateOne.mockResolvedValue({});
-        mockRequestSignatures.mockResolvedValue([
-            { validatorPublicKey: PublicKey.empty(), signature: Signature.empty() },
-        ]);
+        // Full signer set matching the mocked validator set — the optimistic
+        // quorum pre-check needs >= 2/3 of the power to have signed.
+        mockRequestSignatures.mockResolvedValue(
+            Array.from({ length: VALIDATOR_NUMBER }, (_, i) => ({
+                validatorPublicKey: PrivateKey.fromBigInt(
+                    BigInt(i + 1),
+                ).toPublicKey(),
+                signature: Signature.empty(),
+            })),
+        );
+        mockGetContractBlockHeight.mockReturnValue(0);
+        // Distinct, valid curve points — buildSignatureList runs fromBase58.
+        mockResolveValidatorSetForRoot.mockResolvedValue(
+            Array.from({ length: VALIDATOR_NUMBER }, (_, i) => ({
+                minaPublicKey: PrivateKey.fromBigInt(BigInt(i + 1))
+                    .toPublicKey()
+                    .toBase58(),
+                power: "1",
+            })),
+        );
         // pending-pulsar: real ValidateReduceProof is wired in later
         mockGenerateValidateReduceProof.mockResolvedValue({ __mock: "validate-reduce-proof" });
         mockProveReduceTx.mockResolvedValue('{"provedTx":true}');

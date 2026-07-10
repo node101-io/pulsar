@@ -147,6 +147,9 @@ function buildSignatureList(
         new SignaturePublicKey({
           publicKey: s.publicKey,
           signature: s.signature,
+          // power = Field(1): must match the validator-set leaves (see
+          // computeMerkleListRoot in lightnet-setup and CreateValidatorMerkleList)
+          power: Field(1),
         })
     ),
   });

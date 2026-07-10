@@ -1,4 +1,3 @@
-import { Field, PublicKey, Signature } from 'o1js';
 import {
   ActionStackProof,
   ActionStackQueue,
@@ -95,9 +94,6 @@ import {
 } from './utils/loggers.js';
 
 export {
-  Field,
-  PublicKey,
-  Signature,
   merkleActionsAdd,
   emptyActionListHash,
   actionListAdd,
@@ -171,3 +167,9 @@ export {
   analyzeMethods,
   logParams,
 };
+
+export {
+  VALIDATOR_LEAF_PREFIX,
+  hashValidatorLeaf,
+  computeValidatorListHash,
+} from './utils/validatorList.js';

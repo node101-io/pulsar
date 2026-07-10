@@ -2,6 +2,7 @@ import { Field, Poseidon, Provable, Struct, ZkProgram } from 'o1js';
 import { VALIDATOR_NUMBER } from './utils/constants.js';
 import { SignaturePublicKeyList } from './types/signaturePubKeyList.js';
 import { List } from './types/common.js';
+import { hashValidatorLeaf } from './utils/validatorList.js';
 
 export {
   ValidateReduceProof,
@@ -65,12 +66,7 @@ const ValidateReduceProgram = ZkProgram({
           );
           totalPower = totalPower.add(power);
 
-          list.push(
-            Poseidon.hashWithPrefix('pulsar-validator', [
-              ...publicKey.toFields(),
-              power,
-            ])
-          );
+          list.push(hashValidatorLeaf(publicKey, power));
         }
 
         list.hash.assertEquals(

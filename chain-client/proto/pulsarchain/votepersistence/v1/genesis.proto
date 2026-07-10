@@ -1,0 +1,17 @@
+syntax = "proto3";
+package pulsarchain.votepersistence.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "pulsarchain/votepersistence/v1/params.proto";
+
+option go_package = "github.com/node101-io/pulsar-chain/x/votepersistence/types";
+
+// GenesisState defines the votepersistence module's genesis state.
+message GenesisState {
+  // params defines all the parameters of the module.
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}

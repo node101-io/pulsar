@@ -1,7 +1,7 @@
 import { fetchAccount, PublicKey } from "o1js";
-import { SettlementContract } from "../../../../contracts/build/src/SettlementContract.js";
-import { setMinaNetwork } from "../../../../contracts/build/src/utils/fetch.js";
-import { ENDPOINTS } from "../../../../contracts/build/src/utils/constants.js";
+import { SettlementContract } from "pulsar-contracts/build/src/SettlementContract.js";
+import { setMinaNetwork } from "pulsar-contracts/build/src/utils/fetch.js";
+import { ENDPOINTS } from "pulsar-contracts/build/src/utils/constants.js";
 import logger from "../../common/logger.js";
 
 export type MinaNetwork = "devnet" | "mainnet" | "lightnet";
@@ -104,6 +104,15 @@ export function getContractActionState(ctx: MinaClientContext): string {
 
 export function getContractActionListHash(ctx: MinaClientContext): string {
     return ctx.zkappState[STATE_INDEX.actionListHash];
+}
+
+/**
+ * Reads from cached zkappState — use this when the height must be CONSISTENT
+ * with merkleListRoot/actionState read from the same snapshot (a fresh fetch
+ * could observe a newer settlement than the cached root).
+ */
+export function getContractSettledHeight(ctx: MinaClientContext): number {
+    return Number(ctx.zkappState[STATE_INDEX.blockHeight]);
 }
 
 /** Fetches the contract's on-chain blockHeight directly (always fresh). */

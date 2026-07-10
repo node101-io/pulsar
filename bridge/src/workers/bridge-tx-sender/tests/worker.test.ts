@@ -17,10 +17,10 @@ import { Field, Bool } from "o1js";
 // We mock the *heavy / IO* boundaries: ZK proof generation, the Mina tx
 // sender, the validator signature request, the Mina client and the DB models.
 //
-// TODO(pulsar): the validator signature flow (requestSignatures payload +
-// buildSignatureList validator-set / padding) is still undefined — it depends
-// on the Pulsar/prover spec. Once that lands, replace the mocked
-// requestSignatures contract and the it.todo() cases below with real ones.
+// The validator set (with powers) is resolved from the chain via
+// resolveValidatorSetForRoot (mocked here — gRPC IO); buildSignatureList joins
+// signatures onto that ordered set, dummy-signing non-signers, exactly like
+// the prover's block-prover worker.
 // ---------------------------------------------------------------------------
 
 const {
@@ -32,7 +32,9 @@ const {
     mockGetMerkleRoot,
     mockGetActionState,
     mockGetActionListHash,
+    mockGetContractBlockHeight,
     mockRequestSignatures,
+    mockResolveValidatorSetForRoot,
     mockProveReduceTx,
     mockSendProvedReduceTx,
     mockGenerateValidateReduceProof,
@@ -47,7 +49,9 @@ const {
     mockGetMerkleRoot: vi.fn(),
     mockGetActionState: vi.fn(),
     mockGetActionListHash: vi.fn(),
+    mockGetContractBlockHeight: vi.fn(),
     mockRequestSignatures: vi.fn(),
+    mockResolveValidatorSetForRoot: vi.fn(),
     mockProveReduceTx: vi.fn(),
     mockSendProvedReduceTx: vi.fn(),
     mockGenerateValidateReduceProof: vi.fn(),
@@ -55,24 +59,24 @@ const {
     mockCalculateFinalActionState: vi.fn(),
 }));
 
-vi.mock("../../../../../contracts/build/src/utils/generateFunctions.js", () => ({
+vi.mock("pulsar-contracts/build/src/utils/generateFunctions.js", () => ({
     GenerateValidateReduceProof: mockGenerateValidateReduceProof,
     GenerateActionStackProof: mockGenerateActionStackProof,
 }));
 
-vi.mock("../../../../../contracts/build/src/utils/actionQueueUtils.js", () => ({
+vi.mock("pulsar-contracts/build/src/utils/actionQueueUtils.js", () => ({
     CalculateFinalActionState: mockCalculateFinalActionState,
 }));
 
 // Keep BATCH_SIZE / VALIDATOR_NUMBER real, just pass through.
-vi.mock("../../../../../contracts/build/src/utils/constants.js", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../../../../../contracts/build/src/utils/constants.js")>();
+vi.mock("pulsar-contracts/build/src/utils/constants.js", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("pulsar-contracts/build/src/utils/constants.js")>();
     return { ...actual };
 });
 
 // Avoid the expensive real dummy-proof generation — worker only needs an opaque
 // object to hand to proveReduceTx (which is mocked).
-vi.mock("../../../../../contracts/build/src/ActionStack.js", () => ({
+vi.mock("pulsar-contracts/build/src/ActionStack.js", () => ({
     ActionStackProof: {
         dummy: vi.fn().mockResolvedValue({ __mock: "dummy-stack-proof" }),
     },
@@ -99,10 +103,17 @@ vi.mock("../../../services/mina/client.js", () => ({
     getContractMerkleRoot: mockGetMerkleRoot,
     getContractActionState: mockGetActionState,
     getContractActionListHash: mockGetActionListHash,
+    getContractSettledHeight: mockGetContractBlockHeight,
 }));
 
 vi.mock("../../../services/pulsar/client.js", () => ({
     requestSignatures: mockRequestSignatures,
+}));
+
+// Mock the gRPC-backed validator-set resolution (IO boundary); the pure
+// buildSignatureList join stays real below.
+vi.mock("../../../services/pulsar/validatorSet.js", () => ({
+    resolveValidatorSetForRoot: mockResolveValidatorSetForRoot,
 }));
 
 vi.mock("../../../services/mina/txSender.js", () => ({
@@ -119,16 +130,17 @@ import {
     computeActionListHash,
     buildBatchAndMask,
     buildSignatureList,
+    assertPossibleQuorum,
 } from "../worker.js";
 
 import {
     PulsarAction,
     PulsarAuth,
     CosmosSignature,
-} from "../../../../../contracts/build/src/types/PulsarAction.js";
-import { ReduceMask } from "../../../../../contracts/build/src/types/common.js";
-import { VALIDATOR_NUMBER, BATCH_SIZE } from "../../../../../contracts/build/src/utils/constants.js";
-import { PublicKey, Signature } from "o1js";
+} from "pulsar-contracts/build/src/types/PulsarAction.js";
+import { ReduceMask } from "pulsar-contracts/build/src/types/common.js";
+import { VALIDATOR_NUMBER, BATCH_SIZE } from "pulsar-contracts/build/src/utils/constants.js";
+import { PrivateKey, PublicKey, Signature } from "o1js";
 
 // --- helpers ---
 
@@ -150,9 +162,22 @@ function makeWithdrawAction() {
 // [type, x, isOdd, amount, cosmosAddress, r, s]
 const rawDeposit = ["1", "0", "0", "1000000000", "42", "1", "2"];
 
+// Distinct, deterministic, valid curve points — PublicKey.fromBase58 in
+// buildSignatureList rejects non-group elements.
+function makeValidatorKey(i: number) {
+    return PrivateKey.fromBigInt(BigInt(i + 1)).toPublicKey();
+}
+
+function makeValidatorSet(n: number) {
+    return Array.from({ length: n }, (_, i) => ({
+        minaPublicKey: makeValidatorKey(i).toBase58(),
+        power: "1",
+    }));
+}
+
 function makeValidatorSigs(n: number) {
-    return Array.from({ length: n }, () => ({
-        validatorPublicKey: PublicKey.empty(),
+    return Array.from({ length: n }, (_, i) => ({
+        validatorPublicKey: makeValidatorKey(i),
         signature: Signature.empty(),
     }));
 }
@@ -235,23 +260,83 @@ describe("computeActionListHash", () => {
 });
 
 describe("buildSignatureList", () => {
-    it("builds a list of length VALIDATOR_NUMBER from a full set of sigs", () => {
-        const list = buildSignatureList(makeValidatorSigs(VALIDATOR_NUMBER));
+    it("builds a list of length VALIDATOR_NUMBER with powers from the set", () => {
+        const list = buildSignatureList(
+            makeValidatorSet(VALIDATOR_NUMBER),
+            makeValidatorSigs(VALIDATOR_NUMBER),
+        );
+        expect(list.list).toHaveLength(VALIDATOR_NUMBER);
+        for (const item of list.list) {
+            expect(item.power.toString()).toBe("1");
+        }
+    });
+
+    it("ignores signatures from keys outside the validator set", () => {
+        const list = buildSignatureList(
+            makeValidatorSet(VALIDATOR_NUMBER),
+            makeValidatorSigs(VALIDATOR_NUMBER + 2),
+        );
         expect(list.list).toHaveLength(VALIDATOR_NUMBER);
     });
 
-    it("truncates when more than VALIDATOR_NUMBER signatures are provided", () => {
-        const list = buildSignatureList(makeValidatorSigs(VALIDATOR_NUMBER + 2));
-        expect(list.list).toHaveLength(VALIDATOR_NUMBER);
+    it("keeps non-signing validators' keys + power with a dummy signature", () => {
+        const set = makeValidatorSet(VALIDATOR_NUMBER);
+        const list = buildSignatureList(
+            set,
+            makeValidatorSigs(VALIDATOR_NUMBER - 1), // last validator didn't sign
+        );
+        const last = list.list[VALIDATOR_NUMBER - 1];
+        expect(last.publicKey.toBase58()).toBe(
+            set[VALIDATOR_NUMBER - 1].minaPublicKey,
+        );
+        expect(last.power.toString()).toBe("1");
+        // DUMMY_SIGNATURE (r=1, s=1) — fails verify, excluded from quorum
+        expect(last.signature.toBase58()).toBe(
+            Signature.fromValue({ r: 1n, s: 1n }).toBase58(),
+        );
     });
 
-    // TODO(pulsar): when fewer than VALIDATOR_NUMBER validators respond, the
-    // missing slots currently get null-padded, which cannot satisfy the
-    // on-chain merkleListRoot reconstruction in ValidateReduceProgram. The
-    // correct behavior (fill with the real, non-signing validators' public
-    // keys + empty signatures) depends on how the Pulsar validator set is
-    // sourced. Locked once the Pulsar spec lands.
-    it.todo("pads missing validators with the real validator-set public keys");
+    it("throws when the validator set size != VALIDATOR_NUMBER", () => {
+        expect(() =>
+            buildSignatureList(
+                makeValidatorSet(VALIDATOR_NUMBER - 1),
+                makeValidatorSigs(VALIDATOR_NUMBER),
+            ),
+        ).toThrow(/VALIDATOR_NUMBER/);
+    });
+});
+
+describe("assertPossibleQuorum", () => {
+    it("passes when every validator signed", () => {
+        expect(() =>
+            assertPossibleQuorum(
+                makeValidatorSet(VALIDATOR_NUMBER),
+                makeValidatorSigs(VALIDATOR_NUMBER),
+            ),
+        ).not.toThrow();
+    });
+
+    it("throws when signed power is below 2/3 even if all sigs are valid", () => {
+        // one fewer signer than the 2/3 threshold (uniform power = 1)
+        const belowQuorum = Math.ceil((VALIDATOR_NUMBER * 2) / 3) - 1;
+        expect(() =>
+            assertPossibleQuorum(
+                makeValidatorSet(VALIDATOR_NUMBER),
+                makeValidatorSigs(belowQuorum),
+            ),
+        ).toThrow(/quorum/);
+    });
+
+    it("weighs by power, not by count", () => {
+        // 1 signer holding 10 power vs 2 non-signers with 1 each: 10/12 >= 2/3
+        const set = makeValidatorSet(3).map((v, i) => ({
+            ...v,
+            power: i === 0 ? "10" : "1",
+        }));
+        expect(() =>
+            assertPossibleQuorum(set, makeValidatorSigs(1)),
+        ).not.toThrow();
+    });
 });
 
 // ===========================================================================
@@ -278,6 +363,10 @@ describe("worker()", () => {
         mockMinaActionUpdateOne.mockResolvedValue({});
         mockBridgeStateUpdateOne.mockResolvedValue({});
         mockRequestSignatures.mockResolvedValue(makeValidatorSigs(VALIDATOR_NUMBER));
+        mockGetContractBlockHeight.mockReturnValue(0);
+        mockResolveValidatorSetForRoot.mockResolvedValue(
+            makeValidatorSet(VALIDATOR_NUMBER),
+        );
         mockGenerateValidateReduceProof.mockResolvedValue({ __mock: "reduce-proof" });
         mockGenerateActionStackProof.mockResolvedValue({
             useActionStack: Bool(true),

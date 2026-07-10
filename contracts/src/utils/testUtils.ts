@@ -24,6 +24,7 @@ import {
   SignaturePublicKeyMatrix,
 } from '../types/signaturePubKeyList.js';
 import { List } from '../types/common.js';
+import { hashValidatorLeaf } from './validatorList.js';
 import {
   CosmosSignature,
   PulsarAction,
@@ -118,12 +119,7 @@ function CreateValidatorMerkleList(
   for (let i = 0; i < validatorSet.length; i++) {
     const [, publicKey] = validatorSet[i];
     // power = Field(1): must match the sig lists
-    merkleList.push(
-      Poseidon.hashWithPrefix('pulsar-validator', [
-        ...publicKey.toFields(),
-        Field(1),
-      ])
-    );
+    merkleList.push(hashValidatorLeaf(publicKey, Field(1)));
   }
 
   return merkleList;

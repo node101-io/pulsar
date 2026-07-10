@@ -1,0 +1,32 @@
+{
+    "name": "pulsar-chain-client",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Shared pulsar-chain gRPC client: proto-loader transport over vendored protos, generated proto types, wire-format parsers, validator-set queries",
+    "type": "module",
+    "main": "build/src/index.js",
+    "types": "build/src/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "test": "vitest run",
+        "proto:gen": "buf generate",
+        "clean": "rimraf build coverage node_modules",
+        "proto:vendor": "bash scripts/vendor-protos.sh"
+    },
+    "keywords": [
+        "pulsar"
+    ],
+    "license": "MIT",
+    "dependencies": {
+        "@grpc/grpc-js": "^1.13.4",
+        "@grpc/proto-loader": "^0.8.0",
+        "o1js": "2.10.0-dev.be63f"
+    },
+    "devDependencies": {
+        "@bufbuild/buf": "^1.57.0",
+        "@types/node": "^24.3.1",
+        "rimraf": "^6.0.1",
+        "typescript": "^5.9.2",
+        "vitest": "^4.1.8"
+    }
+}

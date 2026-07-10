@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PublicKey } from "o1js";
+import { getLatestHeight } from "pulsar-chain-client";
 import {
     computeValidatorListHash,
-    getLatestHeight,
     getBlockData,
     getVoteExtsByHeight,
     storePulsarBlock,

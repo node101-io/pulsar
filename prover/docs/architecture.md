@@ -442,7 +442,7 @@ On start, the application:
 
 After these steps, processors and sync loops are started separately.
 
-> **Note:** Database seeding (genesis blocks at heights 0 and 1, and the initial `BlockEpoch`) is **not** done automatically on startup. It must be run once before the first start via `npm run seed`. See the [README](../README.md) for details.
+> **Note:** Database seeding (genesis blocks at heights 0 and 1, and the initial `BlockEpoch`) is **not** done automatically on startup. It must be run once before the first start via `pnpm run seed`. See the [README](../README.md) for details.
 
 ---
 
@@ -480,4 +480,4 @@ When the settlement-prover finds the epoch already settled on-chain, it stores `
 
 ### Genesis seed requirement
 
-`Block` documents at heights `0` and `1` and an initial `BlockEpoch` at height `0` must exist in MongoDB before the first application start. Run `npm run seed` once to create them. The seed script is idempotent; it is safe to run multiple times.
+`Block` documents at heights `0` and `1` and an initial `BlockEpoch` at height `0` must exist in MongoDB before the first application start. Run `pnpm run seed` once to create them. The seed script is idempotent; it is safe to run multiple times.

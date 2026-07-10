@@ -1,0 +1,17 @@
+syntax = "proto3";
+package pulsar.pulsar.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "pulsar/pulsar/v1/params.proto";
+
+option go_package = "github.com/node101-io/pulsar-chain/x/pulsar/types";
+
+// GenesisState defines the pulsar module's genesis state.
+message GenesisState {
+  // params defines all the parameters of the module.
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}

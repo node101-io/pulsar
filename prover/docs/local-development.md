@@ -74,7 +74,7 @@ REDIS_PORT=6379
 Then start the prover stack:
 
 ```bash
-npm run start
+pnpm run start
 ```
 
 ---
@@ -83,7 +83,7 @@ npm run start
 
 - **Chain**: `pulsard start` resumes from its data dir. To wipe and restart
   from genesis, re-run `setup_local_testnet.sh` (it cleans the node homes).
-- **Prover**: `npm run reset` drops the Mongo database. Do this whenever you
+- **Prover**: `pnpm run reset` drops the Mongo database. Do this whenever you
   restart the chain from genesis — stored blocks from the old chain no longer
   match the new one.
 
@@ -96,6 +96,6 @@ npm run start
   at `H+3`).
 - Very early heights can miss historical staking info; the prover falls back
   to the block header for those and logs a warning.
-- `npm run smoke` ingests one epoch window from the chain and generates a
+- `pnpm run smoke` ingests one epoch window from the chain and generates a
   SettlementProof through the production ingest + proving paths (~15 s) —
   the fastest way to verify chain ↔ prover ↔ circuit compatibility.
