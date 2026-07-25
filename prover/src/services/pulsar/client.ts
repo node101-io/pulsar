@@ -84,8 +84,6 @@ export async function getBlockData(
     // Full validator set, sorted in the chain's fold order (power ASC, then
     // consensus-address ASC) so the circuit's recomputed validator-set root
     // matches the committed nextValidatorSetHash.
-    // TODO(chain GetValidatorSetWithMinaKeys): single RPC in fold order —
-    // drop this sort (see chain-client getValidatorSet).
     const validatorEntries = await getValidatorSet(
         tmClient,
         krClient,

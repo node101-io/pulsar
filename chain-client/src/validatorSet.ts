@@ -69,17 +69,21 @@ export async function getMinaPubKeyFromEd25519(
  * Mina key cannot be resolved is skipped, not fatal — the chain's committed
  * validator-set hash excludes it too.
  *
- * TODO(chain GetValidatorSetWithMinaKeys): the chain team is adding a single
- * query that returns [{ mina_pub_key, voting_power }] in fold order. Once it
- * lands on the pinned commit:
+ * TODO(chain GetValidatorMinaPubKeys): the chain team is adding a BATCH
+ * keyregistry lookup (input: cosmos pubkey array; response: index-aligned
+ * Mina keys, empty entry for an unregistered validator). Once it lands on
+ * the pinned commit:
  *   1. bump the ref in scripts/vendor-protos.sh, run
  *      `pnpm run proto:vendor && pnpm run proto:gen`
- *   2. replace this whole function body with that one RPC — the per-validator
- *      GetValidatorMinaPubKey fan-out, extractEd25519PubKey and the consAddr
- *      sha256 all disappear (krClient param goes away)
- *   3. delete sortValidatorsByPower + ValidatorEntry.consAddr (the chain
- *      already returns fold order) and drop the sort at the two call sites:
- *      prover getBlockData, bridge resolveValidatorSetForRoot
+ *   2. replace the per-validator getMinaPubKeyFromEd25519 fan-out below with
+ *      ONE batch call, sent with an `x-cosmos-block-height: <height>` gRPC
+ *      metadata header matching the set query — both reads then come from
+ *      the same state snapshot (key rotations can no longer produce a mixed
+ *      set/keys pairing); skip index-aligned empty entries like the current
+ *      per-key NotFound skip
+ *   3. everything else STAYS: sortValidatorsByPower, consAddr tie-break and
+ *      extractEd25519PubKey — fold order is still computed client-side under
+ *      the batch variant (N+1 requests become 2)
  */
 export async function getValidatorSet(
     tmClient: Pick<TendermintService, "GetValidatorSetByHeight"> &

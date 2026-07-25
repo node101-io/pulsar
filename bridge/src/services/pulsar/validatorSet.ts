@@ -88,8 +88,6 @@ export async function resolveValidatorSetForRoot(
         if (height !== "latest" && height < 1) continue;
         let ordered: OrderedValidator[];
         try {
-            // TODO(chain GetValidatorSetWithMinaKeys): single RPC in fold
-            // order — drop this sort (see chain-client getValidatorSet).
             ordered = sortValidatorsByPower(
                 await getValidatorSet(tm, kr, height, logger),
             ).map(({ minaPublicKey, power }) => ({ minaPublicKey, power }));
