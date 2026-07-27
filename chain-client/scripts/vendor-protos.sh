@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Re-vendor the .proto tree that the runtime transport (src/transport.ts) loads
-# via @grpc/proto-loader. Output is committed under ./proto, so normal builds
-# need neither the buf CLI nor the network — run this only when bumping the
-# pinned chain commit below (keep it in sync with buf.gen.yaml's ref).
+# Re-vendor the .proto tree that buf.gen.yaml generates the typed clients and
+# codecs from (ts-proto, outputServices=grpc-js). The protos are generation
+# input only — nothing reads them at runtime. Run this only when bumping the
+# pinned chain commit below, then `pnpm run proto:gen`.
 #
 # Requires: buf CLI (pnpm exec buf ...), network access.
 
 cd "$(dirname "$0")/.."
 
 PULSAR_REPO="https://github.com/node101-io/pulsar-chain.git"
-PULSAR_REF="01358b3efc841b4e6b9af4cdaee4cc68b6b6fbbf" # keep == buf.gen.yaml ref
-PULSAR_BRANCH="refactored-signer"
+PULSAR_REF="b5362a24c78efebec86cc12307ac48f13c643af2"
+PULSAR_BRANCH="development"
 
 rm -rf proto
 mkdir -p proto

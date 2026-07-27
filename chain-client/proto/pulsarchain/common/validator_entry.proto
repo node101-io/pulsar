@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package pulsarchain.common;
+
+option go_package = "github.com/node101-io/pulsar-chain/common;common";
+
+message ValidatorEntry {
+  bytes validator_cosmos_pub_key = 1;
+  int64 consensus_power = 2;
+}

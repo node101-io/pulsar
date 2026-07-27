@@ -6,8 +6,8 @@ import "amino/amino.proto";
 import "cosmos/msg/v1/msg.proto";
 import "cosmos_proto/cosmos.proto";
 import "gogoproto/gogo.proto";
-import "pulsarchain/keyregistry/v1/params.proto";
 import "pulsarchain/keyregistry/v1/key_update_type.proto";
+import "pulsarchain/keyregistry/v1/params.proto";
 
 option go_package = "github.com/node101-io/pulsar-chain/x/keyregistry/types";
 
