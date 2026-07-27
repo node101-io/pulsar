@@ -1,0 +1,3 @@
+# Generated from the vendored protos on every build (see buf.gen.yaml) —
+# build artifact, not source.
+src/generated/

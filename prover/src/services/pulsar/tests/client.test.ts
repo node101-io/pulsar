@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PublicKey } from "o1js";
-import { getLatestHeight } from "pulsar-chain-client";
+import {
+    getLatestHeight,
+    type AbciQueryClient,
+    type KeyregistryClient,
+    type TendermintClient,
+    type VotePersistenceClient,
+} from "pulsar-chain-client";
 import {
     computeValidatorListHash,
     getBlockData,
@@ -62,7 +68,7 @@ describe("pulsar client", () => {
     describe("getLatestHeight", () => {
         it("returns latest block height from Tendermint client", async () => {
             const mockTmClient = {
-                GetLatestBlock: vi.fn((req, callback) => {
+                getLatestBlock: vi.fn((req, callback) => {
                     callback(null, {
                         block: {
                             header: {
@@ -77,10 +83,10 @@ describe("pulsar client", () => {
                 }),
             };
 
-            const height = await getLatestHeight(mockTmClient);
+            const height = await getLatestHeight(mockTmClient as unknown as TendermintClient);
 
             expect(height).toBe(100);
-            expect(mockTmClient.GetLatestBlock).toHaveBeenCalledWith(
+            expect(mockTmClient.getLatestBlock).toHaveBeenCalledWith(
                 {},
                 expect.any(Function),
             );
@@ -88,12 +94,12 @@ describe("pulsar client", () => {
 
         it("rejects on gRPC error", async () => {
             const mockTmClient = {
-                GetLatestBlock: vi.fn((req, callback) => {
+                getLatestBlock: vi.fn((req, callback) => {
                     callback(new Error("gRPC error"), null);
                 }),
             };
 
-            await expect(getLatestHeight(mockTmClient)).rejects.toThrow(
+            await expect(getLatestHeight(mockTmClient as unknown as TendermintClient)).rejects.toThrow(
                 "gRPC error",
             );
         });
@@ -108,7 +114,7 @@ describe("pulsar client", () => {
             const sigBytes = Buffer.alloc(64, 0);
 
             const mockVpClient = {
-                VoteExtensions: vi.fn((req, metadata, callback) => {
+                voteExtensions: vi.fn((req, metadata, callback) => {
                     callback(null, {
                         persisted_vote_extensions_block_height: "100",
                         vote_extensions: [
@@ -121,7 +127,7 @@ describe("pulsar client", () => {
                 }),
             };
 
-            const voteExt = await getVoteExtsByHeight(mockVpClient, 100);
+            const voteExt = await getVoteExtsByHeight(mockVpClient as unknown as VotePersistenceClient, 100);
 
             expect(voteExt).toHaveLength(1);
             expect(typeof voteExt[0].validatorAddr).toBe("string");
@@ -130,7 +136,7 @@ describe("pulsar client", () => {
 
         it("returns empty array when persisted height does not match (vote exts not available yet)", async () => {
             const mockVpClient = {
-                VoteExtensions: vi.fn((req, metadata, callback) => {
+                voteExtensions: vi.fn((req, metadata, callback) => {
                     callback(null, {
                         persisted_vote_extensions_block_height: "99",
                         vote_extensions: [],
@@ -138,37 +144,37 @@ describe("pulsar client", () => {
                 }),
             };
 
-            const result = await getVoteExtsByHeight(mockVpClient, 100);
+            const result = await getVoteExtsByHeight(mockVpClient as unknown as VotePersistenceClient, 100);
             expect(result).toEqual([]);
         });
 
         it("returns empty array when persisted height is absent (early block)", async () => {
             const mockVpClient = {
-                VoteExtensions: vi.fn((req, metadata, callback) => {
+                voteExtensions: vi.fn((req, metadata, callback) => {
                     // Only query_block_height present, no persisted field
                     callback(null, { query_block_height: "3" });
                 }),
             };
 
-            const result = await getVoteExtsByHeight(mockVpClient, 1);
+            const result = await getVoteExtsByHeight(mockVpClient as unknown as VotePersistenceClient, 1);
             expect(result).toEqual([]);
         });
 
         it("rejects on gRPC error", async () => {
             const mockVpClient = {
-                VoteExtensions: vi.fn((req, metadata, callback) => {
+                voteExtensions: vi.fn((req, metadata, callback) => {
                     callback(new Error("gRPC error"), null);
                 }),
             };
 
-            await expect(getVoteExtsByHeight(mockVpClient, 100)).rejects.toThrow(
+            await expect(getVoteExtsByHeight(mockVpClient as unknown as VotePersistenceClient, 100)).rejects.toThrow(
                 "gRPC error",
             );
         });
 
         it("passes x-cosmos-block-height: H+3 in metadata", async () => {
             const mockVpClient = {
-                VoteExtensions: vi.fn((req, metadata, callback) => {
+                voteExtensions: vi.fn((req, metadata, callback) => {
                     callback(null, {
                         persisted_vote_extensions_block_height: "50",
                         vote_extensions: [],
@@ -176,9 +182,9 @@ describe("pulsar client", () => {
                 }),
             };
 
-            await getVoteExtsByHeight(mockVpClient, 50);
+            await getVoteExtsByHeight(mockVpClient as unknown as VotePersistenceClient, 50);
 
-            const [, metadata] = mockVpClient.VoteExtensions.mock.calls[0];
+            const [, metadata] = mockVpClient.voteExtensions.mock.calls[0];
             expect(metadata.get("x-cosmos-block-height")).toEqual(["53"]);
         });
     });
@@ -192,7 +198,7 @@ describe("pulsar client", () => {
             const sigBytes = Buffer.alloc(64, 0);
 
             const mockTmClient = {
-                GetBlockByHeight: vi.fn((req, callback) => {
+                getBlockByHeight: vi.fn((req, callback) => {
                     callback(null, {
                         block: {
                             header: {
@@ -205,17 +211,26 @@ describe("pulsar client", () => {
                         },
                     });
                 }),
-                GetValidatorSetByHeight: vi.fn((req, callback) => {
+                getValidatorSetByHeight: vi.fn((req, callback) => {
                     callback(null, {
                         validators: [
-                            { pub_key: { key: pubkeyBytes.toString("base64") } },
+                            {
+                                // protobuf Any: 2-byte field header + 32-byte key
+                                pub_key: {
+                                    value: Buffer.concat([
+                                        Buffer.from([0x0a, 0x20]),
+                                        pubkeyBytes.subarray(0, 32),
+                                    ]).toString("base64"),
+                                },
+                                voting_power: "1",
+                            },
                         ],
                     });
                 }),
             };
 
             const mockVpClient = {
-                VoteExtensions: vi.fn((req, metadata, callback) => {
+                voteExtensions: vi.fn((req, metadata, callback) => {
                     callback(null, {
                         persisted_vote_extensions_block_height: "100",
                         vote_extensions: [
@@ -229,15 +244,27 @@ describe("pulsar client", () => {
             };
 
             const mockKrClient = {
-                GetValidatorMinaPubKey: vi.fn((req, callback) => {
-                    callback(null, {
-                        validator_mina_pub_key: pubkeyBytes,
-                    });
-                }),
+                getValidatorSetWithMinaKeys: vi.fn(
+                    (req, metadata, callback) => {
+                        callback(null, {
+                            registered_validators: req.validators.map(
+                                (v: {
+                                    validator_cosmos_pub_key: Uint8Array;
+                                    consensus_power: string;
+                                }) => ({
+                                    validator_cosmos_pub_key:
+                                        v.validator_cosmos_pub_key,
+                                    validator_mina_pub_key: pubkeyBytes,
+                                    consensus_power: v.consensus_power,
+                                }),
+                            ),
+                        });
+                    },
+                ),
             };
 
             const mockAbciClient = {
-                VoteExtBodyByHeight: vi.fn((req, callback) => {
+                voteExtBodyByHeight: vi.fn((req, callback) => {
                     callback(null, {
                         voteExtBody: {
                             next_validator_set_hash: pubkeyBytes,
@@ -250,10 +277,10 @@ describe("pulsar client", () => {
             };
 
             const blockData = await getBlockData(
-                mockTmClient,
-                mockVpClient,
-                mockKrClient,
-                mockAbciClient,
+                mockTmClient as unknown as TendermintClient,
+                mockVpClient as unknown as VotePersistenceClient,
+                mockKrClient as unknown as KeyregistryClient,
+                mockAbciClient as unknown as AbciQueryClient,
                 100,
             );
 

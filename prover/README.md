@@ -189,15 +189,17 @@ Each processor follows a **Master/Worker** pattern backed by BullMQ:
 
 ## Proto Types
 
-TypeScript types for the pulsar-chain gRPC messages live in the shared
-**`pulsar-chain-client`** workspace package (`chain-client/`), together with
-the reflection-based transport and wire-format parsers used by both the
-prover and the bridge. Regenerate them there:
+The gRPC transport (typed ts-proto clients + codecs) lives in the shared
+**`pulsar-chain-client`** workspace package (`chain-client/`), used by both
+the prover and the bridge. It is generated from the vendored proto tree
+(`chain-client/proto/`, committed) on every build — fully offline, the buf
+CLI and ts-proto are regular devDependencies. Generated output is a build
+artifact and is not committed.
+
+To bump the pinned chain commit: edit the ref in
+`chain-client/scripts/vendor-protos.sh`, then
 
 ```bash
-pnpm --filter pulsar-chain-client proto:gen
+pnpm --filter pulsar-chain-client proto:vendor   # re-vendor .proto tree (network)
+pnpm run build                                   # regenerates types + clients
 ```
-
-The generated output is committed, so builds never need the buf CLI or
-network; `proto:gen` only runs when bumping the pinned chain commit (see
-`chain-client/buf.gen.yaml`).

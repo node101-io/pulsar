@@ -54,12 +54,30 @@ describe("pulsar sync", () => {
             VoteExtBodyByHeight: vi.fn(),
         };
 
-        vi.mocked(chainClient.createClient).mockImplementation(async (serviceName) => {
-            if (serviceName.includes("tendermint")) return mockTmClient;
-            if (serviceName.includes("votepersistence")) return mockVpClient;
-            if (serviceName.includes("abci")) return mockAbciClient;
-            return mockKrClient;
-        });
+        vi.mocked(chainClient.TendermintClient).mockImplementation(
+            // new-çağrılabilir olması için arrow değil function
+            function () {
+                return mockTmClient;
+            },
+        );
+        vi.mocked(chainClient.VotePersistenceClient).mockImplementation(
+            // new-çağrılabilir olması için arrow değil function
+            function () {
+                return mockVpClient;
+            },
+        );
+        vi.mocked(chainClient.KeyregistryClient).mockImplementation(
+            // new-çağrılabilir olması için arrow değil function
+            function () {
+                return mockKrClient;
+            },
+        );
+        vi.mocked(chainClient.AbciQueryClient).mockImplementation(
+            // new-çağrılabilir olması için arrow değil function
+            function () {
+                return mockAbciClient;
+            },
+        );
 
         vi.mocked(sleepModule.sleep).mockImplementation(async () => {
             sleepCallCount++;
@@ -78,7 +96,10 @@ describe("pulsar sync", () => {
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
         expect(db.fetchLastStoredBlock).toHaveBeenCalled();
-        expect(chainClient.createClient).toHaveBeenCalledTimes(4);
+        expect(chainClient.TendermintClient).toHaveBeenCalledTimes(1);
+        expect(chainClient.VotePersistenceClient).toHaveBeenCalledTimes(1);
+        expect(chainClient.KeyregistryClient).toHaveBeenCalledTimes(1);
+        expect(chainClient.AbciQueryClient).toHaveBeenCalledTimes(1);
         expect(chainClient.getLatestHeight).toHaveBeenCalledWith(mockTmClient);
     });
 
@@ -164,8 +185,7 @@ describe("pulsar sync", () => {
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
-        expect(chainClient.createClient).toHaveBeenCalledWith(
-            expect.any(String),
+        expect(chainClient.TendermintClient).toHaveBeenCalledWith(
             "localhost:9090",
             expect.any(Object),
         );

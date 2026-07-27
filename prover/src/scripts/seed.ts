@@ -2,13 +2,10 @@ import "dotenv/config";
 import mongoose from "mongoose";
 import * as grpc from "@grpc/grpc-js";
 import {
-    createClient,
     getValidatorSet,
     sortValidatorsByPower,
-    MINA_KEYS_SERVICE_NAME,
-    TENDERMINT_SERVICE_NAME,
-    type KeyregistryService,
-    type TendermintService,
+    KeyregistryClient,
+    TendermintClient,
 } from "pulsar-chain-client";
 
 import logger from "../common/logger.js";
@@ -32,16 +29,8 @@ async function fetchGenesisValidators() {
     }
 
     const creds = grpc.credentials.createInsecure();
-    const tm = createClient<TendermintService>(
-        TENDERMINT_SERVICE_NAME,
-        endpoint,
-        creds,
-    );
-    const kr = createClient<KeyregistryService>(
-        MINA_KEYS_SERVICE_NAME,
-        endpoint,
-        creds,
-    );
+    const tm = new TendermintClient(endpoint, creds);
+    const kr = new KeyregistryClient(endpoint, creds);
 
     const validators = sortValidatorsByPower(
         await getValidatorSet(tm, kr, 1, logger),

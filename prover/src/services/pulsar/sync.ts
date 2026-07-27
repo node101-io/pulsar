@@ -13,17 +13,12 @@ import {
     EPOCH_START_HEIGHT,
 } from "../../config/constants.js";
 import {
-    createClient,
     getLatestHeight,
     isServiceError,
-    TENDERMINT_SERVICE_NAME,
-    VOTE_PERSISTENCE_SERVICE_NAME,
-    MINA_KEYS_SERVICE_NAME,
-    ABCI_SERVICE_NAME,
-    type AbciQueryService,
-    type KeyregistryService,
-    type TendermintService,
-    type VotePersistenceService,
+    AbciQueryClient,
+    KeyregistryClient,
+    TendermintClient,
+    VotePersistenceClient,
 } from "pulsar-chain-client";
 import {
     getBlockData,
@@ -33,7 +28,7 @@ import {
 import { sleep } from "../../common/sleep.js";
 
 async function backfillMissingVoteExtensions(
-    vpClient: VotePersistenceService,
+    vpClient: VotePersistenceClient,
     maxHeight: number,
 ): Promise<void> {
     const blocks = await BlockModel.find({
@@ -108,26 +103,10 @@ export async function startPulsarSync(): Promise<void> {
     const rpcAddress = process.env.PULSAR_GRPC_ENDPOINT || "localhost:9090";
     const credentials = grpc.credentials.createInsecure();
 
-    const tmClient = await createClient<TendermintService>(
-        TENDERMINT_SERVICE_NAME,
-        rpcAddress,
-        credentials,
-    );
-    const vpClient = await createClient<VotePersistenceService>(
-        VOTE_PERSISTENCE_SERVICE_NAME,
-        rpcAddress,
-        credentials,
-    );
-    const krClient = await createClient<KeyregistryService>(
-        MINA_KEYS_SERVICE_NAME,
-        rpcAddress,
-        credentials,
-    );
-    const abciClient = await createClient<AbciQueryService>(
-        ABCI_SERVICE_NAME,
-        rpcAddress,
-        credentials,
-    );
+    const tmClient = new TendermintClient(rpcAddress, credentials);
+    const vpClient = new VotePersistenceClient(rpcAddress, credentials);
+    const krClient = new KeyregistryClient(rpcAddress, credentials);
+    const abciClient = new AbciQueryClient(rpcAddress, credentials);
 
     await backfillMissingVoteExtensions(vpClient, currentHeight);
 

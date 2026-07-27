@@ -10,14 +10,14 @@ import {
     protoBufferToDecStr,
     protoBytesToBuffer,
     sortValidatorsByPower,
-    type AbciQueryService,
+    type AbciQueryClient,
     type GetBlockByHeightResponse,
-    type KeyregistryService,
+    type KeyregistryClient,
     type ProtoBytes,
     type QueryVoteExtBodyByHeightResponse,
     type QueryVoteExtensionsResponse,
-    type TendermintService,
-    type VotePersistenceService,
+    type TendermintClient,
+    type VotePersistenceClient,
 } from "pulsar-chain-client";
 
 import logger from "../../common/logger.js";
@@ -30,12 +30,12 @@ import {
 
 export async function getBlockData(
     tmClient: Pick<
-        TendermintService,
-        "GetBlockByHeight" | "GetValidatorSetByHeight"
+        TendermintClient,
+        "getBlockByHeight" | "getValidatorSetByHeight"
     >,
-    vpClient: VotePersistenceService,
-    krClient: KeyregistryService,
-    abciClient: AbciQueryService,
+    vpClient: VotePersistenceClient,
+    krClient: Pick<KeyregistryClient, "getValidatorSetWithMinaKeys">,
+    abciClient: AbciQueryClient,
     height: number,
 ): Promise<BlockData> {
     // VoteExtBody for block H is stored at H+2.
@@ -72,7 +72,7 @@ export async function getBlockData(
         actionsReducedRoot = body.actionsReducedRoot;
     } else {
         const blockRes = await grpcUnary<GetBlockByHeightResponse>((cb) =>
-            tmClient.GetBlockByHeight({ height: height.toString() }, cb),
+            tmClient.getBlockByHeight({ height: height.toString() }, cb),
         );
         stateRoot = appHashToStateRootField(blockRes.block?.header?.app_hash);
         validatorListHash = undefined; // will be computed from validators in storePulsarBlock
@@ -106,7 +106,7 @@ export async function getBlockData(
 }
 
 async function getVoteExtBody(
-    abciClient: AbciQueryService,
+    abciClient: AbciQueryClient,
     height: number,
 ): Promise<{
     stateRoot: string;
@@ -119,7 +119,7 @@ async function getVoteExtBody(
     let res: QueryVoteExtBodyByHeightResponse;
     try {
         res = await grpcUnary<QueryVoteExtBodyByHeightResponse>((cb) =>
-            abciClient.VoteExtBodyByHeight(
+            abciClient.voteExtBodyByHeight(
                 { vote_extension_height: String(bodyHeight) },
                 cb,
             ),
@@ -183,7 +183,7 @@ function appHashToStateRootField(val: ProtoBytes | null | undefined): string {
 }
 
 export async function getVoteExtsByHeight(
-    vpClient: VotePersistenceService,
+    vpClient: VotePersistenceClient,
     height: number,
 ): Promise<VoteExt[]> {
     const queryHeight = height + 3;
@@ -193,7 +193,7 @@ export async function getVoteExtsByHeight(
     let res: QueryVoteExtensionsResponse;
     try {
         res = await grpcUnary<QueryVoteExtensionsResponse>((cb) =>
-            vpClient.VoteExtensions({}, metadata, cb),
+            vpClient.voteExtensions({}, metadata, cb),
         );
     } catch (err) {
         logger.error("VoteExtensions gRPC call failed", {

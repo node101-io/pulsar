@@ -13,17 +13,20 @@ inputs:
   - directory: proto
     paths:
       - proto/pulsarchain
+      # Upstream tendermint query service too, so its message shapes are
+      # generated instead of hand-mirrored in src.
+      - proto/cosmos/base/tendermint/v1beta1
 plugins:
-  # Pinned so regeneration is deterministic (only the vendored protos and this
-  # version decide the output).
-  - remote: buf.build/community/stephenh-ts-proto:v2.12.0
+  # Local ts-proto (exact devDependency pin) — regeneration is deterministic
+  # and fully offline: only the vendored protos and the pinned ts-proto
+  # version decide the output.
+  - local: protoc-gen-ts_proto
     out: src/generated
     include_imports: true
     opt:
-      # Types only: runtime clients are built by @grpc/proto-loader, so no
-      # generated protobuf runtime code is needed.
-      - onlyTypes=true
-      # Match the proto-loader options (keepCase: true, longs: String).
+      # Full output: message codecs + typed grpc-js service clients. The
+      # generated clients ARE the transport — no proto parsing at runtime.
+      - outputServices=grpc-js
       - snakeToCamel=false
       - forceLong=string
       # Responses may omit unset fields; force null-safe access.

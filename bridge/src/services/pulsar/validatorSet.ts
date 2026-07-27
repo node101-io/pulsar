@@ -1,13 +1,10 @@
 import * as grpc from "@grpc/grpc-js";
 import { Field, PublicKey } from "o1js";
 import {
-    createClient,
     getValidatorSet,
     sortValidatorsByPower,
-    MINA_KEYS_SERVICE_NAME,
-    TENDERMINT_SERVICE_NAME,
-    type KeyregistryService,
-    type TendermintService,
+    KeyregistryClient,
+    TendermintClient,
 } from "pulsar-chain-client";
 import { computeValidatorListHash } from "pulsar-contracts";
 
@@ -24,7 +21,7 @@ export interface OrderedValidator {
     power: string;
 }
 
-let _clients: { tm: TendermintService; kr: KeyregistryService } | null = null;
+let _clients: { tm: TendermintClient; kr: KeyregistryClient } | null = null;
 
 async function getClients() {
     if (_clients) return _clients;
@@ -33,12 +30,10 @@ async function getClients() {
     if (!endpoint) throw new Error("PULSAR_GRPC_ENDPOINT is not set");
 
     const creds = grpc.credentials.createInsecure();
-    const [tm, kr] = await Promise.all([
-        createClient<TendermintService>(TENDERMINT_SERVICE_NAME, endpoint, creds),
-        createClient<KeyregistryService>(MINA_KEYS_SERVICE_NAME, endpoint, creds),
-    ]);
-
-    _clients = { tm, kr };
+    _clients = {
+        tm: new TendermintClient(endpoint, creds),
+        kr: new KeyregistryClient(endpoint, creds),
+    };
     return _clients;
 }
 

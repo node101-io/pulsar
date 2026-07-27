@@ -1,15 +1,18 @@
 import { createHash } from "node:crypto";
 
+import { Metadata } from "@grpc/grpc-js";
+
 import { grpcUnary, protoBytesToBuffer } from "./transport.js";
 import { parseMinaPubkeyFromBytes } from "./parser.js";
 import type {
     GetLatestBlockResponse,
+    GetLatestValidatorSetResponse,
     GetValidatorSetByHeightResponse,
-    KeyregistryService,
-    QueryGetValidatorMinaPubKeyResponse,
-    TendermintService,
-    ValidatorSetMember,
-} from "./grpcTypes.js";
+    KeyregistryClient,
+    QueryGetValidatorSetWithMinaKeysResponse,
+    TendermintClient,
+} from "./transport.js";
+import type { Validator } from "./generated/cosmos/base/tendermint/v1beta1/query.js";
 
 // Minimal logging surface so consumers can plug their own structured logger
 // (winston etc.) without this package depending on one.
@@ -42,71 +45,92 @@ export function sortValidatorsByPower(
 
 // The consensus pub_key arrives as a protobuf Any: 2 bytes of field header
 // followed by the 32-byte ed25519 key.
-export function extractEd25519PubKey(v: ValidatorSetMember): Buffer {
+export function extractEd25519PubKey(v: Validator): Buffer {
     const anyValue = protoBytesToBuffer(v.pub_key?.value);
     return anyValue.length >= 34 ? anyValue.subarray(2, 34) : Buffer.alloc(0);
 }
 
-export async function getMinaPubKeyFromEd25519(
-    krClient: KeyregistryService,
-    pubKeyBytes: Buffer,
-): Promise<string> {
-    const res = await grpcUnary<QueryGetValidatorMinaPubKeyResponse>((cb) =>
-        krClient.GetValidatorMinaPubKey(
-            { validator_cosmos_pub_key: pubKeyBytes },
-            cb,
-        ),
-    );
-
-    return parseMinaPubkeyFromBytes(
-        protoBytesToBuffer(res.validator_mina_pub_key),
-    );
-}
-
 /**
  * Fetch the validator set at `height` (or the chain tip with "latest") with
- * each validator's Mina key resolved via the keyregistry. A validator whose
- * Mina key cannot be resolved is skipped, not fatal — the chain's committed
- * validator-set hash excludes it too.
+ * each validator's Mina key attached, in exactly two requests:
  *
- * TODO(chain GetValidatorMinaPubKeys): the chain team is adding a BATCH
- * keyregistry lookup (input: cosmos pubkey array; response: index-aligned
- * Mina keys, empty entry for an unregistered validator). Once it lands on
- * the pinned commit:
- *   1. bump the ref in scripts/vendor-protos.sh, run
- *      `pnpm run proto:vendor && pnpm run proto:gen`
- *   2. replace the per-validator getMinaPubKeyFromEd25519 fan-out below with
- *      ONE batch call, sent with an `x-cosmos-block-height: <height>` gRPC
- *      metadata header matching the set query — both reads then come from
- *      the same state snapshot (key rotations can no longer produce a mixed
- *      set/keys pairing); skip index-aligned empty entries like the current
- *      per-key NotFound skip
- *   3. everything else STAYS: sortValidatorsByPower, consAddr tie-break and
- *      extractEd25519PubKey — fold order is still computed client-side under
- *      the batch variant (N+1 requests become 2)
+ *   1. the set (ed25519 keys + powers) from the tendermint service
+ *   2. one batch GetValidatorSetWithMinaKeys keyregistry call, pinned to the
+ *      SAME state snapshot via the `x-cosmos-block-height` metadata header —
+ *      a key rotation can never produce a mixed set/keys pairing
+ *
+ * A validator without a registered Mina key rejects the whole batch call
+ * (NotFound) — deliberately matching the chain's own root fold, which also
+ * hard-fails there (ErrValidatorMinaKeyNotFound): such a set never produced
+ * a committed root in the first place.
  */
 export async function getValidatorSet(
-    tmClient: Pick<TendermintService, "GetValidatorSetByHeight"> &
-        Partial<Pick<TendermintService, "GetLatestValidatorSet">>,
-    krClient: KeyregistryService,
+    tmClient: Pick<TendermintClient, "getValidatorSetByHeight"> &
+        Partial<Pick<TendermintClient, "getLatestValidatorSet">>,
+    krClient: Pick<KeyregistryClient, "getValidatorSetWithMinaKeys">,
     height: number | "latest",
     logger: ChainLogger = silentLogger,
 ): Promise<ValidatorEntry[]> {
-    if (height === "latest" && !tmClient.GetLatestValidatorSet) {
+    if (height === "latest" && !tmClient.getLatestValidatorSet) {
         throw new Error(
-            "getValidatorSet('latest') requires a client with GetLatestValidatorSet",
+            "getValidatorSet('latest') requires a client with getLatestValidatorSet",
         );
     }
-    let res: GetValidatorSetByHeightResponse;
     try {
-        res = await grpcUnary<GetValidatorSetByHeightResponse>((cb) =>
+        const res = await grpcUnary<
+            GetValidatorSetByHeightResponse | GetLatestValidatorSetResponse
+        >((cb) =>
             height === "latest"
-                ? tmClient.GetLatestValidatorSet!({}, cb)
-                : tmClient.GetValidatorSetByHeight(
+                ? tmClient.getLatestValidatorSet!({}, cb)
+                : tmClient.getValidatorSetByHeight(
                       { height: height.toString() },
                       cb,
                   ),
         );
+
+        const members = (res.validators ?? [])
+            .map((v) => ({
+                pubKeyBytes: extractEd25519PubKey(v),
+                power: String(v.voting_power ?? "0"),
+            }))
+            .filter((m) => m.pubKeyBytes.length > 0);
+
+        // Pin the keyregistry read to the same snapshot the set came from —
+        // for "latest" both calls run unpinned against the tip.
+        const metadata = new Metadata();
+        if (height !== "latest") {
+            metadata.add("x-cosmos-block-height", height.toString());
+        }
+
+        const batch =
+            await grpcUnary<QueryGetValidatorSetWithMinaKeysResponse>((cb) =>
+                krClient.getValidatorSetWithMinaKeys(
+                    {
+                        validators: members.map((m) => ({
+                            validator_cosmos_pub_key: m.pubKeyBytes,
+                            consensus_power: m.power,
+                        })),
+                    },
+                    metadata,
+                    cb,
+                ),
+            );
+
+        return (batch.registered_validators ?? []).map((r) => {
+            const cosmosKey = protoBytesToBuffer(r.validator_cosmos_pub_key);
+            return {
+                minaPublicKey: parseMinaPubkeyFromBytes(
+                    protoBytesToBuffer(r.validator_mina_pub_key),
+                ),
+                power: String(r.consensus_power ?? "0"),
+                // Consensus address = sha256(ed25519 pubkey)[:20], matching
+                // the chain's validator.GetConsAddr() sort tie-break.
+                consAddr: createHash("sha256")
+                    .update(cosmosKey)
+                    .digest()
+                    .subarray(0, 20),
+            };
+        });
     } catch (error) {
         logger.error(`Error retrieving validator set for height ${height}`, {
             error,
@@ -115,51 +139,13 @@ export async function getValidatorSet(
         });
         throw error;
     }
-
-    // The keyregistry exposes only a point lookup (no batch RPC), so each
-    // validator needs its own GetValidatorMinaPubKey call — but they are
-    // independent, so fan them out concurrently instead of awaiting serially
-    // (N sequential round-trips → ~1 round-trip wall-clock). A validator whose
-    // Mina key cannot be resolved is skipped, not fatal — the chain's committed
-    // validator-set hash excludes it too.
-    const entries = await Promise.all(
-        (res.validators ?? []).map(async (v): Promise<ValidatorEntry | null> => {
-            const pubKeyBytes = extractEd25519PubKey(v);
-            try {
-                const minaKey = await getMinaPubKeyFromEd25519(
-                    krClient,
-                    pubKeyBytes,
-                );
-                // Consensus address = sha256(ed25519 pubkey)[:20], matching the
-                // chain's validator.GetConsAddr() used as the sort tie-break.
-                const consAddr = createHash("sha256")
-                    .update(pubKeyBytes)
-                    .digest()
-                    .subarray(0, 20);
-                return {
-                    minaPublicKey: minaKey,
-                    power: String(v.voting_power ?? "0"),
-                    consAddr,
-                };
-            } catch (error) {
-                logger.error("Error retrieving Mina public key for validator", {
-                    error,
-                    blockHeight: height,
-                    event: "validator_key_retrieval_error",
-                });
-                return null;
-            }
-        }),
-    );
-
-    return entries.filter((e): e is ValidatorEntry => e !== null);
 }
 
 export async function getLatestHeight(
-    tmClient: Pick<TendermintService, "GetLatestBlock">,
+    tmClient: Pick<TendermintClient, "getLatestBlock">,
 ): Promise<number> {
     const res = await grpcUnary<GetLatestBlockResponse>((cb) =>
-        tmClient.GetLatestBlock({}, cb),
+        tmClient.getLatestBlock({}, cb),
     );
 
     const height = res.block?.header?.height;

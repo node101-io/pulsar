@@ -9,16 +9,11 @@ import { MultisigVerifierProgram } from "pulsar-contracts";
 
 import { initDb } from "../db/index.js";
 import {
-    createClient,
     getLatestHeight,
-    TENDERMINT_SERVICE_NAME,
-    VOTE_PERSISTENCE_SERVICE_NAME,
-    MINA_KEYS_SERVICE_NAME,
-    ABCI_SERVICE_NAME,
-    type AbciQueryService,
-    type KeyregistryService,
-    type TendermintService,
-    type VotePersistenceService,
+    AbciQueryClient,
+    KeyregistryClient,
+    TendermintClient,
+    VotePersistenceClient,
 } from "pulsar-chain-client";
 import {
     getBlockData,
@@ -42,26 +37,10 @@ async function main() {
 
     const rpc = process.env.PULSAR_GRPC_ENDPOINT || "localhost:9090";
     const creds = grpc.credentials.createInsecure();
-    const tm = await createClient<TendermintService>(
-        TENDERMINT_SERVICE_NAME,
-        rpc,
-        creds,
-    );
-    const vp = await createClient<VotePersistenceService>(
-        VOTE_PERSISTENCE_SERVICE_NAME,
-        rpc,
-        creds,
-    );
-    const kr = await createClient<KeyregistryService>(
-        MINA_KEYS_SERVICE_NAME,
-        rpc,
-        creds,
-    );
-    const abci = await createClient<AbciQueryService>(
-        ABCI_SERVICE_NAME,
-        rpc,
-        creds,
-    );
+    const tm = new TendermintClient(rpc, creds);
+    const vp = new VotePersistenceClient(rpc, creds);
+    const kr = new KeyregistryClient(rpc, creds);
+    const abci = new AbciQueryClient(rpc, creds);
 
     const latest = await getLatestHeight(tm);
     const usableTop = latest - 3; // vote extensions for H are persisted at H+3
