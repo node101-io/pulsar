@@ -11,6 +11,7 @@ import {
     POLL_INTERVAL_MS,
     BLOCK_EPOCH_SIZE,
     EPOCH_START_HEIGHT,
+    VOTE_EXT_PERSISTENCE_LAG,
 } from "../../config/constants.js";
 import {
     getLatestHeight,
@@ -119,8 +120,8 @@ export async function startPulsarSync(): Promise<void> {
     while (true) {
         try {
             const latestHeight = await getLatestHeight(tmClient);
-            // VoteExtensions for H requires x-cosmos-block-height: H+3, so H+3 must exist
-            const processUpTo = latestHeight - 3;
+            // VoteExtensions for H are only queryable once H + lag exists.
+            const processUpTo = latestHeight - VOTE_EXT_PERSISTENCE_LAG;
 
             if (processUpTo > currentHeight) {
                 logger.info("New Pulsar blocks detected", {

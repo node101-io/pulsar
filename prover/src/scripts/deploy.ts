@@ -1,20 +1,21 @@
 /**
  * Deploys and initializes the SettlementContract to the configured Mina network.
  *
- * The initial merkleListRoot (block 0's validatorListHash) is resolved automatically:
- *   1. INITIAL_MERKLE_LIST_ROOT env var  (explicit override)
- *   2. MongoDB Block collection, height=0 (preferred — most accurate)
+ * The contract is anchored to the ANCHOR_BLOCK_HEIGHT record in MongoDB — the
+ * block the first settlement proof starts from. `settle` requires the contract's
+ * merkleListRoot, stateRoot and blockHeight to equal that proof's Initial*
+ * values, so all three are read from that one block. Run `pnpm run seed` first;
+ * it writes the anchor block.
  *
  * Required env vars:
  *   MINA_PRIVATE_KEY   - Base58 private key of the fee-paying signer account
  *   MINA_NETWORK       - "devnet" | "mainnet" | "lightnet"
- *   MONGO_URI          - MongoDB connection string (used for auto-detection)
- *   MONGO_DB           - MongoDB database name   (used for auto-detection)
+ *   MONGO_URI          - MongoDB connection string
+ *   MONGO_DB           - MongoDB database name
  *
  * Optional:
- *   INITIAL_MERKLE_LIST_ROOT - override automatic detection
- *   MINA_FEE                 - TX fee in nanomina (default: 100_000_000 = 0.1 MINA)
- *   CONTRACT_PRIVATE_KEY     - reuse an existing contract key instead of a fresh one
+ *   MINA_FEE             - TX fee in nanomina (default: 100_000_000 = 0.1 MINA)
+ *   CONTRACT_PRIVATE_KEY - reuse an existing contract key instead of a fresh one
  *
  * On success prints:
  *   CONTRACT_ADDRESS=...
@@ -32,79 +33,24 @@ import {
     ActionStackProgram,
 } from "pulsar-contracts";
 
+import { type AnchorBlock, fetchAnchorBlock } from "../db/index.js";
+
 type MinaNetwork = "devnet" | "mainnet" | "lightnet";
 
-// ── hash resolution ──────────────────────────────────────────────────────────
+// ── anchor resolution ────────────────────────────────────────────────────────
 
-async function resolveInitialMerkleListRoot(): Promise<string> {
-    // 1. Explicit env override
-    if (process.env.INITIAL_MERKLE_LIST_ROOT) {
-        console.log("Using INITIAL_MERKLE_LIST_ROOT from env.");
-        return process.env.INITIAL_MERKLE_LIST_ROOT;
-    }
-
-    // 2. MongoDB Block collection
-    const mongoHash = await readFromMongo();
-    if (mongoHash) {
-        console.log(`Auto-detected merkleListRoot from MongoDB block 0: ${mongoHash}`);
-        return mongoHash;
-    }
-
-    throw new Error(
-        "Cannot determine INITIAL_MERKLE_LIST_ROOT.\n" +
-        "Make sure the genesis block is ingested and either:\n" +
-        "  - MongoDB is reachable (MONGO_URI / MONGO_DB set), or\n" +
-        "  - Set INITIAL_MERKLE_LIST_ROOT explicitly in .env",
-    );
-}
-
-interface Block0 {
-    validatorListHash: string;
-    stateRoot: string;
-}
-
-async function readBlock0FromMongo(): Promise<Block0 | null> {
+/** Connects, delegates to the shared resolver, disconnects. */
+async function readAnchorBlock(): Promise<AnchorBlock> {
     const uri = process.env.MONGO_URI;
     const dbName = process.env.MONGO_DB ?? "pulsar";
-    if (!uri) return null;
+    if (!uri) throw new Error("MONGO_URI is not set");
 
+    await mongoose.connect(uri, { dbName, serverSelectionTimeoutMS: 3000 });
     try {
-        await mongoose.connect(uri, { dbName, serverSelectionTimeoutMS: 3000 });
-        const db = mongoose.connection.db!;
-        const block = await db.collection("blocks").findOne({ height: 0 });
+        return await fetchAnchorBlock();
+    } finally {
         await mongoose.disconnect();
-        if (block?.validatorListHash && block?.stateRoot) {
-            return {
-                validatorListHash: String(block.validatorListHash),
-                stateRoot: String(block.stateRoot),
-            };
-        }
-    } catch {
-        try { await mongoose.disconnect(); } catch { /* ignore */ }
     }
-    return null;
-}
-
-async function readFromMongo(): Promise<string | null> {
-    const b = await readBlock0FromMongo();
-    return b?.validatorListHash ?? null;
-}
-
-async function resolveInitialStateRoot(): Promise<string> {
-    if (process.env.INITIAL_STATE_ROOT) {
-        console.log("Using INITIAL_STATE_ROOT from env.");
-        return process.env.INITIAL_STATE_ROOT;
-    }
-
-    // Try MongoDB first
-    const b = await readBlock0FromMongo();
-    if (b?.stateRoot) {
-        console.log(`Auto-detected stateRoot from MongoDB block 0: ${b.stateRoot}`);
-        return b.stateRoot;
-    }
-
-    console.log("stateRoot not found, defaulting to 0.");
-    return "0";
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
@@ -116,8 +62,7 @@ async function main() {
     const network = (process.env.MINA_NETWORK ?? "devnet") as MinaNetwork;
     const fee = Number(process.env.MINA_FEE ?? "100000000");
 
-    const merkleListRootStr = await resolveInitialMerkleListRoot();
-    const stateRootStr = await resolveInitialStateRoot();
+    const anchor = await readAnchorBlock();
 
     // ── key setup ───────────────────────────────────────────────────────────
     const signerPrivateKey = PrivateKey.fromBase58(signerKeyBase58);
@@ -148,17 +93,19 @@ async function main() {
 
     // ── build & prove tx ────────────────────────────────────────────────────
     const contractInstance = new SettlementContract(contractPublicKey);
-    const merkleListRoot = Field.from(merkleListRootStr);
-    const stateRoot = Field.from(stateRootStr);
+    const merkleListRoot = Field.from(anchor.validatorListHash);
+    const stateRoot = Field.from(anchor.stateRoot);
+    const blockHeight = Field.from(anchor.height);
 
-    console.log(`Deploying with merkleListRoot: ${merkleListRootStr}`);
-    console.log(`Deploying with stateRoot:      ${stateRootStr}`);
+    console.log(`Anchoring to Pulsar block ${anchor.height}`);
+    console.log(`  merkleListRoot: ${anchor.validatorListHash}`);
+    console.log(`  stateRoot:      ${anchor.stateRoot}`);
 
     console.log("Building deploy + initialize transaction…");
     const tx = await Mina.transaction({ sender: signerPublicKey, fee }, async () => {
         AccountUpdate.fundNewAccount(signerPublicKey);
         await contractInstance.deploy();
-        await contractInstance.initialize(merkleListRoot, stateRoot);
+        await contractInstance.initialize(merkleListRoot, stateRoot, blockHeight);
     });
 
     console.log("Proving transaction…");

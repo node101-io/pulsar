@@ -26,6 +26,7 @@ import { BlockData, ValidatorInfo, VoteExt } from "../../common/types.js";
 import {
     BLOCK_EPOCH_SIZE,
     EPOCH_START_HEIGHT,
+    VOTE_EXT_PERSISTENCE_LAG,
 } from "../../config/constants.js";
 
 export async function getBlockData(
@@ -186,7 +187,7 @@ export async function getVoteExtsByHeight(
     vpClient: VotePersistenceClient,
     height: number,
 ): Promise<VoteExt[]> {
-    const queryHeight = height + 3;
+    const queryHeight = height + VOTE_EXT_PERSISTENCE_LAG;
     const metadata = new grpc.Metadata();
     metadata.add("x-cosmos-block-height", queryHeight.toString());
 
