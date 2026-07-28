@@ -65,11 +65,22 @@ class SettlementContract extends SmartContract {
     });
   }
 
+  /**
+   * Anchors the contract to the Pulsar block the first settlement proof starts
+   * from. `settle` requires all three to equal that proof's Initial* values, so
+   * they must come from one and the same block — the last one before the first
+   * proving epoch, not the synthetic genesis record.
+   */
   @method
-  async initialize(merkleListRoot: Field, stateRoot: Field) {
+  async initialize(
+    merkleListRoot: Field,
+    stateRoot: Field,
+    blockHeight: Field
+  ) {
     super.init();
     this.merkleListRoot.set(merkleListRoot);
     this.stateRoot.set(stateRoot);
+    this.blockHeight.set(blockHeight);
     this.actionState.set(Reducer.initialActionState);
   }
 

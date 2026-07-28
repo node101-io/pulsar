@@ -77,7 +77,7 @@ import {
   ValidateReducePublicInput,
 } from './ValidateReduce.js';
 import { TestUtils } from './utils/testUtils.js';
-import { DeployScripts } from './scripts/deploy.js';
+import { DeployScripts } from './utils/deployHelpers.js';
 import { PulsarEncoder } from './utils/cosmosUtils.js';
 import {
   CalculateFinalActionState,

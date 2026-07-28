@@ -57,7 +57,7 @@ import {
   SETTLEMENT_MATRIX_SIZE,
 } from '../utils/constants.js';
 import { CosmosSignature, PulsarAuth } from '../types/PulsarAction.js';
-import { DeployScripts } from '../scripts/deploy.js';
+import { DeployScripts } from '../utils/deployHelpers.js';
 
 const { sendMina } = DeployScripts;
 
@@ -231,7 +231,7 @@ async function deployAndInitializeContract() {
     Mina.transaction({ sender: deployerAccount, fee }, async () => {
       AccountUpdate.fundNewAccount(deployerAccount);
       await zkapp.deploy();
-      await zkapp.initialize(merkleList.hash, Field(0));
+      await zkapp.initialize(merkleList.hash, Field(0), Field(0));
     })
   );
 

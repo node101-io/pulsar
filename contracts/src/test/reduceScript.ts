@@ -26,7 +26,7 @@ import { List } from '../types/common.js';
 import { ActionStackProgram } from '../ActionStack.js';
 import { MapFromArray, PrepareBatch } from '../utils/reduceWitness.js';
 import { analyzeMethods, enableLogs, log } from '../utils/loggers.js';
-import { DeployScripts } from '../scripts/deploy.js';
+import { DeployScripts } from '../utils/deployHelpers.js';
 
 const { sendMina } = DeployScripts;
 
@@ -253,7 +253,7 @@ async function deployAndInitializeContract(
     async () => {
       AccountUpdate.fundNewAccount(deployerAccount);
       await zkapp.deploy();
-      await zkapp.initialize(merkleListRoot, Field(0));
+      await zkapp.initialize(merkleListRoot, Field(0), Field(0));
     }
   );
 
