@@ -6,7 +6,7 @@ import { getProof, storeProof } from "../../db/models/Proof.js";
 import { ProofStatus } from "../../common/types.js";
 import logger from "../../common/logger.js";
 import { Aggregation } from "./master.js";
-import { PROOF_EPOCH_LEAF_COUNT, PROOF_EPOCH_SETTLEMENT_INDEX, WORKER_TIMEOUT_MS } from "../../config/constants.js";
+import { PROOF_EPOCH_LEAF_COUNT } from "../../config/constants.js";
 import { MergeSettlementProofs, SettlementProof, MultisigVerifierProgram } from "pulsar-contracts";
 import type { JsonProof } from "o1js";
 
@@ -47,7 +47,6 @@ export async function worker(task: IProofEpoch, aggregation: Aggregation) {
     }
 
     const proofSlotIndex = PROOF_EPOCH_LEAF_COUNT + aggregation.index;
-    const isRootProof = proofSlotIndex === PROOF_EPOCH_SETTLEMENT_INDEX;
 
     await ProofEpochModel.findOneAndUpdate(
         { height: task.height },
@@ -55,9 +54,6 @@ export async function worker(task: IProofEpoch, aggregation: Aggregation) {
             $set: {
                 [`proofs.${proofSlotIndex}`]: aggregatedProofId,
                 [`status.${aggregation.index}`]: "done" as ProofStatus,
-                // Refresh the timeout when the root proof is ready so the
-                // settlement-prover's timeoutAt filter doesn't skip this epoch
-                ...(isRootProof && { timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS) }),
             },
         },
     );

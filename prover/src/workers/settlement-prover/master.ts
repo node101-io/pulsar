@@ -54,17 +54,20 @@ export class SettlementProverMaster extends Master<SettlementProverJob> {
     }
 
     protected async handleTask(): Promise<void> {
+        // Lowest height first: settlement consumes epochs in chain order, so
+        // proving them out of order only builds a backlog the settler cannot use.
+        // The kind transition below is the claim — it is atomic, so two masters
+        // can never take the same epoch.
         const epoch = await ProofEpochModel.findOneAndUpdate(
             {
                 [`proofs.${PROOF_EPOCH_SETTLEMENT_INDEX}`]: { $ne: null },
                 kind: { $nin: EXCLUDED_KINDS },
-                timeoutAt: { $gt: new Date() },
             },
             {
                 $set: { kind: "txProving" as ProofKind },
             },
             {
-                sort: { timeoutAt: 1 },
+                sort: { height: 1 },
                 new: false,
             },
         );

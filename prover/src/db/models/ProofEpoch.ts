@@ -1,13 +1,12 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 import { ProofKind, ProofStatus } from "../../common/types.js";
-import { PROOF_TTL_SECONDS, PROOF_EPOCH_LEAF_COUNT, PROOF_EPOCH_SETTLEMENT_INDEX, WORKER_TIMEOUT_MS } from "../../config/constants.js";
+import { PROOF_TTL_SECONDS, PROOF_EPOCH_LEAF_COUNT, PROOF_EPOCH_SETTLEMENT_INDEX } from "../../config/constants.js";
 import logger from "../../common/logger.js";
 
 export interface IProofEpoch extends Document {
     height: number;
     proofs: (Types.ObjectId | null)[];
     status: ProofStatus[];
-    timeoutAt: Date;
     kind: ProofKind;
     failCount: number;
     provedTxJson: string | null;
@@ -29,7 +28,6 @@ const ProofEpochSchema = new Schema<IProofEpoch>(
                 enum: ["waiting", "processing", "done", "failed"],
             },
         ],
-        timeoutAt: { type: Date, required: true },
         kind: {
             type: String,
             enum: ["blockProof", "aggregation", "txProving", "settlement", "txSending", "done"],
@@ -89,7 +87,6 @@ export async function incrementProofEpochFailCount(height: number) {
         { height },
         {
             $inc: { failCount: 1 },
-            $set: { timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS) },
         },
     );
 }

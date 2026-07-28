@@ -8,7 +8,10 @@ import {
     incrementBlockEpochFailCount,
     BlockEpochModel,
 } from "../models/BlockEpoch.js";
-import { BLOCK_EPOCH_SIZE } from "../../config/constants.js";
+import {
+    BLOCK_EPOCH_SIZE,
+    EPOCH_START_HEIGHT,
+} from "../../config/constants.js";
 
 vi.mock("../../common/logger.js", () => ({
     default: {
@@ -53,31 +56,36 @@ describe("db blockEpoch utils", () => {
     it("storeBlockInBlockEpoch upserts epoch and stores block at computed epoch height", async () => {
         const height = 10;
         const blockId = new Types.ObjectId();
+        vi.spyOn(BlockEpochModel, "updateOne").mockResolvedValue({} as any);
         vi.spyOn(BlockEpochModel, "findOneAndUpdate").mockResolvedValue({
-            height: 8,
+            height: 10,
         } as any);
 
         const result = await storeBlockInBlockEpoch(height, blockId, 2);
 
+        // epochs start at EPOCH_START_HEIGHT (2): [2..9], [10..17], ...
         const expectedEpochHeight =
-            Math.floor(height / BLOCK_EPOCH_SIZE) * BLOCK_EPOCH_SIZE;
-        expect(BlockEpochModel.findOneAndUpdate).toHaveBeenCalledWith(
+            EPOCH_START_HEIGHT +
+            Math.floor((height - EPOCH_START_HEIGHT) / BLOCK_EPOCH_SIZE) *
+                BLOCK_EPOCH_SIZE;
+        expect(BlockEpochModel.updateOne).toHaveBeenCalledWith(
             { height: expectedEpochHeight },
-            expect.objectContaining({
+            {
                 $setOnInsert: expect.objectContaining({
                     height: expectedEpochHeight,
                     blocks: Array(BLOCK_EPOCH_SIZE).fill(null),
                     status: Array(BLOCK_EPOCH_SIZE).fill("waiting"),
                     failCount: 0,
-                    timeoutAt: expect.any(Date),
                 }),
-                $set: expect.objectContaining({
-                    [`blocks.2`]: blockId,
-                }),
-            }),
-            { upsert: true, new: true },
+            },
+            { upsert: true },
         );
-        expect(result).toEqual({ height: 8 });
+        expect(BlockEpochModel.findOneAndUpdate).toHaveBeenCalledWith(
+            { height: expectedEpochHeight },
+            { $set: { [`blocks.2`]: blockId } },
+            { new: true },
+        );
+        expect(result).toEqual({ height: 10 });
     });
 
     it("updateBlockStatusInEpoch updates status at given index", async () => {
@@ -112,13 +120,14 @@ describe("db blockEpoch utils", () => {
         expect(BlockEpochModel.deleteOne).toHaveBeenCalledWith({ height: 8 });
     });
 
-    it("incrementBlockEpochFailCount increments failCount and updates timeoutAt", async () => {
+    it("incrementBlockEpochFailCount increments failCount", async () => {
         vi.spyOn(BlockEpochModel, "updateOne").mockResolvedValue({} as any);
 
         await incrementBlockEpochFailCount(8);
 
-        const call = vi.mocked(BlockEpochModel.updateOne).mock.calls[0][1] as any;
-        expect(call.$inc).toEqual({ failCount: 1 });
-        expect(call.$set.timeoutAt).toBeInstanceOf(Date);
+        expect(BlockEpochModel.updateOne).toHaveBeenCalledWith(
+            { height: 8 },
+            { $inc: { failCount: 1 } },
+        );
     });
 });

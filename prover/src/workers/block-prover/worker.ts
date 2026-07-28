@@ -8,7 +8,6 @@ import {
     fetchBlockRange,
 } from "../../db/index.js";
 import {
-    WORKER_TIMEOUT_MS,
     BLOCK_EPOCH_SIZE,
     EPOCH_START_HEIGHT,
     PROOF_EPOCH_LEAF_COUNT,
@@ -269,16 +268,9 @@ async function createOrUpdateProofEpoch(
         { upsert: true },
     );
 
-    // Refresh timeoutAt on every leaf addition so the aggregator's timeout
-    // filter doesn't expire before all leaves are ready
     const result = await ProofEpochModel.findOneAndUpdate(
         { height: proofEpochHeight },
-        {
-            $set: {
-                [`proofs.${leafIndex}`]: proofId,
-                timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS),
-            },
-        },
+        { $set: { [`proofs.${leafIndex}`]: proofId } },
         { new: true },
     );
 

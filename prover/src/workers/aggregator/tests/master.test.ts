@@ -6,6 +6,7 @@ vi.mock("../../../db/index.js", () => ({
     ProofEpochModel: {
         findOne: vi.fn(),
         updateOne: vi.fn(),
+        updateMany: vi.fn(),
     },
     incrementProofEpochFailCount: vi.fn(),
 }));
