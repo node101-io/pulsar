@@ -10,6 +10,8 @@ const mockTx = {
     sign: vi.fn().mockReturnValue({
         send: vi.fn().mockResolvedValue({ hash: "tx-hash-123" }),
     }),
+    // sendProvedSettlement patches lazyAuthorization through this path
+    transaction: { feePayer: {} as any },
 };
 
 vi.mock("o1js", () => ({
@@ -19,6 +21,7 @@ vi.mock("o1js", () => ({
             await fn();
             return mockTx;
         }),
+        getAccount: vi.fn(() => ({ nonce: "5" })),
     },
     PrivateKey: {
         fromBase58: vi.fn(() => ({
@@ -56,6 +59,8 @@ const mockCtx = {
     endpoint: "http://localhost:8080",
 };
 const mockProof = {} as any;
+// sendProvedSettlement rewrites feePayer.body.nonce before re-signing
+const PROVED_TX_JSON = '{"zkappCommand":{},"feePayer":{"body":{"nonce":"0"}}}';
 
 describe("mina settlement - proveSettlementTx", () => {
     beforeEach(() => {
@@ -110,7 +115,7 @@ describe("mina settlement - sendProvedSettlement", () => {
     it("skips send when contract is already past epochLastPulsarBlock", async () => {
         vi.mocked(getContractBlockHeight).mockResolvedValue(100);
 
-        await sendProvedSettlement(mockCtx, '{"zkappCommand":{}}', 80);
+        await sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80);
 
         expect(waitForTransaction).not.toHaveBeenCalled();
     });
@@ -118,7 +123,7 @@ describe("mina settlement - sendProvedSettlement", () => {
     it("skips send when contract is exactly at epochLastPulsarBlock", async () => {
         vi.mocked(getContractBlockHeight).mockResolvedValue(80);
 
-        await sendProvedSettlement(mockCtx, '{"zkappCommand":{}}', 80);
+        await sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80);
 
         expect(waitForTransaction).not.toHaveBeenCalled();
     });
@@ -128,7 +133,7 @@ describe("mina settlement - sendProvedSettlement", () => {
         delete process.env.MINA_PRIVATE_KEY;
 
         await expect(
-            sendProvedSettlement(mockCtx, '{"zkappCommand":{}}', 80),
+            sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80),
         ).rejects.toThrow("MINA_PRIVATE_KEY is not set");
     });
 
@@ -139,9 +144,13 @@ describe("mina settlement - sendProvedSettlement", () => {
             failureReason: null,
         });
 
-        await sendProvedSettlement(mockCtx, '{"zkappCommand":{}}', 80);
+        await sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80);
 
-        expect(Transaction.fromJSON).toHaveBeenCalledWith({ zkappCommand: {} });
+        expect(Transaction.fromJSON).toHaveBeenCalledWith({
+            zkappCommand: {},
+            // nonce refreshed from the current on-chain account (mocked as "5")
+            feePayer: { body: { nonce: "5" } },
+        });
         expect(waitForTransaction).toHaveBeenCalledWith(
             "tx-hash-123",
             mockCtx.endpoint,
@@ -155,7 +164,7 @@ describe("mina settlement - sendProvedSettlement", () => {
             .mockResolvedValueOnce({ success: false, failureReason: "rejected" })
             .mockResolvedValueOnce({ success: true, failureReason: null });
 
-        await sendProvedSettlement(mockCtx, '{"zkappCommand":{}}', 80);
+        await sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80);
 
         expect(waitForTransaction).toHaveBeenCalledTimes(2);
     });
@@ -168,7 +177,7 @@ describe("mina settlement - sendProvedSettlement", () => {
         });
 
         await expect(
-            sendProvedSettlement(mockCtx, '{"zkappCommand":{}}', 80),
+            sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80),
         ).rejects.toThrow("Settlement send failed after 3 attempts for block 80");
 
         expect(waitForTransaction).toHaveBeenCalledTimes(3);
@@ -181,7 +190,7 @@ describe("mina settlement - sendProvedSettlement", () => {
         });
 
         await expect(
-            sendProvedSettlement(mockCtx, '{"zkappCommand":{}}', 80),
+            sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80),
         ).rejects.toThrow("Settlement send failed after 3 attempts for block 80");
 
         expect(waitForTransaction).not.toHaveBeenCalled();

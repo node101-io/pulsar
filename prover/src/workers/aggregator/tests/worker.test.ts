@@ -20,6 +20,9 @@ vi.mock("pulsar-contracts", () => ({
     MergeSettlementProofs: vi.fn(async () => ({
         toJSON: () => ({ merged: true }),
     })),
+    MultisigVerifierProgram: {
+        compile: vi.fn(async () => ({})),
+    },
 }));
 
 vi.mock("../../../common/logger.js", () => ({
