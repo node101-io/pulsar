@@ -10,6 +10,7 @@ coverage
 # System
 .DS_Store
 .env
+.env.*
 
 # Mock Chain Artifacts
 mock-state.json
