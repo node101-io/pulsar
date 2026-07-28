@@ -72,14 +72,36 @@ Make sure both services are running before starting the bridge.
 
 ## Deploying the Contract (First Time Only)
 
-If you don't have a deployed `SettlementContract` yet:
+If you don't have a deployed `SettlementContract` yet, pick the path that matches
+what you are testing:
+
+### Against lightnet (bridge development)
 
 ```bash
-cd contracts
-MINA_PRIVATE_KEY=<your key> npx ts-node --esm src/scripts/deployAndSeed.ts
+zk lightnet start
+cd contracts && pnpm run build
+node build/src/scripts/lightnet-setup.js
 ```
 
-The script deploys the contract in two transactions (deploy → initialize), compiles all ZK programs, and dispatches some test deposit/withdrawal actions. Copy the printed contract address into your `.env`.
+This acquires a funded account from the lightnet account manager, generates a
+throwaway validator key, deploys the contract with the matching
+`merkleListRoot`, dispatches test deposit/withdrawal actions so the archive has
+data, and writes `contracts/.env.lightnet` — which is also what
+`pnpm run test:e2e` consumes. Pass `--no-seed` to skip the test actions.
+
+### Against a real Pulsar chain
+
+The bridge must verify signatures against the chain's actual validator set, so
+the contract has to be initialized from the chain's genesis validator root.
+That deploy lives in the prover, which has the ingested block 0:
+
+```bash
+cd prover && pnpm run seed && pnpm run deploy
+```
+
+See [prover/docs/local-development.md](../../prover/docs/local-development.md).
+
+Either way, copy the printed contract address into your `.env`.
 
 ---
 
