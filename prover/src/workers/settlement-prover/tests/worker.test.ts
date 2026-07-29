@@ -26,6 +26,8 @@ vi.mock("o1js", () => ({
     PublicKey: {
         fromBase58: vi.fn(() => ({})),
     },
+    // config/cache.ts builds the shared compile cache at module load.
+    Cache: { FileSystem: vi.fn(() => ({})) },
 }));
 
 vi.mock("../../../services/mina/client.js", () => ({

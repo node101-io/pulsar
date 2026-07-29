@@ -1,3 +1,5 @@
+import { fileURLToPath } from "url";
+
 // Processors constants
 export const MASTER_SLEEP_INTERVAL_MS = 1000; // 1 second
 export const WORKER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
@@ -27,3 +29,11 @@ export const MONITOR_INTERVAL_MS = 30_000; // 30 seconds
 
 // Cleanup constants
 export const PROOF_TTL_SECONDS = 100 * 24 * 60 * 60; // 100 days
+
+// Compile cache constants
+// Every program shares one directory on purpose: the SRS and Lagrange bases are
+// program-independent, so they are generated once and reused. See the README's
+// "Circuit Compile Cache" section.
+export const CACHE_DIR = fileURLToPath(
+    new URL("../../../cache", import.meta.url),
+);

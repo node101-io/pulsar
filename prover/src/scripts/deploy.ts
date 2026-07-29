@@ -23,7 +23,7 @@
  */
 
 import "dotenv/config";
-import { AccountUpdate, fetchAccount, Field, Mina, PrivateKey } from "o1js";
+import { AccountUpdate, Cache, fetchAccount, Field, Mina, PrivateKey } from "o1js";
 import mongoose from "mongoose";
 import {
     setMinaNetwork,
@@ -34,6 +34,7 @@ import {
 } from "pulsar-contracts";
 
 import { type AnchorBlock, fetchAnchorBlock } from "../db/index.js";
+import { CACHE_DIR } from "../config/constants.js";
 
 type MinaNetwork = "devnet" | "mainnet" | "lightnet";
 
@@ -78,13 +79,13 @@ async function main() {
 
     // ── compile ─────────────────────────────────────────────────────────────
     console.log("Compiling ZK programs (this can take several minutes)…");
-    await MultisigVerifierProgram.compile();
+    await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
     console.log("MultisigVerifierProgram done.");
-    await ValidateReduceProgram.compile();
+    await ValidateReduceProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
     console.log("ValidateReduceProgram done.");
-    await ActionStackProgram.compile();
+    await ActionStackProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
     console.log("ActionStackProgram done.");
-    await SettlementContract.compile();
+    await SettlementContract.compile({ cache: Cache.FileSystem(CACHE_DIR) });
     console.log("SettlementContract done.");
 
     // ── fetch signer ────────────────────────────────────────────────────────

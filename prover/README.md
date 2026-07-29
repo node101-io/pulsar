@@ -137,6 +137,22 @@ Either set `MONGO_URI` directly, or set the individual fields to construct it.
 | `CONTRACT_PRIVATE_KEY` | Private key of the SettlementContract deployer |
 | `CONTRACT_ADDRESS`     | Deployed SettlementContract address on Mina    |
 
+## Circuit Compile Cache
+
+Each worker runs in its own process and compiles the circuits it needs at
+startup, so without a cache every restart pays the full cost again. Artifacts
+are written to `prover/cache/` (`CACHE_DIR` in `src/config/constants.ts`, and
+gitignored): compiling `MultisigVerifierProgram` drops from ~19 s to ~4 s once
+the cache is warm, and the settlement prover compiles four programs.
+
+All programs share the one directory on purpose — the SRS and Lagrange bases are
+program-independent, so they are generated once and reused, while prover and
+verifier keys are namespaced per program and method. Budget disk accordingly:
+one program alone is ~550 MB.
+
+Entries are keyed by a hash of the circuit, so a changed circuit recompiles
+rather than loading stale keys. Deleting the directory is always safe.
+
 ## All Scripts
 
 | Script                 | Description                                                       |

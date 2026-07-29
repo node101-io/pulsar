@@ -6,8 +6,9 @@ import { getProof, storeProof } from "../../db/models/Proof.js";
 import { ProofStatus } from "../../common/types.js";
 import logger from "../../common/logger.js";
 import { Aggregation } from "./master.js";
-import { PROOF_EPOCH_LEAF_COUNT } from "../../config/constants.js";
+import { PROOF_EPOCH_LEAF_COUNT, CACHE_DIR } from "../../config/constants.js";
 import { MergeSettlementProofs, SettlementProof, MultisigVerifierProgram } from "pulsar-contracts";
+import { Cache } from "o1js";
 import type { JsonProof } from "o1js";
 
 let compiled = false;
@@ -17,7 +18,7 @@ async function ensureCompiled() {
     // that arrives before the first compile finishes starts its own.
     compileLock = compileLock.then(async () => {
         if (!compiled) {
-            await MultisigVerifierProgram.compile();
+            await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
             compiled = true;
         }
     });
