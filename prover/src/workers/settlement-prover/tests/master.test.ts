@@ -9,6 +9,7 @@ vi.mock("../../../db/index.js", () => ({
     ProofEpochModel: {
         findOneAndUpdate: vi.fn(),
         updateOne: vi.fn(),
+        updateMany: vi.fn(),
     },
     incrementProofEpochFailCount: vi.fn(),
 }));
@@ -79,6 +80,27 @@ describe("settlement-prover master", () => {
 
         expect(settlementProverQ.add).not.toHaveBeenCalled();
         expect(sleep).toHaveBeenCalledWith(MASTER_SLEEP_INTERVAL_MS);
+    });
+
+    // Settlement consumes epochs in chain order, so proving them out of order
+    // only builds a backlog the settler cannot use. Selection must not depend on
+    // anything time-based: an epoch that has been ready for hours is exactly as
+    // eligible as one that just finished.
+    it("selects the lowest ready epoch, with no time-based condition", async () => {
+        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue(null as any);
+
+        const m = new SettlementProverMaster() as any;
+        await m.handleTask();
+
+        const [filter, , options] = vi.mocked(ProofEpochModel.findOneAndUpdate)
+            .mock.calls[0];
+        expect(filter).toEqual({
+            [`proofs.${PROOF_EPOCH_SETTLEMENT_INDEX}`]: { $ne: null },
+            kind: {
+                $nin: ["txProving", "settlement", "txSending", "done"],
+            },
+        });
+        expect(options).toMatchObject({ sort: { height: 1 } });
     });
 
     it("rolls back kind to original when queue add fails", async () => {

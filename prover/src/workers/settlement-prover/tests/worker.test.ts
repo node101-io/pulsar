@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { epochLastPulsarBlock } from "../../../common/epoch.js";
 
 vi.mock("../../../db/models/ProofEpoch.js", () => ({
     ProofEpochModel: {
@@ -15,12 +16,18 @@ vi.mock("pulsar-contracts", () => ({
     SettlementProof: {
         fromJSON: vi.fn(async () => ({})),
     },
+    MultisigVerifierProgram: { compile: vi.fn(async () => ({})) },
+    ValidateReduceProgram: { compile: vi.fn(async () => ({})) },
+    ActionStackProgram: { compile: vi.fn(async () => ({})) },
+    SettlementContract: { compile: vi.fn(async () => ({})) },
 }));
 
 vi.mock("o1js", () => ({
     PublicKey: {
         fromBase58: vi.fn(() => ({})),
     },
+    // config/cache.ts builds the shared compile cache at module load.
+    Cache: { FileSystem: vi.fn(() => ({})) },
 }));
 
 vi.mock("../../../services/mina/client.js", () => ({
@@ -122,8 +129,8 @@ describe("settlement-prover worker", () => {
         expect(proveSettlementTx).toHaveBeenCalledWith(
             expect.anything(),
             expect.anything(),
-            // epoch.height (16) + BLOCK_EPOCH_SIZE (8) - 1 = 23
-            23,
+            // epoch 16 spans blocks 16..47, so settling it lands at 47
+            epochLastPulsarBlock(16),
         );
     });
 

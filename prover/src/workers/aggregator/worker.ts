@@ -6,16 +6,36 @@ import { getProof, storeProof } from "../../db/models/Proof.js";
 import { ProofStatus } from "../../common/types.js";
 import logger from "../../common/logger.js";
 import { Aggregation } from "./master.js";
-import { PROOF_EPOCH_LEAF_COUNT, PROOF_EPOCH_SETTLEMENT_INDEX, WORKER_TIMEOUT_MS } from "../../config/constants.js";
+import { PROOF_EPOCH_LEAF_COUNT, CACHE_DIR } from "../../config/constants.js";
 import { MergeSettlementProofs, SettlementProof, MultisigVerifierProgram } from "pulsar-contracts";
+import { Cache } from "o1js";
 import type { JsonProof } from "o1js";
 
 let compiled = false;
+let compileLock: Promise<void> = Promise.resolve();
 async function ensureCompiled() {
-    if (!compiled) {
-        await MultisigVerifierProgram.compile();
-        compiled = true;
-    }
+    // `compiled` is only set after the await, so without this lock every worker
+    // that arrives before the first compile finishes starts its own.
+    compileLock = compileLock.then(async () => {
+        if (!compiled) {
+            await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+            compiled = true;
+        }
+    });
+    await compileLock;
+}
+
+// o1js keeps a single global proving context per process, so concurrent prove
+// calls corrupt each other — measured: running this stage unserialized turned a
+// clean run into 148 "global context reached an inconsistent state" failures
+// and halved throughput, because the failures are retried. The other two
+// proving stages already serialize; this one runs WORKER_COUNT workers, so it
+// needs the same.
+let provingQueue: Promise<void> = Promise.resolve();
+function serializeProving<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        provingQueue = provingQueue.then(() => fn().then(resolve, reject));
+    });
 }
 
 export async function worker(task: IProofEpoch, aggregation: Aggregation) {
@@ -33,12 +53,10 @@ export async function worker(task: IProofEpoch, aggregation: Aggregation) {
         throw new Error("One of the proofs to aggregate is missing.");
     }
 
-    await ensureCompiled();
-
-    const aggregatedProofJson = await generateAggregatedProof(
-        leftProofJson,
-        rightProofJson,
-    );
+    const aggregatedProofJson = await serializeProving(async () => {
+        await ensureCompiled();
+        return generateAggregatedProof(leftProofJson, rightProofJson);
+    });
 
     const aggregatedProofId = await storeProof(aggregatedProofJson);
 
@@ -47,7 +65,6 @@ export async function worker(task: IProofEpoch, aggregation: Aggregation) {
     }
 
     const proofSlotIndex = PROOF_EPOCH_LEAF_COUNT + aggregation.index;
-    const isRootProof = proofSlotIndex === PROOF_EPOCH_SETTLEMENT_INDEX;
 
     await ProofEpochModel.findOneAndUpdate(
         { height: task.height },
@@ -55,9 +72,6 @@ export async function worker(task: IProofEpoch, aggregation: Aggregation) {
             $set: {
                 [`proofs.${proofSlotIndex}`]: aggregatedProofId,
                 [`status.${aggregation.index}`]: "done" as ProofStatus,
-                // Refresh the timeout when the root proof is ready so the
-                // settlement-prover's timeoutAt filter doesn't skip this epoch
-                ...(isRootProof && { timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS) }),
             },
         },
     );

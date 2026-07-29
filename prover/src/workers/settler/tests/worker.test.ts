@@ -1,9 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { epochLastPulsarBlock } from "../../../common/epoch.js";
 
 vi.mock("../../../db/models/ProofEpoch.js", () => ({
     ProofEpochModel: {
         findOne: vi.fn(),
         findOneAndUpdate: vi.fn(),
+    },
+}));
+
+vi.mock("../../../db/models/Block.js", () => ({
+    BlockModel: {
+        deleteMany: vi.fn(async () => ({ deletedCount: 0 })),
     },
 }));
 
@@ -92,8 +99,8 @@ describe("settler worker", () => {
         expect(sendProvedSettlement).toHaveBeenCalledWith(
             expect.anything(),
             "theProvedJson",
-            // epoch.height (16) + BLOCK_EPOCH_SIZE (8) - 1 = 23
-            23,
+            // epoch 16 spans blocks 16..47, so settling it lands at 47
+            epochLastPulsarBlock(16),
         );
     });
 

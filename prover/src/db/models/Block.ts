@@ -5,7 +5,7 @@ import {
     BlockData,
     BlockStatus,
 } from "../../common/types.js";
-import { BLOCKS_TO_KEEP, WORKER_TIMEOUT_MS } from "../../config/constants.js";
+import { ANCHOR_BLOCK_HEIGHT } from "../../config/constants.js";
 import logger from "../../common/logger.js";
 
 export interface IBlock extends Document {
@@ -16,7 +16,6 @@ export interface IBlock extends Document {
     validatorListHash: string;
     actionsReducedRoot: string;
     voteExt: VoteExt[];
-    timeoutAt?: Date;
 }
 
 const VoteExtSchema = new Schema<VoteExt>(
@@ -48,26 +47,13 @@ const BlockSchema = new Schema<IBlock>(
         validatorListHash: { type: String, required: true },
         actionsReducedRoot: { type: String, required: true, default: "0" },
         voteExt: [VoteExtSchema],
-        timeoutAt: { type: Date },
     },
     { timestamps: true },
 );
 
-BlockSchema.post("save", async function () {
-    const Model = this.constructor as typeof BlockModel;
-    const count = await Model.countDocuments();
-    if (count > BLOCKS_TO_KEEP) {
-        const cutoff = await Model.findOne({})
-            .sort({ height: -1 })
-            .skip(BLOCKS_TO_KEEP - 1)
-            .select("height")
-            .lean(); // lean function returns a plain JavaScript object instead of a Mongoose document
-        if (cutoff) {
-            await Model.deleteMany({ height: { $lt: cutoff.height } });
-        }
-    }
-});
-
+// Pruning lives in the settler worker: it deletes an epoch's blocks once that
+// epoch is settled on Mina. Do not add a document middleware here — every write
+// goes through findOneAndUpdate, which does not fire document hooks.
 export const BlockModel = mongoose.model<IBlock>("Block", BlockSchema);
 
 // Utils
@@ -83,10 +69,7 @@ export async function storeBlock(block: BlockData) {
                 actionsReducedRoot: block.actionsReducedRoot,
                 voteExt: block.voteExt,
             },
-            $setOnInsert: {
-                status: "waiting",
-                timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS),
-            },
+            $setOnInsert: { status: "waiting" },
         },
         { upsert: true, new: true },
     );
@@ -116,6 +99,40 @@ export async function fetchBlockRange(
     );
 
     return blocks;
+}
+
+export interface AnchorBlock {
+    validatorListHash: string;
+    stateRoot: string;
+    height: number;
+}
+
+/**
+ * The block the first settlement proof starts from, and therefore the
+ * SettlementContract's initial state.
+ *
+ * All three fields must come from this one record: `settle` requires the
+ * contract's merkleListRoot, stateRoot and blockHeight to equal the proof's
+ * Initial* values. Sourcing any of them separately — from a different block, an
+ * env override, or a default — produces a contract that deploys cleanly and
+ * then rejects every settlement with an opaque precondition failure. So this
+ * reads one document and refuses to guess.
+ */
+export async function fetchAnchorBlock(): Promise<AnchorBlock> {
+    const block = await BlockModel.findOne({ height: ANCHOR_BLOCK_HEIGHT });
+
+    if (!block?.validatorListHash || block.stateRoot === undefined) {
+        throw new Error(
+            `Anchor block ${ANCHOR_BLOCK_HEIGHT} is missing or incomplete in MongoDB. ` +
+                "Run `pnpm run seed` against the target chain first.",
+        );
+    }
+
+    return {
+        validatorListHash: String(block.validatorListHash),
+        stateRoot: String(block.stateRoot),
+        height: Number(block.height),
+    };
 }
 
 export async function fetchLastStoredBlock(): Promise<IBlock | null> {

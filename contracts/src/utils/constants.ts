@@ -63,8 +63,10 @@ const ENDPOINTS = {
   EXPLORER: {
     devnet: 'https://minascan.io/devnet/tx/',
     mainnet: 'https://minascan.io/mainnet/tx/',
-    lightnet:
-      process.env.LIGHTNET_EXPLORER_URL ||
-      'file:///Users/kadircan/.cache/zkapp-cli/lightnet/explorer/v0.2.2/index.html?target=block&numberOrHash=',
+    // Only used to print clickable links in test logs. The zkApp CLI writes its
+    // lightnet explorer under the invoking user's home directory, so there is no
+    // default that works for anyone else — set LIGHTNET_EXPLORER_URL if you want
+    // the links.
+    lightnet: envOrDefault('LIGHTNET_EXPLORER_URL', ''),
   },
 };

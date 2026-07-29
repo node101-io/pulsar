@@ -1,3 +1,5 @@
+import { fileURLToPath } from "url";
+
 // Processors constants
 export const MASTER_SLEEP_INTERVAL_MS = 1000; // 1 second
 export const WORKER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
@@ -13,6 +15,13 @@ export const PROOF_EPOCH_SETTLEMENT_INDEX = PROOF_EPOCH_LEAF_COUNT * 2 - 2;
 export const POLL_INTERVAL_MS = 3_000;
 // first epoch 1-9
 export const EPOCH_START_HEIGHT = 2;
+// The block every proof chain starts from: createProof(EPOCH_START_HEIGHT)
+// reads from EPOCH_START_HEIGHT - 1, so this block's stateRoot,
+// validatorListHash and height are the SettlementContract's initial state.
+export const ANCHOR_BLOCK_HEIGHT = EPOCH_START_HEIGHT - 1;
+// The chain persists block H's vote extensions at H + this, so H is only
+// queryable once the chain has produced that later block.
+export const VOTE_EXT_PERSISTENCE_LAG = 3;
 
 // Monitor constants
 export const MAX_FAIL_COUNT = 3;
@@ -20,4 +29,11 @@ export const MONITOR_INTERVAL_MS = 30_000; // 30 seconds
 
 // Cleanup constants
 export const PROOF_TTL_SECONDS = 100 * 24 * 60 * 60; // 100 days
-export const BLOCKS_TO_KEEP = 100; // keep last N pulsar blocks
+
+// Compile cache constants
+// Every program shares one directory on purpose: the SRS and Lagrange bases are
+// program-independent, so they are generated once and reused. See the README's
+// "Circuit Compile Cache" section.
+export const CACHE_DIR = fileURLToPath(
+    new URL("../../../cache", import.meta.url),
+);

@@ -1,7 +1,6 @@
 import { PublicKey } from "o1js";
 
 import {
-    PROOF_EPOCH_SIZE,
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
     MASTER_SLEEP_INTERVAL_MS,
@@ -89,25 +88,6 @@ export class SettlerMaster extends Master<SettlerJob> {
     }
 
     protected async onStartup(): Promise<void> {
-        // Refresh timeoutAt for settlement-ready epochs that may have expired
-        // while the node was offline (rejoin scenario)
-        const refreshed = await ProofEpochModel.updateMany(
-            {
-                kind: "settlement" as ProofKind,
-                timeoutAt: { $lte: new Date() },
-            },
-            { $set: { timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS) } },
-        );
-        if (refreshed.modifiedCount > 0) {
-            logger.warn(
-                `Refreshed timeoutAt for ${refreshed.modifiedCount} expired settlement epoch(s) on startup`,
-                {
-                    count: refreshed.modifiedCount,
-                    event: "settlement_timeout_refresh",
-                },
-            );
-        }
-
         // Re-queue any epochs stuck in txSending without resetting kind,
         // so the worker can confirm or re-send the tx safely
         const stuckEpochs = await ProofEpochModel.find({
@@ -149,7 +129,6 @@ export class SettlerMaster extends Master<SettlerJob> {
         // Fast path: any settlement-ready epochs at all?
         const hasPending = await ProofEpochModel.exists({
             kind: { $eq: "settlement" as ProofKind },
-            timeoutAt: { $gt: new Date() },
         });
         if (!hasPending) {
             await sleep(MASTER_SLEEP_INTERVAL_MS);
@@ -165,18 +144,26 @@ export class SettlerMaster extends Master<SettlerJob> {
             event: "settler_checked_onchain_state",
         });
 
-        // Step 3b / 4: find the next epoch to settle, lowest height not yet settled on-chain
+        // A proof epoch at height H proves the transitions from block H-1
+        // through H-1+PROOF_EPOCH_SIZE, and `settle` requires the contract's
+        // blockHeight to equal that starting block. So at any moment exactly
+        // one epoch is settleable — the one at contractBlockHeight + 1.
+        //
+        // Matching a range instead would let the settler claim a later epoch
+        // whenever the next one is not ready yet. The contract must reject that
+        // transaction, but only after a full settlement proving cycle and three
+        // send attempts, and the epoch is then re-proved and fails again — an
+        // unbounded loop that never makes progress.
+        const nextEpochHeight = contractBlockHeight + 1;
         const epoch = await ProofEpochModel.findOneAndUpdate(
             {
                 kind: { $eq: "settlement" as ProofKind },
-                timeoutAt: { $gt: new Date() },
-                height: { $gt: contractBlockHeight - PROOF_EPOCH_SIZE },
+                height: { $eq: nextEpochHeight },
             },
             {
                 $set: { kind: "txSending" as ProofKind },
             },
             {
-                sort: { height: 1 },
                 new: false,
             },
         );

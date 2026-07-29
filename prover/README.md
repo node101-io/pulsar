@@ -44,7 +44,11 @@ Fill in `.env` — see [Environment Variables](#environment-variables) for detai
 
 ### 3. Seed the database
 
-This must be done once before the first run. It writes the genesis blocks (height 0 and 1) and the initial block epoch into MongoDB.
+This must be done once before the first run, and it needs the chain reachable.
+It writes two records into MongoDB: the genesis block (height 0) and the
+**anchor block** (`ANCHOR_BLOCK_HEIGHT`) that the first settlement proof starts
+from and the contract is initialized against. Sync then ingests contiguously
+from the anchor onwards.
 
 ```bash
 pnpm run seed
@@ -80,6 +84,10 @@ pulsard start --home ~/.pulsar-node1         # one terminal per node (1..3)
 
 Then point the prover at it with `PULSAR_GRPC_ENDPOINT=127.0.0.1:9090` in `.env`.
 The validator count must match the circuit's `VALIDATOR_NUMBER` (contracts).
+
+To exercise settlement too you also need a Mina lightnet and a deployed
+contract — see **[docs/local-development.md](docs/local-development.md)** for the
+complete chain + lightnet + deploy walkthrough.
 
 ---
 
@@ -129,17 +137,41 @@ Either set `MONGO_URI` directly, or set the individual fields to construct it.
 | `CONTRACT_PRIVATE_KEY` | Private key of the SettlementContract deployer |
 | `CONTRACT_ADDRESS`     | Deployed SettlementContract address on Mina    |
 
+## Circuit Compile Cache
+
+Each worker runs in its own process and compiles the circuits it needs at
+startup, so without a cache every restart pays the full cost again. Artifacts
+are written to `prover/cache/` (`CACHE_DIR` in `src/config/constants.ts`, and
+gitignored): compiling `MultisigVerifierProgram` drops from ~19 s to ~4 s once
+the cache is warm, and the settlement prover compiles four programs.
+
+All programs share the one directory on purpose — the SRS and Lagrange bases are
+program-independent, so they are generated once and reused, while prover and
+verifier keys are namespaced per program and method. Budget disk accordingly:
+one program alone is ~550 MB.
+
+Entries are keyed by a hash of the circuit, so a changed circuit recompiles
+rather than loading stale keys. Deleting the directory is always safe.
+
 ## All Scripts
 
-| Script               | Description                                                    |
-| -------------------- | -------------------------------------------------------------- |
-| `pnpm run start`      | Build and start the main prover node                           |
-| `pnpm run seed`       | Seed MongoDB with genesis blocks (run once before first start) |
-| `pnpm run smoke`      | One-shot ingest + prove smoke test against the configured node |
-| `pnpm run test`       | Run all tests once                                             |
-| `pnpm run test:watch` | Run tests in watch mode                                        |
-| `pnpm run build`      | Compile TypeScript to `dist/`                                  |
-| `pnpm run clean`      | Remove `dist/`, `coverage/`, and `node_modules/`               |
+| Script                 | Description                                                       |
+| ---------------------- | ----------------------------------------------------------------- |
+| `pnpm run start`        | Build and start the main prover node (all processors)             |
+| `pnpm run seed`         | Seed MongoDB with genesis blocks (run once before first start)    |
+| `pnpm run deploy`       | Deploy + initialize the SettlementContract on Mina (needs seed)   |
+| `pnpm run smoke`        | One-shot ingest + prove smoke test against the configured node    |
+| `pnpm run reset`        | Drop the MongoDB database                                         |
+| `pnpm run cli`          | Interactive CLI for inspecting stored state                       |
+| `pnpm run worker:*`     | Run one processor standalone (`block-prover`, `aggregator`, `settlement-prover`, `settler`) |
+| `pnpm run test`         | Run all tests once                                                |
+| `pnpm run test:watch`   | Run tests in watch mode                                           |
+| `pnpm run build`        | Compile TypeScript to `dist/`                                     |
+| `pnpm run clean`        | Remove `dist/`, `coverage/`, and `node_modules/`                  |
+
+`deploy` anchors the contract to the stored anchor block, so `seed` must run
+against the target chain first. See
+[docs/local-development.md](docs/local-development.md) for the full lightnet flow.
 
 ---
 
@@ -183,8 +215,7 @@ Each processor follows a **Master/Worker** pattern backed by BullMQ:
 
 ## TODO
 
-- **Block pruning never runs.** The `BLOCKS_TO_KEEP` cleanup in `src/db/models/Block.ts` is a `post("save")` hook, but blocks are written via `findOneAndUpdate` (`storeBlock`), which does not fire document `save` middleware — so old blocks are never deleted and the collection grows unbounded. Move the pruning into `storeBlock` (after the upsert) or register it as `post("findOneAndUpdate")` middleware.
-- **Validator set is re-fetched on every block.** `getBlockData` calls `GetValidatorSetByHeight` plus one keyregistry `GetValidatorMinaPubKey` gRPC call *per validator* for every ingested block, although the set rarely changes. Cache the sorted validator list keyed by the vote-ext body's `nextValidatorSetHash` (same hash → reuse, skip all lookups).
+- **Validator set is re-fetched on every block.** `getBlockData` makes two gRPC calls per ingested block (`GetValidatorSetByHeight` + the batched `GetValidatorSetWithMinaKeys`), although the set rarely changes. Cache the sorted validator list keyed by the vote-ext body's `nextValidatorSetHash` (same hash → reuse, skip both lookups).
 - **Add eslint with `@typescript-eslint/no-explicit-any: error`** to keep the gRPC boundary typed (the few remaining `any`s are documented reflection-boundary casts).
 
 ## Proto Types

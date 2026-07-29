@@ -103,7 +103,7 @@ describe("pulsar sync", () => {
         expect(chainClient.getLatestHeight).toHaveBeenCalledWith(mockTmClient);
     });
 
-    it("processes new blocks up to latestHeight - 2", async () => {
+    it("processes new blocks up to latestHeight - 3", async () => {
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue({ height: 5 } as any);
 
         const mockBlockData: BlockData = {
@@ -121,8 +121,8 @@ describe("pulsar sync", () => {
 
         vi.mocked(client.getBlockData).mockResolvedValue(mockBlockData);
         vi.mocked(client.storePulsarBlock).mockResolvedValue();
-        // latestHeight=9 → processUpTo=7 → h=6,7 (2 blocks)
-        vi.mocked(chainClient.getLatestHeight).mockResolvedValue(9);
+        // latestHeight=10 → processUpTo=7 → h=6,7 (2 blocks)
+        vi.mocked(chainClient.getLatestHeight).mockResolvedValue(10);
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
@@ -130,10 +130,10 @@ describe("pulsar sync", () => {
         expect(client.storePulsarBlock).toHaveBeenCalledTimes(2);
     });
 
-    it("does not process blocks when latestHeight - 2 <= currentHeight", async () => {
+    it("does not process blocks when latestHeight - 3 <= currentHeight", async () => {
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue({ height: 10 } as any);
-        // latestHeight=12 → processUpTo=10, not > currentHeight(10) → no blocks
-        vi.mocked(chainClient.getLatestHeight).mockResolvedValue(12);
+        // latestHeight=13 → processUpTo=10, not > currentHeight(10) → no blocks
+        vi.mocked(chainClient.getLatestHeight).mockResolvedValue(13);
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 
@@ -143,7 +143,8 @@ describe("pulsar sync", () => {
 
     it("passes all 4 clients to getBlockData", async () => {
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue({ height: 5 } as any);
-        vi.mocked(chainClient.getLatestHeight).mockResolvedValue(8);
+        // latestHeight=9 → processUpTo=6 → one block (h=6)
+        vi.mocked(chainClient.getLatestHeight).mockResolvedValue(9);
         vi.mocked(client.getBlockData).mockResolvedValue({
             height: 6,
             stateRoot: "0x1",

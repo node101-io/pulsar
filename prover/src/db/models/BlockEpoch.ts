@@ -3,7 +3,6 @@ import {
     BLOCK_EPOCH_SIZE,
     EPOCH_START_HEIGHT,
     PROOF_TTL_SECONDS,
-    WORKER_TIMEOUT_MS,
 } from "../../config/constants.js";
 import { BlockStatus } from "../../common/types.js";
 import logger from "../../common/logger.js";
@@ -13,7 +12,6 @@ export interface IBlockEpoch extends Document {
     blocks: (Types.ObjectId | null)[];
     status: BlockStatus[];
     epochStatus: BlockStatus;
-    timeoutAt: Date;
     failCount: number;
 }
 
@@ -36,10 +34,6 @@ const BlockEpochSchema = new Schema<IBlockEpoch>(
             type: String,
             enum: ["waiting", "processing", "done", "failed"],
             default: "waiting" as BlockStatus,
-        },
-        timeoutAt: {
-            type: Date,
-            default: new Date(Date.now() + WORKER_TIMEOUT_MS),
         },
         failCount: { type: Number, default: 0 },
     },
@@ -83,7 +77,6 @@ export async function storeBlockInBlockEpoch(
                 blocks: Array(BLOCK_EPOCH_SIZE).fill(null),
                 status: Array(BLOCK_EPOCH_SIZE).fill("waiting" as BlockStatus),
                 failCount: 0,
-                timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS),
             },
         },
         { upsert: true },
@@ -140,7 +133,6 @@ export async function incrementBlockEpochFailCount(height: number) {
         { height },
         {
             $inc: { failCount: 1 },
-            $set: { timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS) },
         },
     );
 }

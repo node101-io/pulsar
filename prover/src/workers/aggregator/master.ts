@@ -98,14 +98,11 @@ export class AggregatorMaster extends Master<AggregatorJob> {
             ],
         }));
 
-        const epoch = await ProofEpochModel.findOne(
-            {
-                $or: orClauses,
-                timeoutAt: { $gt: new Date() },
-            },
-            undefined,
-            { sort: { timeoutAt: 1 } },
-        );
+        // Ordered by height so aggregation follows the chain, which is also the
+        // order settlement consumes epochs in.
+        const epoch = await ProofEpochModel.findOne(orClauses.length ? { $or: orClauses } : {}, undefined, {
+            sort: { height: 1 },
+        });
 
         if (epoch) {
             const availablePatterns = patterns.filter(

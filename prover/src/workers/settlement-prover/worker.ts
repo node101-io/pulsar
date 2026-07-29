@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import { PublicKey } from "o1js";
+import { Cache, PublicKey } from "o1js";
 import {
     SettlementProof,
     MultisigVerifierProgram,
@@ -18,7 +18,8 @@ import {
     initMinaClientContext,
 } from "../../services/mina/client.js";
 import { proveSettlementTx } from "../../services/mina/settlement.js";
-import { PROOF_EPOCH_SIZE } from "../../config/constants.js";
+import { epochLastPulsarBlock } from "../../common/epoch.js";
+import { CACHE_DIR } from "../../config/constants.js";
 import { SettlementProverJob } from "../types.js";
 
 let compiled = false;
@@ -29,10 +30,10 @@ async function ensureCompiled() {
             logger.info("Compiling ZK programs for settlement-prover…", {
                 event: "settlement_prover_compile_start",
             });
-            await MultisigVerifierProgram.compile();
-            await ValidateReduceProgram.compile();
-            await ActionStackProgram.compile();
-            await SettlementContract.compile();
+            await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+            await ValidateReduceProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+            await ActionStackProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+            await SettlementContract.compile({ cache: Cache.FileSystem(CACHE_DIR) });
             compiled = true;
             logger.info("ZK programs compiled for settlement-prover.", {
                 event: "settlement_prover_compile_done",
@@ -98,12 +99,12 @@ export async function worker(task: SettlementProverJob): Promise<void> {
 
     const settlementProof = await SettlementProof.fromJSON(settlementProofJson);
 
-    const epochLastPulsarBlock = epoch.height + PROOF_EPOCH_SIZE;
+    const lastPulsarBlock = epochLastPulsarBlock(epoch.height);
 
     const provedTxJson = await serializeProving(async () => {
         await ensureCompiled();
         const ctx = await getMinaContext();
-        return proveSettlementTx(ctx, settlementProof, epochLastPulsarBlock);
+        return proveSettlementTx(ctx, settlementProof, lastPulsarBlock);
     });
 
     await setProofEpochSettlement(task.height, provedTxJson);

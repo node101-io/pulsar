@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { setBackend } from "o1js";
+import { Cache, setBackend } from "o1js";
 // wasm compiles everywhere in ~10s; the native backend crashes on some hosts.
 setBackend("wasm");
 
@@ -20,7 +20,7 @@ import {
     storePulsarBlock,
 } from "../services/pulsar/client.js";
 import { createProof } from "../workers/block-prover/worker.js";
-import { BLOCK_EPOCH_SIZE } from "../config/constants.js";
+import { BLOCK_EPOCH_SIZE, CACHE_DIR } from "../config/constants.js";
 import logger from "../common/logger.js";
 
 /**
@@ -70,7 +70,7 @@ async function main() {
     }
 
     logger.info("Compiling MultisigVerifierProgram...");
-    await MultisigVerifierProgram.compile();
+    await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
 
     logger.info(`Generating settlement proof for epoch ${E}...`);
     const proofId = await createProof(E);

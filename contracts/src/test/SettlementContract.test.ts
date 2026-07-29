@@ -37,7 +37,7 @@ import {
 } from '../types/PulsarAction';
 import { fetchRawActions } from '../utils/fetch';
 import { actionListAdd, emptyActionListHash } from '../types/actionHelpers';
-import { DeployScripts } from '../scripts/deploy.js';
+import { DeployScripts } from '../utils/deployHelpers.js';
 
 const { sendMina } = DeployScripts;
 
@@ -150,13 +150,15 @@ describe('SettlementProof tests', () => {
   async function initializeContract(
     zkapp: SettlementContract,
     deployerKey: PrivateKey,
-    merkleListRoot: Field
+    merkleListRoot: Field,
+    stateRoot: Field = Field(0),
+    blockHeight: Field = Field(0)
   ) {
     const deployerAccount = deployerKey.toPublicKey();
     const initTx = await Mina.transaction(
       { sender: deployerAccount, fee },
       async () => {
-        await zkapp.initialize(merkleListRoot, Field(0));
+        await zkapp.initialize(merkleListRoot, stateRoot, blockHeight);
       }
     );
 
@@ -174,7 +176,7 @@ describe('SettlementProof tests', () => {
       const tx = await Mina.transaction(
         { sender: deployerAccount, fee },
         async () => {
-          await zkapp.initialize(merkleListRoot, Field(0));
+          await zkapp.initialize(merkleListRoot, Field(0), Field(0));
         }
       );
       await waitTransactionAndFetchAccount(tx, [deployerKey]);
@@ -199,7 +201,7 @@ describe('SettlementProof tests', () => {
       async () => {
         AccountUpdate.fundNewAccount(deployerAccount);
         await zkapp.deploy();
-        await zkapp.initialize(merkleListRoot, Field(0));
+        await zkapp.initialize(merkleListRoot, Field(0), Field(0));
       }
     );
 
@@ -637,6 +639,39 @@ describe('SettlementProof tests', () => {
 
     it('Reject contract initialization again', async () => {
       await expectInitializeContractToFail(zkapp, feePayerKey, merkleList.hash);
+    });
+
+    // `settle` requires blockHeight and stateRoot to equal the first proof's
+    // Initial* values, so a contract tracking a live chain is initialized from
+    // a real anchor block rather than zero. Initialize once silently dropped
+    // blockHeight, which deploys fine and rejects every settlement forever.
+    it('Initialize persists a non-zero anchor', async () => {
+      const anchorKey = PrivateKey.random();
+      const anchorAddress = anchorKey.toPublicKey();
+      const anchorApp = new SettlementContract(anchorAddress);
+      const deployer = feePayerKey.toPublicKey();
+      const anchorStateRoot = Field(7);
+      const anchorBlockHeight = Field(11);
+
+      const tx = await Mina.transaction({ sender: deployer, fee }, async () => {
+        AccountUpdate.fundNewAccount(deployer);
+        await anchorApp.deploy();
+        await anchorApp.initialize(
+          merkleList.hash,
+          anchorStateRoot,
+          anchorBlockHeight
+        );
+      });
+
+      await waitTransactionAndFetchAccount(
+        tx,
+        [feePayerKey, anchorKey],
+        [anchorAddress]
+      );
+
+      expect(anchorApp.merkleListRoot.get()).toEqual(merkleList.hash);
+      expect(anchorApp.stateRoot.get()).toEqual(anchorStateRoot);
+      expect(anchorApp.blockHeight.get()).toEqual(anchorBlockHeight);
     });
   });
 

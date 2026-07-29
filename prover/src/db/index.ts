@@ -1,7 +1,16 @@
 export { initDb } from "./connection.js";
 
 // Block
-export { BlockModel, type IBlock, storeBlock, getBlock, fetchBlockRange, fetchLastStoredBlock } from "./models/Block.js";
+export {
+    BlockModel,
+    type IBlock,
+    type AnchorBlock,
+    storeBlock,
+    getBlock,
+    fetchBlockRange,
+    fetchAnchorBlock,
+    fetchLastStoredBlock,
+} from "./models/Block.js";
 
 // Proof
 export { ProofModel, type IProof, storeProof, getProof, deleteProof } from "./models/Proof.js";

@@ -8,16 +8,16 @@ import {
     fetchBlockRange,
 } from "../../db/index.js";
 import {
-    WORKER_TIMEOUT_MS,
     BLOCK_EPOCH_SIZE,
     EPOCH_START_HEIGHT,
     PROOF_EPOCH_LEAF_COUNT,
     PROOF_EPOCH_SIZE,
+    CACHE_DIR,
 } from "../../config/constants.js";
 import { BlockStatus, ProofKind, ProofStatus } from "../../common/types.js";
 import logger from "../../common/logger.js";
 import { BlockProverJob } from "../types.js";
-import { Field, PublicKey, Signature } from "o1js";
+import { Cache, Field, PublicKey, Signature } from "o1js";
 import {
     GeneratePulsarBlock,
     GenerateSettlementProof,
@@ -33,7 +33,7 @@ let compileLock: Promise<void> = Promise.resolve();
 async function ensureCompiled() {
     compileLock = compileLock.then(async () => {
         if (!compiled) {
-            await MultisigVerifierProgram.compile();
+            await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
             compiled = true;
         }
     });
@@ -269,16 +269,9 @@ async function createOrUpdateProofEpoch(
         { upsert: true },
     );
 
-    // Refresh timeoutAt on every leaf addition so the aggregator's timeout
-    // filter doesn't expire before all leaves are ready
     const result = await ProofEpochModel.findOneAndUpdate(
         { height: proofEpochHeight },
-        {
-            $set: {
-                [`proofs.${leafIndex}`]: proofId,
-                timeoutAt: new Date(Date.now() + WORKER_TIMEOUT_MS),
-            },
-        },
+        { $set: { [`proofs.${leafIndex}`]: proofId } },
         { new: true },
     );
 

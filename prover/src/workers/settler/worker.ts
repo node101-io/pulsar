@@ -11,6 +11,7 @@ import {
 } from "../../services/mina/client.js";
 import { sendProvedSettlement } from "../../services/mina/settlement.js";
 import { PROOF_EPOCH_SIZE } from "../../config/constants.js";
+import { epochLastPulsarBlock } from "../../common/epoch.js";
 import { SettlerJob } from "../types.js";
 
 let minaCtx: MinaClientContext | null = null;
@@ -59,9 +60,9 @@ export async function worker(task: SettlerJob) {
     }
 
     const ctx = await getMinaContext();
-    const epochLastPulsarBlock = epoch.height + PROOF_EPOCH_SIZE;
+    const lastPulsarBlock = epochLastPulsarBlock(epoch.height);
 
-    await sendProvedSettlement(ctx, epoch.provedTxJson, epochLastPulsarBlock);
+    await sendProvedSettlement(ctx, epoch.provedTxJson, lastPulsarBlock);
 
     await setProofEpochDone(task.height);
 }

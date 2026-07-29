@@ -98,14 +98,14 @@ describe("db proofEpoch utils", () => {
         expect(ProofEpochModel.deleteOne).toHaveBeenCalledWith({ height: 8 });
     });
 
-    it("incrementProofEpochFailCount increments failCount and updates timeoutAt", async () => {
+    it("incrementProofEpochFailCount increments failCount", async () => {
         vi.spyOn(ProofEpochModel, "updateOne").mockResolvedValue({} as any);
 
         await incrementProofEpochFailCount(8);
 
-        const call = vi.mocked(ProofEpochModel.updateOne).mock
-            .calls[0][1] as any;
-        expect(call.$inc).toEqual({ failCount: 1 });
-        expect(call.$set.timeoutAt).toBeInstanceOf(Date);
+        expect(ProofEpochModel.updateOne).toHaveBeenCalledWith(
+            { height: 8 },
+            { $inc: { failCount: 1 } },
+        );
     });
 });

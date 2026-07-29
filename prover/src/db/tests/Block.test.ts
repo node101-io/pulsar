@@ -3,9 +3,14 @@ import {
     storeBlock,
     getBlock,
     fetchBlockRange,
+    fetchAnchorBlock,
     fetchLastStoredBlock,
     BlockModel,
 } from "../models/Block.js";
+import {
+    ANCHOR_BLOCK_HEIGHT,
+    EPOCH_START_HEIGHT,
+} from "../../config/constants.js";
 
 vi.mock("../../common/logger.js", () => ({
     default: {
@@ -25,34 +30,37 @@ describe("db block utils", () => {
         vi.restoreAllMocks();
     });
 
-    it("storeBlock upserts block with timeout and waiting status on insert", async () => {
-        vi.spyOn(BlockModel, "updateOne").mockResolvedValue({} as any);
+    it("storeBlock upserts block with waiting status on insert", async () => {
+        vi.spyOn(BlockModel, "findOneAndUpdate").mockResolvedValue({} as any);
 
+        const validators = [
+            { addr: "v1", power: "1" },
+            { addr: "v2", power: "2" },
+        ];
         const block = {
             height: 10,
             stateRoot: "root",
-            validators: ["v1", "v2"],
+            validators,
             validatorListHash: "hash",
+            actionsReducedRoot: "0",
             voteExt: [],
         } as any;
 
         await storeBlock(block);
 
-        expect(BlockModel.updateOne).toHaveBeenCalledWith(
+        expect(BlockModel.findOneAndUpdate).toHaveBeenCalledWith(
             { height: 10 },
             expect.objectContaining({
                 $set: {
                     stateRoot: "root",
-                    validators: ["v1", "v2"],
+                    validators,
                     validatorListHash: "hash",
+                    actionsReducedRoot: "0",
                     voteExt: [],
                 },
-                $setOnInsert: expect.objectContaining({
-                    status: "waiting",
-                    timeoutAt: expect.any(Date),
-                }),
+                $setOnInsert: { status: "waiting" },
             }),
-            { upsert: true },
+            { upsert: true, new: true },
         );
     });
 
@@ -95,6 +103,59 @@ describe("db block utils", () => {
         expect(result[0]).toEqual(mockBlocks[0]);
         expect(result[1]).toEqual(mockBlocks[0]);
         expect(result[2]).toEqual(mockBlocks[1]);
+    });
+
+    // These pin the contract's initial state. The bug they guard against does
+    // not surface here — it surfaces minutes later, on-chain, as an account
+    // precondition failure that names no cause.
+    describe("fetchAnchorBlock", () => {
+        const anchorDoc = {
+            height: ANCHOR_BLOCK_HEIGHT,
+            stateRoot: "111",
+            validatorListHash: "222",
+        };
+
+        it("reads the block the first proof starts from, not the genesis record", async () => {
+            vi.spyOn(BlockModel, "findOne").mockResolvedValue(anchorDoc as any);
+
+            await fetchAnchorBlock();
+
+            expect(BlockModel.findOne).toHaveBeenCalledWith({
+                height: ANCHOR_BLOCK_HEIGHT,
+            });
+            // createProof(EPOCH_START_HEIGHT) reads from one block below it —
+            // that block, and only that block, is a valid anchor.
+            expect(ANCHOR_BLOCK_HEIGHT).toBe(EPOCH_START_HEIGHT - 1);
+        });
+
+        it("returns all three fields from that one record", async () => {
+            vi.spyOn(BlockModel, "findOne").mockResolvedValue(anchorDoc as any);
+
+            await expect(fetchAnchorBlock()).resolves.toEqual({
+                validatorListHash: "222",
+                stateRoot: "111",
+                height: ANCHOR_BLOCK_HEIGHT,
+            });
+        });
+
+        it("throws instead of defaulting when the anchor is missing", async () => {
+            vi.spyOn(BlockModel, "findOne").mockResolvedValue(null as any);
+
+            await expect(fetchAnchorBlock()).rejects.toThrow(
+                /Anchor block .* is missing or incomplete/,
+            );
+        });
+
+        it("throws when the anchor record is incomplete", async () => {
+            vi.spyOn(BlockModel, "findOne").mockResolvedValue({
+                height: ANCHOR_BLOCK_HEIGHT,
+                stateRoot: "111",
+            } as any);
+
+            await expect(fetchAnchorBlock()).rejects.toThrow(
+                /missing or incomplete/,
+            );
+        });
     });
 
     it("fetchLastStoredBlock returns null and logs warn when no block", async () => {

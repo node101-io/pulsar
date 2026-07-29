@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { MASTER_SLEEP_INTERVAL_MS } from "../../../config/constants.js";
+import {
+    BLOCK_EPOCH_SIZE,
+    MASTER_SLEEP_INTERVAL_MS,
+} from "../../../config/constants.js";
 
 vi.mock("../../../db/index.js", () => ({
     BlockEpochModel: {
@@ -46,7 +49,7 @@ describe("block-prover master", () => {
         vi.clearAllMocks();
     });
 
-    it("queues exactly one job when epoch found", async () => {
+    it("queues one job per block of the epoch when epoch found", async () => {
         vi.mocked(BlockEpochModel.findOneAndUpdate).mockResolvedValue({
             height: 8,
         } as any);
@@ -54,10 +57,14 @@ describe("block-prover master", () => {
         const m = new BlockProverMaster() as any;
         await m.handleTask();
 
-        expect(blockProverQ.add).toHaveBeenCalledTimes(1);
-        expect(blockProverQ.add).toHaveBeenCalledWith("block-prover", {
-            height: 8,
-        });
+        expect(blockProverQ.add).toHaveBeenCalledTimes(BLOCK_EPOCH_SIZE);
+        for (let i = 0; i < BLOCK_EPOCH_SIZE; i++) {
+            expect(blockProverQ.add).toHaveBeenNthCalledWith(
+                i + 1,
+                "block-prover",
+                { height: 8, blockIndex: i },
+            );
+        }
         expect(sleep).not.toHaveBeenCalled();
     });
 
