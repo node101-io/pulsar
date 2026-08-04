@@ -1,27 +1,18 @@
 import { PublicKey, Signature } from "o1js";
 import logger from "../../common/logger.js";
+import { env } from "../../config/env.js";
 
 export interface ValidatorSignature {
     validatorPublicKey: PublicKey;
     signature: Signature;
 }
 
-// PULSAR_VALIDATOR_ENDPOINTS=http://v1:6000,http://v2:6000,...
-function getValidatorEndpoints(): string[] {
-    const raw = process.env.PULSAR_VALIDATOR_ENDPOINTS ?? "";
-    return raw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-}
-
 export async function requestSignatures(
     initialActionState: string,
     finalActionState: string,
 ): Promise<ValidatorSignature[]> {
-    const endpoints = getValidatorEndpoints();
-    if (endpoints.length === 0)
-        throw new Error("PULSAR_VALIDATOR_ENDPOINTS is not set");
+    // Parsed and non-empty by the boot-time env gate.
+    const endpoints = env.PULSAR_VALIDATOR_ENDPOINTS;
 
     const results = await Promise.allSettled(
         endpoints.map((url) =>

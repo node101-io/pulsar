@@ -3,6 +3,7 @@ import { SettlementContract } from "pulsar-contracts/build/src/SettlementContrac
 import { setMinaNetwork } from "pulsar-contracts/build/src/utils/fetch.js";
 import { ENDPOINTS } from "pulsar-contracts/build/src/utils/constants.js";
 import logger from "../../common/logger.js";
+import { env } from "../../config/env.js";
 
 export type MinaNetwork = "devnet" | "mainnet" | "lightnet";
 
@@ -32,9 +33,8 @@ const STATE_INDEX = {
 } as const;
 
 export async function initMinaClientContext(): Promise<MinaClientContext> {
-    const network = (process.env.MINA_NETWORK ?? "lightnet") as MinaNetwork;
-    const contractAddressStr = process.env.CONTRACT_ADDRESS;
-    if (!contractAddressStr) throw new Error("CONTRACT_ADDRESS is not set");
+    const network: MinaNetwork = env.MINA_NETWORK;
+    const contractAddressStr = env.CONTRACT_ADDRESS;
 
     const nodeEndpoint = ENDPOINTS.NODE[network];
     const archiveEndpoint = ENDPOINTS.ARCHIVE[network];

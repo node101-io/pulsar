@@ -7,6 +7,7 @@ import type { Batch } from "pulsar-contracts/build/src/types/PulsarAction.js";
 import type { ReduceMask } from "pulsar-contracts/build/src/types/common.js";
 import type { MinaClientContext } from "./client.js";
 import logger from "../../common/logger.js";
+import { env } from "../../config/env.js";
 
 const MAX_RETRY = 3;
 
@@ -33,11 +34,8 @@ export interface ReduceTxParams {
 export async function proveReduceTx(params: ReduceTxParams): Promise<string> {
     const { ctx, batch, useActionStack, actionStackProof, mask, validateReduceProof, fromActionState } = params;
 
-    const privateKeyBase58 = process.env.MINA_PRIVATE_KEY;
-    if (!privateKeyBase58) throw new Error("MINA_PRIVATE_KEY is not set");
-
-    const fee = Number(process.env.MINA_FEE ?? 1e8);
-    const senderKey = PrivateKey.fromBase58(privateKeyBase58);
+    const fee = env.MINA_FEE;
+    const senderKey = PrivateKey.fromBase58(env.MINA_PRIVATE_KEY);
     const sender = senderKey.toPublicKey();
 
     await fetchAccount({ publicKey: sender });
@@ -69,10 +67,7 @@ export async function sendProvedReduceTx(
     provedTxJson: string,
     fromActionState: string,
 ): Promise<void> {
-    const privateKeyBase58 = process.env.MINA_PRIVATE_KEY;
-    if (!privateKeyBase58) throw new Error("MINA_PRIVATE_KEY is not set");
-
-    const senderKey = PrivateKey.fromBase58(privateKeyBase58);
+    const senderKey = PrivateKey.fromBase58(env.MINA_PRIVATE_KEY);
 
     for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
         try {

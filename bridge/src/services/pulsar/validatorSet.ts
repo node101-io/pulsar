@@ -9,6 +9,7 @@ import {
 import { computeValidatorListHash } from "pulsar-contracts";
 
 import logger from "../../common/logger.js";
+import { env } from "../../config/env.js";
 
 // The circuits verify the validator MerkleList by rebuilding every leaf as
 // hashValidatorLeaf(publicKey, power) in the chain's fold order, so the bridge
@@ -26,7 +27,7 @@ let _clients: { tm: TendermintClient; kr: KeyregistryClient } | null = null;
 async function getClients() {
     if (_clients) return _clients;
 
-    const endpoint = process.env.PULSAR_GRPC_ENDPOINT;
+    const endpoint = env.PULSAR_GRPC_ENDPOINT;
     if (!endpoint) throw new Error("PULSAR_GRPC_ENDPOINT is not set");
 
     const creds = grpc.credentials.createInsecure();
@@ -66,9 +67,31 @@ export async function resolveValidatorSetForRoot(
     const cached = setByRoot.get(merkleListRoot);
     if (cached) return cached;
 
-    const { tm, kr } = await getClients();
-
     const tried: string[] = [];
+
+    // Lightnet/dev escape hatch: with no Pulsar chain to query, the ordered
+    // set can be supplied directly (parsed and shape-checked by the env
+    // schema). It passes the exact same hash gate as every gRPC candidate,
+    // so a wrong override fails fast here and can never reach proving.
+    const override = env.VALIDATOR_SET_OVERRIDE;
+    if (override) {
+        const hash = validatorSetHash(override);
+        if (hash === merkleListRoot) {
+            setByRoot.set(merkleListRoot, override);
+            return override;
+        }
+        tried.push(`override (hash ${hash})`);
+    }
+
+    if (!env.PULSAR_GRPC_ENDPOINT) {
+        throw new Error(
+            `No validator set reproduces on-chain merkleListRoot ` +
+                `${merkleListRoot}; tried: ${tried.join(", ") || "nothing"} ` +
+                `(PULSAR_GRPC_ENDPOINT not set)`,
+        );
+    }
+
+    const { tm, kr } = await getClients();
     // "latest" is the fallback for pruned nodes: the contract's settled height
     // can fall outside the node's retained state window while the validator
     // set itself is unchanged — the tip's set then still folds to the root.

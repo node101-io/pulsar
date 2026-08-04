@@ -1,11 +1,10 @@
 import IORedis from "ioredis";
-import dotenv from "dotenv";
-dotenv.config();
+import { env } from "../config/env.js";
 
 const connection = new IORedis({
-    host: process.env.REDIS_HOST ?? "redis",
-    port: Number(process.env.REDIS_PORT) || 6379,
-    password: process.env.REDIS_PASSWORD,
+    host: env.REDIS_HOST,
+    port: env.REDIS_PORT,
+    password: env.REDIS_PASSWORD,
     maxRetriesPerRequest: null,
 });
 
