@@ -60,10 +60,15 @@ MINA_NETWORK=devnet
 CONTRACT_ADDRESS=<deployed SettlementContract address>
 MINA_PRIVATE_KEY=<base58 private key for the bridge signing account>
 
-PULSAR_VALIDATOR_ENDPOINTS=http://localhost:6000,http://localhost:6001
+# NOT port 6000 (undici's fetch enforces the spec bad-port list — 6000 = X11)
+# and NOT 7000 (macOS AirPlay listens there)
+PULSAR_VALIDATOR_ENDPOINTS=http://localhost:7100,http://localhost:7101
 ```
 
-See the full reference below for all variables.
+See the full reference below for all variables. Every variable is parsed and
+validated at boot by `src/config/env.ts` (t3-env + zod): a missing or
+malformed value fails immediately at startup — before Mongo connects or the
+multi-minute compile begins — with the offending variable named.
 
 ### 4. Start MongoDB and Redis
 
@@ -154,10 +159,11 @@ pm2 restart all
 | `CONTRACT_ADDRESS`          | —               | Deployed `SettlementContract` address (base58)                               |
 | `MINA_PRIVATE_KEY`          | —               | Signing key for the bridge account that sends reduce TXs (base58)            |
 | `MINA_FEE`                  | `100000000`     | Transaction fee in nanomina (0.1 MINA)                                       |
-| `PULSAR_VALIDATOR_ENDPOINTS`| —               | Comma-separated list of Pulsar signer-node base URLs (e.g. `http://v1:6000`) |
+| `PULSAR_VALIDATOR_ENDPOINTS`| —               | Comma-separated list of Pulsar signer-node base URLs (e.g. `http://v1:7100`; avoid port 6000 — undici's fetch blocks it — and 7000 — macOS AirPlay) |
 | `PULSAR_GRPC_ENDPOINT`      | —               | Pulsar chain gRPC endpoint (validator set + powers)                          |
+| `VALIDATOR_SET_OVERRIDE`    | —               | Ordered validator set as JSON `[{"minaPublicKey":"B62...","power":"1"},...]` for environments without a Pulsar chain (lightnet). Hash-gated against the contract's `merkleListRoot`, so a wrong set fails fast |
 | `MAX_RETRY`                 | `3`             | Non-transient strikes per queue front before the master halts                |
-| `LOG_LEVEL`                 | `info`          | Winston log level                                                            |
+| `LOG_LEVEL`                 | `info`          | Log level (pino)                                                             |
 | `NODE_ENV`                  | `production`    | Node environment                                                             |
 
 ---

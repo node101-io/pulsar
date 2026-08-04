@@ -32,6 +32,8 @@
 
 `processed == tip` → nothing to do. `processed != tip` → the difference IS the pending queue, fetched from the Archive with `fetchActions(contract, processed)` on every attempt. There is no work list in MongoDB, no per-block bookkeeping, and no finality delay before reducing: a reorged action makes the rebuilt fold disagree with the surviving branch, the contract rejects the TX, and the next attempt re-derives everything. Crash recovery is the same mechanism — whatever landed already moved `processed`.
 
+One archive quirk matters here: the archive can only slice action history at **block boundaries**, while `reduce` consumes `BATCH_SIZE` actions regardless of block alignment. When `processed` lands mid-block, the ranged query returns empty even though actions are pending; `fetchActions` (contracts `utils/fetch.ts`) then refetches the full history and slices it locally on the per-action hash chain. The worker's refold cross-check validates the slice, so a bad cut can never reach proving.
+
 **Key responsibilities:**
 
 - Detecting pending actions from the contract's on-chain action-state gap
