@@ -18,22 +18,22 @@ async function fetchRawActions(
   fromActionState: Field,
   endActionState?: Field
 ) {
-  try {
-    const result = await Mina.fetchActions(address, {
-      fromActionState,
-      endActionState,
-    });
+  // Errors must propagate: swallowing them into an empty result makes an
+  // archive outage indistinguishable from a genuinely empty action queue,
+  // which callers cannot handle safely.
+  const result = await Mina.fetchActions(address, {
+    fromActionState,
+    endActionState,
+  });
 
-    log('Fetched actions:', JSON.stringify(result), null, 2);
+  log('Fetched actions:', JSON.stringify(result), null, 2);
 
-    if (Array.isArray(result)) {
-      return result;
-    } else {
-      console.error('Error fetching actions:', result.error);
-    }
-  } catch (error) {
-    console.error('Unexpected error:', error);
+  if (!Array.isArray(result)) {
+    throw new Error(
+      `Error fetching actions: ${JSON.stringify(result.error)}`
+    );
   }
+  return result;
 }
 
 async function fetchActions(
@@ -47,7 +47,7 @@ async function fetchActions(
     endActionState
   );
 
-  if (!rawActions || rawActions.length === 0) {
+  if (rawActions.length === 0) {
     console.warn('No actions found for the given address and state range.');
     return [];
   }
