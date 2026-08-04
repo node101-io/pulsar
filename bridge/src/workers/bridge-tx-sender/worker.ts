@@ -271,7 +271,7 @@ async function recordAttempt(fromActionState: string): Promise<void> {
                 },
             },
         ],
-        { upsert: true },
+        { upsert: true, updatePipeline: true },
     );
 }
 

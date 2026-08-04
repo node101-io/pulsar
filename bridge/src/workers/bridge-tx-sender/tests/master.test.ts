@@ -233,7 +233,7 @@ describe("bridge-tx-sender master — failure bookkeeping", () => {
         expect(mockBridgeStateFindOneAndUpdate).toHaveBeenCalledWith(
             {},
             FAILURE_PIPELINE,
-            { new: true },
+            { new: true, updatePipeline: true },
         );
     });
 
@@ -294,7 +294,7 @@ describe("bridge-tx-sender master — onStartup", () => {
         expect(mockBridgeStateFindOneAndUpdate).toHaveBeenCalledWith(
             {},
             FAILURE_PIPELINE,
-            { new: true },
+            { new: true, updatePipeline: true },
         );
     });
 

@@ -419,7 +419,7 @@ describe("worker()", () => {
                 },
             },
         ]);
-        expect(identityCall[2]).toEqual({ upsert: true });
+        expect(identityCall[2]).toEqual({ upsert: true, updatePipeline: true });
         expect(
             mockBridgeStateUpdateOne.mock.invocationCallOrder[0],
         ).toBeLessThan(mockFetchActions.mock.invocationCallOrder[0]);
