@@ -78,9 +78,13 @@ const ActionStackProgram = ZkProgram({
         actionQueue: ActionStackQueue
       ) {
         proofSoFar.verify();
-        initialActionState.assertEquals(proofSoFar.publicOutput);
+        // The anchor must survive every recursion layer: SettlementContract
+        // asserts the FINAL proof's publicInput equals the batch-end action
+        // state, so each layer re-exposes the original anchor and resumes
+        // folding from the previous layer's end.
+        initialActionState.assertEquals(proofSoFar.publicInput);
 
-        let actionState = initialActionState;
+        let actionState = proofSoFar.publicOutput;
 
         for (let i = 0; i < ACTION_QUEUE_SIZE; i++) {
           const action = actionQueue.stack[i];

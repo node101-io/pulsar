@@ -18,7 +18,11 @@ import {
 import { log, table } from './loggers.js';
 import { PulsarAction } from '../types/PulsarAction.js';
 import { ACTION_QUEUE_SIZE, SETTLEMENT_MATRIX_SIZE } from './constants.js';
-import { ActionStackProgram, ActionStackQueue } from '../ActionStack.js';
+import {
+  ActionStackProgram,
+  ActionStackProof,
+  ActionStackQueue,
+} from '../ActionStack.js';
 
 export {
   GenerateSettlementProof,
@@ -217,6 +221,16 @@ async function GenerateActionStackProof(
   endActionState: Field,
   actions: PulsarAction[]
 ) {
+  if (actions.length === 0) {
+    // The contract ignores the proof when useActionStack is false but still
+    // verifies its shape — the dummy convention matches reduceWitness.ts and
+    // replaces a pointlessly real proveBase over an empty queue.
+    return {
+      useActionStack: Bool(false),
+      actionStackProof: await ActionStackProof.dummy(Field(0), Field(0), 1, 14),
+    };
+  }
+
   let proof = (
     await ActionStackProgram.proveBase(
       endActionState,
@@ -224,18 +238,13 @@ async function GenerateActionStackProof(
     )
   ).proof;
 
-  if (actions.length === 0) {
-    return {
-      useActionStack: Bool(false),
-      actionStackProof: proof,
-    };
-  }
-
   try {
     for (let i = 1; i < Math.ceil(actions.length / ACTION_QUEUE_SIZE); i++) {
       proof = (
         await ActionStackProgram.proveRecursive(
-          proof.publicOutput,
+          // endActionState is the anchor the contract asserts against — it
+          // must be passed unchanged to every layer, never the running fold.
+          endActionState,
           proof,
           ActionStackQueue.fromArray(
             actions.slice(i * ACTION_QUEUE_SIZE, (i + 1) * ACTION_QUEUE_SIZE)

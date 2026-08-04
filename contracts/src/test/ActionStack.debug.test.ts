@@ -243,19 +243,23 @@ describe('ActionStack — compile & prove timing (mock proofs)', () => {
       const secondActions = TestUtils.GenerateTestActions(ACTION_QUEUE_SIZE / 2);
       const secondQueue = ActionStackQueue.fromArray(secondActions);
 
-      // initialActionState for recursive must equal base proof's publicOutput
-      const nextInitial = baseResult.proof.publicOutput;
-
       const t = performance.now();
+      // The anchor (the base proof's publicInput) travels unchanged through
+      // every recursion layer — SettlementContract asserts the final proof's
+      // publicInput against the batch-end action state.
       const result = await ActionStackProgram.proveRecursive(
-        nextInitial,
+        initial,
         baseResult.proof,
         secondQueue
       );
       console.log(`\nproveRecursive() with ${secondActions.length} actions: ${ms(t)}`);
 
-      // publicInput of recursive proof must equal base proof's publicOutput
-      result.proof.publicInput.assertEquals(baseResult.proof.publicOutput);
+      result.proof.publicInput.assertEquals(initial);
+      const expected = computeExpectedRoot(
+        baseResult.proof.publicOutput,
+        secondActions
+      );
+      result.proof.publicOutput.assertEquals(expected);
     },
     60 * 60 * 1000
   );
