@@ -10,12 +10,13 @@ export {
   fetchBlockHeight,
   fetchEvents,
   setMinaNetwork,
+  sliceActionHistory,
   waitForTransaction,
 };
 
 async function fetchRawActions(
   address: PublicKey,
-  fromActionState: Field,
+  fromActionState?: Field,
   endActionState?: Field
 ) {
   // Errors must propagate: swallowing them into an empty result makes an
@@ -41,11 +42,25 @@ async function fetchActions(
   fromActionState: Field,
   endActionState?: Field
 ) {
-  const rawActions = await fetchRawActions(
+  let rawActions = await fetchRawActions(
     address,
     fromActionState,
     endActionState
   );
+
+  if (rawActions.length === 0) {
+    // The archive can only slice the action history at block boundaries. A
+    // fromActionState that landed mid-block — e.g. a BATCH_SIZE cut inside a
+    // block that carried several dispatches — comes back empty even while
+    // actions are pending. Refetch the full history and slice locally on the
+    // per-action hash chain; callers verify the slice by refolding it against
+    // the account's stored action states, so a bad slice can never prove.
+    rawActions = sliceActionHistory(
+      await fetchRawActions(address),
+      fromActionState,
+      endActionState
+    );
+  }
 
   if (rawActions.length === 0) {
     console.warn('No actions found for the given address and state range.');
@@ -58,6 +73,41 @@ async function fetchActions(
       hash: BigInt(action.hash),
     };
   });
+}
+
+/**
+ * Cut a full per-action history (one entry per action, `hash` = the action
+ * state AFTER applying it) down to the (fromActionState, endActionState]
+ * range. States that are not on the chain throw instead of degrading into an
+ * empty or over-wide result: both point at archive lag or inconsistency the
+ * caller must not paper over.
+ */
+function sliceActionHistory(
+  history: { actions: string[][]; hash: string }[],
+  fromActionState: Field,
+  endActionState?: Field
+) {
+  const from = fromActionState.toString();
+  const cut = history.findIndex((entry) => entry.hash === from);
+  if (cut === -1 && history.length > 0) {
+    throw new Error(
+      `fromActionState ${from} is not on the fetched action chain — ` +
+        `archive is lagging or inconsistent`
+    );
+  }
+  let sliced = history.slice(cut + 1);
+  if (endActionState !== undefined) {
+    const end = endActionState.toString();
+    const endIndex = sliced.findIndex((entry) => entry.hash === end);
+    if (endIndex === -1) {
+      throw new Error(
+        `endActionState ${end} is not on the fetched action chain after ` +
+          `${from} — archive is lagging or inconsistent`
+      );
+    }
+    sliced = sliced.slice(0, endIndex + 1);
+  }
+  return sliced;
 }
 
 async function fetchBlockHeight(
