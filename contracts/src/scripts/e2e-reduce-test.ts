@@ -281,19 +281,17 @@ async function main() {
   let useActionStack = Bool(false);
   let actionStackProof: ActionStackProof;
   if (useMockProof) {
-    actionStackProof = await ActionStackProof.dummy(
-      Field(0),
-      Field(0),
-      0,
-    );
+    // shape convention from reduceWitness.ts — (1, 14), anything else fails
+    // in-circuit even under verifyIf(false)
+    actionStackProof = await ActionStackProof.dummy(Field(0), Field(0), 1, 14);
   } else {
-    log(
-      'Generating ActionStackProof (proveBase — real proof required for real tx.prove())...'
-    );
     const t2 = Date.now();
+    // The batch already contains ALL pending actions, so the stack remainder
+    // is EMPTY — passing the full list again would double-fold it and produce
+    // an account.actionState precondition no stored state can ever satisfy.
     ({ useActionStack, actionStackProof } = await GenerateActionStackProof(
       finalActionState,
-      pulsarActions
+      []
     ));
 
     log(`  ActionStackProof ✓ (${Date.now() - t2}ms)`);
