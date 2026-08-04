@@ -1,68 +1,35 @@
-import winston from "winston";
+import pino from "pino";
 
 const isProduction = process.env.NODE_ENV === "production";
 const isDocker = !!process.env.DOCKER_CONTAINER;
 
-const logger = winston.createLogger({
+// pino's err serializer natively handles what winston never did: an Error
+// attached to the log metadata (message/stack are non-enumerable, so plain
+// JSON serialization yields {}). The `error` key is the codebase-wide
+// convention for attaching one; cause chains are unwrapped too.
+const base = pino({
     level: process.env.LOG_LEVEL || (isProduction ? "info" : "debug"),
-    defaultMeta: {
+    base: {
         service: "pulsar-bridge",
         environment: process.env.NODE_ENV || "development",
         container: process.env.HOSTNAME || "local",
     },
-    format: winston.format.combine(
-        winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" }),
-        winston.format.errors({ stack: true }),
-        winston.format.metadata({
-            fillExcept: ["message", "level", "timestamp"],
-        }),
-        isDocker || isProduction
-            ? winston.format.json()
-            : winston.format.combine(
-                  winston.format.colorize(),
-                  winston.format.printf(
-                      ({ timestamp, level, message, metadata }) => {
-                          const meta =
-                              metadata &&
-                              typeof metadata === "object" &&
-                              Object.keys(metadata).length
-                                  ? JSON.stringify(metadata, null, 2)
-                                  : "";
-                          return `${timestamp} [${level}]: ${message}${
-                              meta ? `\n${meta}` : ""
-                          }`;
-                      },
-                  ),
-              ),
-    ),
-    transports: [
-        new winston.transports.Console({
-            handleExceptions: true,
-            handleRejections: true,
-        }),
-    ],
-    exitOnError: false,
+    serializers: {
+        error: pino.stdSerializers.errWithCause,
+    },
+    transport:
+        !isDocker && !isProduction ? { target: "pino-pretty" } : undefined,
 });
 
-if (!isDocker) {
-    logger.add(
-        new winston.transports.File({
-            filename: "logs/bridge-error.log",
-            level: "error",
-            format: winston.format.json(),
-            maxsize: 50 * 1024 * 1024,
-            maxFiles: 5,
-        }),
-    );
-
-    logger.add(
-        new winston.transports.File({
-            filename: "logs/bridge-combined.log",
-            format: winston.format.json(),
-            maxsize: 100 * 1024 * 1024,
-            maxFiles: 3,
-        }),
-    );
+// Call sites use the (message, meta) order; pino natively takes (meta, message).
+function level(name: "info" | "warn" | "error" | "debug") {
+    return (message: string, meta?: Record<string, unknown>) =>
+        base[name](meta ?? {}, message);
 }
 
-export default logger;
+export default {
+    info: level("info"),
+    warn: level("warn"),
+    error: level("error"),
+    debug: level("debug"),
+};
