@@ -6,14 +6,15 @@ End-to-end instructions for running the bridge node locally against a Mina devne
 
 ## Overview
 
-The bridge node consists of two PM2 processes:
+The bridge is a single process:
 
-| Process             | Entry point                                    | What it does                                      |
-| ------------------- | ---------------------------------------------- | ------------------------------------------------- |
-| `bridge-main`       | `dist/src/index.js`                            | Archive sync loop + startup procedures            |
-| `bridge-tx-sender`  | `dist/src/workers/bridge-tx-sender/index.js`   | Sequential reduce TX pipeline (master + worker)   |
+| Process  | Entry point         | What it does                                                    |
+| -------- | ------------------- | --------------------------------------------------------------- |
+| `bridge` | `dist/src/index.js` | Sequential reduce TX pipeline driven by the contract's on-chain action queue |
 
-Both processes share the same MongoDB database and Redis instance.
+It needs MongoDB (a one-document `BridgeState` for failure bookkeeping) and
+Redis (the BullMQ job queue). See [architecture.md](architecture.md) for how
+work is derived from the chain.
 
 ---
 
@@ -109,14 +110,8 @@ Either way, copy the printed contract address into your `.env`.
 
 ### Without PM2 (development)
 
-Run each process in a separate terminal:
-
 ```bash
-# Terminal 1 — sync loop
 cd bridge && pnpm run start
-
-# Terminal 2 — TX sender
-cd bridge && node dist/src/workers/bridge-tx-sender/index.js
 ```
 
 ### With PM2
@@ -131,9 +126,8 @@ Common PM2 commands:
 
 ```bash
 pm2 list                        # show all processes
-pm2 logs                        # stream all logs
-pm2 logs bridge-tx-sender       # logs for one process
-pm2 restart bridge-main         # restart one process
+pm2 logs bridge                 # stream logs
+pm2 restart bridge
 pm2 stop all
 pm2 delete all
 ```
@@ -161,9 +155,8 @@ pm2 restart all
 | `MINA_PRIVATE_KEY`          | —               | Signing key for the bridge account that sends reduce TXs (base58)            |
 | `MINA_FEE`                  | `100000000`     | Transaction fee in nanomina (0.1 MINA)                                       |
 | `PULSAR_VALIDATOR_ENDPOINTS`| —               | Comma-separated list of Pulsar signer-node base URLs (e.g. `http://v1:6000`) |
-| `HARD_FINALITY_BLOCKS`      | `32`            | Mina blocks to wait before processing a height                               |
-| `POLL_INTERVAL_MS`          | `5000`          | Archive sync poll interval (ms)                                              |
-| `MAX_RETRY`                 | `3`             | Max worker failures before a block is permanently marked failed              |
+| `PULSAR_GRPC_ENDPOINT`      | —               | Pulsar chain gRPC endpoint (validator set + powers)                          |
+| `MAX_RETRY`                 | `3`             | Non-transient strikes per queue front before the master halts                |
 | `LOG_LEVEL`                 | `info`          | Winston log level                                                            |
 | `NODE_ENV`                  | `production`    | Node environment                                                             |
 
@@ -174,7 +167,7 @@ pm2 restart all
 | Script             | Description                                  |
 | ------------------ | -------------------------------------------- |
 | `pnpm run build`    | Compile TypeScript to `dist/`                |
-| `pnpm run start`    | Build and start the main process             |
+| `pnpm run start`    | Build and start the bridge                   |
 | `pnpm run lint`     | Run ESLint                                   |
 | `pnpm run clean`    | Remove `dist/` and `node_modules/`           |
 
@@ -185,14 +178,15 @@ pm2 restart all
 To wipe all bridge state and start from scratch:
 
 ```bash
-# Drop the MongoDB database
+# Drop the MongoDB database (failure bookkeeping only)
 mongosh --eval 'use pulsar-bridge; db.dropDatabase()'
 
 # Clear Redis (if you want to remove queued jobs too)
 redis-cli FLUSHDB
 ```
 
-After a reset, restart both processes. The sync loop will begin from height 0 and re-fetch all actions from the Archive.
+After a reset, restart the bridge. Nothing else needs rebuilding — the work
+list is always re-derived from the contract's on-chain action queue.
 
 ---
 
