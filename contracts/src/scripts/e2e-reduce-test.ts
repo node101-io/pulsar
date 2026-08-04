@@ -24,9 +24,10 @@ import {
 } from 'o1js';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
+import { mockProve } from './mock-prove.js';
 import {
   ValidateReduceProgram,
   ValidateReducePublicInput,
@@ -328,17 +329,7 @@ async function main() {
     log(
       'Applying mock proof (instant — lightnet PROOF_LEVEL=none does not verify content)...'
     );
-    const accountUpdatePath = resolve(
-      __dirname,
-      '../../../node_modules/o1js/dist/node/lib/mina/v1/account-update.js'
-    );
-    const { addMissingProofs } = (await import(
-      pathToFileURL(accountUpdatePath).href
-    )) as any;
-    const { zkappCommand } = await addMissingProofs((tx as any).transaction, {
-      proofsEnabled: false,
-    });
-    (tx as any).transaction = zkappCommand;
+    await mockProve(tx);
   } else {
     log(
       'Proving tx (real Pickles SNARK — this blocks the event loop and may take 30-60 min)...'

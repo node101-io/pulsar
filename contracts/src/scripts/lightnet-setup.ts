@@ -25,7 +25,7 @@ import {
 } from 'o1js';
 import { writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
 import { ValidateReduceProgram } from '../ValidateReduce.js';
@@ -34,6 +34,7 @@ import { PulsarAuth } from '../types/PulsarAction.js';
 import { List } from '../types/common.js';
 import { VALIDATOR_NUMBER } from '../utils/constants.js';
 import { hashValidatorLeaf } from '../utils/validatorList.js';
+import { mockProve } from './mock-prove.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -49,13 +50,7 @@ async function waitForTx(
   signingKeys: PrivateKey[],
   label: string,
 ): Promise<void> {
-  // Lightnet runs with PROOF_LEVEL=none — proof content is never verified on-chain.
-  // Use the internal addMissingProofs bypass to generate instant mock proofs instead
-  // of running the full Pickles SNARK (which would take 30-60 min per tx).
-  const auPath = resolve(__dirname, '../../../node_modules/o1js/dist/node/lib/mina/v1/account-update.js');
-  const { addMissingProofs } = await import(pathToFileURL(auPath).href) as any;
-  const { zkappCommand } = await addMissingProofs((tx as any).transaction, { proofsEnabled: false });
-  (tx as any).transaction = zkappCommand;
+  await mockProve(tx);
   const pending = await tx.sign(signingKeys).send();
   if (pending.status === 'rejected') {
     throw new Error(`${label}: transaction rejected — ${JSON.stringify(pending.errors)}`);
