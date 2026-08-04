@@ -14,11 +14,12 @@ export interface MinaClientContext {
     archiveEndpoint: string;
     /** Cached zkapp state array (Field.toString()) from last fetchAccount. Index = @state declaration order. */
     zkappState: string[];
-}
-
-export interface MinaActionEntry {
-    blockHeight: number;
-    actions: string[][];
+    /**
+     * The account's five stored action states from the same fetchAccount
+     * snapshot — [0] is the live action queue tip, [1..4] the archived
+     * predecessors a reduce precondition may still match.
+     */
+    actionStateHistory: string[];
 }
 
 // SettlementContract @state declaration order
@@ -50,6 +51,7 @@ export async function initMinaClientContext(): Promise<MinaClientContext> {
     }
 
     const zkappState = (fetchResult.account?.zkapp?.appState ?? []).map((f: any) => f.toString());
+    const actionStateHistory = (fetchResult.account?.zkapp?.actionState ?? []).map((f: any) => f.toString());
     const contract = new SettlementContract(contractAddress);
 
     logger.info("Mina client initialized", {
@@ -58,24 +60,7 @@ export async function initMinaClientContext(): Promise<MinaClientContext> {
         event: "mina_client_initialized",
     });
 
-    return { contractAddress, contract, network, nodeEndpoint, archiveEndpoint, zkappState };
-}
-
-/**
- * Uses daemonStatus instead of bestChain — bestChain hangs on some public endpoints.
- */
-export async function getLatestMinaHeight(ctx: MinaClientContext): Promise<number> {
-    const res = await fetch(ctx.nodeEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: "{ daemonStatus { blockchainLength } }" }),
-    });
-    if (!res.ok) throw new Error(`Node query failed: HTTP ${res.status}`);
-    const { data, errors } = (await res.json()) as any;
-    if (errors?.length) throw new Error(`GraphQL error: ${errors[0].message}`);
-    const height: number = data?.daemonStatus?.blockchainLength;
-    if (!height) throw new Error("daemonStatus returned no blockchainLength");
-    return height;
+    return { contractAddress, contract, network, nodeEndpoint, archiveEndpoint, zkappState, actionStateHistory };
 }
 
 /**
@@ -91,6 +76,18 @@ export async function refreshContractState(ctx: MinaClientContext): Promise<void
         throw new Error("Contract has no zkapp state — is it deployed?");
     }
     ctx.zkappState = appState.map((f: any) => f.toString());
+    ctx.actionStateHistory = (result.account?.zkapp?.actionState ?? []).map(
+        (f: any) => f.toString(),
+    );
+}
+
+/**
+ * The account's five stored action states (same snapshot as zkappState);
+ * [0] is the live action queue tip. Pending work exists exactly when the
+ * contract's own actionState (state[0]) differs from that tip.
+ */
+export function getActionStateHistory(ctx: MinaClientContext): string[] {
+    return ctx.actionStateHistory;
 }
 
 /** Reads from cached zkappState — call refreshContractState() first if you need fresh data. */
@@ -113,130 +110,4 @@ export function getContractActionListHash(ctx: MinaClientContext): string {
  */
 export function getContractSettledHeight(ctx: MinaClientContext): number {
     return Number(ctx.zkappState[STATE_INDEX.blockHeight]);
-}
-
-/** Fetches the contract's on-chain blockHeight directly (always fresh). */
-export async function getContractBlockHeight(ctx: MinaClientContext): Promise<number> {
-    const result = await fetchAccount({ publicKey: ctx.contractAddress });
-    if (result.error != null) {
-        throw new Error(`fetchAccount failed: ${result.error.statusText}`);
-    }
-    return Number(ctx.contract.blockHeight.get().toString());
-}
-
-export async function fetchActionsByHeight(
-    fromHeight: number,
-    toHeight: number,
-    ctx: MinaClientContext,
-): Promise<MinaActionEntry[]> {
-    if (ctx.network === "lightnet") {
-        return fetchActionsByHeightLightnet(fromHeight, toHeight, ctx);
-    }
-
-    const contractAddr = ctx.contractAddress.toBase58();
-
-    const query = `{
-        zkapps(query: {
-            zkappCommand: {
-                accountUpdates: {
-                    body: { publicKey: "${contractAddr}" }
-                }
-            }
-            blockHeight_gte: ${fromHeight}
-            blockHeight_lte: ${toHeight}
-            canonical: true
-        }, sortBy: BLOCKHEIGHT_ASC) {
-            blockHeight
-            zkappCommand {
-                accountUpdates {
-                    body {
-                        publicKey
-                        actions
-                    }
-                }
-            }
-        }
-    }`;
-
-    const res = await fetch(ctx.archiveEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
-    });
-
-    if (!res.ok) throw new Error(`Archive query failed: HTTP ${res.status}`);
-
-    const { data, errors } = (await res.json()) as any;
-    if (errors?.length)
-        throw new Error(`Archive GraphQL error: ${errors[0].message}`);
-
-    const zkapps: any[] = data?.zkapps ?? [];
-    const byHeight = new Map<number, string[][]>();
-
-    for (const zkapp of zkapps) {
-        const height: number = zkapp.blockHeight;
-        for (const update of zkapp.zkappCommand.accountUpdates) {
-            if (update.body.publicKey !== contractAddr) continue;
-            const actions: string[][] = update.body.actions ?? [];
-            if (actions.length === 0) continue;
-
-            const existing = byHeight.get(height) ?? [];
-            byHeight.set(height, [...existing, ...actions]);
-        }
-    }
-
-    return Array.from(byHeight.entries())
-        .sort(([a], [b]) => a - b)
-        .map(([blockHeight, actions]) => ({ blockHeight, actions }));
-}
-
-/**
- * lightnet archive-node-api uses `actions` query instead of `zkapps`.
- * Filters by height range client-side (archive doesn't support height filtering).
- */
-async function fetchActionsByHeightLightnet(
-    fromHeight: number,
-    toHeight: number,
-    ctx: MinaClientContext,
-): Promise<MinaActionEntry[]> {
-    const contractAddr = ctx.contractAddress.toBase58();
-
-    const query = `{
-        actions(input: { address: "${contractAddr}" }) {
-            blockInfo { height }
-            actionData { data }
-        }
-    }`;
-
-    const res = await fetch(ctx.archiveEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
-    });
-
-    if (!res.ok) throw new Error(`Archive query failed: HTTP ${res.status}`);
-
-    const { data, errors } = (await res.json()) as any;
-    if (errors?.length)
-        throw new Error(`Archive GraphQL error: ${errors[0].message}`);
-
-    const entries: any[] = data?.actions ?? [];
-    const byHeight = new Map<number, string[][]>();
-
-    for (const entry of entries) {
-        const height: number = entry.blockInfo.height;
-        if (height < fromHeight || height > toHeight) continue;
-
-        for (const actionData of entry.actionData ?? []) {
-            const fields: string[] = actionData.data ?? [];
-            if (fields.length === 0) continue;
-
-            const existing = byHeight.get(height) ?? [];
-            byHeight.set(height, [...existing, fields]);
-        }
-    }
-
-    return Array.from(byHeight.entries())
-        .sort(([a], [b]) => a - b)
-        .map(([blockHeight, actions]) => ({ blockHeight, actions }));
 }

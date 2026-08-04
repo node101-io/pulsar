@@ -1,32 +1,23 @@
 // o1js
-import { Bool, Field, Poseidon, PublicKey, Signature } from "o1js";
+import { Cache, Field, PublicKey, Signature } from "o1js";
 
 // contracts
-import { ActionStackProof } from "pulsar-contracts/build/src/ActionStack.js";
-import { ValidateReducePublicInput } from "pulsar-contracts/build/src/ValidateReduce.js";
-import {
-    PulsarAction,
-    Batch,
-} from "pulsar-contracts/build/src/types/PulsarAction.js";
-import { ReduceMask } from "pulsar-contracts/build/src/types/common.js";
+import { ActionStackProgram } from "pulsar-contracts/build/src/ActionStack.js";
+import { ValidateReduceProgram } from "pulsar-contracts/build/src/ValidateReduce.js";
+import { PulsarAction } from "pulsar-contracts/build/src/types/PulsarAction.js";
 import {
     SignaturePublicKey,
     SignaturePublicKeyList,
 } from "pulsar-contracts/build/src/types/signaturePubKeyList.js";
 import { CalculateFinalActionState } from "pulsar-contracts/build/src/utils/actionQueueUtils.js";
-import {
-    GenerateValidateReduceProof,
-    GenerateActionStackProof,
-} from "pulsar-contracts/build/src/utils/generateFunctions.js";
-import {
-    BATCH_SIZE,
-    VALIDATOR_NUMBER,
-} from "pulsar-contracts/build/src/utils/constants.js";
+import { GenerateValidateReduceProof } from "pulsar-contracts/build/src/utils/generateFunctions.js";
+import { fetchActions } from "pulsar-contracts/build/src/utils/fetch.js";
+import { PrepareBatchWithActions } from "pulsar-contracts/build/src/utils/reduceWitness.js";
+import { VALIDATOR_NUMBER } from "pulsar-contracts/build/src/utils/constants.js";
 
 // bridge
-import { MAX_FAIL_COUNT } from "../../config/constants.js";
+import { CACHE_DIR } from "../../config/constants.js";
 import logger from "../../common/logger.js";
-import { MinaActionModel } from "../../db/models/MinaAction.js";
 import { BridgeStateModel } from "../../db/models/BridgeState.js";
 import {
     type MinaClientContext,
@@ -34,8 +25,8 @@ import {
     refreshContractState,
     getContractMerkleRoot,
     getContractActionState,
-    getContractActionListHash,
     getContractSettledHeight,
+    getActionStateHistory,
 } from "../../services/mina/client.js";
 import { requestSignatures } from "../../services/pulsar/client.js";
 import {
@@ -48,28 +39,47 @@ import {
 } from "../../services/mina/txSender.js";
 import type { BridgeTxJob } from "./master.js";
 
-interface ChunkParams {
-    ctx: MinaClientContext;
-    chunk: PulsarAction[];
-    remainingActions: PulsarAction[];
-    actionsFromChunk: PulsarAction[];
-    blockHeight: number;
-    chunkIndex: number;
-    chunkCount: number;
+type PackedAction = { action: PulsarAction; hash: bigint };
+
+/**
+ * Environmental failures (archive lag/outage) that retrying will heal on its
+ * own — the failure listener logs them WITHOUT charging the queue front's
+ * failure budget, so a seconds-long archive blip can never trip the circuit
+ * breaker against a healthy front.
+ */
+export class TransientReduceError extends Error {
+    readonly transient = true;
 }
 
-interface ReduceTxParams {
-    ctx: MinaClientContext;
-    batch: Batch;
-    mask: ReduceMask;
-    merkleListRoot: Field;
-    actionListHash: Field;
-    initialActionState: Field;
-    finalActionState: Field;
-    useActionStack: Bool;
-    actionStackProof: ActionStackProof;
-    blockHeight: number;
-    logMeta: object;
+let compiled = false;
+let compileLock: Promise<void> = Promise.resolve();
+export async function ensureCompiled(): Promise<void> {
+    compileLock = compileLock.then(async () => {
+        if (compiled) return;
+
+        // Deferred imports: declaring SettlementContract executes its @method
+        // decorators against the proof classes, which unit tests replace with
+        // mocks — only the compile path may load these modules.
+        const [{ MultisigVerifierProgram }, { SettlementContract }] =
+            await Promise.all([
+                import("pulsar-contracts/build/src/SettlementProof.js"),
+                import("pulsar-contracts/build/src/SettlementContract.js"),
+            ]);
+
+        logger.info("Compiling ZK programs for bridge-tx-sender…", {
+            event: "bridge_compile_start",
+        });
+        // Dependency order: the contract verifies proofs of all three programs.
+        await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+        await ValidateReduceProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+        await ActionStackProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+        await SettlementContract.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+        compiled = true;
+        logger.info("ZK programs compiled for bridge-tx-sender.", {
+            event: "bridge_compile_done",
+        });
+    });
+    await compileLock;
 }
 
 let _ctx: MinaClientContext | null = null;
@@ -78,190 +88,103 @@ async function getCtx(): Promise<MinaClientContext> {
     return _ctx;
 }
 
+/**
+ * One job = one reduce over the FRONT of the contract's pending action queue.
+ *
+ * The chain is the single source of truth: the queue front is the contract's
+ * own actionState (state[0]), the pending actions come from the archive via
+ * fetchActions, and the batch/stack are rebuilt from scratch on every attempt.
+ * That makes retries and crash recovery trivial — whatever landed on-chain
+ * already moved state[0], so the next attempt simply starts from the new
+ * front. The master re-queues a job as long as a gap to the queue tip remains.
+ */
 export async function worker(task: BridgeTxJob): Promise<void> {
-    const { blockHeight, actions } = task;
-
-    const block = await MinaActionModel.findOne({ blockHeight });
-    if (!block)
-        throw new Error(`MinaAction for blockHeight ${blockHeight} not found`);
-
-    if (block.status === "done") {
-        logger.info("Skipping already done block", {
-            blockHeight,
-            event: "bridge_tx_already_done",
-        });
-        return;
-    }
-
-    if (block.failCount >= MAX_FAIL_COUNT) {
-        logger.error("Block exceeded max fail count, dropping job", {
-            blockHeight,
-            failCount: block.failCount,
-            event: "bridge_tx_max_fail_exceeded",
-        });
-        return;
-    }
-
     const ctx = await getCtx();
     await refreshContractState(ctx);
 
-    const pulsarActions = (actions as string[][]).map((raw) =>
-        PulsarAction.fromRawAction(raw),
-    );
+    const processed = getContractActionState(ctx);
+    if (getActionStateHistory(ctx)[0] === processed) {
+        logger.info("Queue front already reduced — nothing pending", {
+            requestedFrom: task.fromActionState,
+            event: "reduce_nothing_pending",
+        });
+        return;
+    }
 
-    logger.info("Actions parsed", {
-        blockHeight,
-        actionCount: pulsarActions.length,
-        event: "actions_prepared",
-    });
+    // Stamp the failure identity FIRST: every strike the failure listener
+    // books must be attributed to the front this attempt actually targets,
+    // including strikes from throws below (e.g. the reconstruction check).
+    await recordAttempt(processed);
 
-    if (pulsarActions.length <= BATCH_SIZE) {
-        await proveSingleBatch(ctx, pulsarActions, blockHeight);
-    } else {
-        const chunks = chunkArray(pulsarActions, BATCH_SIZE);
-        for (let i = 0; i < chunks.length; i++) {
-            await processChunk({
-                ctx,
-                chunk: chunks[i],
-                remainingActions: pulsarActions.slice((i + 1) * BATCH_SIZE),
-                actionsFromChunk: pulsarActions.slice(i * BATCH_SIZE),
-                blockHeight,
-                chunkIndex: i,
-                chunkCount: chunks.length,
-            });
-            if (i < chunks.length - 1) {
-                await refreshContractState(ctx);
-            }
+    let packed: PackedAction[];
+    try {
+        packed = await fetchActions(ctx.contractAddress, Field(processed));
+    } catch (error) {
+        throw new TransientReduceError(
+            `Archive fetch failed for queue front ${processed}: ` +
+                `${error instanceof Error ? error.message : String(error)}`,
+        );
+    }
+    if (packed.length === 0) {
+        // The account shows a gap the archive has not indexed yet.
+        throw new TransientReduceError(
+            `Contract shows pending actions (state ${processed} != tip ` +
+                `${getActionStateHistory(ctx)[0]}) but the archive returned ` +
+                `none — archive lag`,
+        );
+    }
+
+    // Fail-fast reconstruction check BEFORE any proving: refold the fetched
+    // queue and require the result to be one of the account's five stored
+    // action states. A mismatch means the archive data cannot be what the
+    // ledger applied (wrong order, missing action, failed-command action) and
+    // would only surface later as an opaque on-chain rejection.
+    const computedTip = CalculateFinalActionState(
+        Field(processed),
+        packed.map((pack) => pack.action),
+    ).toString();
+    if (!getActionStateHistory(ctx).includes(computedTip)) {
+        // One refresh: actions dispatched between our account snapshot and
+        // the archive read legitimately move the tip forward.
+        await refreshContractState(ctx);
+        if (!getActionStateHistory(ctx).includes(computedTip)) {
+            throw new Error(
+                `Refolded action queue ends at ${computedTip}, which matches ` +
+                    `none of the account's stored action states — refusing ` +
+                    `to prove against an unverifiable reconstruction`,
+            );
         }
     }
 
-    await MinaActionModel.updateOne(
-        { blockHeight },
-        { $set: { status: "done" } },
-    );
-    await BridgeStateModel.updateOne(
-        {},
-        { $set: { lastSubmittedHeight: blockHeight } },
-    );
+    // Mark the attempt in-flight BEFORE the expensive proving: if it OOMs or
+    // crashes, startup finds txAttemptActive and books the failure.
+    await BridgeStateModel.updateOne({}, { $set: { txAttemptActive: true } });
 
-    logger.info("Reduce TX done", { blockHeight, event: "reduce_tx_done" });
-}
+    // Placeholder approval set: every pending action is approved. Deposits
+    // are intrinsically safe (funds already escrowed on L1); withdrawals are
+    // paid for whatever this map contains, so the REAL map must come from the
+    // validators once the /getSignature spec covers it.
+    const includedActions = new Map<string, number>();
+    for (const pack of packed) {
+        const hash = pack.action.unconstrainedHash().toString();
+        includedActions.set(hash, (includedActions.get(hash) ?? 0) + 1);
+    }
 
-async function proveSingleBatch(
-    ctx: MinaClientContext,
-    pulsarActions: PulsarAction[],
-    blockHeight: number,
-): Promise<void> {
-    const initialActionState = Field(getContractActionState(ctx));
-    const initialActionListHash = Field(getContractActionListHash(ctx));
-    const merkleListRoot = Field(getContractMerkleRoot(ctx));
+    const { batchActions, batch, useActionStack, actionStackProof, publicInput, mask } =
+        await PrepareBatchWithActions(includedActions, ctx.contract, packed);
 
-    const finalActionState = CalculateFinalActionState(
-        initialActionState,
-        pulsarActions,
-    );
-    const { batch, mask } = buildBatchAndMask(pulsarActions);
-    const actionListHash = computeActionListHash(
-        initialActionListHash,
-        batch,
-        mask,
-    );
-    const actionStackProof = await ActionStackProof.dummy(
-        Field(0),
-        Field(0),
-        0,
-        16,
-    );
+    logger.info("Batch prepared from the on-chain queue", {
+        fromActionState: processed,
+        pendingCount: packed.length,
+        batchCount: batchActions.length,
+        useActionStack: useActionStack.toBoolean(),
+        event: "reduce_batch_prepared",
+    });
 
-    const reduceTxParams: ReduceTxParams = {
-        ctx: ctx,
-        batch: batch,
-        mask: mask,
-        merkleListRoot: merkleListRoot,
-        actionListHash: actionListHash,
-        initialActionState: initialActionState,
-        finalActionState: finalActionState,
-        useActionStack: Bool(false),
-        actionStackProof: actionStackProof,
-        blockHeight: blockHeight,
-        logMeta: {},
-    };
-
-    await proveAndSendReduceTx(reduceTxParams);
-}
-
-async function processChunk({
-    ctx,
-    chunk,
-    remainingActions,
-    actionsFromChunk,
-    blockHeight,
-    chunkIndex,
-    chunkCount,
-}: ChunkParams): Promise<void> {
-    const initialActionState = Field(getContractActionState(ctx));
-    const initialActionListHash = Field(getContractActionListHash(ctx));
-    const merkleListRoot = Field(getContractMerkleRoot(ctx));
-
-    const batchActionState = CalculateFinalActionState(
-        initialActionState,
-        chunk,
-    );
-    const chunkFinalActionState = CalculateFinalActionState(
-        initialActionState,
-        actionsFromChunk,
-    );
-
-    const { batch, mask } = buildBatchAndMask(chunk);
-    const actionListHash = computeActionListHash(
-        initialActionListHash,
-        batch,
-        mask,
-    );
-
-    const { useActionStack, actionStackProof } = await GenerateActionStackProof(
-        batchActionState,
-        remainingActions,
-    );
-
-    const reduceTxParams: ReduceTxParams = {
-        ctx: ctx,
-        batch: batch,
-        mask: mask,
-        merkleListRoot: merkleListRoot,
-        actionListHash: actionListHash,
-        initialActionState: initialActionState,
-        finalActionState: chunkFinalActionState,
-        useActionStack: useActionStack,
-        actionStackProof: actionStackProof,
-        blockHeight: blockHeight,
-        logMeta: { chunkIndex, chunkCount },
-    };
-
-    await proveAndSendReduceTx(reduceTxParams);
-}
-
-async function proveAndSendReduceTx({
-    ctx,
-    batch,
-    mask,
-    merkleListRoot,
-    actionListHash,
-    initialActionState,
-    finalActionState,
-    useActionStack,
-    actionStackProof,
-    blockHeight,
-    logMeta,
-}: ReduceTxParams): Promise<void> {
-    const signatures = await requestSignatures(
-        initialActionState.toString(),
-        finalActionState.toString(),
-    );
+    const signatures = await requestSignatures(processed, computedTip);
 
     logger.info("Validator signatures received", {
-        blockHeight,
-        ...logMeta,
+        fromActionState: processed,
         sigCount: signatures.length,
         event: "signatures_received",
     });
@@ -272,23 +195,24 @@ async function proveAndSendReduceTx({
     // Height comes from the SAME cached snapshot as merkleListRoot: a fresh
     // fetch could observe a newer settlement than the cached root.
     const validatorSet = await resolveValidatorSetForRoot(
-        merkleListRoot.toString(),
+        getContractMerkleRoot(ctx),
         getContractSettledHeight(ctx),
     );
 
     // Fail fast with a clear error when quorum is impossible even if every
     // received signature verifies — proving would only fail in-circuit after
     // minutes of wasted work ("Not enough signed voting power").
-    assertPossibleQuorum(validatorSet, signatures, { blockHeight, ...logMeta });
+    assertPossibleQuorum(validatorSet, signatures, {
+        fromActionState: processed,
+    });
 
     const validateReduceProof = await GenerateValidateReduceProof(
-        new ValidateReducePublicInput({ merkleListRoot, actionListHash }),
+        publicInput,
         buildSignatureList(validatorSet, signatures),
     );
 
     logger.info("Proofs generated", {
-        blockHeight,
-        ...logMeta,
+        fromActionState: processed,
         useActionStack: useActionStack.toBoolean(),
         event: "proofs_generated",
     });
@@ -300,48 +224,55 @@ async function proveAndSendReduceTx({
         actionStackProof,
         mask,
         validateReduceProof,
-        upToMinaHeight: blockHeight,
+        fromActionState: processed,
     });
 
-    if (provedTxJson === null) {
-        logger.info("Reduce TX already on-chain", {
-            blockHeight,
-            ...logMeta,
-            event: "reduce_tx_already_onchain",
-        });
-        return;
-    }
+    await sendProvedReduceTx(ctx, provedTxJson, processed);
 
-    await sendProvedReduceTx(ctx, provedTxJson, blockHeight);
+    await BridgeStateModel.updateOne(
+        {},
+        { $set: { txAttemptActive: false } },
+    );
+
+    logger.info("Reduce TX done", {
+        fromActionState: processed,
+        batchCount: batchActions.length,
+        remainingCount: packed.length - batchActions.length,
+        event: "reduce_tx_done",
+    });
 }
 
-function chunkArray<T>(arr: T[], size: number): T[][] {
-    const chunks: T[][] = [];
-    for (let i = 0; i < arr.length; i += size) {
-        chunks.push(arr.slice(i, i + size));
-    }
-    return chunks;
-}
-
-export function computeActionListHash(
-    startHash: Field,
-    batch: Batch,
-    mask: ReduceMask,
-): Field {
-    let hash = startHash;
-    for (let i = 0; i < BATCH_SIZE; i++) {
-        const action = batch.actions[i];
-        if (PulsarAction.isDummy(action).toBoolean()) continue;
-        if (!mask.list[i].toBoolean()) continue;
-        hash = Poseidon.hash([
-            hash,
-            action.type,
-            ...action.account.toFields(),
-            action.amount,
-            ...action.pulsarAuth.toFields(),
-        ]);
-    }
-    return hash;
+/**
+ * Failure identity = the queue front being attempted. A front that moved
+ * means progress happened, so the counter restarts; the same front failing
+ * MAX_FAIL_COUNT times (transient failures excepted) halts the master.
+ * txAttemptActive stays untouched here — it flips on only when the expensive
+ * in-flight phase (proving/sending) begins.
+ */
+async function recordAttempt(fromActionState: string): Promise<void> {
+    await BridgeStateModel.updateOne(
+        {},
+        [
+            {
+                $set: {
+                    txFailCount: {
+                        $cond: [
+                            {
+                                $eq: [
+                                    "$txAttemptActionState",
+                                    { $literal: fromActionState },
+                                ],
+                            },
+                            { $ifNull: ["$txFailCount", 0] },
+                            0,
+                        ],
+                    },
+                    txAttemptActionState: { $literal: fromActionState },
+                },
+            },
+        ],
+        { upsert: true },
+    );
 }
 
 /**
@@ -413,21 +344,4 @@ export function buildSignatureList(
                 }),
         ),
     });
-}
-
-export function buildBatchAndMask(pulsarActions: PulsarAction[]): {
-    batch: Batch;
-    mask: ReduceMask;
-} {
-    if (pulsarActions.length > BATCH_SIZE) {
-        throw new Error(
-            `chunk exceeds BATCH_SIZE (${pulsarActions.length} > ${BATCH_SIZE}) — use chunkArray before calling`,
-        );
-    }
-    const batch = Batch.fromArray(pulsarActions);
-    const maskBools = [
-        ...Array(pulsarActions.length).fill(true),
-        ...Array(BATCH_SIZE - pulsarActions.length).fill(false),
-    ];
-    return { batch, mask: ReduceMask.fromArray(maskBools) };
 }

@@ -1,71 +1,72 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Field, Bool } from "o1js";
+import { Bool, Field } from "o1js";
 
 // paths relative to src/workers/bridge-tx-sender/tests/
 // bridge-internal:  ../../../X     (3 up = src/)
 // worker itself:    ../worker.js   (1 up)
-// contracts:        ../../../../../contracts/build/src/X  (5 up = pulsar/ root)
+// contracts:        pulsar-contracts/build/src/X
 
 // ---------------------------------------------------------------------------
 // Mock boundaries
 //
-// We keep the *pure* contract helpers real (PulsarAction, Batch, ReduceMask,
-// SignaturePublicKeyList, ValidateReducePublicInput, constants) so that
-// buildBatchAndMask / computeActionListHash / buildSignatureList exercise the
-// same o1js code paths the contract uses.
+// We keep the *pure* contract helpers real (PulsarAction, constants,
+// SignaturePublicKeyList types) so buildSignatureList / the included-actions
+// map exercise the same o1js code paths the contract uses.
 //
-// We mock the *heavy / IO* boundaries: ZK proof generation, the Mina tx
+// We mock the *heavy / IO* boundaries: the archive fetch, batch+stack-proof
+// preparation (PrepareBatchWithActions), ZK proof generation, the Mina tx
 // sender, the validator signature request, the Mina client and the DB models.
-//
-// The validator set (with powers) is resolved from the chain via
-// resolveValidatorSetForRoot (mocked here — gRPC IO); buildSignatureList joins
-// signatures onto that ordered set, dummy-signing non-signers, exactly like
-// the prover's block-prover worker.
 // ---------------------------------------------------------------------------
 
 const {
-    mockMinaActionFindOne,
-    mockMinaActionUpdateOne,
     mockBridgeStateUpdateOne,
     mockInitCtx,
     mockRefreshContractState,
     mockGetMerkleRoot,
     mockGetActionState,
-    mockGetActionListHash,
-    mockGetContractBlockHeight,
+    mockGetSettledHeight,
+    mockGetActionStateHistory,
+    mockFetchActions,
+    mockPrepareBatchWithActions,
+    mockCalculateFinalActionState,
     mockRequestSignatures,
     mockResolveValidatorSetForRoot,
+    mockGenerateValidateReduceProof,
     mockProveReduceTx,
     mockSendProvedReduceTx,
-    mockGenerateValidateReduceProof,
-    mockGenerateActionStackProof,
-    mockCalculateFinalActionState,
 } = vi.hoisted(() => ({
-    mockMinaActionFindOne: vi.fn(),
-    mockMinaActionUpdateOne: vi.fn(),
     mockBridgeStateUpdateOne: vi.fn(),
     mockInitCtx: vi.fn(),
     mockRefreshContractState: vi.fn(),
     mockGetMerkleRoot: vi.fn(),
     mockGetActionState: vi.fn(),
-    mockGetActionListHash: vi.fn(),
-    mockGetContractBlockHeight: vi.fn(),
+    mockGetSettledHeight: vi.fn(),
+    mockGetActionStateHistory: vi.fn(),
+    mockFetchActions: vi.fn(),
+    mockPrepareBatchWithActions: vi.fn(),
+    mockCalculateFinalActionState: vi.fn(),
     mockRequestSignatures: vi.fn(),
     mockResolveValidatorSetForRoot: vi.fn(),
+    mockGenerateValidateReduceProof: vi.fn(),
     mockProveReduceTx: vi.fn(),
     mockSendProvedReduceTx: vi.fn(),
-    mockGenerateValidateReduceProof: vi.fn(),
-    mockGenerateActionStackProof: vi.fn(),
-    mockCalculateFinalActionState: vi.fn(),
 }));
 
-vi.mock("pulsar-contracts/build/src/utils/generateFunctions.js", () => ({
-    GenerateValidateReduceProof: mockGenerateValidateReduceProof,
-    GenerateActionStackProof: mockGenerateActionStackProof,
+vi.mock("pulsar-contracts/build/src/utils/fetch.js", () => ({
+    fetchActions: mockFetchActions,
+    waitForTransaction: vi.fn(),
+}));
+
+vi.mock("pulsar-contracts/build/src/utils/reduceWitness.js", () => ({
+    PrepareBatchWithActions: mockPrepareBatchWithActions,
 }));
 
 vi.mock("pulsar-contracts/build/src/utils/actionQueueUtils.js", () => ({
     CalculateFinalActionState: mockCalculateFinalActionState,
+}));
+
+vi.mock("pulsar-contracts/build/src/utils/generateFunctions.js", () => ({
+    GenerateValidateReduceProof: mockGenerateValidateReduceProof,
 }));
 
 // Keep BATCH_SIZE / VALIDATOR_NUMBER real, just pass through.
@@ -74,23 +75,14 @@ vi.mock("pulsar-contracts/build/src/utils/constants.js", async (importOriginal) 
     return { ...actual };
 });
 
-// Avoid the expensive real dummy-proof generation — worker only needs an opaque
-// object to hand to proveReduceTx (which is mocked).
+// ensureCompiled is never called in unit tests; the program handles are only
+// dereferenced inside it.
 vi.mock("pulsar-contracts/build/src/ActionStack.js", () => ({
-    ActionStackProof: {
-        dummy: vi.fn().mockResolvedValue({ __mock: "dummy-stack-proof" }),
-    },
+    ActionStackProgram: { compile: vi.fn() },
 }));
 
 vi.mock("../../../common/logger.js", () => ({
     default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
-
-vi.mock("../../../db/models/MinaAction.js", () => ({
-    MinaActionModel: {
-        findOne: mockMinaActionFindOne,
-        updateOne: mockMinaActionUpdateOne,
-    },
 }));
 
 vi.mock("../../../db/models/BridgeState.js", () => ({
@@ -102,8 +94,8 @@ vi.mock("../../../services/mina/client.js", () => ({
     refreshContractState: mockRefreshContractState,
     getContractMerkleRoot: mockGetMerkleRoot,
     getContractActionState: mockGetActionState,
-    getContractActionListHash: mockGetActionListHash,
-    getContractSettledHeight: mockGetContractBlockHeight,
+    getContractSettledHeight: mockGetSettledHeight,
+    getActionStateHistory: mockGetActionStateHistory,
 }));
 
 vi.mock("../../../services/pulsar/client.js", () => ({
@@ -121,16 +113,15 @@ vi.mock("../../../services/mina/txSender.js", () => ({
     sendProvedReduceTx: mockSendProvedReduceTx,
 }));
 
-vi.mock("../../../config/constants.js", () => ({
-    MAX_FAIL_COUNT: 3,
+vi.mock("../../../config/constants.js", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("../../../config/constants.js")>()),
 }));
 
 import {
     worker,
-    computeActionListHash,
-    buildBatchAndMask,
     buildSignatureList,
     assertPossibleQuorum,
+    TransientReduceError,
 } from "../worker.js";
 
 import {
@@ -138,8 +129,7 @@ import {
     PulsarAuth,
     CosmosSignature,
 } from "pulsar-contracts/build/src/types/PulsarAction.js";
-import { ReduceMask } from "pulsar-contracts/build/src/types/common.js";
-import { VALIDATOR_NUMBER, BATCH_SIZE } from "pulsar-contracts/build/src/utils/constants.js";
+import { VALIDATOR_NUMBER } from "pulsar-contracts/build/src/utils/constants.js";
 import { PrivateKey, PublicKey, Signature } from "o1js";
 
 // --- helpers ---
@@ -155,12 +145,12 @@ function makeDepositAction() {
     );
 }
 
-function makeWithdrawAction() {
-    return PulsarAction.withdrawal(PublicKey.empty(), Field(500_000_000n));
+function makePacked(count: number) {
+    return Array.from({ length: count }, (_, i) => ({
+        action: makeDepositAction(),
+        hash: BigInt(1000 + i),
+    }));
 }
-
-// [type, x, isOdd, amount, cosmosAddress, r, s]
-const rawDeposit = ["1", "0", "0", "1000000000", "42", "1", "2"];
 
 // Distinct, deterministic, valid curve points — PublicKey.fromBase58 in
 // buildSignatureList rejects non-group elements.
@@ -185,79 +175,6 @@ function makeValidatorSigs(n: number) {
 // ===========================================================================
 // Pure helpers
 // ===========================================================================
-
-describe("buildBatchAndMask", () => {
-    it("pads actions to BATCH_SIZE with dummy entries", () => {
-        const { batch } = buildBatchAndMask([makeDepositAction()]);
-        expect(batch.actions).toHaveLength(BATCH_SIZE);
-        expect(PulsarAction.isDummy(batch.actions[0]).toBoolean()).toBe(false);
-        expect(PulsarAction.isDummy(batch.actions[1]).toBoolean()).toBe(true);
-    });
-
-    it("sets mask true only for real actions", () => {
-        const { mask } = buildBatchAndMask([makeDepositAction(), makeWithdrawAction()]);
-        expect(mask.list[0].toBoolean()).toBe(true);
-        expect(mask.list[1].toBoolean()).toBe(true);
-        expect(mask.list[2].toBoolean()).toBe(false);
-        expect(mask.list[BATCH_SIZE - 1].toBoolean()).toBe(false);
-    });
-
-    it("throws when actions exceed BATCH_SIZE", () => {
-        const actions = Array(BATCH_SIZE + 1).fill(makeDepositAction());
-        expect(() => buildBatchAndMask(actions)).toThrow("exceeds BATCH_SIZE");
-    });
-
-    it("handles empty action list", () => {
-        const { batch, mask } = buildBatchAndMask([]);
-        expect(batch.actions.every((a) => PulsarAction.isDummy(a).toBoolean())).toBe(true);
-        expect(mask.list.every((b) => !b.toBoolean())).toBe(true);
-    });
-});
-
-describe("computeActionListHash", () => {
-    it("returns startHash unchanged when all actions are dummy", () => {
-        const { batch, mask } = buildBatchAndMask([]);
-        expect(computeActionListHash(Field(12345), batch, mask).toString()).toBe("12345");
-    });
-
-    it("produces a different hash when a real action is included", () => {
-        const { batch, mask } = buildBatchAndMask([makeDepositAction()]);
-        expect(computeActionListHash(Field(0), batch, mask).toString()).not.toBe("0");
-    });
-
-    it("is deterministic — same inputs produce same hash", () => {
-        const { batch, mask } = buildBatchAndMask([makeDepositAction(), makeWithdrawAction()]);
-        const h1 = computeActionListHash(Field(7), batch, mask);
-        const h2 = computeActionListHash(Field(7), batch, mask);
-        expect(h1.toString()).toBe(h2.toString());
-    });
-
-    it("mask=false skips action so hash stays at startHash", () => {
-        const { batch } = buildBatchAndMask([makeDepositAction()]);
-        const maskOff = ReduceMask.fromArray(Array(BATCH_SIZE).fill(false));
-        const maskOn = ReduceMask.fromArray([true, ...Array(BATCH_SIZE - 1).fill(false)]);
-        expect(computeActionListHash(Field(0), batch, maskOff).toString()).toBe("0");
-        expect(computeActionListHash(Field(0), batch, maskOn).toString()).not.toBe("0");
-    });
-
-    it("deposit and withdrawal produce different hashes", () => {
-        const { batch: b1, mask: m1 } = buildBatchAndMask([makeDepositAction()]);
-        const { batch: b2, mask: m2 } = buildBatchAndMask([makeWithdrawAction()]);
-        expect(computeActionListHash(Field(0), b1, m1).toString()).not.toBe(
-            computeActionListHash(Field(0), b2, m2).toString(),
-        );
-    });
-
-    it("chaining hashes accumulates state — order matters", () => {
-        const a1 = makeDepositAction();
-        const a2 = makeWithdrawAction();
-        const { batch: bAB, mask: mAB } = buildBatchAndMask([a1, a2]);
-        const { batch: bBA, mask: mBA } = buildBatchAndMask([a2, a1]);
-        expect(computeActionListHash(Field(0), bAB, mAB).toString()).not.toBe(
-            computeActionListHash(Field(0), bBA, mBA).toString(),
-        );
-    });
-});
 
 describe("buildSignatureList", () => {
     it("builds a list of length VALIDATOR_NUMBER with powers from the set", () => {
@@ -340,177 +257,225 @@ describe("assertPossibleQuorum", () => {
 });
 
 // ===========================================================================
-// worker() — orchestration
+// worker() — one reduce over the front of the on-chain pending queue
 // ===========================================================================
+
+const PROCESSED = "100"; // contract state[0] — the processed pointer
+const TIP = "999"; // account actionState[0] — the live queue tip
 
 describe("worker()", () => {
     const mockCtx = {
         contractAddress: PublicKey.empty(),
-        contract: {},
+        contract: { __mock: "contract" },
         network: "devnet",
         nodeEndpoint: "https://node",
         archiveEndpoint: "https://archive",
         zkappState: [],
+        actionStateHistory: [],
     } as any;
 
     beforeEach(() => {
         vi.clearAllMocks();
         mockInitCtx.mockResolvedValue(mockCtx);
         mockRefreshContractState.mockResolvedValue(undefined);
-        mockGetMerkleRoot.mockReturnValue("100");
-        mockGetActionState.mockReturnValue("200");
-        mockGetActionListHash.mockReturnValue("0");
-        mockMinaActionUpdateOne.mockResolvedValue({});
+        mockGetActionState.mockReturnValue(PROCESSED);
+        mockGetActionStateHistory.mockReturnValue([TIP, "888", "777", "666", "555"]);
+        mockGetMerkleRoot.mockReturnValue("4242");
+        mockGetSettledHeight.mockReturnValue(33);
+        mockFetchActions.mockResolvedValue(makePacked(2));
+        // the refolded queue ends exactly at the live tip
+        mockCalculateFinalActionState.mockReturnValue(Field(TIP));
+        mockPrepareBatchWithActions.mockResolvedValue({
+            batchActions: [makeDepositAction()],
+            batch: { __mock: "batch" },
+            useActionStack: Bool(false),
+            actionStackProof: { __mock: "stack-proof" },
+            publicInput: { __mock: "public-input" },
+            mask: { __mock: "mask" },
+            endActionState: Field(TIP),
+        });
         mockBridgeStateUpdateOne.mockResolvedValue({});
         mockRequestSignatures.mockResolvedValue(makeValidatorSigs(VALIDATOR_NUMBER));
-        mockGetContractBlockHeight.mockReturnValue(0);
         mockResolveValidatorSetForRoot.mockResolvedValue(
             makeValidatorSet(VALIDATOR_NUMBER),
         );
         mockGenerateValidateReduceProof.mockResolvedValue({ __mock: "reduce-proof" });
-        mockGenerateActionStackProof.mockResolvedValue({
-            useActionStack: Bool(true),
-            actionStackProof: { __mock: "stack-proof" },
-        });
-        mockCalculateFinalActionState.mockReturnValue(Field(999));
         mockProveReduceTx.mockResolvedValue('{"provedTx":true}');
         mockSendProvedReduceTx.mockResolvedValue(undefined);
     });
 
-    // --- guard clauses ---
+    it("returns without fetching or proving when the front equals the live tip", async () => {
+        mockGetActionState.mockReturnValue(TIP); // fully reduced
 
-    it("throws when block not found in DB", async () => {
-        mockMinaActionFindOne.mockResolvedValue(null);
-        await expect(worker({ blockHeight: 50, actions: [] })).rejects.toThrow("not found");
-    });
+        await worker({ fromActionState: TIP });
 
-    it("returns early without sending TX when block is already done", async () => {
-        mockMinaActionFindOne.mockResolvedValue({ status: "done", failCount: 0 });
-        await worker({ blockHeight: 50, actions: [rawDeposit] });
-        expect(mockProveReduceTx).not.toHaveBeenCalled();
-        expect(mockSendProvedReduceTx).not.toHaveBeenCalled();
-    });
-
-    it("returns early without sending TX when failCount >= MAX_FAIL_COUNT", async () => {
-        mockMinaActionFindOne.mockResolvedValue({ status: "submitted", failCount: 3 });
-        await worker({ blockHeight: 50, actions: [rawDeposit] });
+        expect(mockFetchActions).not.toHaveBeenCalled();
+        expect(mockPrepareBatchWithActions).not.toHaveBeenCalled();
         expect(mockProveReduceTx).not.toHaveBeenCalled();
     });
 
-    it("processes when failCount is below MAX_FAIL_COUNT", async () => {
-        mockMinaActionFindOne.mockResolvedValue({ status: "pending", failCount: 2 });
-        await worker({ blockHeight: 50, actions: [rawDeposit] });
+    it("throws a TRANSIENT error when the archive returns nothing on a gap — no strike", async () => {
+        mockFetchActions.mockResolvedValue([]);
+
+        await expect(
+            worker({ fromActionState: PROCESSED }),
+        ).rejects.toBeInstanceOf(TransientReduceError);
+        expect(mockPrepareBatchWithActions).not.toHaveBeenCalled();
+    });
+
+    it("wraps an archive fetch failure as TRANSIENT — no strike", async () => {
+        mockFetchActions.mockRejectedValue(new Error("ECONNREFUSED"));
+
+        await expect(
+            worker({ fromActionState: PROCESSED }),
+        ).rejects.toBeInstanceOf(TransientReduceError);
+        expect(mockPrepareBatchWithActions).not.toHaveBeenCalled();
+    });
+
+    it("throws a NON-transient error when the refolded queue matches no stored action state", async () => {
+        mockCalculateFinalActionState.mockReturnValue(Field(123456)); // matches nothing
+
+        const rejection = await worker({ fromActionState: PROCESSED }).then(
+            () => {
+                throw new Error("should have thrown");
+            },
+            (error) => error,
+        );
+        expect(rejection.message).toMatch(/unverifiable reconstruction/);
+        // deterministic bad archive data MUST charge the front's budget
+        expect(rejection).not.toBeInstanceOf(TransientReduceError);
+        // ...and the identity was already stamped, so the strike lands on the
+        // right front
+        expect(mockBridgeStateUpdateOne).toHaveBeenCalledTimes(1);
+        // initial refresh + one retry refresh before giving up
+        expect(mockRefreshContractState).toHaveBeenCalledTimes(2);
+        expect(mockPrepareBatchWithActions).not.toHaveBeenCalled();
+        expect(mockRequestSignatures).not.toHaveBeenCalled();
+    });
+
+    it("accepts a fold that matches an OLDER stored action state (race tolerance)", async () => {
+        // actions dispatched during our snapshot moved the tip; our fold lands
+        // on history[1] — still provable thanks to the 5-slot window
+        mockCalculateFinalActionState.mockReturnValue(Field(888));
+
+        await worker({ fromActionState: PROCESSED });
+
         expect(mockProveReduceTx).toHaveBeenCalledOnce();
+        // signatures must follow the REFOLDED tip (what the stack proof ends
+        // at), never the account's live tip
+        expect(mockRequestSignatures).toHaveBeenCalledWith(PROCESSED, "888");
     });
 
-    // --- single-batch path (actions <= BATCH_SIZE): direct reduce tx ---
+    it("fetches the queue from the contract's processed pointer", async () => {
+        await worker({ fromActionState: PROCESSED });
 
-    describe("single batch (actions <= BATCH_SIZE)", () => {
-        beforeEach(() => {
-            mockMinaActionFindOne.mockResolvedValue({ status: "pending", failCount: 0 });
-        });
-
-        it("proves and sends exactly one reduce TX", async () => {
-            await worker({ blockHeight: 50, actions: [rawDeposit] });
-            expect(mockProveReduceTx).toHaveBeenCalledOnce();
-            expect(mockSendProvedReduceTx).toHaveBeenCalledOnce();
-        });
-
-        it("does NOT generate an action-stack proof (uses dummy, useActionStack=false)", async () => {
-            await worker({ blockHeight: 50, actions: [rawDeposit] });
-            expect(mockGenerateActionStackProof).not.toHaveBeenCalled();
-            const call = mockProveReduceTx.mock.calls[0][0];
-            expect(call.useActionStack.toBoolean()).toBe(false);
-        });
-
-        it("passes ctx, batch, mask and the reduce proof to proveReduceTx", async () => {
-            await worker({ blockHeight: 50, actions: [rawDeposit] });
-            const call = mockProveReduceTx.mock.calls[0][0];
-            expect(call.ctx).toBe(mockCtx);
-            expect(call.batch.actions).toHaveLength(BATCH_SIZE);
-            expect(call.mask).toBeDefined();
-            expect(call.validateReduceProof).toEqual({ __mock: "reduce-proof" });
-            expect(call.upToMinaHeight).toBe(50);
-        });
-
-        it("requests signatures with the on-chain initial/final action state", async () => {
-            mockGetActionState.mockReturnValue("12345");
-            await worker({ blockHeight: 50, actions: [rawDeposit] });
-            expect(mockRequestSignatures).toHaveBeenCalledWith("12345", "999");
-        });
-
-        it("marks the block done and advances lastSubmittedHeight on success", async () => {
-            await worker({ blockHeight: 50, actions: [rawDeposit] });
-            expect(mockMinaActionUpdateOne).toHaveBeenCalledWith(
-                { blockHeight: 50 },
-                { $set: { status: "done" } },
-            );
-            expect(mockBridgeStateUpdateOne).toHaveBeenCalledWith(
-                {},
-                { $set: { lastSubmittedHeight: 50 } },
-            );
-        });
-
-        it("skips sending when proveReduceTx reports the height is already on-chain", async () => {
-            mockProveReduceTx.mockResolvedValue(null);
-            await worker({ blockHeight: 50, actions: [rawDeposit] });
-            expect(mockSendProvedReduceTx).not.toHaveBeenCalled();
-            // still marks done — nothing left to do for this height
-            expect(mockMinaActionUpdateOne).toHaveBeenCalledWith(
-                { blockHeight: 50 },
-                { $set: { status: "done" } },
-            );
-        });
-
-        it("does not refresh contract state again after the initial refresh", async () => {
-            await worker({ blockHeight: 50, actions: [rawDeposit] });
-            expect(mockRefreshContractState).toHaveBeenCalledOnce();
-        });
+        const [address, from] = mockFetchActions.mock.calls[0];
+        expect(address).toBe(mockCtx.contractAddress);
+        expect(from.toString()).toBe(PROCESSED);
     });
 
-    // --- chunk path (actions > BATCH_SIZE): proof per chunk ---
+    it("prepares the batch via PrepareBatchWithActions with an approve-all included map", async () => {
+        const packed = makePacked(2);
+        mockFetchActions.mockResolvedValue(packed);
 
-    describe("chunked (actions > BATCH_SIZE)", () => {
-        beforeEach(() => {
-            mockMinaActionFindOne.mockResolvedValue({ status: "pending", failCount: 0 });
+        await worker({ fromActionState: PROCESSED });
+
+        const [included, contract, passedPacked] =
+            mockPrepareBatchWithActions.mock.calls[0];
+        expect(contract).toBe(mockCtx.contract);
+        expect(passedPacked).toBe(packed);
+        // placeholder until validators provide the real approval set: every
+        // pending action's hash is in the map
+        for (const pack of packed) {
+            expect(
+                included.get(pack.action.unconstrainedHash().toString()),
+            ).toBeGreaterThan(0);
+        }
+    });
+
+    it("requests signatures over (processed pointer, refolded tip)", async () => {
+        await worker({ fromActionState: PROCESSED });
+
+        expect(mockRequestSignatures).toHaveBeenCalledWith(PROCESSED, TIP);
+    });
+
+    it("stamps the identity before fetching, flags in-flight before proving, clears after the send", async () => {
+        await worker({ fromActionState: PROCESSED });
+
+        // 1st write = identity stamp (preserve-or-reset), BEFORE fetchActions
+        // so even pre-proving strikes land on the right front
+        const identityCall = mockBridgeStateUpdateOne.mock.calls[0];
+        expect(identityCall[1]).toEqual([
+            {
+                $set: {
+                    txFailCount: {
+                        $cond: [
+                            { $eq: ["$txAttemptActionState", { $literal: PROCESSED }] },
+                            { $ifNull: ["$txFailCount", 0] },
+                            0,
+                        ],
+                    },
+                    txAttemptActionState: { $literal: PROCESSED },
+                },
+            },
+        ]);
+        expect(identityCall[2]).toEqual({ upsert: true });
+        expect(
+            mockBridgeStateUpdateOne.mock.invocationCallOrder[0],
+        ).toBeLessThan(mockFetchActions.mock.invocationCallOrder[0]);
+
+        // 2nd write = in-flight flag, before the expensive batch preparation
+        expect(mockBridgeStateUpdateOne.mock.calls[1][1]).toEqual({
+            $set: { txAttemptActive: true },
         });
+        expect(
+            mockBridgeStateUpdateOne.mock.invocationCallOrder[1],
+        ).toBeLessThan(mockPrepareBatchWithActions.mock.invocationCallOrder[0]);
 
-        it("splits into chunks and sends one reduce TX per chunk", async () => {
-            // BATCH_SIZE + 1 actions -> 2 chunks (BATCH_SIZE, 1)
-            const actions = Array(BATCH_SIZE + 1).fill(rawDeposit);
-            await worker({ blockHeight: 77, actions });
-            expect(mockProveReduceTx).toHaveBeenCalledTimes(2);
-            expect(mockSendProvedReduceTx).toHaveBeenCalledTimes(2);
-        });
+        // last write clears the in-flight flag, after the send completed
+        const lastCall = mockBridgeStateUpdateOne.mock.calls.at(-1);
+        expect(lastCall![1]).toEqual({ $set: { txAttemptActive: false } });
+        expect(
+            mockBridgeStateUpdateOne.mock.invocationCallOrder.at(-1)!,
+        ).toBeGreaterThan(mockSendProvedReduceTx.mock.invocationCallOrder[0]);
+    });
 
-        it("generates an action-stack proof for each chunk", async () => {
-            const actions = Array(BATCH_SIZE + 1).fill(rawDeposit);
-            await worker({ blockHeight: 77, actions });
-            expect(mockGenerateActionStackProof).toHaveBeenCalledTimes(2);
-        });
+    it("passes the prepared batch, mask and proofs through to proveReduceTx and sends", async () => {
+        await worker({ fromActionState: PROCESSED });
 
-        it("forwards the generated useActionStack flag and proof to proveReduceTx", async () => {
-            const actions = Array(BATCH_SIZE + 1).fill(rawDeposit);
-            await worker({ blockHeight: 77, actions });
-            const call = mockProveReduceTx.mock.calls[0][0];
-            expect(call.useActionStack.toBoolean()).toBe(true);
-            expect(call.actionStackProof).toEqual({ __mock: "stack-proof" });
-        });
+        const call = mockProveReduceTx.mock.calls[0][0];
+        expect(call.ctx).toBe(mockCtx);
+        expect(call.batch).toEqual({ __mock: "batch" });
+        expect(call.mask).toEqual({ __mock: "mask" });
+        expect(call.actionStackProof).toEqual({ __mock: "stack-proof" });
+        expect(call.validateReduceProof).toEqual({ __mock: "reduce-proof" });
+        expect(call.fromActionState).toBe(PROCESSED);
+        expect(mockSendProvedReduceTx).toHaveBeenCalledWith(
+            mockCtx,
+            '{"provedTx":true}',
+            PROCESSED,
+        );
+    });
 
-        it("refreshes contract state between chunks (initial + 1 between)", async () => {
-            const actions = Array(BATCH_SIZE + 1).fill(rawDeposit);
-            await worker({ blockHeight: 77, actions });
-            // initial refresh (1) + one refresh between the two chunks (1)
-            expect(mockRefreshContractState).toHaveBeenCalledTimes(2);
-        });
+    it("generates the validate-reduce proof from PrepareBatch's publicInput", async () => {
+        await worker({ fromActionState: PROCESSED });
 
-        it("marks the block done only after all chunks are processed", async () => {
-            const actions = Array(BATCH_SIZE + 1).fill(rawDeposit);
-            await worker({ blockHeight: 77, actions });
-            expect(mockMinaActionUpdateOne).toHaveBeenCalledWith(
-                { blockHeight: 77 },
-                { $set: { status: "done" } },
-            );
+        const [publicInput] = mockGenerateValidateReduceProof.mock.calls[0];
+        expect(publicInput).toEqual({ __mock: "public-input" });
+    });
+
+    it("propagates a proving failure WITHOUT clearing the in-flight flag", async () => {
+        mockProveReduceTx.mockRejectedValue(new Error("prove failed"));
+
+        await expect(worker({ fromActionState: PROCESSED })).rejects.toThrow(
+            "prove failed",
+        );
+
+        // identity stamp + in-flight flag only; txAttemptActive stays true so
+        // a crash before onJobFailed still gets booked at startup
+        expect(mockBridgeStateUpdateOne).toHaveBeenCalledTimes(2);
+        expect(mockBridgeStateUpdateOne.mock.calls.at(-1)![1]).toEqual({
+            $set: { txAttemptActive: true },
         });
     });
 });

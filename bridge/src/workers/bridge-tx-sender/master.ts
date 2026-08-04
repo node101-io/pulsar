@@ -2,75 +2,97 @@ import { Queue } from "bullmq";
 import { Master } from "../master.js";
 import { connection } from "../redis.js";
 import { bridgeTxSenderQ } from "../queue.js";
-import { worker as processBridgeTx } from "./worker.js";
+import { worker as processBridgeTx, ensureCompiled } from "./worker.js";
 import { sleep } from "../../common/sleep.js";
 import logger from "../../common/logger.js";
-import { MinaActionModel } from "../../db/models/MinaAction.js";
 import {
-    getBridgeState,
     BridgeStateModel,
+    getBridgeState,
 } from "../../db/models/BridgeState.js";
 import {
     type MinaClientContext,
     initMinaClientContext,
-    getLatestMinaHeight,
+    refreshContractState,
+    getContractActionState,
+    getActionStateHistory,
 } from "../../services/mina/client.js";
 import {
     MASTER_SLEEP_INTERVAL_MS,
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
-    HARD_FINALITY_BLOCKS,
     MAX_FAIL_COUNT,
 } from "../../config/constants.js";
 
 export interface BridgeTxJob {
-    blockHeight: number;
-    actions: object[];
+    /**
+     * Queue front (contract actionState) observed when the job was queued —
+     * traceability only; the worker re-derives everything from the chain.
+     */
+    fromActionState: string;
 }
+
+// Bump txFailCount and clear the in-flight flag in one atomic pipeline
+// update. Shared by the job-failed listener and the boot-time recovery of
+// interrupted attempts, so a crash-looping front converges to the halt.
+const FAILURE_BOOKKEEPING_PIPELINE = [
+    {
+        $set: {
+            txFailCount: { $add: [{ $ifNull: ["$txFailCount", 0] }, 1] },
+            txAttemptActive: false,
+        },
+    },
+];
 
 export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
     private ctx!: MinaClientContext;
-    private halted = false;
 
     constructor() {
         super({
             queueName: "bridge-tx-sender",
             workerLabel: "BridgeTxSender",
             connection,
-            workerCount: 1, // sıralı çalışmalı, her reduce bir sonraki için actionState'i güncelliyor
+            workerCount: 1, // sıralı çalışmalı, her reduce bir sonraki için actionState'i günceller
             lockDurationMs: WORKER_TIMEOUT_MS,
             stalledIntervalMs: STALLED_INTERVAL_MS,
             processJob: async (_workerId, job) => {
                 await processBridgeTx(job.data);
             },
-            onJobFailed: async (job) => {
-                if (job?.data.blockHeight !== undefined) {
-                    const updated = await MinaActionModel.findOneAndUpdate(
-                        {
-                            blockHeight: job.data.blockHeight,
-                            status: "submitted",
-                        },
-                        { $inc: { failCount: 1 } },
+            onJobFailed: async (job, error) => {
+                // Environmental failures (archive lag/outage) heal on retry —
+                // charging them to the front's budget would let a seconds-long
+                // blip trip the circuit breaker against a healthy front.
+                if ((error as { transient?: boolean } | undefined)?.transient) {
+                    logger.warn("Transient reduce failure — retrying without a strike", {
+                        fromActionState: job?.data.fromActionState,
+                        error,
+                        event: "bridge_tx_transient_failure",
+                    });
+                    return;
+                }
+                try {
+                    const updated = await BridgeStateModel.findOneAndUpdate(
+                        {},
+                        FAILURE_BOOKKEEPING_PIPELINE,
                         { new: true },
                     );
-                    if (!updated) return;
-
-                    if (updated.failCount >= MAX_FAIL_COUNT) {
-                        await MinaActionModel.updateOne(
-                            { blockHeight: job.data.blockHeight },
-                            { $set: { status: "failed" } },
-                        );
-                        logger.error("Bridge TX permanently failed", {
-                            blockHeight: job.data.blockHeight,
-                            failCount: updated.failCount,
-                            event: "bridge_tx_failed",
-                        });
-                    } else {
-                        await MinaActionModel.updateOne(
-                            { blockHeight: job.data.blockHeight },
-                            { $set: { status: "pending" } },
+                    if ((updated?.txFailCount ?? 0) >= MAX_FAIL_COUNT) {
+                        logger.error(
+                            "Reduce of the current queue front is permanently failing",
+                            {
+                                fromActionState: job?.data.fromActionState,
+                                failCount: updated?.txFailCount,
+                                event: "bridge_tx_failed",
+                            },
                         );
                     }
+                } catch (error) {
+                    // BullMQ does not await this listener — an unhandled throw
+                    // here would be an unhandled rejection, not a job failure.
+                    logger.error("Failed to record bridge TX job failure", {
+                        fromActionState: job?.data.fromActionState,
+                        error,
+                        event: "bridge_tx_fail_bookkeeping_error",
+                    });
                 }
             },
         });
@@ -79,29 +101,35 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
     async onStartup(): Promise<void> {
         this.ctx = await initMinaClientContext();
 
-        const stuckBlocks = await MinaActionModel.find({ status: "submitted" });
-        for (const block of stuckBlocks) {
-            await MinaActionModel.updateOne(
-                { blockHeight: block.blockHeight },
-                { $set: { status: "pending" } },
+        // An attempt still flagged active at boot was killed mid-flight
+        // (crash/OOM). BullMQ's deferred-failure evidence dies with the
+        // obliterate below, so book the failure here — otherwise a block of
+        // actions that deterministically crashes the process retries forever
+        // with txFailCount stuck at 0.
+        const state = await BridgeStateModel.findOne();
+        if (state?.txAttemptActive) {
+            const updated = await BridgeStateModel.findOneAndUpdate(
+                {},
+                FAILURE_BOOKKEEPING_PIPELINE,
+                { new: true },
             );
-            logger.warn("Reset stuck submitted block to pending on startup", {
-                blockHeight: block.blockHeight,
-                event: "stuck_block_reset",
+            logger.warn("Booked interrupted reduce attempt on startup", {
+                txAttemptActionState: state.txAttemptActionState,
+                failCount: updated?.txFailCount,
+                event: "stuck_attempt_booked",
             });
         }
 
         const queue = new Queue("bridge-tx-sender", { connection });
         await queue.obliterate({ force: true });
         await queue.close();
+
+        // Compile before any job can run — a lazy compile inside the job
+        // would burn most of the BullMQ lock window.
+        await ensureCompiled();
     }
 
     async handleTask(): Promise<void> {
-        if (this.halted) {
-            await sleep(MASTER_SLEEP_INTERVAL_MS * 60);
-            return;
-        }
-
         const counts = await bridgeTxSenderQ.getJobCounts(
             "waiting",
             "active",
@@ -112,66 +140,79 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
             return;
         }
 
-        let currentMinaHeight: number;
         try {
-            currentMinaHeight = await getLatestMinaHeight(this.ctx);
+            await refreshContractState(this.ctx);
         } catch (error) {
-            logger.error("Failed to get current Mina height", {
+            logger.error("Failed to refresh contract state", {
                 error,
-                event: "mina_height_fetch_error",
+                event: "contract_state_refresh_error",
             });
             await sleep(MASTER_SLEEP_INTERVAL_MS);
             return;
         }
 
-        const state = await getBridgeState();
-        const nextHeight = state.lastSubmittedHeight + 1;
-
-        const block = await MinaActionModel.findOne({
-            blockHeight: nextHeight,
-            status: "pending",
-            $expr: {
-                $lte: [
-                    "$blockHeight",
-                    currentMinaHeight - HARD_FINALITY_BLOCKS,
-                ],
-            },
-        });
-
-        if (!block) {
-            const failedBlock = await MinaActionModel.findOne({
-                blockHeight: nextHeight,
-                status: "failed",
-            });
-
-            if (failedBlock) {
-                this.halted = true;
-                logger.error("Next height is permanently failed — halting master. Manual intervention required.", {
-                    blockHeight: nextHeight,
-                    failCount: failedBlock.failCount,
-                    event: "master_halted_failed_block",
-                });
-                return;
-            }
-
+        // Pending-work signal: the contract's processed pointer (state[0])
+        // versus the account's live action queue tip. Equal → fully reduced.
+        const processed = getContractActionState(this.ctx);
+        const queueTip = getActionStateHistory(this.ctx)[0];
+        if (processed === queueTip) {
             await sleep(MASTER_SLEEP_INTERVAL_MS);
             return;
         }
 
-        await MinaActionModel.updateOne(
-            { blockHeight: block.blockHeight },
-            { $set: { status: "submitted" } },
-        );
+        // Durable circuit breaker: the same queue front failing repeatedly is
+        // a deterministic failure — retrying only burns fees, and skipping is
+        // impossible (each reduce chains the actionState). Recovery: fix the
+        // cause and reset txFailCount in BridgeState, or the front advances
+        // on its own (e.g. another bridge instance reduced it).
+        const bridgeState = await getBridgeState();
+        if (
+            bridgeState.txFailCount >= MAX_FAIL_COUNT &&
+            bridgeState.txAttemptActionState === processed
+        ) {
+            logger.error(
+                "Master halted: reducing the current queue front has permanently failed. Manual intervention required.",
+                {
+                    fromActionState: processed,
+                    failCount: bridgeState.txFailCount,
+                    event: "master_halted_failed_front",
+                },
+            );
+            await sleep(MASTER_SLEEP_INTERVAL_MS * 60);
+            return;
+        }
 
-        await bridgeTxSenderQ.add("bridge-tx-sender", {
-            blockHeight: block.blockHeight,
-            actions: block.actions,
-        });
+        // Exponential backoff between retries of a front that already has
+        // strikes — without it, MAX_FAIL_COUNT is consumable within seconds.
+        if (
+            bridgeState.txFailCount > 0 &&
+            bridgeState.txAttemptActionState === processed
+        ) {
+            await sleep(
+                Math.min(
+                    MASTER_SLEEP_INTERVAL_MS * 2 ** bridgeState.txFailCount,
+                    MASTER_SLEEP_INTERVAL_MS * 60,
+                ),
+            );
+        }
 
-        logger.info("Queued bridge TX job", {
-            blockHeight: block.blockHeight,
-            event: "bridge_tx_queued",
-        });
+        try {
+            await bridgeTxSenderQ.add("bridge-tx-sender", {
+                fromActionState: processed,
+            });
+            logger.info("Queued reduce job for pending actions", {
+                fromActionState: processed,
+                queueTip,
+                event: "bridge_tx_queued",
+            });
+        } catch (error) {
+            // Nothing to revert — no state was claimed. Retry next tick.
+            logger.error("Failed to queue reduce job", {
+                error,
+                event: "bridge_tx_queue_error",
+            });
+            await sleep(MASTER_SLEEP_INTERVAL_MS);
+        }
     }
 }
 

@@ -1,19 +1,15 @@
 import "dotenv/config";
 import { initDb } from "./db/connection.js";
-import { runStartup } from "./startup.js";
-import { startMinaSync } from "./services/mina/sync.js";
+import { masterRunner } from "./workers/bridge-tx-sender/master.js";
 import logger from "./common/logger.js";
 
 async function main() {
     await initDb();
-    await runStartup();
-
-    logger.info("Bridge node initialized.");
-
-    startMinaSync();
+    logger.info("Bridge TX sender started.");
+    await masterRunner();
 }
 
 main().catch((err) => {
-    logger.error("Fatal error during initialization", { error: err });
+    logger.error("Fatal error in bridge", { error: err });
     process.exit(1);
 });

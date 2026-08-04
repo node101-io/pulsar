@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 import logger from "../common/logger.js";
 
-import "./models/MinaAction.js";
 import "./models/BridgeState.js";
 
 let initialized = false;

@@ -1,16 +1,20 @@
 /**
  * Integration test for the Bridge TX Sender worker — REAL proof generation.
  *
- * Goal: verify the worker's core logic end-to-end *without* a Mina node and
- * *without* sending a transaction. We mock the Mina blockchain boundary
- * (client + txSender) and the pending-pulsar signature flow
- * (requestSignatures + GenerateValidateReduceProof), but run the
- * ActionStackProof generation FOR REAL (compiled ActionStackProgram).
+ * Goal: verify the chain-derived reduce pipeline end-to-end *without* a Mina
+ * node and *without* sending a transaction. We mock the IO boundaries (the
+ * account/archive reads and the tx sender) but run the REAL
+ * PrepareBatchWithActions → CalculateMax → GenerateActionStackProof path with
+ * a compiled ActionStackProgram.
  *
- * This answers: "does the worker take incoming actions, batch them, and
- * generate the action-stack proof correctly?"
+ * This answers: "given a pending on-chain action queue, does the worker cut
+ * the right batch, stack the full remainder, and anchor the stack proof the
+ * way SettlementContract.reduce asserts it?" In particular it pins the
+ * proveRecursive anchor semantics: the final stack proof's publicInput must
+ * equal the batch-end action state even when the remainder spans multiple
+ * ActionStackQueues.
  *
- * Heavy: compiles ActionStackProgram and runs real proveBase proofs.
+ * Heavy: compiles ActionStackProgram and runs real proveBase/proveRecursive.
  * Run with: npm run test:integration
  *
  * TODO(pulsar): GenerateValidateReduceProof + requestSignatures are mocked
@@ -18,44 +22,46 @@
  * lands. Once it does, wire in a real ValidateReduceProof here too.
  */
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
-import { Bool, Field, Cache } from "o1js";
-
-// contracts:  ../../../../../contracts/build/src/X   (5 up = pulsar/ root)
+import { Cache, Field } from "o1js";
 
 const {
-    mockMinaActionFindOne,
-    mockMinaActionUpdateOne,
     mockBridgeStateUpdateOne,
     mockInitCtx,
     mockRefreshContractState,
     mockGetMerkleRoot,
     mockGetActionState,
-    mockGetActionListHash,
-    mockGetContractBlockHeight,
+    mockGetSettledHeight,
+    mockGetActionStateHistory,
+    mockFetchActions,
     mockRequestSignatures,
     mockResolveValidatorSetForRoot,
+    mockGenerateValidateReduceProof,
     mockProveReduceTx,
     mockSendProvedReduceTx,
-    mockGenerateValidateReduceProof,
 } = vi.hoisted(() => ({
-    mockMinaActionFindOne: vi.fn(),
-    mockMinaActionUpdateOne: vi.fn(),
     mockBridgeStateUpdateOne: vi.fn(),
     mockInitCtx: vi.fn(),
     mockRefreshContractState: vi.fn(),
     mockGetMerkleRoot: vi.fn(),
     mockGetActionState: vi.fn(),
-    mockGetActionListHash: vi.fn(),
-    mockGetContractBlockHeight: vi.fn(),
+    mockGetSettledHeight: vi.fn(),
+    mockGetActionStateHistory: vi.fn(),
+    mockFetchActions: vi.fn(),
     mockRequestSignatures: vi.fn(),
     mockResolveValidatorSetForRoot: vi.fn(),
+    mockGenerateValidateReduceProof: vi.fn(),
     mockProveReduceTx: vi.fn(),
     mockSendProvedReduceTx: vi.fn(),
-    mockGenerateValidateReduceProof: vi.fn(),
 }));
 
-// Keep GenerateActionStackProof REAL — only stub the pulsar-dependent
-// GenerateValidateReduceProof.
+// Archive boundary — the packed action lists are served by the test.
+vi.mock("pulsar-contracts/build/src/utils/fetch.js", () => ({
+    fetchActions: mockFetchActions,
+    waitForTransaction: vi.fn(),
+}));
+
+// Keep PrepareBatchWithActions + GenerateActionStackProof REAL — only stub
+// the pulsar-dependent GenerateValidateReduceProof.
 vi.mock("pulsar-contracts/build/src/utils/generateFunctions.js", async (importOriginal) => {
     const actual = await importOriginal<typeof import("pulsar-contracts/build/src/utils/generateFunctions.js")>();
     return {
@@ -68,13 +74,6 @@ vi.mock("../../../common/logger.js", () => ({
     default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock("../../../db/models/MinaAction.js", () => ({
-    MinaActionModel: {
-        findOne: mockMinaActionFindOne,
-        updateOne: mockMinaActionUpdateOne,
-    },
-}));
-
 vi.mock("../../../db/models/BridgeState.js", () => ({
     BridgeStateModel: { updateOne: mockBridgeStateUpdateOne },
 }));
@@ -84,8 +83,8 @@ vi.mock("../../../services/mina/client.js", () => ({
     refreshContractState: mockRefreshContractState,
     getContractMerkleRoot: mockGetMerkleRoot,
     getContractActionState: mockGetActionState,
-    getContractActionListHash: mockGetActionListHash,
-    getContractSettledHeight: mockGetContractBlockHeight,
+    getContractSettledHeight: mockGetSettledHeight,
+    getActionStateHistory: mockGetActionStateHistory,
 }));
 
 vi.mock("../../../services/pulsar/client.js", () => ({
@@ -102,184 +101,205 @@ vi.mock("../../../services/mina/txSender.js", () => ({
     sendProvedReduceTx: mockSendProvedReduceTx,
 }));
 
-vi.mock("../../../config/constants.js", () => ({
-    MAX_FAIL_COUNT: 3,
+vi.mock("../../../config/constants.js", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("../../../config/constants.js")>()),
 }));
 
 import { worker } from "../worker.js";
 import { ActionStackProgram } from "pulsar-contracts/build/src/ActionStack.js";
 import {
+    PulsarAction,
+    PulsarAuth,
+    CosmosSignature,
+} from "pulsar-contracts/build/src/types/PulsarAction.js";
+import { CalculateFinalActionState } from "pulsar-contracts/build/src/utils/actionQueueUtils.js";
+import {
     BATCH_SIZE,
+    MAX_WITHDRAWAL_PER_BATCH,
     VALIDATOR_NUMBER,
 } from "pulsar-contracts/build/src/utils/constants.js";
 import { PrivateKey, PublicKey, Signature } from "o1js";
 
-// [type, x, isOdd, amount, cosmosAddress, r, s]
-const rawDeposit = ["1", "0", "0", "1000000000", "42", "1", "2"];
+// --- helpers ---
 
-describe("Bridge TX Sender worker — real ActionStackProof generation", () => {
+function makeDepositAction(i: number) {
+    return PulsarAction.deposit(
+        PublicKey.empty(),
+        Field(1_000_000_000n + BigInt(i)),
+        new PulsarAuth({
+            cosmosAddress: Field(42),
+            cosmosSignature: new CosmosSignature({ r: Field(1), s: Field(2) }),
+        }),
+    );
+}
+
+function makeWithdrawAction(i: number) {
+    return PulsarAction.withdrawal(PublicKey.empty(), Field(500_000_000n + BigInt(i)));
+}
+
+/** Rebuild the archive's view: each entry carries the action state AFTER it. */
+function packActions(fromState: Field, actions: PulsarAction[]) {
+    const packed: { action: PulsarAction; hash: bigint }[] = [];
+    let state = fromState;
+    for (const action of actions) {
+        state = CalculateFinalActionState(state, [action]);
+        packed.push({ action, hash: state.toBigInt() });
+    }
+    return packed;
+}
+
+function makeValidatorKey(i: number) {
+    return PrivateKey.fromBigInt(BigInt(i + 1)).toPublicKey();
+}
+
+describe("Bridge TX Sender worker — real batch preparation and stack proofs", () => {
     const mockCtx = {
         contractAddress: PublicKey.empty(),
-        contract: {},
+        // CalculateMax reads these two state fields off the contract instance
+        contract: {
+            merkleListRoot: { get: () => Field(4242) },
+            actionListHash: { get: () => Field(0) },
+        },
         network: "devnet",
         nodeEndpoint: "https://node",
         archiveEndpoint: "https://archive",
         zkappState: [],
+        actionStateHistory: [],
     } as any;
 
     beforeAll(async () => {
-        // Required before GenerateActionStackProof can call proveBase.
-        console.log("[integration] Compiling ActionStackProgram...");
         const t0 = Date.now();
+        console.log("[integration] Compiling ActionStackProgram...");
         await ActionStackProgram.compile({ cache: Cache.FileSystemDefault });
         console.log(`[integration] ActionStackProgram compiled (${Date.now() - t0}ms)`);
-    }, 300_000);
+    }, 600_000);
 
     beforeEach(() => {
         vi.clearAllMocks();
         mockInitCtx.mockResolvedValue(mockCtx);
         mockRefreshContractState.mockResolvedValue(undefined);
-        mockGetMerkleRoot.mockReturnValue("100");
-        mockGetActionState.mockReturnValue("0");
-        mockGetActionListHash.mockReturnValue("0");
-        mockMinaActionUpdateOne.mockResolvedValue({});
+        mockGetMerkleRoot.mockReturnValue("4242");
+        mockGetSettledHeight.mockReturnValue(33);
         mockBridgeStateUpdateOne.mockResolvedValue({});
-        // Full signer set matching the mocked validator set — the optimistic
-        // quorum pre-check needs >= 2/3 of the power to have signed.
         mockRequestSignatures.mockResolvedValue(
             Array.from({ length: VALIDATOR_NUMBER }, (_, i) => ({
-                validatorPublicKey: PrivateKey.fromBigInt(
-                    BigInt(i + 1),
-                ).toPublicKey(),
+                validatorPublicKey: makeValidatorKey(i),
                 signature: Signature.empty(),
             })),
         );
-        mockGetContractBlockHeight.mockReturnValue(0);
-        // Distinct, valid curve points — buildSignatureList runs fromBase58.
         mockResolveValidatorSetForRoot.mockResolvedValue(
             Array.from({ length: VALIDATOR_NUMBER }, (_, i) => ({
-                minaPublicKey: PrivateKey.fromBigInt(BigInt(i + 1))
-                    .toPublicKey()
-                    .toBase58(),
+                minaPublicKey: makeValidatorKey(i).toBase58(),
                 power: "1",
             })),
         );
-        // pending-pulsar: real ValidateReduceProof is wired in later
-        mockGenerateValidateReduceProof.mockResolvedValue({ __mock: "validate-reduce-proof" });
+        mockGenerateValidateReduceProof.mockResolvedValue({ __mock: "reduce-proof" });
         mockProveReduceTx.mockResolvedValue('{"provedTx":true}');
         mockSendProvedReduceTx.mockResolvedValue(undefined);
-        mockMinaActionFindOne.mockResolvedValue({ status: "pending", failCount: 0 });
     });
 
-    it("batches > BATCH_SIZE actions into chunks and generates a real ActionStackProof per chunk", async () => {
-        // BATCH_SIZE + 1 -> 2 chunks (BATCH_SIZE, 1)
-        const actions = Array(BATCH_SIZE + 1).fill(rawDeposit);
+    it("reduces a 130-action queue front-first across three jobs, anchoring every stack proof at the batch end", async () => {
+        const initial = Field(0);
+        const actions = Array.from({ length: 130 }, (_, i) => makeDepositAction(i));
+        const packedAll = packActions(initial, actions);
+        const tip = Field(packedAll[packedAll.length - 1].hash);
 
-        await worker({ blockHeight: 100, actions });
+        // fold checkpoints the contract's state[0] will pass through
+        const afterBatch1 = CalculateFinalActionState(initial, actions.slice(0, BATCH_SIZE));
+        const afterBatch2 = CalculateFinalActionState(afterBatch1, actions.slice(BATCH_SIZE, 2 * BATCH_SIZE));
 
-        // one reduce tx prepared per chunk
-        expect(mockProveReduceTx).toHaveBeenCalledTimes(2);
+        mockGetActionStateHistory.mockReturnValue([tip.toString(), "1", "2", "3", "4"]);
 
-        // --- debug: dump each chunk's generated proof so we can eyeball that
-        //     real ActionStackProofs were produced ---
-        console.log(`\n[debug] ${actions.length} actions -> ${mockProveReduceTx.mock.calls.length} reduce tx(s)`);
-        mockProveReduceTx.mock.calls.forEach(([params], i) => {
-            const realActions = params.batch.actions.filter(
-                (a: any) => a.type.toString() !== "0",
-            ).length;
-            console.log(`[debug] chunk #${i}:`);
-            console.log(`[debug]   batch size (padded):   ${params.batch.actions.length}`);
-            console.log(`[debug]   real actions in batch:  ${realActions}`);
-            console.log(`[debug]   useActionStack:         ${params.useActionStack.toBoolean()}`);
-            console.log(`[debug]   actionStackProof.publicInput:  ${params.actionStackProof.publicInput.toString()}`);
-            console.log(`[debug]   actionStackProof.publicOutput: ${params.actionStackProof.publicOutput.toString()}`);
-            console.log(`[debug]   maxProofsVerified:      ${params.actionStackProof.maxProofsVerified}`);
-            const proofLen = params.actionStackProof.proof?.length ?? params.actionStackProof.proof?.toString().length;
-            console.log(`[debug]   proof payload length:   ${proofLen}`);
-        });
-        console.log("");
+        // ---- job 1: 130 pending -> batch 60, stack 70 (2 queues -> proveRecursive) ----
+        mockGetActionState.mockReturnValue(initial.toString());
+        mockFetchActions.mockResolvedValue(packedAll);
 
-        // each chunk produced a REAL ActionStackProof (has Zk proof public IO)
-        for (const [params] of mockProveReduceTx.mock.calls) {
-            expect(params.actionStackProof).toBeDefined();
-            expect(params.actionStackProof.publicInput).toBeDefined();
-            expect(params.actionStackProof.publicOutput).toBeDefined();
-            // a real proof carries a non-empty serialized payload
-            expect(params.actionStackProof.proof).toBeTruthy();
-            // batch must be padded to BATCH_SIZE
-            expect(params.batch.actions).toHaveLength(BATCH_SIZE);
-        }
+        await worker({ fromActionState: initial.toString() });
 
-        // useActionStack must be true whenever un-reduced actions remain, false
-        // only on the final chunk (no leftover). 61 actions -> chunks [60, 1]:
-        //   chunk #0: 1 action remaining  -> true
-        //   chunk #1: 0 actions remaining -> false
-        const chunk0 = mockProveReduceTx.mock.calls[0][0];
-        const chunk1 = mockProveReduceTx.mock.calls[1][0];
-        expect(chunk0.useActionStack.toBoolean()).toBe(true);
-        expect(chunk1.useActionStack.toBoolean()).toBe(false);
-
-        // block flagged done only after both chunks succeed
-        expect(mockMinaActionUpdateOne).toHaveBeenCalledWith(
-            { blockHeight: 100 },
-            { $set: { status: "done" } },
+        let params = mockProveReduceTx.mock.calls[0][0];
+        expect(params.useActionStack.toBoolean()).toBe(true);
+        // the anchor: SettlementContract asserts publicInput == batch-end
+        // action state — with 70 remaining (60+10 queues) this only holds if
+        // proveRecursive re-exposes the ORIGINAL anchor
+        expect(params.actionStackProof.publicInput.toString()).toBe(
+            afterBatch1.toString(),
         );
-        expect(mockBridgeStateUpdateOne).toHaveBeenCalledWith(
-            {},
-            { $set: { lastSubmittedHeight: 100 } },
+        // and the stack must fold the full remainder to the live queue tip
+        expect(params.actionStackProof.publicOutput.toString()).toBe(
+            tip.toString(),
         );
-    }, 600_000);
-
-    it("130 actions -> 3 chunks, exercises proveRecursive and the useActionStack pattern [true, true, false]", async () => {
-        // 130 actions -> chunkArray(130, 60) = [60, 60, 10] -> 3 reduce tx(s)
-        //   chunk #0: 70 remaining -> proveBase + proveRecursive, useActionStack=true
-        //   chunk #1: 10 remaining -> proveBase only,             useActionStack=true
-        //   chunk #2:  0 remaining -> no stack,                   useActionStack=false
-        const actions = Array(130).fill(rawDeposit);
-
-        await worker({ blockHeight: 130, actions });
-
-        expect(mockProveReduceTx).toHaveBeenCalledTimes(3);
-
-        console.log(`\n[debug] ${actions.length} actions -> ${mockProveReduceTx.mock.calls.length} reduce tx(s)`);
-        const remainingPerChunk = [70, 10, 0];
-        mockProveReduceTx.mock.calls.forEach(([params], i) => {
-            const realActions = params.batch.actions.filter(
-                (a: any) => a.type.toString() !== "0",
-            ).length;
-            console.log(`[debug] chunk #${i} (remaining=${remainingPerChunk[i]}):`);
-            console.log(`[debug]   real actions in batch:  ${realActions}`);
-            console.log(`[debug]   useActionStack:         ${params.useActionStack.toBoolean()}`);
-            console.log(`[debug]   actionStackProof.publicInput:  ${params.actionStackProof.publicInput.toString()}`);
-            console.log(`[debug]   actionStackProof.publicOutput: ${params.actionStackProof.publicOutput.toString()}`);
-            console.log(`[debug]   maxProofsVerified:      ${params.actionStackProof.maxProofsVerified}`);
-        });
-        console.log("");
-
-        const flags = mockProveReduceTx.mock.calls.map(
-            ([p]) => p.useActionStack.toBoolean(),
+        expect(mockRequestSignatures).toHaveBeenCalledWith(
+            initial.toString(),
+            tip.toString(),
         );
-        expect(flags).toEqual([true, true, false]);
 
-        for (const [params] of mockProveReduceTx.mock.calls) {
-            expect(params.actionStackProof.proof).toBeTruthy();
-            expect(params.batch.actions).toHaveLength(BATCH_SIZE);
-        }
-
-        expect(mockMinaActionUpdateOne).toHaveBeenCalledWith(
-            { blockHeight: 130 },
-            { $set: { status: "done" } },
+        // ---- job 2: 70 pending -> batch 60, stack 10 (single queue) ----
+        mockGetActionState.mockReturnValue(afterBatch1.toString());
+        mockFetchActions.mockResolvedValue(
+            packActions(afterBatch1, actions.slice(BATCH_SIZE)),
         );
-    }, 600_000);
 
-    it("single batch (<= BATCH_SIZE) prepares exactly one reduce tx with useActionStack=false", async () => {
-        const actions = Array(10).fill(rawDeposit);
+        await worker({ fromActionState: afterBatch1.toString() });
 
-        await worker({ blockHeight: 101, actions });
+        params = mockProveReduceTx.mock.calls[1][0];
+        expect(params.useActionStack.toBoolean()).toBe(true);
+        expect(params.actionStackProof.publicInput.toString()).toBe(
+            afterBatch2.toString(),
+        );
+        expect(params.actionStackProof.publicOutput.toString()).toBe(
+            tip.toString(),
+        );
 
-        expect(mockProveReduceTx).toHaveBeenCalledOnce();
-        const params = mockProveReduceTx.mock.calls[0][0];
+        // ---- job 3: 10 pending -> batch 10, no stack ----
+        mockGetActionState.mockReturnValue(afterBatch2.toString());
+        mockFetchActions.mockResolvedValue(
+            packActions(afterBatch2, actions.slice(2 * BATCH_SIZE)),
+        );
+
+        await worker({ fromActionState: afterBatch2.toString() });
+
+        params = mockProveReduceTx.mock.calls[2][0];
         expect(params.useActionStack.toBoolean()).toBe(false);
-        expect(params.batch.actions).toHaveLength(BATCH_SIZE);
-    }, 120_000);
+        expect(params.batch.actions.slice(0, 10).every(
+            (a: PulsarAction) => !PulsarAction.isDummy(a).toBoolean(),
+        )).toBe(true);
+        expect(mockSendProvedReduceTx).toHaveBeenCalledTimes(3);
+    }, 1_800_000);
+
+    it("caps withdrawals per batch and stacks the overflow instead of dropping it", async () => {
+        const initial = Field(0);
+        const withdrawals = Array.from(
+            { length: MAX_WITHDRAWAL_PER_BATCH + 6 },
+            (_, i) => makeWithdrawAction(i),
+        );
+        const packed = packActions(initial, withdrawals);
+        const tip = Field(packed[packed.length - 1].hash);
+
+        mockGetActionState.mockReturnValue(initial.toString());
+        mockGetActionStateHistory.mockReturnValue([tip.toString(), "1", "2", "3", "4"]);
+        mockFetchActions.mockResolvedValue(packed);
+
+        await worker({ fromActionState: initial.toString() });
+
+        const params = mockProveReduceTx.mock.calls[0][0];
+        // batch stops at the withdrawal cap (the contract pays out each masked
+        // withdrawal as an AccountUpdate — 9 is the per-tx budget)
+        const realBatchActions = params.batch.actions.filter(
+            (a: PulsarAction) => !PulsarAction.isDummy(a).toBoolean(),
+        );
+        expect(realBatchActions).toHaveLength(MAX_WITHDRAWAL_PER_BATCH);
+        // the overflow is NOT dropped: it rides the stack and the proof still
+        // reaches the live tip from the batch-end anchor
+        expect(params.useActionStack.toBoolean()).toBe(true);
+        const afterBatch = CalculateFinalActionState(
+            initial,
+            withdrawals.slice(0, MAX_WITHDRAWAL_PER_BATCH),
+        );
+        expect(params.actionStackProof.publicInput.toString()).toBe(
+            afterBatch.toString(),
+        );
+        expect(params.actionStackProof.publicOutput.toString()).toBe(
+            tip.toString(),
+        );
+    }, 1_800_000);
 });

@@ -3,17 +3,9 @@
 module.exports = {
     apps: [
         {
-            name: "bridge-main",
+            name: "bridge",
             script: "./dist/src/index.js",
-            autorestart: true,
-            restart_delay: 3000,
-            max_restarts: 20,
-            watch: false,
-        },
-        {
-            name: "bridge-tx-sender",
-            script: "./dist/src/workers/bridge-tx-sender/index.js",
-            node_args: "--max-old-space-size=512",
+            node_args: "--max-old-space-size=8192",
             autorestart: true,
             restart_delay: 3000,
             max_restarts: 20,

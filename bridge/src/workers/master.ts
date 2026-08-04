@@ -15,6 +15,7 @@ export interface MasterConfig<JobData> {
     ) => Promise<void>;
     onJobFailed?: (
         job: Job<JobData, void, string> | undefined,
+        error?: Error,
     ) => Promise<void>;
 }
 
@@ -61,6 +62,9 @@ export abstract class Master<JobData> {
                 concurrency: 1,
                 lockDuration: lockDurationMs,
                 stalledInterval: stalledIntervalMs,
+                // A stalled job may have a reduce TX in flight — fail it so
+                // onJobFailed does the bookkeeping; never silently replay it.
+                maxStalledCount: 0,
             },
         );
 
@@ -72,7 +76,7 @@ export abstract class Master<JobData> {
         });
 
         worker.on("failed", async (job, err) => {
-            if (onJobFailed && job) await onJobFailed(job);
+            if (onJobFailed && job) await onJobFailed(job, err);
             logger.error(
                 `${workerLabel} worker ${workerId} failed job ${job?.id}`,
                 { errorMessage: err?.message, stack: err?.stack, jobId: job?.id, data: job?.data },
