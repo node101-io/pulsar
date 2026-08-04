@@ -4,13 +4,16 @@
  *
  * kullanım:
  *   node build/src/scripts/seed.js \
- *     <DEPLOYER_PRIVATE_KEY_BASE58> \
- *     [--network devnet|mainnet] \
+ *     [DEPLOYER_PRIVATE_KEY_BASE58] \
+ *     [--network devnet|mainnet|lightnet] \
  *     [--contract <B62...>] \
  *     [--deposits N] [--withdrawals M]
  *
- * DEPLOYER_PRIVATE_KEY_BASE58: ilgili ağda bakiyesi olan hesabın private key'i (EK...)
- * --network   : hedef ağ (varsayılan "devnet")
+ * DEPLOYER_PRIVATE_KEY_BASE58: ilgili ağda bakiyesi olan hesabın private key'i
+ * (EK...). lightnet'te verilmezse account manager'dan taze hesap alınır —
+ * bridge'in gönderici hesabıyla nonce çakışmaması için tercih edilen yol.
+ * --network   : hedef ağ (varsayılan "devnet"). lightnet'te compile atlanır,
+ *               proof'lar mock'lanır (PROOF_LEVEL=none zaten doğrulamıyor).
  * --contract  : kontrat adresi. Verilmezse deploy-result.json'daki contractAddress kullanılır.
  * --deposits  : deposit sayısı (varsayılan 3)
  * --withdrawals: withdraw sayısı (varsayılan 2)
@@ -18,8 +21,17 @@
  * NOT: mainnet'te her deposit/withdraw GERÇEK MINA harcar.
  */
 
-import { Mina, PrivateKey, PublicKey, UInt64, AccountUpdate, fetchAccount } from 'o1js';
+import {
+  Mina,
+  PrivateKey,
+  PublicKey,
+  UInt64,
+  AccountUpdate,
+  fetchAccount,
+  Lightnet,
+} from 'o1js';
 import { readFileSync } from 'fs';
+import { mockProve } from './mock-prove.js';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
 import { ValidateReduceProgram } from '../ValidateReduce.js';
@@ -30,11 +42,21 @@ import { ENDPOINTS } from '../utils/constants.js';
 declare const process: { argv: string[]; exit: (code: number) => void };
 
 const FEE = 1e8;
+const LIGHTNET_ACCOUNT_MANAGER_URL = 'http://127.0.0.1:8181';
 
-type SeedNetwork = 'devnet' | 'mainnet';
+type SeedNetwork = 'devnet' | 'mainnet' | 'lightnet';
 
 function parseCliArgs(args: string[]) {
-  const positionalArgs = args.filter((a) => !a.startsWith('--'));
+  // Every flag consumes the next arg as its value — flag values must not be
+  // mistaken for positionals.
+  const positionalArgs: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i].startsWith('--')) {
+      i++;
+      continue;
+    }
+    positionalArgs.push(args[i]);
+  }
   const deployerKeyArg = positionalArgs[0];
 
   const flagValue = (flag: string) => {
@@ -43,9 +65,13 @@ function parseCliArgs(args: string[]) {
   };
 
   const networkArg = flagValue('--network') ?? 'devnet';
-  if (networkArg !== 'devnet' && networkArg !== 'mainnet') {
+  if (
+    networkArg !== 'devnet' &&
+    networkArg !== 'mainnet' &&
+    networkArg !== 'lightnet'
+  ) {
     throw new Error(
-      `Invalid --network "${networkArg}". Expected "devnet" or "mainnet".`
+      `Invalid --network "${networkArg}". Expected "devnet", "mainnet" or "lightnet".`
     );
   }
 
@@ -100,8 +126,6 @@ async function main() {
   const args = process.argv.slice(2);
   const { deployerKeyArg, network, contractArg, deposits, withdrawals } =
     parseCliArgs(args);
-  const deployerKey = parseDeployerPrivateKey(deployerKeyArg);
-  const deployer = deployerKey.toPublicKey();
   const contractAddress = resolveContractAddress(contractArg);
 
   const nodeUrl = ENDPOINTS.NODE[network];
@@ -110,8 +134,22 @@ async function main() {
     networkId: network === 'mainnet' ? 'mainnet' : 'testnet',
     mina: nodeUrl,
     archive: archiveUrl,
+    ...(network === 'lightnet'
+      ? { lightnetAccountManager: LIGHTNET_ACCOUNT_MANAGER_URL }
+      : {}),
   });
   Mina.setActiveInstance(Network);
+
+  // Lightnet runs PROOF_LEVEL=none — dummy proofs suffice and take
+  // milliseconds instead of 30-60 min per tx (see mock-prove.ts).
+  const prove = (tx: Awaited<ReturnType<typeof Mina.transaction>>) =>
+    network === 'lightnet' ? mockProve(tx) : tx.prove().then(() => {});
+
+  const acquiredFromPool = network === 'lightnet' && !deployerKeyArg;
+  const deployerKey = acquiredFromPool
+    ? (await Lightnet.acquireKeyPair()).privateKey
+    : parseDeployerPrivateKey(deployerKeyArg);
+  const deployer = deployerKey.toPublicKey();
 
   console.log(`network : ${network}`);
   console.log(`  node    : ${nodeUrl}`);
@@ -123,15 +161,19 @@ async function main() {
   await fetchAccount({ publicKey: deployer });
   await fetchAccount({ publicKey: contractAddress });
 
-  console.log('\ncompiling...');
-  await MultisigVerifierProgram.compile();
-  console.log('  MultisigVerifierProgram ✓');
-  await ValidateReduceProgram.compile();
-  console.log('  ValidateReduceProgram ✓');
-  await ActionStackProgram.compile();
-  console.log('  ActionStackProgram ✓');
-  await SettlementContract.compile();
-  console.log('  SettlementContract ✓');
+  if (network !== 'lightnet') {
+    console.log('\ncompiling...');
+    await MultisigVerifierProgram.compile();
+    console.log('  MultisigVerifierProgram ✓');
+    await ValidateReduceProgram.compile();
+    console.log('  ValidateReduceProgram ✓');
+    await ActionStackProgram.compile();
+    console.log('  ActionStackProgram ✓');
+    await SettlementContract.compile();
+    console.log('  SettlementContract ✓');
+  } else {
+    console.log('\nlightnet: compile atlandı (mock proof)');
+  }
 
   const contract = new SettlementContract(contractAddress);
 
@@ -145,7 +187,7 @@ async function main() {
         await contract.deposit(amount, PulsarAuth.empty());
       }
     );
-    await depositTx.prove();
+    await prove(depositTx);
     const pending = await depositTx.sign([deployerKey]).send();
     console.log(`deposit #${i + 1}:`, pending.hash);
     await pending.safeWait();
@@ -160,13 +202,17 @@ async function main() {
         await contract.withdraw(amount);
       }
     );
-    await withdrawTx.prove();
+    await prove(withdrawTx);
     const pending = await withdrawTx.sign([deployerKey]).send();
     console.log(`withdraw #${i + 1}:`, pending.hash);
     await pending.safeWait();
   }
 
   console.log('\n=== SEED DONE ===');
+
+  if (acquiredFromPool) {
+    await Lightnet.releaseKeyPair({ publicKey: deployer.toBase58() });
+  }
 }
 
 main().catch((e) => {
