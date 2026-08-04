@@ -687,20 +687,25 @@ describe('SettlementProof tests', () => {
           0,
           AGGREGATE_THRESHOLD
         );
+      // settle guards its inputs with requireEquals preconditions, so the
+      // rejection surfaces as the raw precondition on state slot 1
+      // (merkleListRoot), not a custom message
       await expectSettleToFail(
         feePayerKey,
         invalidSettlementProof,
-        'Initial MerkleList root mismatch with on-chain state'
+        '"Account_app_state_precondition_unsatisfied",1'
       );
     });
 
     it('Invalid block height settlement proof & reject settle', async () => {
       const invalidSettlementProof =
         await TestUtils.GenerateTestSettlementProof(activeSet, 1, 17);
+      // initial height matches the anchor, so this fails on the in-circuit
+      // NewBlockHeight == InitialBlockHeight + AGGREGATE_THRESHOLD assertion
       await expectSettleToFail(
         feePayerKey,
         invalidSettlementProof,
-        'Initial block height mismatch with on-chain state'
+        'New block height must be equal to initial block height + AGGREGATE_THRESHOLD'
       );
     });
 
@@ -722,10 +727,11 @@ describe('SettlementProof tests', () => {
           40,
           50
         );
+      // raw precondition on state slot 2 (stateRoot)
       await expectSettleToFail(
         feePayerKey,
         invalidSettlementProof,
-        'Initial Pulsar state root mismatch with on-chain state'
+        '"Account_app_state_precondition_unsatisfied",2'
       );
     });
 
@@ -737,10 +743,11 @@ describe('SettlementProof tests', () => {
           2 + AGGREGATE_THRESHOLD
         );
 
+      // raw precondition on state slot 3 (blockHeight)
       await expectSettleToFail(
         feePayerKey,
         invalidSettlementProof,
-        'Initial block height mismatch with on-chain state'
+        '"Account_app_state_precondition_unsatisfied",3'
       );
     });
   });
