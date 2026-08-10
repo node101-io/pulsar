@@ -1,25 +1,38 @@
-# Generates TypeScript types for the pulsar-chain gRPC messages from the
-# VENDORED proto tree (./proto — the same files the runtime transport loads
-# via @grpc/proto-loader, so types and wire behavior share one source).
+# Generates TypeScript types for the pulsar-chain gRPC messages straight from
+# the ../pulsar-chain SUBMODULE working tree (no vendored copy). The generated
+# codecs ARE the transport — nothing parses a .proto at runtime — so a build
+# that skipped this step keeps decoding with the previous field types instead
+# of failing.
 #
-# Run:      pnpm run proto:gen        (requires the buf CLI; no network)
-# Update:   bump the pinned chain commit in scripts/vendor-protos.sh, run
-#           `pnpm run proto:vendor && pnpm run proto:gen`, and commit the
-#           proto/** + src/generated/** diff — chain-side proto changes then
-#           show up as a reviewable diff / compile error.
+# Run:      pnpm run proto:gen   (buf CLI; network only to warm the BSR dep
+#           cache the first time)
+# Update:   check out the desired ref in ../pulsar-chain — the submodule
+#           gitlink is the pin — and rerun. Uncommitted submodule changes are
+#           generated from too, which is deliberate: chain-side proto patches
+#           can be tried against the bridge before they land upstream.
 version: v2
 clean: true
 inputs:
-  - directory: proto
+  # Upstream cosmos-sdk tendermint query service (GetLatestBlock,
+  # GetValidatorSetByHeight, ...), which pulsar-chain depends on but does not
+  # contain. The chain encodes its responses with the cosmos-sdk version IT
+  # was built against, so this commit MUST equal the one in the submodule's
+  # buf.lock — protoPins.test.ts fails on drift, because src/generated is
+  # gitignored and a mismatched pin would silently reshape the
+  # cosmos/tendermint codecs (including the Any-encoded Validator.pub_key
+  # that validatorSet.ts slices at fixed offsets). Listed first so
+  # pulsar-chain's pinned copies of shared well-known types win on overlap.
+  - module: buf.build/cosmos/cosmos-sdk:65fa41963e6a41dd95a35934239029df
     paths:
-      - proto/pulsarchain
-      # Upstream tendermint query service too, so its message shapes are
-      # generated instead of hand-mirrored in src.
-      - proto/cosmos/base/tendermint/v1beta1
+      - cosmos/base/tendermint/v1beta1
+  # pulsar-chain's own protos (abci, bridge, keyregistry, votepersistence, ...).
+  - directory: ../pulsar-chain
+    paths:
+      - ../pulsar-chain/proto/pulsarchain
 plugins:
-  # Local ts-proto (exact devDependency pin) — regeneration is deterministic
-  # and fully offline: only the vendored protos and the pinned ts-proto
-  # version decide the output.
+  # Local ts-proto (exact devDependency pin) — regeneration is deterministic:
+  # the submodule gitlink, the BSR pin above, and the pinned ts-proto version
+  # decide the output.
   - local: protoc-gen-ts_proto
     out: src/generated
     include_imports: true
