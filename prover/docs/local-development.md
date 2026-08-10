@@ -172,9 +172,9 @@ lists them.
 
 > There is a second deploy path, `contracts/build/src/scripts/lightnet-setup.js`.
 > It is **not** for this flow: it invents a throwaway validator key, deploys with
-> that root, and writes `contracts/.env.lightnet` for the bridge's
-> `pnpm run test:e2e`. Use `pnpm run deploy` whenever the prover must follow the
-> real chain.
+> that root, and writes `bridge/.env.lightnet` for the bridge's lightnet loop
+> (see `bridge/docs/local-development.md`). Use `pnpm run deploy` whenever the
+> prover must follow the real chain.
 
 ### 3. Start the full stack
 
@@ -214,7 +214,7 @@ Restarting the chain from genesis invalidates the deployed contract too: its
   SettlementProof through the production ingest + proving paths (~15 s) —
   the fastest way to verify chain ↔ prover ↔ circuit compatibility. It never
   touches Mina, so it passes without lightnet running.
-- The prover node must run the same chain build the protos were vendored from
-  (`PULSAR_REF` in `chain-client/scripts/vendor-protos.sh`). An older chain
-  binary lacks `GetValidatorSetWithMinaKeys` and every ingest fails with
-  NotFound.
+- The prover node must run the same chain build the protos were generated
+  from (the `pulsar-chain/` submodule commit at the repo root). An older
+  chain binary lacks `GetValidatorSetWithMinaKeys` and every ingest fails
+  with NotFound.

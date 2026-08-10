@@ -1,5 +1,6 @@
 /**
- * Deploys and initializes the SettlementContract to the configured Mina network.
+ * Deploys the SettlementContract to the configured Mina network. Anchors are
+ * set in deploy() itself — the permissionless initialize method is gone.
  *
  * The contract is anchored to the ANCHOR_BLOCK_HEIGHT record in MongoDB — the
  * block the first settlement proof starts from. `settle` requires the contract's
@@ -29,7 +30,8 @@ import {
     setMinaNetwork,
     SettlementContract,
     MultisigVerifierProgram,
-    ValidateReduceProgram,
+    ApprovalTailProgram,
+    ApprovalQuorumProgram,
     ActionStackProgram,
 } from "pulsar-contracts";
 
@@ -81,8 +83,10 @@ async function main() {
     console.log("Compiling ZK programs (this can take several minutes)…");
     await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
     console.log("MultisigVerifierProgram done.");
-    await ValidateReduceProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
-    console.log("ValidateReduceProgram done.");
+    await ApprovalTailProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+    console.log("ApprovalTailProgram done.");
+    await ApprovalQuorumProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+    console.log("ApprovalQuorumProgram done.");
     await ActionStackProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
     console.log("ActionStackProgram done.");
     await SettlementContract.compile({ cache: Cache.FileSystem(CACHE_DIR) });
@@ -102,11 +106,11 @@ async function main() {
     console.log(`  merkleListRoot: ${anchor.validatorListHash}`);
     console.log(`  stateRoot:      ${anchor.stateRoot}`);
 
-    console.log("Building deploy + initialize transaction…");
+    console.log("Building deploy transaction…");
     const tx = await Mina.transaction({ sender: signerPublicKey, fee }, async () => {
         AccountUpdate.fundNewAccount(signerPublicKey);
-        await contractInstance.deploy();
-        await contractInstance.initialize(merkleListRoot, stateRoot, blockHeight);
+        // anchors live in deploy(); the permissionless initialize is gone
+        await contractInstance.deploy({ merkleListRoot, stateRoot, blockHeight });
     });
 
     console.log("Proving transaction…");
@@ -125,7 +129,7 @@ async function main() {
     }
 
     // ── output ──────────────────────────────────────────────────────────────
-    console.log("\n=== CONTRACT DEPLOYED & INITIALIZED ===");
+    console.log("\n=== CONTRACT DEPLOYED ===");
     console.log(`CONTRACT_ADDRESS=${contractPublicKey.toBase58()}`);
     console.log(`CONTRACT_PRIVATE_KEY=${contractPrivateKey.toBase58()}`);
     console.log("\nAdd both lines to your .env file.");

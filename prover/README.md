@@ -222,15 +222,15 @@ Each processor follows a **Master/Worker** pattern backed by BullMQ:
 
 The gRPC transport (typed ts-proto clients + codecs) lives in the shared
 **`pulsar-chain-client`** workspace package (`chain-client/`), used by both
-the prover and the bridge. It is generated from the vendored proto tree
-(`chain-client/proto/`, committed) on every build — fully offline, the buf
-CLI and ts-proto are regular devDependencies. Generated output is a build
-artifact and is not committed.
+the prover and the bridge. It is generated on every build straight from the
+`pulsar-chain/` git submodule at the repo root — the submodule gitlink pins
+the chain commit — with the buf CLI and ts-proto as regular devDependencies.
+Generated output is a build artifact and is not committed.
 
-To bump the pinned chain commit: edit the ref in
-`chain-client/scripts/vendor-protos.sh`, then
+To bump the pinned chain commit: check out the desired ref in the submodule,
+then
 
 ```bash
-pnpm --filter pulsar-chain-client proto:vendor   # re-vendor .proto tree (network)
-pnpm run build                                   # regenerates types + clients
+git -C pulsar-chain checkout <ref>   # or apply not-yet-landed chain patches
+pnpm run build                       # regenerates types + clients
 ```

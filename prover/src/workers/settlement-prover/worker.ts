@@ -3,7 +3,8 @@ import { Cache, PublicKey } from "o1js";
 import {
     SettlementProof,
     MultisigVerifierProgram,
-    ValidateReduceProgram,
+    ApprovalTailProgram,
+    ApprovalQuorumProgram,
     ActionStackProgram,
     SettlementContract,
 } from "pulsar-contracts";
@@ -31,7 +32,10 @@ async function ensureCompiled() {
                 event: "settlement_prover_compile_start",
             });
             await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
-            await ValidateReduceProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+            // reduce verifies ApprovalQuorumProof, which verifies ApprovalTailProof —
+            // both VKs must exist before SettlementContract.compile.
+            await ApprovalTailProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+            await ApprovalQuorumProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
             await ActionStackProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
             await SettlementContract.compile({ cache: Cache.FileSystem(CACHE_DIR) });
             compiled = true;

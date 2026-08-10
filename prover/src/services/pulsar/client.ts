@@ -148,15 +148,10 @@ async function getVoteExtBody(
         body.next_validator_set_hash,
     );
 
-    // actionsReducedRoot is a string in the proto — convert to BigInt via UTF-8 bytes
-    const actionsRootBytes = Buffer.from(
-        body.actions_reduced_root ?? "",
-        "utf-8",
-    );
-    const actionsReducedRoot =
-        actionsRootBytes.length > 0
-            ? BigInt("0x" + actionsRootBytes.toString("hex")).toString()
-            : "0";
+    // Same encoding as the hashes above: raw big-endian field bytes, decoded
+    // with the shared reader. The validators sign this exact field element,
+    // so any other reading of the same bytes proves a different block.
+    const actionsReducedRoot = protoBufferToDecStr(body.actions_reduced_root);
 
     logger.debug("VoteExtBody fetched", {
         blockHeight: height,

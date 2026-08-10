@@ -1,5 +1,3 @@
-import * as grpc from "@grpc/grpc-js";
-
 import logger from "../../common/logger.js";
 import {
     fetchLastStoredBlock,
@@ -15,6 +13,7 @@ import {
 } from "../../config/constants.js";
 import {
     getLatestHeight,
+    grpcCredentials,
     isServiceError,
     AbciQueryClient,
     KeyregistryClient,
@@ -102,7 +101,7 @@ export async function startPulsarSync(): Promise<void> {
     let currentHeight = lastStored?.height ?? 0;
 
     const rpcAddress = process.env.PULSAR_GRPC_ENDPOINT || "localhost:9090";
-    const credentials = grpc.credentials.createInsecure();
+    const credentials = grpcCredentials(rpcAddress);
 
     const tmClient = new TendermintClient(rpcAddress, credentials);
     const vpClient = new VotePersistenceClient(rpcAddress, credentials);

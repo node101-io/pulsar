@@ -183,6 +183,9 @@ describe("pulsar sync", () => {
 
         vi.mocked(db.fetchLastStoredBlock).mockResolvedValue(null);
         vi.mocked(chainClient.getLatestHeight).mockResolvedValue(0);
+        vi.mocked(chainClient.grpcCredentials).mockReturnValue(
+            {} as ReturnType<typeof chainClient.grpcCredentials>,
+        );
 
         await expect(startPulsarSync()).rejects.toThrow("Test iteration limit reached");
 

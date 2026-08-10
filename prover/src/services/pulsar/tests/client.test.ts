@@ -25,6 +25,15 @@ vi.mock("../../../common/logger.js", () => ({
     },
 }));
 
+// Verbatim from the chain's cross-language fixture
+// (scripts/vote-ext-verifier/actions-root-vectors.json): the base64 the wire
+// carries and the field element its Go tests assert it decodes to.
+const CHAIN_ACTIONS_ROOT_VECTOR = {
+    base64: "KKhZhIikWJfh4jhbhfpmmeq1ZdrPvTIbZtwKcsCe9Ro=",
+    decimal:
+        "18389962078741328244067350182709210827719642147845999328709309946826497914138",
+};
+
 // 33-byte Mina pubkey bytes: X[32] || isOdd[1]
 function makePubkeyBytes(pubkey: PublicKey): Buffer {
     const fields = pubkey.toFields();
@@ -266,11 +275,14 @@ describe("pulsar client", () => {
             const mockAbciClient = {
                 voteExtBodyByHeight: vi.fn((req, callback) => {
                     callback(null, {
-                        voteExtBody: {
+                        vote_ext_body: {
                             next_validator_set_hash: pubkeyBytes,
                             current_state_root: Buffer.alloc(32, 0),
                             current_block_height: "100",
-                            actions_reduced_root: "pulsar",
+                            actions_reduced_root: Buffer.from(
+                                CHAIN_ACTIONS_ROOT_VECTOR.base64,
+                                "base64",
+                            ),
                         },
                     });
                 }),
@@ -288,6 +300,13 @@ describe("pulsar client", () => {
             expect(blockData.stateRoot).toBeDefined();
             expect(Array.isArray(blockData.validators)).toBe(true);
             expect(Array.isArray(blockData.voteExt)).toBe(true);
+            // The root is proto `bytes` — the raw big-endian field the
+            // validators signed. Reading those bytes any other way (e.g. as a
+            // UTF-8 string) yields a different field element, and the block
+            // proof then commits to something nobody signed.
+            expect(blockData.actionsReducedRoot).toBe(
+                CHAIN_ACTIONS_ROOT_VECTOR.decimal,
+            );
         });
     });
 

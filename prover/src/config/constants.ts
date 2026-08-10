@@ -13,8 +13,20 @@ export const PROOF_EPOCH_SETTLEMENT_INDEX = PROOF_EPOCH_LEAF_COUNT * 2 - 2;
 
 // Pulsar client constants
 export const POLL_INTERVAL_MS = 3_000;
-// first epoch 1-9
-export const EPOCH_START_HEIGHT = 2;
+// The height the first 8-block epoch starts at (default: 2, first epoch 2-9).
+// Overridable per deployment because a long-running chain would otherwise be
+// proven from genesis: anchoring near the current height skips the backlog.
+// The value is FROZEN at seed/deploy time — the contract is initialized
+// against the anchor block it implies — so set it in .env before `seed` and
+// never change it without `reset` + a contract redeploy.
+// `||`, not `??`: an empty string in .env means unset.
+export const EPOCH_START_HEIGHT = Number(process.env.EPOCH_START_HEIGHT || 2);
+// Frozen into the contract at seed/deploy — garbage here costs a redeploy,
+// so fail at boot instead of seeding from NaN.
+if (!Number.isInteger(EPOCH_START_HEIGHT) || EPOCH_START_HEIGHT < 2)
+    throw new Error(
+        `EPOCH_START_HEIGHT must be an integer >= 2, got "${process.env.EPOCH_START_HEIGHT}"`,
+    );
 // The block every proof chain starts from: createProof(EPOCH_START_HEIGHT)
 // reads from EPOCH_START_HEIGHT - 1, so this block's stateRoot,
 // validatorListHash and height are the SettlementContract's initial state.

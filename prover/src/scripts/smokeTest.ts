@@ -4,12 +4,12 @@ import { Cache, setBackend } from "o1js";
 setBackend("wasm");
 
 import mongoose from "mongoose";
-import * as grpc from "@grpc/grpc-js";
 import { MultisigVerifierProgram } from "pulsar-contracts";
 
 import { initDb } from "../db/index.js";
 import {
     getLatestHeight,
+    grpcCredentials,
     AbciQueryClient,
     KeyregistryClient,
     TendermintClient,
@@ -36,7 +36,7 @@ async function main() {
     await initDb();
 
     const rpc = process.env.PULSAR_GRPC_ENDPOINT || "localhost:9090";
-    const creds = grpc.credentials.createInsecure();
+    const creds = grpcCredentials(rpc);
     const tm = new TendermintClient(rpc, creds);
     const vp = new VotePersistenceClient(rpc, creds);
     const kr = new KeyregistryClient(rpc, creds);

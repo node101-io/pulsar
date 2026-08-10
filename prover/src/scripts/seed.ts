@@ -1,8 +1,8 @@
 import "dotenv/config";
 import mongoose from "mongoose";
-import * as grpc from "@grpc/grpc-js";
 import {
     getLatestHeight,
+    grpcCredentials,
     AbciQueryClient,
     KeyregistryClient,
     TendermintClient,
@@ -49,7 +49,7 @@ async function seedAnchorBlock() {
         );
     }
 
-    const creds = grpc.credentials.createInsecure();
+    const creds = grpcCredentials(endpoint);
     const tm = new TendermintClient(endpoint, creds);
     const vp = new VotePersistenceClient(endpoint, creds);
     const kr = new KeyregistryClient(endpoint, creds);
