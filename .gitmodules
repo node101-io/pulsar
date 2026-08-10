@@ -1,0 +1,4 @@
+[submodule "pulsar-chain"]
+	path = pulsar-chain
+	url = https://github.com/node101-io/pulsar-chain.git
+	branch = development
