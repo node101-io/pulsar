@@ -1,6 +1,6 @@
 import {
+  Bool,
   Field,
-  Poseidon,
   PrivateKey,
   PublicKey,
   Signature,
@@ -13,18 +13,23 @@ import {
   SettlementProof,
 } from '../SettlementProof.js';
 import {
-  GenerateValidateReduceProof,
+  GenerateApprovalQuorumProof,
+  GenerateApprovalTailProof,
   GenerateSettlementPublicInput,
   MergeSettlementProofs,
   GeneratePulsarBlock,
 } from './generateFunctions.js';
-import { ValidateReducePublicInput } from '../ValidateReduce.js';
+import { ApprovalQuorumProof } from '../ApprovalQuorum.js';
 import {
   SignaturePublicKeyList,
   SignaturePublicKeyMatrix,
 } from '../types/signaturePubKeyList.js';
-import { List } from '../types/common.js';
-import { hashValidatorLeaf } from './validatorList.js';
+import { ApprovalVerdicts, List } from '../types/common.js';
+import { VoteExtBody } from '../types/voteExtBody.js';
+import {
+  computeValidatorListHash,
+  hashValidatorLeaf,
+} from './validatorList.js';
 import {
   CosmosSignature,
   PulsarAction,
@@ -36,24 +41,22 @@ import {
   merkleActionsAdd,
 } from '../types/actionHelpers.js';
 import {
-  BATCH_SIZE,
-  MAX_DEPOSIT_PER_BATCH,
-  MAX_WITHDRAWAL_PER_BATCH,
-  SETTLEMENT_MATRIX_SIZE,
-} from './constants.js';
+  foldApprovalCursor,
+  hashPulsarActionLeafV2,
+} from './pulsarActionLeaf.js';
+import { BATCH_SIZE, SETTLEMENT_MATRIX_SIZE } from './constants.js';
 
 export const TestUtils = {
   GenerateSignaturePubKeyList,
   GenerateSignaturePubKeyMatrix,
-  GenerateReducerSignatureList,
   GenerateTestSettlementProof,
-  MockReducerVerifierProof,
+  MockApprovalQuorumProof,
+  FoldVerdictLeaves,
   GenerateTestActions,
   CalculateActionRoot,
   GenerateTestBlocks,
   GenerateTestBlocksWithRotation,
   CreateValidatorMerkleList,
-  CalculateFromMockActions,
 };
 
 function GenerateSignaturePubKeyList(
@@ -90,27 +93,6 @@ function GenerateSignaturePubKeyMatrix(
   );
 }
 
-function GenerateReducerSignatureList(
-  publicInput: ValidateReducePublicInput,
-  proofGeneratorsList: Array<[PrivateKey, PublicKey]>
-) {
-  const signatures = [];
-
-  const message = publicInput.hash().toFields();
-
-  for (let i = 0; i < proofGeneratorsList.length; i++) {
-    signatures.push(Signature.create(proofGeneratorsList[i][0], message));
-  }
-
-  return SignaturePublicKeyList.fromArray(
-    signatures.map((signature, i) => [
-      signature,
-      proofGeneratorsList[i][1],
-      Field(1),
-    ])
-  );
-}
-
 function CreateValidatorMerkleList(
   validatorSet: Array<[PrivateKey, PublicKey]>
 ) {
@@ -123,6 +105,100 @@ function CreateValidatorMerkleList(
   }
 
   return merkleList;
+}
+
+/** Fold v2 verdict leaves for `actions` (verdict per slot) onto `cursor`. */
+function FoldVerdictLeaves(
+  cursor: Field,
+  actions: PulsarAction[],
+  verdicts: boolean[]
+): Field {
+  return actions.reduce(
+    (acc, action, i) =>
+      foldApprovalCursor(acc, hashPulsarActionLeafV2(action, Bool(verdicts[i]))),
+    cursor
+  );
+}
+
+/**
+ * Chain stand-in for unit tests: folds v2
+ * verdict leaves and signs a REAL vote-extension body with local keys — a
+ * stand-in signing the real message, not a fake signer of a fabricated one.
+ * Successor to MockReducerVerifierProof, which signed the deleted
+ * ValidateReduce batch commitment nothing chain-side ever produces.
+ *
+ * The signed cursor derives from the SIGNED verdicts over the SCANNED prefix,
+ * independent of what the contract folds — so tests can diverge the two on
+ * purpose:
+ * - signedVerdicts != verdicts  -> verdict-flip rejection cases;
+ * - scannedCount < batch length -> "batch beyond the chain's scan";
+ * - tailLeaves                  -> scanned-but-unconsumed suffix the tail
+ *                                  proof absorbs (batch shorter than the
+ *                                  signed prefix).
+ */
+async function MockApprovalQuorumProof(opts: {
+  validatorSet: Array<[PrivateKey, PublicKey]>;
+  cursorBefore: Field;
+  batchActions: PulsarAction[];
+  /** what the CONTRACT folds, one bool per batch action */
+  verdicts: boolean[];
+  /** what the CHAIN signed (default: verdicts) */
+  signedVerdicts?: boolean[];
+  /** how many batch actions the chain has scanned (default: all) */
+  scannedCount?: number;
+  /** leaves beyond the batch that the tail proof must absorb (default: none) */
+  tailLeaves?: Field[];
+}): Promise<{
+  verdicts: ApprovalVerdicts;
+  approvalProof: ApprovalQuorumProof;
+  cursorAfter: Field;
+}> {
+  const {
+    validatorSet,
+    cursorBefore,
+    batchActions,
+    verdicts,
+    signedVerdicts = verdicts,
+    scannedCount = batchActions.length,
+    tailLeaves = [],
+  } = opts;
+
+  const cursorAfter = FoldVerdictLeaves(
+    cursorBefore,
+    batchActions.slice(0, scannedCount),
+    signedVerdicts.slice(0, scannedCount)
+  );
+  const signedRoot = tailLeaves.reduce(
+    (cursor, leaf) => foldApprovalCursor(cursor, leaf),
+    cursorAfter
+  );
+
+  const body = new VoteExtBody({
+    // power = Field(1): must match GenerateSignaturePubKeyList
+    nextValidatorSetHash: computeValidatorListHash(
+      validatorSet.map(([, publicKey]) => ({ publicKey, power: Field(1) }))
+    ),
+    stateRootHi: Field(123),
+    stateRootLo: Field(456),
+    currentBlockHeight: Field(42),
+    actionsReducedRoot: signedRoot,
+  });
+
+  const approvalProof = await GenerateApprovalQuorumProof(
+    cursorAfter,
+    body,
+    GenerateSignaturePubKeyList([body.hash()], validatorSet),
+    await GenerateApprovalTailProof(cursorAfter, tailLeaves)
+  );
+
+  return {
+    verdicts: ApprovalVerdicts.fromArray([
+      ...verdicts,
+      ...new Array(BATCH_SIZE - verdicts.length).fill(false),
+    ]),
+    approvalProof,
+    cursorAfter,
+  };
 }
 
 async function GenerateTestSettlementProof(
@@ -192,20 +268,6 @@ async function GenerateTestSettlementProof(
   let mergedProof = await MergeSettlementProofs(settlementProofs);
 
   return mergedProof;
-}
-
-async function MockReducerVerifierProof(
-  publicInput: ValidateReducePublicInput,
-  validatorSet: Array<[PrivateKey, PublicKey]>
-) {
-  const signatureList = GenerateReducerSignatureList(publicInput, validatorSet);
-
-  return {
-    validateReduceProof: await GenerateValidateReduceProof(
-      publicInput,
-      signatureList
-    ),
-  };
 }
 
 function GenerateTestActions(numActions: number): PulsarAction[] {
@@ -303,66 +365,4 @@ function GenerateTestBlocksWithRotation(
   }
 
   return blocks;
-}
-
-function CalculateFromMockActions(
-  initialState: ValidateReducePublicInput,
-  packedActions: Array<{ action: PulsarAction; hash: bigint }>
-) {
-  let withdrawals = 0;
-  let deposits = 0;
-
-  const batchActions: Array<PulsarAction> = [];
-  let endActionState = 0n;
-
-  let publicInput = initialState;
-
-  for (const [, pack] of packedActions.entries()) {
-    if (batchActions.length === BATCH_SIZE) {
-      break;
-    }
-
-    if (PulsarAction.isDeposit(pack.action).toBoolean()) {
-      if (deposits === MAX_DEPOSIT_PER_BATCH) {
-        break;
-      }
-      deposits++;
-
-      publicInput = new ValidateReducePublicInput({
-        ...publicInput,
-        actionListHash: Poseidon.hash([
-          publicInput.actionListHash,
-          pack.action.type,
-          ...pack.action.account.toFields(),
-          pack.action.amount,
-          ...pack.action.pulsarAuth.toFields(),
-        ]),
-      });
-    } else if (PulsarAction.isWithdrawal(pack.action).toBoolean()) {
-      if (withdrawals === MAX_WITHDRAWAL_PER_BATCH) {
-        break;
-      }
-      withdrawals++;
-
-      publicInput = new ValidateReducePublicInput({
-        ...publicInput,
-        actionListHash: Poseidon.hash([
-          publicInput.actionListHash,
-          pack.action.type,
-          ...pack.action.account.toFields(),
-          pack.action.amount,
-          ...pack.action.pulsarAuth.toFields(),
-        ]),
-      });
-    }
-
-    batchActions.push(pack.action);
-    endActionState = BigInt(pack.hash);
-  }
-
-  return {
-    endActionState,
-    batchActions,
-    publicInput,
-  };
 }

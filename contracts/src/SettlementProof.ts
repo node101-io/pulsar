@@ -7,6 +7,7 @@ import {
 import { SignaturePublicKeyMatrix } from './types/signaturePubKeyList.js';
 import { List } from './types/common.js';
 import { hashValidatorLeaf } from './utils/validatorList.js';
+import { hashVoteExtMessage } from './types/voteExtBody.js';
 
 export {
   SettlementProof,
@@ -83,6 +84,13 @@ class SettlementPublicInputs extends Struct({
   }
 }
 
+/**
+ * The settle path's view of the chain's signed vote-extension body: the New*
+ * fields plus actionsReducedRoot ARE the body (NewStateRoot pre-joined), the
+ * Initial* fields exist only for the block-chaining assertions below. hash()
+ * delegates to the shared formula in types/voteExtBody.ts so settle and
+ * reduce verify signatures over one implementation and cannot drift.
+ */
 class Block extends Struct({
   InitialMerkleListRoot: Field,
   InitialStateRoot: Field,
@@ -93,12 +101,12 @@ class Block extends Struct({
   actionsReducedRoot: Field,
 }) {
   hash() {
-    const innerHash = Poseidon.hash([
+    return hashVoteExtMessage(
       this.NewMerkleListRoot,
       this.NewStateRoot,
       this.NewBlockHeight,
-    ]);
-    return Poseidon.hash([innerHash, this.actionsReducedRoot]);
+      this.actionsReducedRoot
+    );
   }
 
   toJSON() {

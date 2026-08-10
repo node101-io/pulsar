@@ -1,378 +1,106 @@
-import { Bool, Field, Poseidon } from 'o1js';
-import { ValidateReducePublicInput } from '../ValidateReduce.js';
-import { log } from './loggers.js';
-import {
-  BATCH_SIZE,
-  MAX_DEPOSIT_PER_BATCH,
-  MAX_WITHDRAWAL_PER_BATCH,
-} from './constants.js';
+import { Bool, Field } from 'o1js';
+import { BATCH_SIZE, MAX_WITHDRAWAL_PER_BATCH } from './constants.js';
 import { Batch, PulsarAction } from '../types/PulsarAction.js';
-import { SettlementContract } from '../SettlementContract.js';
-import { ReduceMask } from '../types/common.js';
-import { GenerateActionStackProof } from './generateFunctions.js';
-import { fetchActions } from './fetch.js';
+import { ApprovalVerdicts } from '../types/common.js';
 import {
-  actionListAdd,
-  emptyActionListHash,
-  merkleActionsAdd,
-} from '../types/actionHelpers.js';
-import { ActionStackProof } from '../ActionStack.js';
+  foldApprovalCursor,
+  hashPulsarActionLeafV2,
+} from './pulsarActionLeaf.js';
 
-export {
-  MapFromArray,
-  CalculateMax,
-  CalculateMaxWithBalances,
-  PrepareBatch,
-  PrepareBatchWithActions,
-  PackActions,
-};
+export { BuildVerdictBatch };
 
-function MapFromArray(array: Field[]) {
-  const map = new Map<string, number>();
+/**
+ * Witness construction for reduce under the verdict-leaf model. The verdict is no
+ * longer a local decision: the chain's leaf list mirrors the L1 action queue
+ * position for position, so the walk is positional — no multiset, no
+ * balance gate, no local approval policy. Per position the chain leaf can
+ * only be leafV2(action, 0) or leafV2(action, 1); whichever matches IS the
+ * chain's adjudication of exactly that action.
+ *
+ * NEITHER matching is a hard error, never a silent skip: it means the chain
+ * scanned a different action at that queue position (phantom/dropped leaf,
+ * fee-payer mismatch, reorg divergence). Building a batch across it could
+ * never prove — the fold would reach no signed root — so refuse loudly and
+ * leave the recovery to a chain-side rebase.
+ *
+ * @param packedActions the L1 action queue from the contract's actionState,
+ *   in ledger order (the shape fetchActions returns)
+ * @param chainLeaves the chain's v2 leaf list from the same position, i.e.
+ *   the leaves whose fold extends the contract's approvalCursor
+ * @param fromCursor the contract's current approvalCursor
+ * @returns the batch (dummy-padded) with its per-slot chain verdicts, the
+ *   consumed prefix `batchActions`, `endCursor` (the approval cursor after
+ *   the batch — ApprovalQuorum's publicInput.cursorAfter and the tail
+ *   anchor), and `tailLeaves` (the provided leaves the batch did not
+ *   consume — the tail proof folds them from endCursor toward a signed
+ *   actions_reduced_root)
+ */
+function BuildVerdictBatch(
+  packedActions: Array<{ action: PulsarAction; hash: bigint }>,
+  chainLeaves: Field[],
+  fromCursor: Field
+): {
+  batch: Batch;
+  verdicts: ApprovalVerdicts;
+  batchActions: PulsarAction[];
+  endCursor: Field;
+  tailLeaves: Field[];
+} {
+  const batchActions: PulsarAction[] = [];
+  const verdictBits: boolean[] = [];
+  let endCursor = fromCursor;
+  let approvedWithdrawals = 0;
 
-  for (const field of array.map((x) => x.toString())) {
-    const count = map.get(field) || 0;
-    map.set(field, count + 1);
-
-    log('map:', map);
-    log('map.get(field):', map.get(field));
-  }
-  return map;
-}
-
-function CalculateMax(
-  includedActionsMap: Map<string, number>,
-  contractInstance: SettlementContract,
-  packedActions: Array<{ action: PulsarAction; hash: bigint }>
-) {
-  let withdrawals = 0;
-  let deposits = 0;
-
-  const batchActions: Array<PulsarAction> = [];
-  let endActionState = 0n;
-
-  let mask = new Array<boolean>(BATCH_SIZE).fill(false);
-  let publicInput = new ValidateReducePublicInput({
-    merkleListRoot: contractInstance.merkleListRoot.get(),
-    actionListHash: contractInstance.actionListHash.get(),
-  });
-
-  for (const [i, pack] of packedActions.entries()) {
+  for (const [i, { action }] of packedActions.entries()) {
     if (batchActions.length === BATCH_SIZE) {
-      log('Batch size reached:', batchActions.length);
+      break;
+    }
+    if (i >= chainLeaves.length) {
+      // The chain's cursor: this action is not yet adjudicated. Folding past
+      // it is the existing TransientReduceError path — stop, leave it queued.
       break;
     }
 
-    const hash = pack.action.unconstrainedHash().toString();
-    const count = includedActionsMap.get(hash) || 0;
-
-    if (PulsarAction.isDeposit(pack.action).toBoolean()) {
-      if (deposits === MAX_DEPOSIT_PER_BATCH) {
-        log('Max deposits reached for batch');
-        break;
-      }
-      deposits++;
-      mask[i] = true;
-
-      publicInput = new ValidateReducePublicInput({
-        ...publicInput,
-        actionListHash: Poseidon.hash([
-          publicInput.actionListHash,
-          pack.action.type,
-          ...pack.action.account.toFields(),
-          pack.action.amount,
-          ...pack.action.pulsarAuth.toFields(),
-        ]),
-      });
-    } else if (PulsarAction.isWithdrawal(pack.action).toBoolean()) {
-      if (count <= 0) {
-        log('Action skipped:', pack.action.toJSON());
-        batchActions.push(pack.action);
-        endActionState = BigInt(pack.hash);
-        continue;
-      } else if (withdrawals === MAX_WITHDRAWAL_PER_BATCH) {
-        log('Max withdrawals reached for batch');
-        break;
-      }
-      withdrawals++;
-      mask[i] = true;
-
-      publicInput = new ValidateReducePublicInput({
-        ...publicInput,
-        actionListHash: Poseidon.hash([
-          publicInput.actionListHash,
-          pack.action.type,
-          ...pack.action.account.toFields(),
-          pack.action.amount,
-          ...pack.action.pulsarAuth.toFields(),
-        ]),
-      });
+    const chainLeaf = chainLeaves[i].toBigInt();
+    let approved: boolean;
+    if (chainLeaf === hashPulsarActionLeafV2(action, Bool(true)).toBigInt()) {
+      approved = true;
+    } else if (
+      chainLeaf === hashPulsarActionLeafV2(action, Bool(false)).toBigInt()
+    ) {
+      approved = false;
+    } else {
+      throw new Error(
+        `chain leaf at position ${i} matches neither verdict for action ` +
+          `${JSON.stringify(action.toJSON())} — chain/L1 divergence, ` +
+          `refusing to build a batch across it`
+      );
     }
 
-    batchActions.push(pack.action);
-    endActionState = BigInt(pack.hash);
-  }
-
-  return {
-    endActionState,
-    batchActions,
-    publicInput,
-    mask: ReduceMask.fromArray(mask),
-  };
-}
-
-function CalculateMaxWithBalances(
-  withdrawBalances: Map<string, number>,
-  contractInstance: SettlementContract,
-  packedActions: Array<{ action: PulsarAction; hash: bigint }>
-) {
-  let withdrawals = 0;
-  let deposits = 0;
-
-  const batchActions: Array<PulsarAction> = [];
-  let endActionState = 0n;
-
-  let mask = new Array<boolean>(BATCH_SIZE).fill(false);
-  let publicInput = new ValidateReducePublicInput({
-    merkleListRoot: contractInstance.merkleListRoot.get(),
-    actionListHash: contractInstance.actionListHash.get(),
-  });
-
-  for (const [i, pack] of packedActions.entries()) {
-    if (batchActions.length === BATCH_SIZE) {
-      log('Batch size reached:', batchActions.length);
-      break;
-    }
-
-    if (PulsarAction.isDeposit(pack.action).toBoolean()) {
-      console.log('Processing deposit for action:', pack.action.toJSON());
-      if (deposits === MAX_DEPOSIT_PER_BATCH) {
-        log('Max deposits reached for batch');
+    if (approved && PulsarAction.isWithdrawal(action).toBoolean()) {
+      // An account-update budget, not a protocol rule: the tail absorbs the
+      // remainder, so cutting before the (MAX+1)th paid withdrawal is legal
+      // at any batch length.
+      if (approvedWithdrawals === MAX_WITHDRAWAL_PER_BATCH) {
         break;
       }
-      deposits++;
-      mask[i] = true;
-
-      publicInput = new ValidateReducePublicInput({
-        ...publicInput,
-        actionListHash: Poseidon.hash([
-          publicInput.actionListHash,
-          pack.action.type,
-          ...pack.action.account.toFields(),
-          pack.action.amount,
-          ...pack.action.pulsarAuth.toFields(),
-        ]),
-      });
-    } else if (PulsarAction.isWithdrawal(pack.action).toBoolean()) {
-      console.log('Processing withdrawal for action:', pack.action.toJSON());
-      const accountBalance = withdrawBalances.get(
-        pack.action.account.toBase58()
-      );
-      console.log(
-        'Account balance for',
-        pack.action.account.toBase58(),
-        ':',
-        accountBalance
-      );
-      if (
-        accountBalance === undefined ||
-        pack.action.amount.toBigInt() > BigInt(accountBalance)
-      ) {
-        console.log('Action skipped:', pack.action.toJSON());
-        batchActions.push(pack.action);
-        endActionState = BigInt(pack.hash);
-        continue;
-      } else if (withdrawals === MAX_WITHDRAWAL_PER_BATCH) {
-        console.log('Max withdrawals reached for batch');
-        break;
-      }
-      withdrawals++;
-      mask[i] = true;
-      withdrawBalances.set(
-        pack.action.account.toBase58(),
-        accountBalance - Number(pack.action.amount.toBigInt())
-      );
-      console.log(
-        'Updated account balance for',
-        pack.action.account.toBase58(),
-        ':',
-        withdrawBalances.get(pack.action.account.toBase58())
-      );
-
-      publicInput = new ValidateReducePublicInput({
-        ...publicInput,
-        actionListHash: Poseidon.hash([
-          publicInput.actionListHash,
-          pack.action.type,
-          ...pack.action.account.toFields(),
-          pack.action.amount,
-          ...pack.action.pulsarAuth.toFields(),
-        ]),
-      });
+      approvedWithdrawals++;
     }
 
-    batchActions.push(pack.action);
-    endActionState = BigInt(pack.hash);
+    batchActions.push(action);
+    verdictBits.push(approved);
+    endCursor = foldApprovalCursor(endCursor, chainLeaves[i]);
   }
 
   return {
-    endActionState,
+    batch: Batch.fromArray(batchActions),
+    verdicts: ApprovalVerdicts.fromArray(
+      verdictBits.concat(
+        new Array(BATCH_SIZE - verdictBits.length).fill(false)
+      )
+    ),
     batchActions,
-    publicInput,
-    mask: ReduceMask.fromArray(mask),
-  };
-}
-
-function PackActions(initialState: Field, actions: Array<PulsarAction>) {
-  let packedActions: Array<{ action: PulsarAction; hash: bigint }> = [];
-
-  for (const [i, action] of actions.entries()) {
-    packedActions.push({
-      action,
-      hash:
-        i === 0
-          ? initialState.toBigInt()
-          : merkleActionsAdd(
-              Field(packedActions[i - 1].hash),
-              actionListAdd(emptyActionListHash, action)
-            ).toBigInt(),
-    });
-  }
-  return packedActions;
-}
-
-// Included actions will be fetched from the validators
-async function PrepareBatch(
-  includedActions: Map<string, number>,
-  contractInstance: SettlementContract
-) {
-  const packedActions = await fetchActions(
-    contractInstance.address,
-    contractInstance.actionState.get()
-  );
-
-  if (packedActions.length === 0) {
-    log('No actions found for the contract.');
-    return {
-      endActionState: 0n,
-      batchActions: [],
-      batch: Batch.empty(),
-      useActionStack: Bool(false),
-      actionStackProof: undefined,
-      publicInput: ValidateReducePublicInput.default,
-      mask: ReduceMask.empty(),
-    };
-  }
-
-  const { endActionState, batchActions, publicInput, mask } = CalculateMax(
-    includedActions,
-    contractInstance,
-    packedActions
-  );
-
-  let actionStack = packedActions
-    .slice(batchActions.length)
-    .map((pack) => pack.action);
-
-  log(
-    'Batch actions:',
-    batchActions.map((action) => action.toJSON()),
-    '\n',
-    'Action stack:',
-    actionStack.map((action) => action.toJSON())
-  );
-
-  const batch = Batch.fromArray(batchActions);
-
-  const { useActionStack, actionStackProof } = await GenerateActionStackProof(
-    Field.from(endActionState),
-    actionStack
-  );
-
-  log(
-    'useActionStack:',
-    useActionStack.toBoolean(),
-    '\n',
-    'actionStackProof Input:',
-    actionStackProof.publicInput.toJSON(),
-    'output:',
-    actionStackProof.publicOutput.toJSON()
-  );
-
-  return {
-    batchActions,
-    batch,
-    useActionStack,
-    actionStackProof,
-    publicInput,
-    mask,
-  };
-}
-
-async function PrepareBatchWithActions(
-  includedActions: Map<string, number>,
-  contractInstance: SettlementContract,
-  packedActions: {
-    action: PulsarAction;
-    hash: bigint;
-  }[]
-) {
-  if (packedActions.length === 0) {
-    log('No actions found for the contract.');
-    let proof = await ActionStackProof.dummy(Field(0), Field(0), 1, 14);
-    return {
-      endActionState: Field(0),
-      batchActions: [PulsarAction.fromRawAction([])],
-      batch: Batch.empty(),
-      useActionStack: Bool(false),
-      actionStackProof: proof,
-      publicInput: ValidateReducePublicInput.default,
-      mask: ReduceMask.empty(),
-    };
-  }
-
-  const { endActionState, batchActions, publicInput, mask } = CalculateMax(
-    includedActions,
-    contractInstance,
-    packedActions
-  );
-
-  let actionStack = packedActions
-    .slice(batchActions.length)
-    .map((pack) => pack.action);
-
-  log(
-    'Batch actions:',
-    batchActions.map((action) => action.toJSON()),
-    '\n',
-    'Action stack:',
-    actionStack.map((action) => action.toJSON())
-  );
-
-  const batch = Batch.fromArray(batchActions);
-
-  const { useActionStack, actionStackProof } = await GenerateActionStackProof(
-    Field.from(endActionState),
-    actionStack
-  );
-
-  log(
-    'useActionStack:',
-    useActionStack.toBoolean(),
-    '\n',
-    'actionStackProof Input:',
-    actionStackProof.publicInput.toJSON(),
-    'output:',
-    actionStackProof.publicOutput.toJSON()
-  );
-
-  return {
-    endActionState: Field.from(endActionState),
-    batchActions,
-    batch,
-    useActionStack,
-    actionStackProof,
-    publicInput,
-    mask,
+    endCursor,
+    tailLeaves: chainLeaves.slice(batchActions.length),
   };
 }

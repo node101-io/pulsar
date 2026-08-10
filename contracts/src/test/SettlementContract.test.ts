@@ -1,47 +1,52 @@
 /* eslint-disable no-unused-vars */
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import {
+  Bool,
   Field,
   Mina,
   PrivateKey,
   PublicKey,
   AccountUpdate,
-  Poseidon,
   fetchAccount,
   Lightnet,
+  Reducer,
   UInt64,
 } from 'o1js';
 import { MultisigVerifierProgram, SettlementProof } from '../SettlementProof';
 import {
   AGGREGATE_THRESHOLD,
+  BATCH_SIZE,
   ENDPOINTS,
   MINIMUM_DEPOSIT_AMOUNT,
   VALIDATOR_NUMBER,
+  WITHDRAW_DOWN_PAYMENT,
 } from '../utils/constants';
 import { SettlementContract } from '../SettlementContract';
 import { devnetTestAccounts, validatorSet, testAccounts } from './mock';
 import { TestUtils } from '../utils/testUtils';
-import { ValidateReduceProgram } from '../ValidateReduce';
 import { List } from '../types/common';
 import { ActionStackProgram } from '../ActionStack';
-import { MapFromArray, PrepareBatch } from '../utils/reduceWitness';
+import { ApprovalTailProgram } from '../ApprovalTail';
+import { ApprovalQuorumProgram } from '../ApprovalQuorum';
+import { GenerateActionStackProof } from '../utils/generateFunctions';
+import { fetchActions } from '../utils/fetch';
 import {
-  analyzeMethods,
-  enableLogs,
-  log,
-  logZkappState,
-} from '../utils/loggers';
+  foldApprovalCursor,
+  hashPulsarActionLeafV2,
+} from '../utils/pulsarActionLeaf';
+import { enableLogs, log, logZkappState } from '../utils/loggers';
 import {
+  Batch,
   CosmosSignature,
   PulsarAction,
   PulsarAuth,
 } from '../types/PulsarAction';
-import { fetchRawActions } from '../utils/fetch';
-import { actionListAdd, emptyActionListHash } from '../types/actionHelpers';
 import { DeployScripts } from '../utils/deployHelpers.js';
 
 const { sendMina } = DeployScripts;
 
-describe('SettlementProof tests', () => {
+describe('SettlementContract tests', () => {
   const testEnvironment = process.env.TEST_ENV ?? 'local';
   const localTest = testEnvironment === 'local';
   const randomKeys = process.env.RANDOM_KEYS === '1';
@@ -77,13 +82,19 @@ describe('SettlementProof tests', () => {
   // proofs
   let settlementProof: SettlementProof;
 
-  // action stack
-  let actionStack: Array<Field> = [];
-
   // ZkApp
   let zkappAddress: PublicKey;
   let zkappPrivateKey: PrivateKey;
   let zkapp: SettlementContract;
+
+  // Row counts of the redesign circuits, collected in beforeAll and reported
+  // by the 'Circuit rows' test — the benchmark record for this tranche.
+  let rows: {
+    tailBase: number;
+    tailRecursive: number;
+    quorum: number;
+    reduce: number;
+  };
 
   // Local Mina blockchain
   let Local: Awaited<ReturnType<typeof Mina.LocalBlockchain>>;
@@ -129,79 +140,18 @@ describe('SettlementProof tests', () => {
   async function deployZkApp(
     zkapp: SettlementContract,
     deployerKey: PrivateKey,
-    zkappPrivateKey: PrivateKey
-  ) {
-    const deployerAccount = deployerKey.toPublicKey();
-    const tx = await Mina.transaction(
-      { sender: deployerAccount, fee },
-      async () => {
-        AccountUpdate.fundNewAccount(deployerAccount);
-        await zkapp.deploy();
-      }
-    );
-
-    await waitTransactionAndFetchAccount(
-      tx,
-      [deployerKey, zkappPrivateKey],
-      [zkappAddress]
-    );
-  }
-
-  async function initializeContract(
-    zkapp: SettlementContract,
-    deployerKey: PrivateKey,
+    zkappPrivateKey: PrivateKey,
     merkleListRoot: Field,
     stateRoot: Field = Field(0),
     blockHeight: Field = Field(0)
   ) {
     const deployerAccount = deployerKey.toPublicKey();
-    const initTx = await Mina.transaction(
-      { sender: deployerAccount, fee },
-      async () => {
-        await zkapp.initialize(merkleListRoot, stateRoot, blockHeight);
-      }
-    );
-
-    await waitTransactionAndFetchAccount(initTx, [deployerKey], [zkappAddress]);
-  }
-
-  async function expectInitializeContractToFail(
-    zkapp: SettlementContract,
-    deployerKey: PrivateKey,
-    merkleListRoot: Field,
-    expectedMsg: string = 'Transaction failed'
-  ) {
-    const deployerAccount = deployerKey.toPublicKey();
-    try {
-      const tx = await Mina.transaction(
-        { sender: deployerAccount, fee },
-        async () => {
-          await zkapp.initialize(merkleListRoot, Field(0), Field(0));
-        }
-      );
-      await waitTransactionAndFetchAccount(tx, [deployerKey]);
-    } catch (error: any) {
-      log(error);
-      expect(error.message).toContain(expectedMsg);
-      return;
-    }
-    throw new Error('Contract initialization should have failed');
-  }
-
-  async function deployAndInitializeContract(
-    zkapp: SettlementContract,
-    deployerKey: PrivateKey,
-    zkappPrivateKey: PrivateKey,
-    merkleListRoot: Field
-  ) {
-    const deployerAccount = deployerKey.toPublicKey();
-
     const tx = await Mina.transaction(
       { sender: deployerAccount, fee },
       async () => {
         AccountUpdate.fundNewAccount(deployerAccount);
-        await zkapp.deploy();
-        await zkapp.initialize(merkleListRoot, Field(0), Field(0));
+        // anchors live in deploy(); the permissionless initialize is gone
+        await zkapp.deploy({ merkleListRoot, stateRoot, blockHeight });
       }
     );
 
@@ -220,19 +170,12 @@ describe('SettlementProof tests', () => {
     zkappAddress = zkappPrivateKey.toPublicKey();
     zkapp = new SettlementContract(zkappAddress);
 
-    await deployAndInitializeContract(
-      zkapp,
-      feePayerKey,
-      zkappPrivateKey,
-      merkleList.hash
-    );
-    actionStack = [];
+    await deployZkApp(zkapp, feePayerKey, zkappPrivateKey, merkleList.hash);
   }
 
   async function settle(
     senderKey: PrivateKey,
-    settlementProof: SettlementProof,
-    pushToStack: boolean = true
+    settlementProof: SettlementProof
   ) {
     await fetchAccounts([zkappAddress]);
     const tx = await Mina.transaction(
@@ -241,10 +184,6 @@ describe('SettlementProof tests', () => {
         await zkapp.settle(settlementProof);
       }
     );
-
-    if (pushToStack) {
-      actionStack.push(settlementProof.publicInput.actionHash());
-    }
 
     log('settle tx', JSON.parse(tx.toJSON()));
 
@@ -272,11 +211,7 @@ describe('SettlementProof tests', () => {
     throw new Error('Settle should have failed');
   }
 
-  async function deposit(
-    senderKey: PrivateKey,
-    amount: UInt64,
-    pushToStack: boolean = true
-  ) {
+  async function deposit(senderKey: PrivateKey, amount: UInt64) {
     await fetchAccounts([senderKey.toPublicKey()]);
     const balanceBefore = Mina.getBalance(senderKey.toPublicKey());
     log(
@@ -291,18 +226,6 @@ describe('SettlementProof tests', () => {
         );
       }
     );
-
-    if (pushToStack) {
-      actionStack.push(
-        Poseidon.hash([
-          Field(1),
-          ...senderKey.toPublicKey().toFields(),
-          amount.value,
-
-          ...PulsarAuth.from(Field(0), CosmosSignature.empty()).toFields(),
-        ])
-      );
-    }
 
     await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
 
@@ -334,11 +257,7 @@ describe('SettlementProof tests', () => {
     throw new Error('Deposit should have failed');
   }
 
-  async function withdraw(
-    senderKey: PrivateKey,
-    amount: UInt64,
-    pushToStack: boolean = true
-  ) {
+  async function withdraw(senderKey: PrivateKey, amount: UInt64) {
     await fetchAccounts([senderKey.toPublicKey()]);
     const balanceBefore = Mina.getBalance(senderKey.toPublicKey());
     log(
@@ -350,16 +269,6 @@ describe('SettlementProof tests', () => {
         await zkapp.withdraw(amount);
       }
     );
-
-    if (pushToStack) {
-      actionStack.push(
-        Poseidon.hash([
-          Field(2),
-          ...senderKey.toPublicKey().toFields(),
-          amount.value,
-        ])
-      );
-    }
 
     await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
     const balanceAfter = Mina.getBalance(senderKey.toPublicKey());
@@ -389,62 +298,105 @@ describe('SettlementProof tests', () => {
     throw new Error('Withdraw should have failed');
   }
 
-  async function reduce(senderKey: PrivateKey) {
-    let map = MapFromArray(actionStack);
+  /**
+   * Knobs to make the mock chain's signed truth diverge from what the
+   * contract folds — each knob exists for one mandatory rejection case of
+   * the redesign.
+   */
+  type ReduceOverrides = {
+    /** consume only the first N pending actions (rest go to the action stack) */
+    batchCount?: number;
+    /** what the CONTRACT folds, per batch slot (default: approve all) */
+    verdicts?: boolean[];
+    /** what the CHAIN signed (default: same as verdicts) */
+    signedVerdicts?: boolean[];
+    /** the chain scanned only this many of the batch's actions */
+    scannedCount?: number;
+  };
 
-    const { batch, useActionStack, actionStackProof, publicInput, mask } =
-      await PrepareBatch(map, zkapp);
+  async function buildReduce(overrides: ReduceOverrides = {}) {
+    await fetchAccounts([zkappAddress]);
+    const cursorBefore = zkapp.approvalCursor.get();
+    const packed = await fetchActions(zkapp.address, zkapp.actionState.get());
 
-    const { validateReduceProof } = await TestUtils.MockReducerVerifierProof(
-      publicInput,
-      activeSet
+    const batchCount = Math.min(
+      overrides.batchCount ?? packed.length,
+      BATCH_SIZE
     );
-    log('mask', mask.toJSON());
+    const batchActions = packed
+      .slice(0, batchCount)
+      .map((pack) => pack.action);
+    const stackActions = packed.slice(batchCount).map((pack) => pack.action);
+    const endActionState =
+      batchCount === 0
+        ? zkapp.actionState.get()
+        : Field(packed[batchCount - 1].hash);
+
+    const { useActionStack, actionStackProof } = await GenerateActionStackProof(
+      endActionState,
+      stackActions
+    );
+
+    const verdicts = overrides.verdicts ?? batchActions.map(() => true);
+    // Unless a scan limit is being simulated, the mock chain has scanned the
+    // whole queue: unconsumed actions feed the tail as approve-all leaves —
+    // exactly the "batch shorter than the signed prefix" geometry.
+    const tailLeaves =
+      overrides.scannedCount !== undefined
+        ? []
+        : stackActions.map((action) =>
+            hashPulsarActionLeafV2(action, Bool(true))
+          );
+
+    const { verdicts: verdictsStruct, approvalProof } =
+      await TestUtils.MockApprovalQuorumProof({
+        validatorSet: activeSet,
+        cursorBefore,
+        batchActions,
+        verdicts,
+        signedVerdicts: overrides.signedVerdicts,
+        scannedCount: overrides.scannedCount,
+        tailLeaves,
+      });
+
+    return {
+      cursorBefore,
+      batchActions,
+      verdicts,
+      batch: Batch.fromArray(batchActions),
+      useActionStack,
+      actionStackProof,
+      verdictsStruct,
+      approvalProof,
+    };
+  }
+
+  async function reduce(senderKey: PrivateKey, overrides: ReduceOverrides = {}) {
+    const witness = await buildReduce(overrides);
     const tx = await Mina.transaction(
       { sender: senderKey.toPublicKey(), fee },
       async () => {
         await zkapp.reduce(
-          batch!,
-          useActionStack!,
-          actionStackProof!,
-          mask,
-          validateReduceProof
+          witness.batch,
+          witness.useActionStack,
+          witness.actionStackProof,
+          witness.verdictsStruct,
+          witness.approvalProof
         );
       }
     );
 
     await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+    return witness;
   }
 
   async function expectReduceToFail(
     senderKey: PrivateKey,
-    expectedMsg: string = 'Transaction failed'
+    overrides: ReduceOverrides = {},
+    expectedMsg: string = 'Batch verdict fold must reach the quorum-bound approval cursor'
   ) {
     try {
-      let map = MapFromArray(actionStack);
-
-      const { batch, useActionStack, actionStackProof, publicInput, mask } =
-        await PrepareBatch(map, zkapp);
-
-      const { validateReduceProof } = await TestUtils.MockReducerVerifierProof(
-        publicInput,
-        activeSet
-      );
-      log('mask', mask.toJSON());
-      const tx = await Mina.transaction(
-        { sender: senderKey.toPublicKey(), fee },
-        async () => {
-          await zkapp.reduce(
-            batch!,
-            useActionStack!,
-            actionStackProof!,
-            mask,
-            validateReduceProof
-          );
-        }
-      );
-
-      await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
+      await reduce(senderKey, overrides);
     } catch (error: any) {
       log(error);
       expect(error.message).toContain(expectedMsg);
@@ -453,43 +405,9 @@ describe('SettlementProof tests', () => {
     throw new Error('Reduce should have failed');
   }
 
-  async function settleDepositWithdraw(
-    settlementRound: number,
-    depositRound: number,
-    withdrawRound: number
-  ) {
-    for (let i = 0; i < settlementRound; i++) {
-      settlementProof = await TestUtils.GenerateTestSettlementProof(
-        activeSet,
-        i * AGGREGATE_THRESHOLD,
-        (i + 1) * AGGREGATE_THRESHOLD
-      );
-      await settle(feePayerKey, settlementProof);
-    }
-    for (let i = 0; i < depositRound; i++) {
-      await deposit(usersKeys[i % 5], UInt64.from(1e9 + i));
-    }
-    for (let i = 0; i < withdrawRound; i++) {
-      await withdraw(usersKeys[i % 5], UInt64.from(1e9 - i));
-    }
-    logZkappState('before', zkapp);
-    await reduce(feePayerKey);
-    logZkappState('after', zkapp);
-  }
-
   beforeAll(async () => {
-    merkleList = List.empty();
     activeSet = validatorSet.slice(0, VALIDATOR_NUMBER);
-
-    for (let i = 0; i < VALIDATOR_NUMBER; i++) {
-      const [, publicKey] = activeSet[i];
-      merkleList.push(
-        Poseidon.hashWithPrefix('pulsar-validator', [
-          ...publicKey.toFields(),
-          Field(1),
-        ])
-      );
-    }
+    merkleList = TestUtils.CreateValidatorMerkleList(activeSet);
 
     if (testEnvironment === 'local') {
       Local = await Mina.LocalBlockchain({ proofsEnabled });
@@ -585,28 +503,31 @@ describe('SettlementProof tests', () => {
       enableLogs();
     }
 
-    const validateReduceAnalyze = await ValidateReduceProgram.analyzeMethods();
-    analyzeMethods(validateReduceAnalyze);
-
-    const actionStackAnalyze = await ActionStackProgram.analyzeMethods();
-    analyzeMethods(actionStackAnalyze);
-
-    const multisigVerifierAnalyze =
-      await MultisigVerifierProgram.analyzeMethods();
-    analyzeMethods(multisigVerifierAnalyze);
-
-    const settlementContractAnalyze = await SettlementContract.analyzeMethods();
-    analyzeMethods(settlementContractAnalyze);
+    const tailAnalyze = await ApprovalTailProgram.analyzeMethods();
+    const quorumAnalyze = await ApprovalQuorumProgram.analyzeMethods();
+    const contractAnalyze = await SettlementContract.analyzeMethods();
+    rows = {
+      tailBase: tailAnalyze.proveBase.rows,
+      tailRecursive: tailAnalyze.proveRecursive.rows,
+      quorum: quorumAnalyze.verifySignatures.rows,
+      reduce: contractAnalyze.reduce.rows,
+    };
 
     await MultisigVerifierProgram.compile({
       proofsEnabled,
     });
     log('MultisigVerifierProgram compiled');
 
-    await ValidateReduceProgram.compile({
+    // ApprovalQuorumProgram verifies ApprovalTailProofs — tail compiles first
+    await ApprovalTailProgram.compile({
       proofsEnabled,
     });
-    log('ValidateReduceProgram compiled');
+    log('ApprovalTailProgram compiled');
+
+    await ApprovalQuorumProgram.compile({
+      proofsEnabled,
+    });
+    log('ApprovalQuorumProgram compiled');
 
     await ActionStackProgram.compile({
       proofsEnabled,
@@ -619,59 +540,106 @@ describe('SettlementProof tests', () => {
     }
   });
 
-  describe('Deploy & Initialize Flow', () => {
+  describe('Circuit rows', () => {
+    // The benchmark record for the redesign: its
+    // in-circuit cost argument ("designed to be neutral") is measured, not
+    // assumed. 65,536 is the per-method row limit.
+    it('logs row counts for the redesign circuits and stays within the limit', () => {
+      console.log(
+        `[rows] ApprovalTailProgram.proveBase=${rows.tailBase} ` +
+          `proveRecursive=${rows.tailRecursive}`
+      );
+      console.log(
+        `[rows] ApprovalQuorumProgram.verifySignatures=${rows.quorum}`
+      );
+      console.log(
+        `[rows] SettlementContract.reduce=${rows.reduce} (limit 65536)`
+      );
+
+      expect(rows.tailBase).toBeLessThan(65536);
+      expect(rows.tailRecursive).toBeLessThan(65536);
+      expect(rows.quorum).toBeLessThan(65536);
+      expect(rows.reduce).toBeLessThan(65536);
+    });
+
+    // benchmark.md is what a retune decision reads (e.g. APPROVAL_TAIL_CHUNK
+    // headroom against the 65,536 limit) — a stale record there is worse than
+    // none, so the recorded numbers must equal the measured ones.
+    it('matches the rows recorded in benchmark.md', () => {
+      // jest runs from the contracts package root, like seed.ts reads
+      // deploy-result.json
+      const benchmark = readFileSync(
+        join(process.cwd(), 'src/benchmark/benchmark.md'),
+        'utf-8'
+      );
+
+      // method names repeat across circuits (proveBase, verifySignatures),
+      // so resolve them inside their '### <circuit> ...' section
+      const recordedRows = (circuit: string, method: string): number => {
+        const section = benchmark
+          .split(/^### /m)
+          .find((block) => block.startsWith(circuit));
+        const match = section?.match(
+          new RegExp(`\\|\\s*${method}\\s*\\|\\s*(\\d+)\\s*\\|`)
+        );
+        if (!match) {
+          throw new Error(`benchmark.md records no rows for ${circuit}.${method}`);
+        }
+        return Number(match[1]);
+      };
+
+      expect(recordedRows('ApprovalTailProgram', 'proveBase')).toBe(
+        rows.tailBase
+      );
+      expect(recordedRows('ApprovalTailProgram', 'proveRecursive')).toBe(
+        rows.tailRecursive
+      );
+      expect(recordedRows('ApprovalQuorumProgram', 'verifySignatures')).toBe(
+        rows.quorum
+      );
+      expect(recordedRows('SettlementContract', 'reduce')).toBe(rows.reduce);
+    });
+  });
+
+  describe('Deploy flow', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
     });
 
-    it('Deploy a SettlementContract', async () => {
-      await deployZkApp(zkapp, feePayerKey, zkappPrivateKey);
-    });
-
-    it('Initialize the contract with a valid MerkleListRoot', async () => {
-      await initializeContract(zkapp, feePayerKey, merkleList.hash);
+    it('Deploys with all five anchors set in deploy()', async () => {
+      await deployZkApp(zkapp, feePayerKey, zkappPrivateKey, merkleList.hash);
 
       expect(zkapp.merkleListRoot.get()).toEqual(merkleList.hash);
       expect(zkapp.stateRoot.get()).toEqual(Field(0));
       expect(zkapp.blockHeight.get()).toEqual(Field.from(0));
-      expect(zkapp.actionListHash.get()).toEqual(Field(0));
-    });
-
-    it('Reject contract initialization again', async () => {
-      await expectInitializeContractToFail(zkapp, feePayerKey, merkleList.hash);
+      expect(zkapp.actionState.get()).toEqual(Reducer.initialActionState);
+      // m = 0 of the cursor invariant: Field(0) is the chain's empty root
+      expect(zkapp.approvalCursor.get()).toEqual(Field(0));
     });
 
     // `settle` requires blockHeight and stateRoot to equal the first proof's
-    // Initial* values, so a contract tracking a live chain is initialized from
-    // a real anchor block rather than zero. Initialize once silently dropped
-    // blockHeight, which deploys fine and rejects every settlement forever.
-    it('Initialize persists a non-zero anchor', async () => {
+    // Initial* values, so a contract tracking a live chain is deployed from a
+    // real anchor block rather than zero. A deploy that silently dropped
+    // blockHeight would deploy fine and reject every settlement forever.
+    it('Deploy persists a non-zero anchor', async () => {
       const anchorKey = PrivateKey.random();
-      const anchorAddress = anchorKey.toPublicKey();
-      const anchorApp = new SettlementContract(anchorAddress);
-      const deployer = feePayerKey.toPublicKey();
+      const anchorApp = new SettlementContract(anchorKey.toPublicKey());
       const anchorStateRoot = Field(7);
       const anchorBlockHeight = Field(11);
 
-      const tx = await Mina.transaction({ sender: deployer, fee }, async () => {
-        AccountUpdate.fundNewAccount(deployer);
-        await anchorApp.deploy();
-        await anchorApp.initialize(
-          merkleList.hash,
-          anchorStateRoot,
-          anchorBlockHeight
-        );
-      });
-
-      await waitTransactionAndFetchAccount(
-        tx,
-        [feePayerKey, anchorKey],
-        [anchorAddress]
+      await deployZkApp(
+        anchorApp,
+        feePayerKey,
+        anchorKey,
+        merkleList.hash,
+        anchorStateRoot,
+        anchorBlockHeight
       );
 
       expect(anchorApp.merkleListRoot.get()).toEqual(merkleList.hash);
       expect(anchorApp.stateRoot.get()).toEqual(anchorStateRoot);
       expect(anchorApp.blockHeight.get()).toEqual(anchorBlockHeight);
+      expect(anchorApp.approvalCursor.get()).toEqual(Field(0));
     });
   });
 
@@ -752,13 +720,9 @@ describe('SettlementProof tests', () => {
     });
   });
 
-  describe('Deposit flow', () => {
+  describe('Dispatch bounds', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
-    });
-
-    it('Deposit method', async () => {
-      await deposit(feePayerKey, UInt64.from(1e10));
     });
 
     it('Reject deposit with less than minimum amount', async () => {
@@ -769,122 +733,205 @@ describe('SettlementProof tests', () => {
       );
     });
 
-    it('Reduce actions', async () => {
-      const actionListHash = zkapp.actionListHash.get();
-      log(`Action list hash before: ${actionListHash.toString()}`);
-      await reduce(feePayerKey);
-      log(`Action list hash after: ${zkapp.actionListHash.get().toString()}`);
+    // A withdraw(0) reaching the chain scanner is the archive-wrapper stall
+    // class the redesign closes — the L1 bound is defence in depth.
+    it('Reject withdraw of zero', async () => {
+      await expectWithdrawToFail(
+        feePayerKey,
+        UInt64.zero,
+        'Withdrawal amount must be positive'
+      );
+    });
 
-      expect(zkapp.actionListHash.get()).toEqual(
-        Poseidon.hash([
-          actionListHash,
-          Field(1),
-          ...feePayerAccount.toFields(),
-          Field(1e10),
-          ...PulsarAuth.from(Field(0), CosmosSignature.empty()).toFields(),
-        ])
+    // The reduce circuit range-checks amount + WITHDRAW_DOWN_PAYMENT as a
+    // UInt64, so an amount near 2^64 would make the queue head unprovable —
+    // 2^63 also keeps the amount inside the chain's int64 domain.
+    it('Reject withdraw at the 2^63 int64 boundary', async () => {
+      await expectWithdrawToFail(
+        feePayerKey,
+        UInt64.from(2n ** 63n),
+        'Withdrawal amount must fit int64'
       );
     });
   });
 
-  describe('Withdraw flow', () => {
+  describe('Reduce flow', () => {
     beforeEach(() => {
       log(expect.getState().currentTestName);
     });
 
-    it('Withdraw method', async () => {
+    it('Deploys a fresh contract for the reduce flow', async () => {
+      // self-contained so `-t "Reduce flow"` (the PROOFS_ENABLED=1 target)
+      // runs without the other describes
+      await prepareNewContract();
+      expect(zkapp.approvalCursor.get()).toEqual(Field(0));
+    });
+
+    it('Reduces a deposit, advancing both cursors in lockstep', async () => {
+      await deposit(feePayerKey, UInt64.from(1e10));
+
+      const witness = await reduce(feePayerKey);
+      logZkappState('after deposit reduce', zkapp);
+
+      const expectedAction = PulsarAction.deposit(
+        feePayerAccount,
+        UInt64.from(1e10).value,
+        PulsarAuth.from(Field(0), CosmosSignature.empty())
+      );
+      expect(zkapp.approvalCursor.get()).toEqual(
+        foldApprovalCursor(
+          witness.cursorBefore,
+          hashPulsarActionLeafV2(expectedAction, Bool(true))
+        )
+      );
+      // both cursors moved by exactly one action: the ALIGNMENT invariant
+      expect(zkapp.actionState.get()).toEqual(
+        TestUtils.CalculateActionRoot(Reducer.initialActionState, [
+          expectedAction,
+        ])
+      );
+    });
+
+    it('Pays an approved withdrawal with its down payment', async () => {
       await withdraw(feePayerKey, UInt64.from(1e9));
-    });
-    it('Reduce actions', async () => {
-      const actionListHash = zkapp.actionListHash.get();
-      log(`Action list hash before: ${actionListHash.toString()}`);
-      await reduce(feePayerKey);
-      log(`Action list hash after: ${zkapp.actionListHash.get().toString()}`);
 
-      expect(zkapp.actionListHash.get()).toEqual(
-        Poseidon.hash([
-          actionListHash,
-          Field(2),
-          ...feePayerAccount.toFields(),
-          Field(1e9),
-          ...PulsarAuth.empty().toFields(),
-        ])
+      const balanceBefore = Mina.getBalance(feePayerAccount);
+      const witness = await reduce(feePayerKey);
+      const balanceAfter = Mina.getBalance(feePayerAccount);
+
+      expect(balanceAfter.toBigInt() - balanceBefore.toBigInt()).toBe(
+        BigInt(1e9) + BigInt(WITHDRAW_DOWN_PAYMENT)
       );
+      expect(zkapp.approvalCursor.get()).toEqual(
+        TestUtils.FoldVerdictLeaves(
+          witness.cursorBefore,
+          witness.batchActions,
+          witness.verdicts
+        )
+      );
+    });
+
+    // Mandatory case: an approved action
+    // folded as unapproved must fail — the flipped bit changes the leaf and
+    // every later fold, so no quorum-signed root is reachable.
+    it('Rejects an approved action folded as unapproved', async () => {
+      await withdraw(feePayerKey, UInt64.from(1e9));
+
+      await expectReduceToFail(feePayerKey, {
+        verdicts: [false],
+        signedVerdicts: [true],
+      });
+    });
+
+    // Mandatory case: the symmetric flip. Folding a chain-rejected action as
+    // approved would PAY it — same cursor divergence blocks it.
+    it('Rejects an unapproved action folded as approved', async () => {
+      // the withdrawal from the previous test is still pending
+      await expectReduceToFail(feePayerKey, {
+        verdicts: [true],
+        signedVerdicts: [false],
+      });
+    });
+
+    it('Folds the chain-rejected withdrawal unpaid, consuming the action', async () => {
+      // still the same pending withdrawal: now BOTH sides agree on verdict 0
+      const balanceBefore = Mina.getBalance(feePayerAccount);
+      const witness = await reduce(feePayerKey, { verdicts: [false] });
+      const balanceAfter = Mina.getBalance(feePayerAccount);
+
+      // unpaid: the WITHDRAW_DOWN_PAYMENT stays with the contract
+      expect(balanceAfter.toBigInt()).toBe(balanceBefore.toBigInt());
+      expect(zkapp.approvalCursor.get()).toEqual(
+        TestUtils.FoldVerdictLeaves(
+          witness.cursorBefore,
+          witness.batchActions,
+          [false]
+        )
+      );
+      // consumed: nothing left pending
+      expect(
+        await fetchActions(zkapp.address, zkapp.actionState.get())
+      ).toHaveLength(0);
+    });
+
+    // Mandatory case: a batch shorter than the signed prefix passes — the
+    // tail proof absorbs the scanned-but-unconsumed suffix, and the next
+    // reduce picks the remainder up. No batch/snapshot alignment required.
+    it('Accepts a batch shorter than the signed prefix (tail absorbs)', async () => {
+      await deposit(usersKeys[0], UInt64.from(2e9));
+      await deposit(usersKeys[1], UInt64.from(3e9));
+      await deposit(usersKeys[2], UInt64.from(4e9));
+
+      const witness = await reduce(feePayerKey, { batchCount: 2 });
+      expect(witness.batchActions).toHaveLength(2);
+      expect(zkapp.approvalCursor.get()).toEqual(
+        TestUtils.FoldVerdictLeaves(
+          witness.cursorBefore,
+          witness.batchActions,
+          witness.verdicts
+        )
+      );
+
+      // the third action stayed queued with its leaf unconsumed
+      const witness2 = await reduce(feePayerKey);
+      expect(witness2.batchActions).toHaveLength(1);
+      expect(
+        await fetchActions(zkapp.address, zkapp.actionState.get())
+      ).toHaveLength(0);
+    });
+
+    // Mandatory case: a batch beyond the chain's scan must fail — the cursor
+    // can only advance to a prefix of a signed root, so an unscanned action
+    // has no leaf any tail could reach ("no premature consumption").
+    it('Rejects a batch beyond the chain scan', async () => {
+      await deposit(usersKeys[0], UInt64.from(2e9));
+      await deposit(usersKeys[1], UInt64.from(2e9));
+
+      await expectReduceToFail(feePayerKey, { scannedCount: 1 });
+
+      // cleanup: the chain catches up and the same batch reduces fine
+      await reduce(feePayerKey);
+    });
+
+    // Mandatory case: a duplicate action pair with different verdicts pays
+    // exactly one — the two leaves differ only in the approved bit, and the
+    // fold pins which position was paid.
+    it('Pays exactly one of a duplicate pair with different verdicts', async () => {
+      await deposit(usersKeys[3], UInt64.from(5e9));
+      await reduce(feePayerKey);
+
+      await withdraw(usersKeys[3], UInt64.from(1e9));
+      await withdraw(usersKeys[3], UInt64.from(1e9));
+
+      const balanceBefore = Mina.getBalance(usersAccounts[3]);
+      const witness = await reduce(feePayerKey, { verdicts: [true, false] });
+      const balanceAfter = Mina.getBalance(usersAccounts[3]);
+
+      expect(witness.batchActions).toHaveLength(2);
+      expect(balanceAfter.toBigInt() - balanceBefore.toBigInt()).toBe(
+        BigInt(1e9) + BigInt(WITHDRAW_DOWN_PAYMENT)
+      );
+      expect(zkapp.approvalCursor.get()).toEqual(
+        TestUtils.FoldVerdictLeaves(
+          witness.cursorBefore,
+          witness.batchActions,
+          [true, false]
+        )
+      );
+    });
+
+    // Mandatory case: an all-dummy batch is a no-op — dummy slots contribute
+    // to neither cursor, and the quorum proof binds the unchanged cursor to
+    // the chain's current signed root via the empty-tail identity.
+    it('Accepts an all-dummy batch as a no-op', async () => {
+      const actionStateBefore = zkapp.actionState.get();
+      const cursorBefore = zkapp.approvalCursor.get();
+
+      const witness = await reduce(feePayerKey);
+      expect(witness.batchActions).toHaveLength(0);
+
+      expect(zkapp.actionState.get()).toEqual(actionStateBefore);
+      expect(zkapp.approvalCursor.get()).toEqual(cursorBefore);
     });
   });
-
-  describe('Combined flow', () => {
-    beforeEach(() => {
-      log(expect.getState().currentTestName);
-    });
-
-    it('Deposit method', async () => {
-      await deposit(feePayerKey, UInt64.from(1e10 + 123));
-    });
-    it('Withdraw method', async () => {
-      await withdraw(feePayerKey, UInt64.from(1e9 + 123));
-    });
-    it('Reduce actions', async () => {
-      const actionListHashBefore = zkapp.actionListHash.get();
-
-      const actions = await fetchRawActions(
-        zkapp.address,
-        zkapp.actionState.get()
-      );
-      console.log(JSON.stringify(actions, null, 2));
-
-      if (!actions) throw new Error('No actions found');
-
-      await reduce(feePayerKey);
-
-      const expectedAfterDeposit = Poseidon.hash([
-        actionListHashBefore,
-        Field(1),
-        ...feePayerAccount.toFields(),
-        Field(1e10 + 123),
-        ...PulsarAuth.from(Field(0), CosmosSignature.empty()).toFields(),
-      ]);
-
-      expect(zkapp.actionListHash.get()).toEqual(
-        Poseidon.hash([
-          expectedAfterDeposit,
-          Field(2),
-          ...feePayerAccount.toFields(),
-          Field(1e9 + 123),
-          ...PulsarAuth.empty().toFields(),
-        ])
-      );
-    });
-  });
-
-  // describe('More transactions to reduce', () => {
-  //   beforeEach(async () => {
-  //     await prepareNewContract();
-  //     log(expect.getState().currentTestName);
-  //   });
-
-  //   it('1 settlement + 1 deposit + 1 withdraw', async () => {
-  //     await settleDepositWithdraw(1, 1, 1);
-  //   });
-
-  //   it('1 settlement + 5 deposits + 5 withdraws', async () => {
-  //     await settleDepositWithdraw(1, 5, 5);
-  //   });
-
-  //   it('1 settlement + 10 deposits + 10 withdraws', async () => {
-  //     await settleDepositWithdraw(1, 10, 10);
-  //   });
-
-  //   it('1 settlement + 20 deposits + 20 withdraws', async () => {
-  //     await settleDepositWithdraw(1, 20, 20);
-  //   });
-
-  //   it('1 settlement + 50 deposits + 50 withdraws', async () => {
-  //     await settleDepositWithdraw(1, 50, 50);
-  //   });
-
-  //   it('1 settlement + 80 deposits + 80 withdraws', async () => {
-  //     await settleDepositWithdraw(1, 80, 80);
-  //   });
-  // });
 });

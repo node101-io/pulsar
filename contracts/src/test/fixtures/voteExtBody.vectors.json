@@ -1,0 +1,115 @@
+{
+  "generator": "scratchpad/vote-ext-vectors/main.go via abci.SecondaryKey.SignVoteExtBody (pulsar-chain@return-string-action-root)",
+  "networkId": "testnet",
+  "vectors": [
+    {
+      "description": "low height, single-fold actions root",
+      "wire": {
+        "nextValidatorSetHashBase64": "DlzqXBJxC94Pa4QIQY2CoEkD9jipzCP1JYg+GuKHu/w=",
+        "appHashBase64": "5SgoKK/cwiEo0pq/Yh4I18Y1xozovWr+wVYX+C2JB6Y=",
+        "currentBlockHeight": "1",
+        "actionsReducedRootBase64": "NZFViVj2UNDl3gNmjeqctrsMAeNIiXih6JjyJONl/Ec="
+      },
+      "fields": {
+        "nextValidatorSetHash": "6496547301027708989324844883824628131366163431900776788938253436566404316156",
+        "stateRootHi": "304601717429024531787335918531437791447",
+        "stateRootLo": "263466361979989478255727867507652495270",
+        "currentBlockHeight": "1",
+        "actionsReducedRoot": "24229364150626964972560659041656716539676495794420057134296557304385726970951"
+      },
+      "msgHash": "15225959585235651469507990063210877260573067466450500482316241626485491696704",
+      "signature": {
+        "r": "27235715189265562204175072579651038091774621639957064633451886857778224393583",
+        "s": "21460634838871722847482294258202707000606030491088989366365500296770237717638"
+      },
+      "publicKeyBase58": "B62qjGGQrR2iNhpr8rgJsDSziPpveEovbEkn2TBqh7NaoC5A5fHaWQC"
+    },
+    {
+      "description": "mid height, empty actions root (Field(0) merklelist zero value)",
+      "wire": {
+        "nextValidatorSetHashBase64": "C6yyfOU0jj4np+7PT2BudhFZ/9nZCjhPs6W+JjT60sY=",
+        "appHashBase64": "77kxcybNyci41OLzDqqjMw0lR9n+f9IAvhkUC5sI74k=",
+        "currentBlockHeight": "176770",
+        "actionsReducedRootBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      },
+      "fields": {
+        "nextValidatorSetHash": "5280570907579062750528116649501635233913699360290614508688999882094378930886",
+        "stateRootHi": "318647068872742317872100128565322490675",
+        "stateRootLo": "17473536251326537618338587970183425929",
+        "currentBlockHeight": "176770",
+        "actionsReducedRoot": "0"
+      },
+      "msgHash": "14720545224367465610356250960683814076335237875383509080839442694071018886951",
+      "signature": {
+        "r": "1363684986769930166652652880817609700080954043525578037662872474912406794715",
+        "s": "1155302192790518940092356152299771833215367444806625683212840606255224633227"
+      },
+      "publicKeyBase58": "B62qm3EDeg36SxN3vhjYpeN4PafVzmgWBUUiDcDiemhRHB346AXr7bd"
+    },
+    {
+      "description": "large height, multi-fold actions root",
+      "wire": {
+        "nextValidatorSetHashBase64": "Mmc9nXY+It+fj64eD7NKnsgBC0M9ZUvgr9xfnv4Xwck=",
+        "appHashBase64": "/tj3SH1qIcQEAgj/0RrLDmzuukCt15iq+8/IfUzGqDE=",
+        "currentBlockHeight": "9007199254740993",
+        "actionsReducedRootBase64": "OcsCZNjsw5WztzPfhKMhWgl0O5YtfH7tf3Yy00EthlU="
+      },
+      "fields": {
+        "nextValidatorSetHash": "22798052928526685748782617935744678941745978014093310717637092834456290968009",
+        "stateRootHi": "338750462549225889293448462873954798350",
+        "stateRootLo": "144796167849692430076924553555012397105",
+        "currentBlockHeight": "9007199254740993",
+        "actionsReducedRoot": "26140518845728410514280147973487340473041077118846258705691441815855003698773"
+      },
+      "msgHash": "23178285707222610355148861096438396549048588755448261953914719188256443770654",
+      "signature": {
+        "r": "14298812444797758993948333605014046276539155381838824497488886957975966723519",
+        "s": "5572747374830838609986831260053890626095360035525636887212849856743158015196"
+      },
+      "publicKeyBase58": "B62qmFdx235LtuB3em6T4NPbwawAVoHJaRWqkJL7NYqTcCwRQGoh7Bt"
+    }
+  ],
+  "quorum": {
+    "description": "3-validator set (powers 1,2,3), every validator signs the same body",
+    "wire": {
+      "nextValidatorSetHashBase64": "EH02iTxltzBqj2w+iKRBocWFYqfUJ/rWh+d9EjThFZM=",
+      "appHashBase64": "Cq+DG+wVI+5ewx7tooDtIJjm2ORm6s3N1zAX3lHHzmI=",
+      "currentBlockHeight": "424243",
+      "actionsReducedRootBase64": "H9ZEHu7KnVtaWvU0beClc2Gn1UQENG7b9rwx4HMIN14="
+    },
+    "fields": {
+      "nextValidatorSetHash": "7458237854605561209014896060249577021590629999505595968667891939529136870803",
+      "stateRootHi": "14203591115975239258023228454201257248",
+      "stateRootLo": "203241282733116996574805694637826100834",
+      "currentBlockHeight": "424243",
+      "actionsReducedRoot": "14400273730641490318926657563630718371887718572496431256175913786228907456350"
+    },
+    "msgHash": "27752629036960257018996005683104415035607272980280147535986933872918896888180",
+    "validators": [
+      {
+        "publicKeyBase58": "B62qjvFKqCHzLS76fW8fBrnbbUbzA1caLRTN7DQaEbV9DJXNHtUYnZ5",
+        "power": "1",
+        "signature": {
+          "r": "13153506259255997961878475046945453906365174101523182345508912610080537272164",
+          "s": "13846738680769651244946885889538990631447661199143020448493061414192292866729"
+        }
+      },
+      {
+        "publicKeyBase58": "B62qrpFLqfFkpK6gsmRKwfGAUn2u6cj7sJf1dKQP9ALeHMJPbt6yFZi",
+        "power": "2",
+        "signature": {
+          "r": "1603621463221428014742638290186675304891630773276399654227979724853051547478",
+          "s": "15871772666758474065123887450496004831492096353741335122664252572674797677471"
+        }
+      },
+      {
+        "publicKeyBase58": "B62qr8S4qvLsqTHoQGk2SYKMVKGGJuFiR6yR2dXNdnQgi4MasCcTMWt",
+        "power": "3",
+        "signature": {
+          "r": "15193583564217500248609698019978153543683570566691975667328604443694912563502",
+          "s": "5360504255386447199111552660320776973744250261663128421910162970219648048220"
+        }
+      }
+    ]
+  }
+}

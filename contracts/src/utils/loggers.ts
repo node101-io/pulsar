@@ -33,7 +33,7 @@ function logZkappState(label: string, zkapp: SettlementContract) {
     merkleListRoot: zkapp.merkleListRoot.get().toString(),
     stateRoot: zkapp.stateRoot.get().toString(),
     blockHeight: zkapp.blockHeight.get().toString(),
-    actionListHash: zkapp.actionListHash.get().toString(),
+    approvalCursor: zkapp.approvalCursor.get().toString(),
     accountActionState: zkapp.account.actionState.get().toString(),
   });
 }

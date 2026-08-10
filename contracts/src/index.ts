@@ -3,6 +3,12 @@ import {
   ActionStackQueue,
   ActionStackProgram,
 } from './ActionStack.js';
+import {
+  ApprovalTailProof,
+  ApprovalTailEntry,
+  ApprovalTailQueue,
+  ApprovalTailProgram,
+} from './ApprovalTail.js';
 import { SettlementContract } from './SettlementContract.js';
 import {
   SettlementProof,
@@ -19,7 +25,7 @@ import {
   ActionList,
   MerkleActions,
 } from './types/actionHelpers.js';
-import { List, emptyHash, ReduceMask } from './types/common.js';
+import { List, emptyHash, ApprovalVerdicts } from './types/common.js';
 import { ProofGenerators } from './types/proofGenerators.js';
 import {
   Batch,
@@ -45,6 +51,7 @@ import {
   MAX_DEPOSIT_PER_BATCH,
   MAX_WITHDRAWAL_PER_BATCH,
   ACTION_QUEUE_SIZE,
+  APPROVAL_TAIL_CHUNK,
   ENDPOINTS,
 } from './utils/constants.js';
 import {
@@ -53,29 +60,19 @@ import {
   fetchBlockHeight,
   fetchEvents,
   setMinaNetwork,
+  sliceActionHistory,
   waitForTransaction,
 } from './utils/fetch.js';
 import {
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
-  GenerateValidateReduceProof,
+  GenerateApprovalQuorumProof,
   GenerateActionStackProof,
+  GenerateApprovalTailProof,
   GeneratePulsarBlock,
 } from './utils/generateFunctions.js';
-import {
-  MapFromArray,
-  CalculateMax,
-  CalculateMaxWithBalances,
-  PackActions,
-  PrepareBatch,
-  PrepareBatchWithActions,
-} from './utils/reduceWitness.js';
-import {
-  ValidateReduceProof,
-  ValidateReduceProgram,
-  ValidateReducePublicInput,
-} from './ValidateReduce.js';
+import { BuildVerdictBatch } from './utils/reduceWitness.js';
 import { TestUtils } from './utils/testUtils.js';
 import { DeployScripts } from './utils/deployHelpers.js';
 import { PulsarEncoder } from './utils/cosmosUtils.js';
@@ -101,7 +98,7 @@ export {
   MerkleActions,
   List,
   emptyHash,
-  ReduceMask,
+  ApprovalVerdicts,
   ProofGenerators,
   SignaturePublicKey,
   SignaturePublicKeyList,
@@ -117,28 +114,30 @@ export {
   MAX_DEPOSIT_PER_BATCH,
   MAX_WITHDRAWAL_PER_BATCH,
   ACTION_QUEUE_SIZE,
+  APPROVAL_TAIL_CHUNK,
   ENDPOINTS,
   fetchActions,
   fetchRawActions,
   fetchBlockHeight,
   fetchEvents,
   setMinaNetwork,
+  sliceActionHistory,
   waitForTransaction,
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
-  GenerateValidateReduceProof,
+  GenerateApprovalQuorumProof,
   GenerateActionStackProof,
+  GenerateApprovalTailProof,
   GeneratePulsarBlock,
-  MapFromArray,
-  CalculateMax,
-  CalculateMaxWithBalances,
-  PackActions,
-  PrepareBatch,
-  PrepareBatchWithActions,
+  BuildVerdictBatch,
   ActionStackProof,
   ActionStackQueue,
   ActionStackProgram,
+  ApprovalTailProof,
+  ApprovalTailEntry,
+  ApprovalTailQueue,
+  ApprovalTailProgram,
   SettlementContract,
   SettlementProof,
   MultisigVerifierProgram,
@@ -146,9 +145,6 @@ export {
   SettlementPublicOutputs,
   Block,
   BlockList,
-  ValidateReduceProof,
-  ValidateReduceProgram,
-  ValidateReducePublicInput,
   PulsarAction,
   CosmosSignature,
   PulsarAuth,
@@ -173,3 +169,22 @@ export {
   hashValidatorLeaf,
   computeValidatorListHash,
 } from './utils/validatorList.js';
+
+export {
+  ACTION_LEAF_PREFIX_V2,
+  APPROVAL_CURSOR_PREFIX_V2,
+  hashPulsarActionLeafV2,
+  foldApprovalCursor,
+} from './utils/pulsarActionLeaf.js';
+
+export {
+  VoteExtBody,
+  VoteExtBodyWire,
+  hashVoteExtMessage,
+} from './types/voteExtBody.js';
+
+export {
+  ApprovalQuorumProof,
+  ApprovalQuorumPublicInput,
+  ApprovalQuorumProgram,
+} from './ApprovalQuorum.js';

@@ -1,43 +1,52 @@
 # Benchmark Report
 
-This report summarizes the circuit analysis, compilation times, and per-step benchmark results for the **TODO** on a local Mina network that runs run NodeJS environment. The tests measure the time taken to create, prove, and verify game steps in a Mastermind-like application.
+`Provable.constraintSystem` row counts for every circuit in the package,
+against the 65,536 per-method row limit. The in-circuit cost of the
+redesign is measured, not assumed.
 
-### Device Information
+These tables are pinned by the `Circuit rows` test in
+`src/test/SettlementContract.test.ts` — it re-measures the redesign circuits
+with `analyzeMethods()` and fails if this file drifts, so retune decisions
+(e.g. `APPROVAL_TAIL_CHUNK` in `src/utils/constants.ts`) can trust the numbers
+here. Re-run `pnpm run test -- SettlementContract` after any circuit change and
+copy the `[rows]` output in.
 
-- **CPU**: Apple M2
-- **RAM**: 16 GB
+## Circuit Analysis
 
----
+### ApprovalTailProgram zkProgram Analysis
 
-## Circuit Analysis & Compilation Times
+| Method         | Rows |
+| -------------- | ---- |
+| proveBase      | 1921 |
+| proveRecursive | 1921 |
 
-### ValidateReduceProgram zkProgram Analysis
+### ApprovalQuorumProgram zkProgram Analysis
 
-| Method           | Rows  |
-| ---------------- | ----- |
-| verifySignatures | 20788 |
+| Method           | Rows |
+| ---------------- | ---- |
+| verifySignatures | 1171 |
 
 ### ActionStackProgram zkProgram Analysis
 
-| Method         | Rows  |
-| -------------- | ----- |
-| proveIntegrity | 45003 |
+| Method         | Rows |
+| -------------- | ---- |
+| proveBase      | 901  |
+| proveRecursive | 901  |
 
 ### MultisigVerifierProgram zkProgram Analysis
 
-| Method           | Rows      |
-| ---------------- | --------- |
-| mergeProofs      | 5967      |
-| verifySignatures | 20853     |
-| **Total**        | **26820** |
+| Method           | Rows     |
+| ---------------- | -------- |
+| mergeProofs      | 13       |
+| verifySignatures | 9100     |
+| **Total**        | **9113** |
 
 ### SettlementContract Analysis
 
-| Method     | Rows      |
-| ---------- | --------- |
-| initialize | 326       |
-| settle     | 895       |
-| deposit    | 1074      |
-| withdraw   | 1075      |
-| reduce     | 36564     |
-| **Total**  | **40234** |
+| Method   | Rows      |
+| -------- | --------- |
+| settle   | 368       |
+| deposit  | 1065      |
+| withdraw | 1033      |
+| reduce   | 31465     |
+| **Total**| **33931** |

@@ -19,22 +19,20 @@ import {
 import {
   ACTION_QUEUE_SIZE,
   ActionStackProgram,
-  ActionStackProof,
+  ApprovalQuorumProgram,
+  ApprovalTailProgram,
   Batch,
   BATCH_SIZE,
-  CalculateMax,
   ENDPOINTS,
   fetchActions,
   GenerateActionStackProof,
   GenerateSettlementPublicInput,
-  GenerateValidateReduceProof,
+  hashPulsarActionLeafV2,
   List,
-  MapFromArray,
-  ReduceMask,
+  MAX_WITHDRAWAL_PER_BATCH,
+  PulsarAction,
   SettlementContract,
   SettlementPublicInputs,
-  ValidateReduceProgram,
-  ValidateReducePublicInput,
   VALIDATOR_NUMBER,
 } from '../index.js';
 import {
@@ -180,7 +178,6 @@ let testAccountIndex = 10;
 let usersAccounts: PublicKey[] = [];
 let MINA_NODE_ENDPOINT: string;
 let MINA_ARCHIVE_ENDPOINT: string;
-let actionStack: Array<Field> = [];
 
 async function waitTransactionAndFetchAccount(
   tx: Awaited<ReturnType<typeof Mina.transaction>>,
@@ -230,8 +227,11 @@ async function deployAndInitializeContract() {
   const tx = await bench('Deploy and initialize contract', () =>
     Mina.transaction({ sender: deployerAccount, fee }, async () => {
       AccountUpdate.fundNewAccount(deployerAccount);
-      await zkapp.deploy();
-      await zkapp.initialize(merkleList.hash, Field(0), Field(0));
+      await zkapp.deploy({
+        merkleListRoot: merkleList.hash,
+        stateRoot: Field(0),
+        blockHeight: Field(0),
+      });
     })
   );
 
@@ -262,8 +262,11 @@ async function main() {
 
   logParams();
 
-  const validateReduceAnalyze = await ValidateReduceProgram.analyzeMethods();
-  analyzeMethods(validateReduceAnalyze);
+  const approvalTailAnalyze = await ApprovalTailProgram.analyzeMethods();
+  analyzeMethods(approvalTailAnalyze);
+
+  const approvalQuorumAnalyze = await ApprovalQuorumProgram.analyzeMethods();
+  analyzeMethods(approvalQuorumAnalyze);
 
   const actionStackAnalyze = await ActionStackProgram.analyzeMethods();
   analyzeMethods(actionStackAnalyze);
@@ -275,8 +278,15 @@ async function main() {
   const settlementContractAnalyze = await SettlementContract.analyzeMethods();
   analyzeMethods(settlementContractAnalyze);
 
-  await bench('ValidateReduce compile', () =>
-    ValidateReduceProgram.compile({
+  // ApprovalQuorumProgram verifies ApprovalTailProofs — tail first
+  await bench('ApprovalTail compile', () =>
+    ApprovalTailProgram.compile({
+      forceRecompile: proofsEnabled && true,
+      proofsEnabled,
+    })
+  );
+  await bench('ApprovalQuorum compile', () =>
+    ApprovalQuorumProgram.compile({
       forceRecompile: proofsEnabled && true,
       proofsEnabled,
     })
@@ -480,11 +490,7 @@ async function settlementProofBenchmark(
   return mergedProof;
 }
 
-async function settle(
-  senderKey: PrivateKey,
-  settlementProof: SettlementProof,
-  pushToStack: boolean = true
-) {
+async function settle(senderKey: PrivateKey, settlementProof: SettlementProof) {
   await fetchAccounts([zkappAddress]);
   const tx = await bench('Settle transaction', () =>
     Mina.transaction({ sender: senderKey.toPublicKey(), fee }, async () => {
@@ -492,18 +498,10 @@ async function settle(
     })
   );
 
-  if (pushToStack) {
-    actionStack.push(settlementProof.publicInput.actionHash());
-  }
-
   await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
 }
 
-async function deposit(
-  senderKey: PrivateKey,
-  amount: UInt64,
-  pushToStack: boolean = true
-) {
+async function deposit(senderKey: PrivateKey, amount: UInt64) {
   await fetchAccounts([senderKey.toPublicKey()]);
   const tx = await bench('Deposit transaction', () =>
     Mina.transaction({ sender: senderKey.toPublicKey(), fee }, async () => {
@@ -514,24 +512,10 @@ async function deposit(
     })
   );
 
-  if (pushToStack) {
-    actionStack.push(
-      Poseidon.hash([
-        Field(2),
-        ...senderKey.toPublicKey().toFields(),
-        amount.value,
-      ])
-    );
-  }
-
   await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
 }
 
-async function withdraw(
-  senderKey: PrivateKey,
-  amount: UInt64,
-  pushToStack: boolean = true
-) {
+async function withdraw(senderKey: PrivateKey, amount: UInt64) {
   await fetchAccounts([senderKey.toPublicKey()]);
   const tx = await bench('Withdraw transaction', () =>
     Mina.transaction({ sender: senderKey.toPublicKey(), fee }, async () => {
@@ -539,107 +523,69 @@ async function withdraw(
     })
   );
 
-  if (pushToStack) {
-    actionStack.push(
-      Poseidon.hash([
-        Field(3),
-        ...senderKey.toPublicKey().toFields(),
-        amount.value,
-      ])
-    );
-  }
-
   await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
 }
 
-async function MockReducerVerifierProof(
-  publicInput: ValidateReducePublicInput,
-  validatorSet: Array<[PrivateKey, PublicKey]>
-) {
-  const signatureList = TestUtils.GenerateReducerSignatureList(
-    publicInput,
-    validatorSet
-  );
-
-  const proof = await bench('Generate ValidateReduce proof', () =>
-    GenerateValidateReduceProof(publicInput, signatureList)
-  );
-
-  return {
-    validateReduceProof: proof,
-  };
-}
-
-async function PrepareBatch(
-  includedActions: Map<string, number>,
-  contractInstance: SettlementContract
-) {
+/**
+ * Bench-only chain stand-in: the local "chain" approves every deposit and up
+ * to MAX_WITHDRAWAL_PER_BATCH withdrawals per batch (mirroring the bridge's
+ * cut rule so the payout account-update count stays within budget), signs the
+ * resulting v2 leaf fold as a real vote-extension body, and the quorum proof
+ * plus the (approve-all) tail over the unconsumed suffix binds it.
+ */
+async function reduce(senderKey: PrivateKey) {
   const packedActions = await fetchActions(
-    contractInstance.address,
-    contractInstance.actionState.get()
+    zkapp.address,
+    zkapp.actionState.get()
   );
 
-  if (packedActions.length === 0) {
-    return {
-      endActionState: 0n,
-      batchActions: [],
-      batch: Batch.empty(),
-      useActionStack: Bool(false),
-      actionStackProof: undefined,
-      publicInput: ValidateReducePublicInput.default,
-      mask: ReduceMask.empty(),
-    };
-  }
-
-  const { endActionState, batchActions, publicInput, mask } = CalculateMax(
-    includedActions,
-    contractInstance,
-    packedActions
-  );
-
-  let actionStack = packedActions
-    .slice(batchActions.length)
+  const batchPacks = packedActions.slice(0, BATCH_SIZE);
+  const batchActions = batchPacks.map((pack) => pack.action);
+  const stackActions = packedActions
+    .slice(BATCH_SIZE)
     .map((pack) => pack.action);
-
-  const batch = Batch.fromArray(batchActions);
+  const endActionState =
+    batchPacks.length === 0
+      ? zkapp.actionState.get()
+      : Field(batchPacks[batchPacks.length - 1].hash);
 
   const { useActionStack, actionStackProof } = await bench(
     'Generate Action Stack Proof',
-    () => GenerateActionStackProof(Field.from(endActionState), actionStack)
+    () => GenerateActionStackProof(endActionState, stackActions)
   );
 
-  return {
-    batchActions,
-    batch,
-    useActionStack,
-    actionStackProof,
-    publicInput,
-    mask,
-  };
-}
+  let approvedWithdrawals = 0;
+  const verdicts = batchActions.map((action) => {
+    if (!PulsarAction.isWithdrawal(action).toBoolean()) return true;
+    if (approvedWithdrawals === MAX_WITHDRAWAL_PER_BATCH) return false;
+    approvedWithdrawals++;
+    return true;
+  });
+  const tailLeaves = stackActions.map((action) =>
+    hashPulsarActionLeafV2(action, Bool(true))
+  );
 
-async function reduce(senderKey: PrivateKey) {
-  let map = MapFromArray(actionStack);
-
-  const { batch, useActionStack, actionStackProof, publicInput, mask } =
-    await bench('Prepare batch and action stack proof', () =>
-      PrepareBatch(map, zkapp)
-    );
-
-  const { validateReduceProof } = await MockReducerVerifierProof(
-    publicInput,
-    activeSet
+  const { verdicts: verdictsStruct, approvalProof } = await bench(
+    'Generate ApprovalQuorum proof (incl. tail)',
+    () =>
+      TestUtils.MockApprovalQuorumProof({
+        validatorSet: activeSet,
+        cursorBefore: zkapp.approvalCursor.get(),
+        batchActions,
+        verdicts,
+        tailLeaves,
+      })
   );
 
   const tx = await Mina.transaction(
     { sender: senderKey.toPublicKey(), fee },
     async () => {
       await zkapp.reduce(
-        batch!,
-        useActionStack!,
-        actionStackProof!,
-        mask,
-        validateReduceProof
+        Batch.fromArray(batchActions),
+        useActionStack,
+        actionStackProof,
+        verdictsStruct,
+        approvalProof
       );
     }
   );

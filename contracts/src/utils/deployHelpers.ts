@@ -13,7 +13,6 @@ import { List } from '../types/common.js';
 export const DeployScripts = {
   fetchAccounts,
   waitTransactionAndFetchAccount,
-  deploySettlementContract,
   deployAndInitializeContract,
   sendMina,
 };
@@ -68,33 +67,10 @@ async function waitTransactionAndFetchAccount(
   }
 }
 
-async function deploySettlementContract(
-  signerPrivateKey: PrivateKey,
-  contractPrivateKey: PrivateKey = PrivateKey.random(),
-  fee: number = 1e9
-) {
-  const contractInstance = new SettlementContract(
-    contractPrivateKey.toPublicKey()
-  );
-  const signerPublicKey = signerPrivateKey.toPublicKey();
-
-  const deployTx = await Mina.transaction(
-    { sender: signerPublicKey, fee },
-    async () => {
-      AccountUpdate.fundNewAccount(signerPublicKey);
-      await contractInstance.deploy();
-    }
-  );
-
-  await waitTransactionAndFetchAccount(
-    deployTx,
-    [signerPrivateKey, contractPrivateKey],
-    [contractInstance.address]
-  );
-
-  return contractPrivateKey;
-}
-
+// Anchors are set in deploy() itself — a separate permissionless initialize
+// no longer exists, so
+// there is no bare-deploy helper either: a contract without anchors is not a
+// deployable state.
 async function deployAndInitializeContract(
   signerPrivateKey: PrivateKey,
   contractPrivateKey: PrivateKey = PrivateKey.random(),
@@ -110,8 +86,11 @@ async function deployAndInitializeContract(
     { sender: signerPublicKey, fee },
     async () => {
       AccountUpdate.fundNewAccount(signerPublicKey);
-      await contractInstance.deploy();
-      await contractInstance.initialize(validatorList.hash, Field(0), Field(0));
+      await contractInstance.deploy({
+        merkleListRoot: validatorList.hash,
+        stateRoot: Field(0),
+        blockHeight: Field(0),
+      });
     }
   );
 

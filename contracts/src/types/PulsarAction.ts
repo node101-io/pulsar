@@ -1,4 +1,4 @@
-import { Bool, Field, Poseidon, Provable, PublicKey, Struct } from 'o1js';
+import { Bool, Field, Provable, PublicKey, Struct } from 'o1js';
 import { BATCH_SIZE } from '../utils/constants.js';
 
 export { PulsarAction, Batch, PulsarActionBase, PulsarAuth, CosmosSignature };
@@ -95,25 +95,6 @@ class PulsarAction extends Struct({
 
   static isWithdrawal(action: PulsarAction): Bool {
     return action.type.equals(Field(2));
-  }
-
-  unconstrainedHash() {
-    if (PulsarAction.isDeposit(this).toBoolean()) {
-      return Poseidon.hash([
-        this.type,
-        ...this.account.toFields(),
-        this.amount,
-        ...this.pulsarAuth.toFields(),
-      ]);
-    } else if (PulsarAction.isWithdrawal(this).toBoolean()) {
-      return Poseidon.hash([
-        this.type,
-        ...this.account.toFields(),
-        this.amount,
-      ]);
-    } else {
-      return Field(0);
-    }
   }
 
   static fromRawAction(rawAction: string[]) {

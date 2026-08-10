@@ -11,6 +11,7 @@ export {
   MAX_DEPOSIT_PER_BATCH,
   MAX_WITHDRAWAL_PER_BATCH,
   ACTION_QUEUE_SIZE,
+  APPROVAL_TAIL_CHUNK,
   ENDPOINTS,
 };
 
@@ -29,6 +30,11 @@ const MAX_SETTLEMENT_PER_BATCH = 1;
 const MAX_DEPOSIT_PER_BATCH = BATCH_SIZE;
 const MAX_WITHDRAWAL_PER_BATCH = 9;
 const ACTION_QUEUE_SIZE = 60;
+// v2 leaves absorbed per ApprovalTailProgram step. Each slot costs one
+// hashWithPrefix fold plus a mux, so the chunk bounds base-case rows, not
+// correctness — a longer tail just stacks recursion layers. Row counts are
+// logged by approvalTail.test.ts; retune there if compile cost moves.
+const APPROVAL_TAIL_CHUNK = 128;
 
 function envOrDefault(key: string, fallback: string) {
   return typeof process !== 'undefined' &&

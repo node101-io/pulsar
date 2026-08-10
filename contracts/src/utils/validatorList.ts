@@ -6,7 +6,7 @@ export { VALIDATOR_LEAF_PREFIX, hashValidatorLeaf, computeValidatorListHash };
 /**
  * SINGLE SOURCE OF TRUTH for the validator-set leaf convention.
  *
- * The circuits (ValidateReduceProgram, MultisigVerifierProgram) rebuild the
+ * The circuits (ApprovalQuorumProgram, MultisigVerifierProgram) rebuild the
  * validator MerkleList leaf-by-leaf with hashValidatorLeaf and assert the fold
  * equals the committed root, so every off-chain producer of that root (chain,
  * prover ingest, bridge, deploy/seed scripts) must use these exact functions.

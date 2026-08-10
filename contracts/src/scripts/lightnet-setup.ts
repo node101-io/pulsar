@@ -6,7 +6,7 @@
  * - Generates a test validator key and computes the correct merkleListRoot
  * - Compiles and deploys SettlementContract with that merkleListRoot
  * - Dispatches several deposit and withdrawal actions so the archive has data
- * - Writes results to ../../bridge/.env.lightnet (includes VALIDATOR_PRIVATE_KEY)
+ * - Writes results to ../../bridge/.env.lightnet and deploy-result.json
  *
  * Usage:
  *   node build/src/scripts/lightnet-setup.js [--no-seed]
@@ -28,7 +28,8 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
-import { ValidateReduceProgram } from '../ValidateReduce.js';
+import { ApprovalTailProgram } from '../ApprovalTail.js';
+import { ApprovalQuorumProgram } from '../ApprovalQuorum.js';
 import { ActionStackProgram } from '../ActionStack.js';
 import { PulsarAuth } from '../types/PulsarAction.js';
 import { List } from '../types/common.js';
@@ -64,7 +65,7 @@ async function waitForTx(
 }
 
 /** Compute the merkleListRoot by pushing the validator key VALIDATOR_NUMBER times.
- *  ValidateReduceProgram iterates over all VALIDATOR_NUMBER slots, so the root
+ *  ApprovalQuorumProgram iterates over all VALIDATOR_NUMBER slots, so the root
  *  must reflect the full list — even when there is only one real validator. */
 function computeMerkleListRoot(validatorPublicKey: PrivateKey['toPublicKey'] extends () => infer R ? R : never): Field {
   const list = List.empty();
@@ -121,8 +122,11 @@ async function main() {
   console.log('\nCompiling programs (using cache)...');
   await MultisigVerifierProgram.compile({ cache });
   console.log('  MultisigVerifierProgram ✓');
-  await ValidateReduceProgram.compile({ cache });
-  console.log('  ValidateReduceProgram ✓');
+  // ApprovalQuorumProgram verifies ApprovalTailProofs, so the tail compiles first
+  await ApprovalTailProgram.compile({ cache });
+  console.log('  ApprovalTailProgram ✓');
+  await ApprovalQuorumProgram.compile({ cache });
+  console.log('  ApprovalQuorumProgram ✓');
   await ActionStackProgram.compile({ cache });
   console.log('  ActionStackProgram ✓');
   const { verificationKey } = await SettlementContract.compile({ cache });
@@ -142,10 +146,14 @@ async function main() {
 
   const deployTx = await Mina.transaction({ sender: deployer, fee: FEE }, async () => {
     AccountUpdate.fundNewAccount(deployer);
-    await contract.deploy();
-    await contract.initialize(merkleListRoot, Field(0), Field(0));
+    // anchors live in deploy(); the permissionless initialize is gone
+    await contract.deploy({
+      merkleListRoot,
+      stateRoot: Field(0),
+      blockHeight: Field(0),
+    });
   });
-  await waitForTx(deployTx, [deployerKey, contractKey], 'deploy+initialize');
+  await waitForTx(deployTx, [deployerKey, contractKey], 'deploy');
 
   await fetchAccount({ publicKey: contractAddress });
   console.log('  Contract deployed and initialized ✓');
@@ -181,7 +189,6 @@ async function main() {
     `MINA_FEE=${FEE}`,
     `LIGHTNET_NODE_URL=${NODE_URL}`,
     `LIGHTNET_ARCHIVE_URL=${ARCHIVE_URL}`,
-    `VALIDATOR_PRIVATE_KEY=${validatorKey.toBase58()}`,
     `USE_MOCK_PROOF=`,
     '',
   ].join('\n');
@@ -197,6 +204,12 @@ async function main() {
     contractPrivateKey: contractKey.toBase58(),
     deployerAddress: deployer.toBase58(),
     validatorPublicKey: validatorPubKey.toBase58(),
+    // Contracts-local only, NOT bridge config: the deploy anchors
+    // merkleListRoot to this key, so a chain stand-in signing the REAL
+    // vote-extension body with it is the
+    // only way to drive a reduce on this deployment without a pulsar-chain
+    // whose validator set matches.
+    validatorPrivateKey: validatorKey.toBase58(),
     merkleListRoot: merkleListRoot.toString(),
     deployedAt: new Date().toISOString(),
     network: 'lightnet',
@@ -209,8 +222,12 @@ async function main() {
 
   console.log('\n=== DONE ===');
   console.log(`Contract address: ${contractAddress.toBase58()}`);
-  console.log(`Validator key written to .env.lightnet`);
-  console.log(`NOTE: Set USE_MOCK_PROOF= in .env.lightnet before running e2e-reduce-test.ts`);
+  console.log(`Validator key written to deploy-result.json`);
+  console.log(
+    'NOTE: the lightnet reduce flow now needs vote extensions from a real ' +
+      'single-validator pulsar-chain — the stub signer is gone.',
+      'the stub signer is gone.'
+  );
 
   // Release accounts back to the pool
   await Lightnet.releaseKeyPair({ publicKey: depositor.toBase58() });

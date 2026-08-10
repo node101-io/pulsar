@@ -8,11 +8,11 @@ import {
   UInt64,
   AccountUpdate,
   Provable,
-  Poseidon,
   PublicKey,
   Reducer,
   Bool,
   Struct,
+  DeployArgs,
 } from 'o1js';
 import { SettlementProof } from './SettlementProof.js';
 import {
@@ -21,15 +21,19 @@ import {
   MINIMUM_DEPOSIT_AMOUNT,
   WITHDRAW_DOWN_PAYMENT,
 } from './utils/constants.js';
-import { ValidateReduceProof } from './ValidateReduce.js';
+import { ApprovalQuorumProof } from './ApprovalQuorum.js';
 import { Batch, PulsarAction, PulsarAuth } from './types/PulsarAction.js';
-import { ReduceMask } from './types/common.js';
+import { ApprovalVerdicts } from './types/common.js';
 import { ActionStackProof } from './ActionStack.js';
 import {
   actionListAdd,
   emptyActionListHash,
   merkleActionsAdd,
 } from './types/actionHelpers.js';
+import {
+  foldApprovalCursor,
+  hashPulsarActionLeafV2,
+} from './utils/pulsarActionLeaf.js';
 
 export { SettlementContract, SettlementEvent };
 
@@ -46,7 +50,13 @@ class SettlementContract extends SmartContract {
   @state(Field) stateRoot = State<Field>();
   @state(Field) blockHeight = State<Field>();
 
-  @state(Field) actionListHash = State<Field>();
+  /**
+   * Was `actionListHash` — the prefix fold of the chain's v2 verdict-leaf
+   * chain that this contract has consumed. Invariant with slot 0: actionState folds L1 actions
+   * a_1..a_m and approvalCursor folds verdict leaves leaf_1..leaf_m for the
+   * SAME m — one counter in two encodings, advanced only by reduce.
+   */
+  @state(Field) approvalCursor = State<Field>();
 
   reducer = Reducer({ actionType: PulsarAction });
 
@@ -54,8 +64,23 @@ class SettlementContract extends SmartContract {
     Settlement: SettlementEvent,
   };
 
-  async deploy() {
-    await super.deploy();
+  /**
+   * Anchors the contract to the Pulsar block the first settlement proof
+   * starts from — all three must come from one and the same block. Setting
+   * them here rather than in a post-deploy `initialize` is deliberate:
+   * initialize was a permissionless @method guarded only by o1js's
+   * `provedState == false`, so whoever won the post-deploy race could
+   * install a validator set of their own choosing and sign any body they
+   * liked. deploy() is authorized by the zkApp key, which closes that hole.
+   */
+  async deploy(
+    args: DeployArgs & {
+      merkleListRoot: Field;
+      stateRoot: Field;
+      blockHeight: Field;
+    }
+  ) {
+    await super.deploy(args);
 
     this.account.permissions.set({
       ...Permissions.default(),
@@ -63,25 +88,14 @@ class SettlementContract extends SmartContract {
       setVerificationKey:
         Permissions.VerificationKey.impossibleDuringCurrentVersion(),
     });
-  }
 
-  /**
-   * Anchors the contract to the Pulsar block the first settlement proof starts
-   * from. `settle` requires all three to equal that proof's Initial* values, so
-   * they must come from one and the same block — the last one before the first
-   * proving epoch, not the synthetic genesis record.
-   */
-  @method
-  async initialize(
-    merkleListRoot: Field,
-    stateRoot: Field,
-    blockHeight: Field
-  ) {
-    super.init();
-    this.merkleListRoot.set(merkleListRoot);
-    this.stateRoot.set(stateRoot);
-    this.blockHeight.set(blockHeight);
     this.actionState.set(Reducer.initialActionState);
+    this.merkleListRoot.set(args.merkleListRoot);
+    this.stateRoot.set(args.stateRoot);
+    this.blockHeight.set(args.blockHeight);
+    // m = 0 of the cursor invariant: zero L1 actions consumed, zero chain
+    // leaves consumed — Field(0) is the chain's empty actions root.
+    this.approvalCursor.set(Field(0));
   }
 
   @method
@@ -128,6 +142,18 @@ class SettlementContract extends SmartContract {
 
   @method
   async withdraw(amount: UInt64) {
+    // The lower bound removes the archive-wrapper edge case (a withdraw(0)
+    // must never reach the chain's scanner). The upper bound is required,
+    // not cosmetic: reduce range-checks amount + WITHDRAW_DOWN_PAYMENT as a
+    // UInt64, so an amount within WITHDRAW_DOWN_PAYMENT of 2^64 would make
+    // the reduce circuit unsatisfiable at the queue head. 2^63 also keeps
+    // the amount inside the chain's int64 domain.
+    amount.assertGreaterThan(UInt64.zero, 'Withdrawal amount must be positive');
+    amount.assertLessThan(
+      UInt64.from(2n ** 63n),
+      'Withdrawal amount must fit int64'
+    );
+
     const account = this.sender.getUnconstrained();
     const withdrawalUpdate = AccountUpdate.createSigned(account);
 
@@ -144,10 +170,10 @@ class SettlementContract extends SmartContract {
     batch: Batch,
     useActionStack: Bool,
     actionStackProof: ActionStackProof,
-    mask: ReduceMask,
-    validateReduceProof: ValidateReduceProof
+    verdicts: ApprovalVerdicts,
+    approvalProof: ApprovalQuorumProof
   ) {
-    let actionListHash = this.actionListHash.getAndRequireEquals();
+    let approvalCursor = this.approvalCursor.getAndRequireEquals();
 
     let initialActionState = this.actionState.getAndRequireEquals();
     let actionState = initialActionState;
@@ -156,6 +182,7 @@ class SettlementContract extends SmartContract {
       const action = batch.actions[i];
       const isDummy = PulsarAction.isDummy(action);
 
+      // L1 cursor: Mina action-queue fold of every consumed action.
       actionState = Provable.if(
         isDummy,
         actionState,
@@ -165,26 +192,28 @@ class SettlementContract extends SmartContract {
         )
       );
 
-      const shouldProcess = PulsarAction.isDeposit(action)
-        .or(PulsarAction.isWithdrawal(action))
-        .and(isDummy.not())
-        .and(mask.list[i]);
-
-      actionListHash = Provable.if(
-        shouldProcess,
-        Poseidon.hash([
-          actionListHash,
-          action.type,
-          ...action.account.toFields(),
-          action.amount,
-          ...action.pulsarAuth.toFields(),
-        ]),
-        actionListHash
+      // Chain cursor: one v2 verdict leaf per consumed slot, folded in
+      // lockstep — the same isDummy guard drives both cursors, so they
+      // advance by the same count and cannot drift (the
+      // alignment invariant). Dummy slots contribute to neither. The verdict is not
+      // chosen here: with the actions pinned by the action-state anchors,
+      // only the chain's own verdict vector folds to a cursor the quorum
+      // proof below can bind to a signed root.
+      const approved = verdicts.list[i];
+      const leaf = hashPulsarActionLeafV2(action, approved);
+      approvalCursor = Provable.if(
+        isDummy,
+        approvalCursor,
+        foldApprovalCursor(approvalCursor, leaf)
       );
 
+      // verdict = 1 on a withdrawal PAYS (amount + the returned down
+      // payment); verdict = 0 folds unpaid — the down payment stays with
+      // the contract. Deposits are credited chain-side, so their verdict
+      // affects only the leaf.
       const shouldWithdraw = PulsarAction.isWithdrawal(action)
         .and(isDummy.not())
-        .and(mask.list[i]);
+        .and(approved);
 
       const to = Provable.if(
         shouldWithdraw,
@@ -204,12 +233,21 @@ class SettlementContract extends SmartContract {
       this.send({ to, amount });
     }
 
-    validateReduceProof.verify();
+    // Exactly two proofs are verified in this method (the Pickles limit):
+    // the quorum proof internalizes the tail, extending cursorAfter leaf by
+    // leaf to an actions_reduced_root that >= 2/3 of the validator set
+    // signed in a real vote extension. The slot-1 pin is the second half of
+    // the signer-set authentication — without it a prover could invent an
+    // entire validator set that is merely self-consistent with its body.
+    approvalProof.verify();
 
     this.merkleListRoot.requireEquals(
-      validateReduceProof.publicInput.merkleListRoot
+      approvalProof.publicInput.validatorSetRoot
     );
-    actionListHash.assertEquals(validateReduceProof.publicInput.actionListHash);
+    approvalCursor.assertEquals(
+      approvalProof.publicInput.cursorAfter,
+      'Batch verdict fold must reach the quorum-bound approval cursor'
+    );
 
     actionStackProof.verifyIf(useActionStack);
     Provable.assertEqualIf(
@@ -228,11 +266,11 @@ class SettlementContract extends SmartContract {
       new SettlementEvent({
         fromActionState: initialActionState,
         endActionState: actionState,
-        mask: mask.toField(),
+        mask: verdicts.toField(),
       })
     );
 
     this.actionState.set(actionState);
-    this.actionListHash.set(actionListHash);
+    this.approvalCursor.set(approvalCursor);
   }
 }

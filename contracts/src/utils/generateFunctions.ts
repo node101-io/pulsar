@@ -7,29 +7,40 @@ import {
   SettlementPublicInputs,
 } from '../SettlementProof.js';
 import {
-  ValidateReducePublicInput,
-  ValidateReduceProgram,
-  ValidateReduceProof,
-} from '../ValidateReduce.js';
+  ApprovalQuorumProgram,
+  ApprovalQuorumProof,
+  ApprovalQuorumPublicInput,
+} from '../ApprovalQuorum.js';
+import { VoteExtBody } from '../types/voteExtBody.js';
 import {
   SignaturePublicKeyList,
   SignaturePublicKeyMatrix,
 } from '../types/signaturePubKeyList.js';
 import { log, table } from './loggers.js';
 import { PulsarAction } from '../types/PulsarAction.js';
-import { ACTION_QUEUE_SIZE, SETTLEMENT_MATRIX_SIZE } from './constants.js';
+import {
+  ACTION_QUEUE_SIZE,
+  APPROVAL_TAIL_CHUNK,
+  SETTLEMENT_MATRIX_SIZE,
+} from './constants.js';
 import {
   ActionStackProgram,
   ActionStackProof,
   ActionStackQueue,
 } from '../ActionStack.js';
+import {
+  ApprovalTailProgram,
+  ApprovalTailProof,
+  ApprovalTailQueue,
+} from '../ApprovalTail.js';
 
 export {
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
-  GenerateValidateReduceProof,
+  GenerateApprovalQuorumProof,
   GenerateActionStackProof,
+  GenerateApprovalTailProof,
   GeneratePulsarBlock,
 };
 
@@ -198,20 +209,40 @@ function GeneratePulsarBlock(
   });
 }
 
-async function GenerateValidateReduceProof(
-  publicInputs: ValidateReducePublicInput,
-  signaturePublicKeyList: SignaturePublicKeyList
+/**
+ * Successor to the deleted GenerateValidateReduceProof: the message is the
+ * chain's own vote-extension body, so the signature list comes from archived
+ * vote extensions, never from a bespoke signing round.
+ * Non-signers must occupy their slots with the dummy Signature {r:1, s:1} —
+ * the circuit rebuilds the validator list from all VALIDATOR_NUMBER slots.
+ *
+ * cursorAfter is the approval cursor the contract reaches after folding the
+ * batch; tailProof (GenerateApprovalTailProof(cursorAfter, tailLeaves)) must
+ * extend it to body.actionsReducedRoot — for a batch that consumes the whole
+ * signed prefix, that is the empty tail, i.e.
+ * GenerateApprovalTailProof(body.actionsReducedRoot, []).
+ */
+async function GenerateApprovalQuorumProof(
+  cursorAfter: Field,
+  body: VoteExtBody,
+  signaturePublicKeyList: SignaturePublicKeyList,
+  tailProof: ApprovalTailProof
 ) {
-  let proof: ValidateReduceProof;
+  let proof: ApprovalQuorumProof;
   try {
     proof = (
-      await ValidateReduceProgram.verifySignatures(
-        publicInputs,
-        signaturePublicKeyList
+      await ApprovalQuorumProgram.verifySignatures(
+        new ApprovalQuorumPublicInput({
+          validatorSetRoot: body.nextValidatorSetHash,
+          cursorAfter,
+        }),
+        body,
+        signaturePublicKeyList,
+        tailProof
       )
     ).proof;
   } catch (error) {
-    console.error('Error generating reducer verifier proof:', error);
+    console.error('Error generating approval quorum proof:', error);
     throw error;
   }
   return proof;
@@ -259,6 +290,44 @@ async function GenerateActionStackProof(
     };
   } catch (error) {
     console.error('Error generating action stack proof:', error);
+    throw error;
+  }
+}
+
+async function GenerateApprovalTailProof(
+  anchor: Field,
+  leaves: Field[]
+): Promise<ApprovalTailProof> {
+  // No dummy-proof shortcut here, unlike GenerateActionStackProof:
+  // ApprovalQuorumProgram verifies the tail proof unconditionally, so the
+  // empty tail is a REAL base proof over an all-dummy queue and returns its
+  // input unchanged (empty tail == identity).
+  try {
+    let proof = (
+      await ApprovalTailProgram.proveBase(
+        anchor,
+        ApprovalTailQueue.fromLeaves(leaves.slice(0, APPROVAL_TAIL_CHUNK))
+      )
+    ).proof;
+
+    for (let i = 1; i < Math.ceil(leaves.length / APPROVAL_TAIL_CHUNK); i++) {
+      proof = (
+        await ApprovalTailProgram.proveRecursive(
+          // anchor is what ApprovalQuorumProgram asserts equals the batch-end
+          // cursor — it must be passed unchanged to every layer, never the
+          // running fold.
+          anchor,
+          proof,
+          ApprovalTailQueue.fromLeaves(
+            leaves.slice(i * APPROVAL_TAIL_CHUNK, (i + 1) * APPROVAL_TAIL_CHUNK)
+          )
+        )
+      ).proof;
+    }
+
+    return proof;
+  } catch (error) {
+    console.error('Error generating approval tail proof:', error);
     throw error;
   }
 }

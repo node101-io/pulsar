@@ -34,7 +34,8 @@ import { readFileSync } from 'fs';
 import { mockProve } from './mock-prove.js';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
-import { ValidateReduceProgram } from '../ValidateReduce.js';
+import { ApprovalTailProgram } from '../ApprovalTail.js';
+import { ApprovalQuorumProgram } from '../ApprovalQuorum.js';
 import { ActionStackProgram } from '../ActionStack.js';
 import { PulsarAuth } from '../types/PulsarAction.js';
 import { ENDPOINTS } from '../utils/constants.js';
@@ -165,8 +166,11 @@ async function main() {
     console.log('\ncompiling...');
     await MultisigVerifierProgram.compile();
     console.log('  MultisigVerifierProgram ✓');
-    await ValidateReduceProgram.compile();
-    console.log('  ValidateReduceProgram ✓');
+    // ApprovalQuorumProgram verifies ApprovalTailProofs — tail first
+    await ApprovalTailProgram.compile();
+    console.log('  ApprovalTailProgram ✓');
+    await ApprovalQuorumProgram.compile();
+    console.log('  ApprovalQuorumProgram ✓');
     await ActionStackProgram.compile();
     console.log('  ActionStackProgram ✓');
     await SettlementContract.compile();
