@@ -1,7 +1,7 @@
-import * as grpc from "@grpc/grpc-js";
 import { Field, PublicKey } from "o1js";
 import {
     getValidatorSet,
+    grpcCredentials,
     sortValidatorsByPower,
     KeyregistryClient,
     TendermintClient,
@@ -14,8 +14,8 @@ import { env } from "../../config/env.js";
 // The circuits verify the validator MerkleList by rebuilding every leaf as
 // hashValidatorLeaf(publicKey, power) in the chain's fold order, so the bridge
 // must source the FULL ordered validator set (with powers) from the chain —
-// the /getSignature responses alone (signers only, unordered, no power) can
-// never reproduce the root.
+// the vote-extension archive alone (per-validator signatures, no order, no
+// power) can never reproduce the root.
 
 export interface OrderedValidator {
     minaPublicKey: string;
@@ -30,7 +30,7 @@ async function getClients() {
     const endpoint = env.PULSAR_GRPC_ENDPOINT;
     if (!endpoint) throw new Error("PULSAR_GRPC_ENDPOINT is not set");
 
-    const creds = grpc.credentials.createInsecure();
+    const creds = grpcCredentials(endpoint);
     _clients = {
         tm: new TendermintClient(endpoint, creds),
         kr: new KeyregistryClient(endpoint, creds),

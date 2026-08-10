@@ -29,7 +29,7 @@ const STATE_INDEX = {
     merkleListRoot: 1,
     stateRoot: 2,
     blockHeight: 3,
-    actionListHash: 4,
+    approvalCursor: 4,
 } as const;
 
 export async function initMinaClientContext(): Promise<MinaClientContext> {
@@ -99,8 +99,13 @@ export function getContractActionState(ctx: MinaClientContext): string {
     return ctx.zkappState[STATE_INDEX.actionState];
 }
 
-export function getContractActionListHash(ctx: MinaClientContext): string {
-    return ctx.zkappState[STATE_INDEX.actionListHash];
+/**
+ * Slot 4: the prefix fold of the chain's v2 verdict-leaf chain this contract
+ * has consumed — the anchor of the approval walk and the fromCursor of
+ * BuildVerdictBatch. Same snapshot rule as the other getters.
+ */
+export function getContractApprovalCursor(ctx: MinaClientContext): string {
+    return ctx.zkappState[STATE_INDEX.approvalCursor];
 }
 
 /**

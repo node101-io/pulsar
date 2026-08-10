@@ -99,6 +99,7 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
     }
 
     async onStartup(): Promise<void> {
+
         this.ctx = await initMinaClientContext();
 
         // An attempt still flagged active at boot was killed mid-flight

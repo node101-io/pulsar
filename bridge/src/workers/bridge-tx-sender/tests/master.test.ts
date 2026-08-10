@@ -63,6 +63,8 @@ vi.mock("../../../services/mina/client.js", () => ({
     getActionStateHistory: mockGetActionStateHistory,
 }));
 
+// gRPC-backed ingest loop (IO boundary) — onStartup only has to START it.
+
 vi.mock("bullmq", () => {
     class Queue {
         obliterate = vi.fn();

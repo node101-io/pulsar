@@ -1,10 +1,9 @@
 import { Bool, fetchAccount, Mina, PrivateKey } from "o1js";
-import type { Proof } from "o1js";
 import { waitForTransaction } from "pulsar-contracts/build/src/utils/fetch.js";
-import type { ValidateReducePublicInput } from "pulsar-contracts/build/src/ValidateReduce.js";
+import type { ApprovalQuorumProof } from "pulsar-contracts/build/src/ApprovalQuorum.js";
 import type { ActionStackProof } from "pulsar-contracts/build/src/ActionStack.js";
 import type { Batch } from "pulsar-contracts/build/src/types/PulsarAction.js";
-import type { ReduceMask } from "pulsar-contracts/build/src/types/common.js";
+import type { ApprovalVerdicts } from "pulsar-contracts/build/src/types/common.js";
 import type { MinaClientContext } from "./client.js";
 import logger from "../../common/logger.js";
 import { env } from "../../config/env.js";
@@ -16,8 +15,10 @@ export interface ReduceTxParams {
     batch: Batch;
     useActionStack: Bool;
     actionStackProof: ActionStackProof;
-    mask: ReduceMask;
-    validateReduceProof: Proof<ValidateReducePublicInput, void>;
+    /** Per-slot chain verdicts (was the bridge-chosen mask). */
+    verdicts: ApprovalVerdicts;
+    /** Quorum proof binding the batch-end approval cursor to a signed root. */
+    approvalProof: ApprovalQuorumProof;
     /** Queue front (contract actionState) being reduced — log/telemetry only. */
     fromActionState: string;
 }
@@ -32,7 +33,7 @@ export interface ReduceTxParams {
  * fold does not extend its current state.
  */
 export async function proveReduceTx(params: ReduceTxParams): Promise<string> {
-    const { ctx, batch, useActionStack, actionStackProof, mask, validateReduceProof, fromActionState } = params;
+    const { ctx, batch, useActionStack, actionStackProof, verdicts, approvalProof, fromActionState } = params;
 
     const fee = env.MINA_FEE;
     const senderKey = PrivateKey.fromBase58(env.MINA_PRIVATE_KEY);
@@ -46,8 +47,8 @@ export async function proveReduceTx(params: ReduceTxParams): Promise<string> {
             batch,
             useActionStack,
             actionStackProof,
-            mask,
-            validateReduceProof,
+            verdicts,
+            approvalProof,
         );
     });
 

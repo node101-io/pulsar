@@ -5,8 +5,6 @@
     "scripts": {
         "test": "vitest run",
         "test:watch": "vitest",
-        "test:integration": "NODE_OPTIONS=--max-old-space-size=8192 vitest run --config vitest.integration.config.ts",
-        "test:e2e": "node --max-old-space-size=8192 ../contracts/build/src/scripts/e2e-reduce-test.js",
         "build": "pnpm --filter pulsar-contracts --filter pulsar-chain-client build && tsc",
         "start": "pnpm run build && node --max-old-space-size=8192 dist/src/index.js",
         "clean": "rimraf dist node_modules"

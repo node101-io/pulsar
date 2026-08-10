@@ -7,7 +7,7 @@ const envGateDummies = {
     MONGO_URI: "mongodb://127.0.0.1:27017",
     CONTRACT_ADDRESS: "B62qTestContractAddress",
     MINA_PRIVATE_KEY: "EKETestPrivateKey",
-    PULSAR_VALIDATOR_ENDPOINTS: "http://localhost:7100",
+    PULSAR_GRPC_ENDPOINT: "localhost:9090",
     NODE_ENV: "test",
 };
 
@@ -15,7 +15,6 @@ export default defineConfig({
     test: {
         environment: "node",
         include: ["src/**/*.test.ts"],
-        exclude: ["src/**/*.integration.test.ts"],
         env: envGateDummies,
     },
 });

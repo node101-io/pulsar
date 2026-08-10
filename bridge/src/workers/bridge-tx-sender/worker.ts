@@ -3,17 +3,23 @@ import { Cache, Field, PublicKey, Signature } from "o1js";
 
 // contracts
 import { ActionStackProgram } from "pulsar-contracts/build/src/ActionStack.js";
-import { ValidateReduceProgram } from "pulsar-contracts/build/src/ValidateReduce.js";
-import { PulsarAction } from "pulsar-contracts/build/src/types/PulsarAction.js";
+import { ApprovalQuorumProgram } from "pulsar-contracts/build/src/ApprovalQuorum.js";
+import { ApprovalTailProgram } from "pulsar-contracts/build/src/ApprovalTail.js";
 import {
     SignaturePublicKey,
     SignaturePublicKeyList,
 } from "pulsar-contracts/build/src/types/signaturePubKeyList.js";
+import { VoteExtBody } from "pulsar-contracts/build/src/types/voteExtBody.js";
 import { CalculateFinalActionState } from "pulsar-contracts/build/src/utils/actionQueueUtils.js";
-import { GenerateValidateReduceProof } from "pulsar-contracts/build/src/utils/generateFunctions.js";
+import {
+    GenerateActionStackProof,
+    GenerateApprovalQuorumProof,
+    GenerateApprovalTailProof,
+} from "pulsar-contracts/build/src/utils/generateFunctions.js";
 import { fetchActions } from "pulsar-contracts/build/src/utils/fetch.js";
-import { PrepareBatchWithActions } from "pulsar-contracts/build/src/utils/reduceWitness.js";
+import { BuildVerdictBatch } from "pulsar-contracts/build/src/utils/reduceWitness.js";
 import { VALIDATOR_NUMBER } from "pulsar-contracts/build/src/utils/constants.js";
+import type { PulsarAction } from "pulsar-contracts/build/src/types/PulsarAction.js";
 
 // bridge
 import { CACHE_DIR } from "../../config/constants.js";
@@ -25,14 +31,22 @@ import {
     refreshContractState,
     getContractMerkleRoot,
     getContractActionState,
+    getContractApprovalCursor,
     getContractSettledHeight,
     getActionStateHistory,
 } from "../../services/mina/client.js";
-import { requestSignatures } from "../../services/pulsar/client.js";
 import {
     type OrderedValidator,
     resolveValidatorSetForRoot,
 } from "../../services/pulsar/validatorSet.js";
+import {
+    ApprovalHistoryPrunedError,
+    ApprovalIntegrityError,
+    ApprovalWireSpecError,
+    type ApprovalPushSlice,
+    collectApprovalLeaves,
+} from "../../services/pulsar/validActions.js";
+import { findSignedRootAtOrBeyond } from "../../services/pulsar/voteExtensions.js";
 import {
     proveReduceTx,
     sendProvedReduceTx,
@@ -42,13 +56,33 @@ import type { BridgeTxJob } from "./master.js";
 type PackedAction = { action: PulsarAction; hash: bigint };
 
 /**
- * Environmental failures (archive lag/outage) that retrying will heal on its
- * own — the failure listener logs them WITHOUT charging the queue front's
- * failure budget, so a seconds-long archive blip can never trip the circuit
- * breaker against a healthy front.
+ * A validator's vote-extension signature rebuilt from a signed-root read —
+ * the shape assertPossibleQuorum / buildSignatureList join against the
+ * ordered validator set.
+ */
+export interface ValidatorSignature {
+    validatorPublicKey: PublicKey;
+    signature: Signature;
+}
+
+/**
+ * Environmental failures (archive lag/outage, the chain trailing the queue,
+ * a missed signature window) that retrying will heal on its own —
+ * the failure listener logs them WITHOUT charging the queue front's failure
+ * budget, so a seconds-long blip can never trip the circuit breaker against a
+ * healthy front.
  */
 export class TransientReduceError extends Error {
     readonly transient = true;
+
+    // Always wrap with { cause }: the message keeps the operator's context
+    // while the logger's errWithCause serializer still prints the frame that
+    // actually failed (fetch rejects with a bare "fetch failed" whose real
+    // reason — ENOTFOUND, the URL — lives only on the cause).
+    constructor(message: string, options?: { cause?: unknown }) {
+        super(message, options);
+        this.name = "TransientReduceError";
+    }
 }
 
 let compiled = false;
@@ -69,9 +103,12 @@ export async function ensureCompiled(): Promise<void> {
         logger.info("Compiling ZK programs for bridge-tx-sender…", {
             event: "bridge_compile_start",
         });
-        // Dependency order: the contract verifies proofs of all three programs.
+        // Dependency order: the quorum program verifies tail proofs, and the
+        // contract verifies proofs of the settlement, quorum and stack
+        // programs.
         await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
-        await ValidateReduceProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+        await ApprovalTailProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+        await ApprovalQuorumProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
         await ActionStackProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
         await SettlementContract.compile({ cache: Cache.FileSystem(CACHE_DIR) });
         compiled = true;
@@ -93,10 +130,13 @@ async function getCtx(): Promise<MinaClientContext> {
  *
  * The chain is the single source of truth: the queue front is the contract's
  * own actionState (state[0]), the pending actions come from the archive via
- * fetchActions, and the batch/stack are rebuilt from scratch on every attempt.
- * That makes retries and crash recovery trivial — whatever landed on-chain
- * already moved state[0], so the next attempt simply starts from the new
- * front. The master re-queues a job as long as a gap to the queue tip remains.
+ * fetchActions, the verdicts come from the Pulsar chain's v2 leaf chain past
+ * the contract's approvalCursor (state[4]), and the quorum proof targets a
+ * vote-extension body the validators really signed, read on demand from the
+ * chain's vote-extension state. Everything is rebuilt from scratch on every attempt, which makes
+ * retries and crash recovery trivial — whatever landed on-chain already moved
+ * state[0]/state[4], so the next attempt simply starts from the new front.
+ * The master re-queues a job as long as a gap to the queue tip remains.
  */
 export async function worker(task: BridgeTxJob): Promise<void> {
     const ctx = await getCtx();
@@ -123,6 +163,7 @@ export async function worker(task: BridgeTxJob): Promise<void> {
         throw new TransientReduceError(
             `Archive fetch failed for queue front ${processed}: ` +
                 `${error instanceof Error ? error.message : String(error)}`,
+            { cause: error },
         );
     }
     if (packed.length === 0) {
@@ -156,38 +197,95 @@ export async function worker(task: BridgeTxJob): Promise<void> {
         }
     }
 
-    // Mark the attempt in-flight BEFORE the expensive proving: if it OOMs or
-    // crashes, startup finds txAttemptActive and books the failure.
-    await BridgeStateModel.updateOne({}, { $set: { txAttemptActive: true } });
-
-    // Placeholder approval set: every pending action is approved. Deposits
-    // are intrinsically safe (funds already escrowed on L1); withdrawals are
-    // paid for whatever this map contains, so the REAL map must come from the
-    // validators once the /getSignature spec covers it.
-    const includedActions = new Map<string, number>();
-    for (const pack of packed) {
-        const hash = pack.action.unconstrainedHash().toString();
-        includedActions.set(hash, (includedActions.get(hash) ?? 0) + 1);
+    // The chain's verdicts, walked from the contract's own approvalCursor —
+    // all fetched BEFORE the in-flight flag: the transient waits below (the
+    // chain trailing the queue, a missed signature window) must
+    // not read as an interrupted expensive attempt that startup would book as
+    // a strike.
+    const approvalCursor = getContractApprovalCursor(ctx);
+    let pushes: ApprovalPushSlice[];
+    try {
+        pushes = await collectApprovalLeaves(approvalCursor);
+    } catch (error) {
+        // Deterministic faults — a fold mismatch, a response contradicting
+        // the wire spec (HTML 200, renamed field, a node too old to serve the
+        // query), or a cursor out of reach (pruned, restarted, diverged) —
+        // must strike the failure budget: wrapping them transient would retry
+        // the same bytes forever without ever tripping the breaker. Only
+        // genuine network failures stay transient.
+        if (
+            error instanceof ApprovalIntegrityError ||
+            error instanceof ApprovalWireSpecError ||
+            error instanceof ApprovalHistoryPrunedError
+        )
+            throw error;
+        throw new TransientReduceError(
+            `Pulsar chain approval walk failed: ` +
+                `${error instanceof Error ? error.message : String(error)}`,
+            { cause: error },
+        );
     }
 
-    const { batchActions, batch, useActionStack, actionStackProof, publicInput, mask } =
-        await PrepareBatchWithActions(includedActions, ctx.contract, packed);
+    const chainLeaves = pushes.flatMap((push) => push.leaves);
+    if (chainLeaves.length === 0) {
+        throw new TransientReduceError(
+            `Pulsar chain has not adjudicated past the contract's approval ` +
+                `cursor ${approvalCursor} — waiting for the next push`,
+        );
+    }
 
-    logger.info("Batch prepared from the on-chain queue", {
-        fromActionState: processed,
-        pendingCount: packed.length,
-        batchCount: batchActions.length,
-        useActionStack: useActionStack.toBoolean(),
-        event: "reduce_batch_prepared",
-    });
+    // Positional match of the L1 queue against the chain's verdict leaves.
+    // BuildVerdictBatch THROWS when a chain leaf matches neither verdict of
+    // the action at its position (chain/L1 divergence) — deterministic, so it
+    // propagates and strikes; a governance rebase is the remedy, not a retry.
+    const { batch, verdicts, batchActions, endCursor } = BuildVerdictBatch(
+        packed,
+        chainLeaves.map((leaf) => Field(leaf)),
+        Field(approvalCursor),
+    );
+    const consumed = batchActions.length;
 
-    const signatures = await requestSignatures(processed, computedTip);
+    // The push that appended the last consumed leaf bounds the usable signed
+    // roots from below: any root signed at or beyond its state height commits
+    // to every leaf the batch folds.
+    let coveringHeight = 0;
+    let seen = 0;
+    for (const push of pushes) {
+        seen += push.leaves.length;
+        if (seen >= consumed) {
+            coveringHeight = push.cosmosBlockHeight;
+            break;
+        }
+    }
 
-    logger.info("Validator signatures received", {
-        fromActionState: processed,
-        sigCount: signatures.length,
-        event: "signatures_received",
-    });
+    // OLDEST readable at-or-beyond, not the tip: every block re-signs the
+    // current root, so the covering height itself is tried first — the older
+    // the root, the shorter the tail the quorum proof folds. A missed
+    // persistence window or pruned version only lengthens the tail via the
+    // latest-root fallback, never blocks.
+    const merkleListRoot = getContractMerkleRoot(ctx);
+    const signedRoot = await findSignedRootAtOrBeyond(
+        coveringHeight,
+        merkleListRoot,
+    );
+    if (!signedRoot) {
+        throw new TransientReduceError(
+            `No readable signed root at or beyond cosmos height ` +
+                `${coveringHeight} carries the contract's validator-set root ` +
+                `— waiting for the next block (or the next settlement) to ` +
+                `re-sign it`,
+        );
+    }
+
+    const { tailLeaves, terminalRoot } = trimTailAtSignedRoot(
+        pushes,
+        chainLeaves,
+        consumed,
+        {
+            cosmosHeight: signedRoot.cosmosHeight,
+            actionsReducedRoot: signedRoot.body.actionsReducedRoot,
+        },
+    );
 
     // The circuit rebuilds the validator MerkleList from ALL slots and asserts
     // it equals merkleListRoot, so the signature list must carry the full
@@ -195,20 +293,72 @@ export async function worker(task: BridgeTxJob): Promise<void> {
     // Height comes from the SAME cached snapshot as merkleListRoot: a fresh
     // fetch could observe a newer settlement than the cached root.
     const validatorSet = await resolveValidatorSetForRoot(
-        getContractMerkleRoot(ctx),
+        merkleListRoot,
         getContractSettledHeight(ctx),
     );
 
+    const signatures: ValidatorSignature[] = signedRoot.signatures.map(
+        (sig) => ({
+            validatorPublicKey: PublicKey.fromBase58(sig.minaPublicKey),
+            signature: Signature.fromValue({
+                r: BigInt(sig.r),
+                s: BigInt(sig.s),
+            }),
+        }),
+    );
+
     // Fail fast with a clear error when quorum is impossible even if every
-    // received signature verifies — proving would only fail in-circuit after
+    // archived signature verifies — proving would only fail in-circuit after
     // minutes of wasted work ("Not enough signed voting power").
     assertPossibleQuorum(validatorSet, signatures, {
         fromActionState: processed,
+        signedRootHeight: signedRoot.cosmosHeight,
     });
 
-    const validateReduceProof = await GenerateValidateReduceProof(
-        publicInput,
+    logger.info("Batch prepared from the on-chain queue", {
+        fromActionState: processed,
+        pendingCount: packed.length,
+        batchCount: consumed,
+        tailLength: tailLeaves.length,
+        signedRootHeight: signedRoot.cosmosHeight,
+        actionsReducedRoot: terminalRoot,
+        event: "reduce_batch_prepared",
+    });
+
+    // Mark the attempt in-flight BEFORE the expensive proving: if it OOMs or
+    // crashes, startup finds txAttemptActive and books the failure.
+    await BridgeStateModel.updateOne({}, { $set: { txAttemptActive: true } });
+
+    // The stack absorbs the unbatched remainder of the queue: anchored at the
+    // batch-end action state (what the contract asserts the proof's
+    // publicInput equals) and folding to the account tip.
+    const endActionState = CalculateFinalActionState(
+        Field(processed),
+        batchActions,
+    );
+    const { useActionStack, actionStackProof } = await GenerateActionStackProof(
+        endActionState,
+        packed.slice(consumed).map((pack) => pack.action),
+    );
+
+    // The tail extends the batch-end cursor to the signed root; an empty tail
+    // is a REAL base proof (identity), never a dummy.
+    const tailProof = await GenerateApprovalTailProof(
+        endCursor,
+        tailLeaves.map((leaf) => Field(leaf)),
+    );
+
+    const approvalProof = await GenerateApprovalQuorumProof(
+        endCursor,
+        new VoteExtBody({
+            nextValidatorSetHash: Field(signedRoot.body.nextValidatorSetHash),
+            stateRootHi: Field(signedRoot.body.stateRootHi),
+            stateRootLo: Field(signedRoot.body.stateRootLo),
+            currentBlockHeight: Field(signedRoot.cosmosHeight),
+            actionsReducedRoot: Field(signedRoot.body.actionsReducedRoot),
+        }),
         buildSignatureList(validatorSet, signatures),
+        tailProof,
     );
 
     logger.info("Proofs generated", {
@@ -222,8 +372,8 @@ export async function worker(task: BridgeTxJob): Promise<void> {
         batch,
         useActionStack,
         actionStackProof,
-        mask,
-        validateReduceProof,
+        verdicts,
+        approvalProof,
         fromActionState: processed,
     });
 
@@ -236,10 +386,60 @@ export async function worker(task: BridgeTxJob): Promise<void> {
 
     logger.info("Reduce TX done", {
         fromActionState: processed,
-        batchCount: batchActions.length,
-        remainingCount: packed.length - batchActions.length,
+        batchCount: consumed,
+        remainingCount: packed.length - consumed,
         event: "reduce_tx_done",
     });
+}
+
+/**
+ * The tail = every unconsumed leaf the signed root's actionsReducedRoot
+ * commits to: the remainder of the pushes at or before its signed state
+ * height. Cross-checked before any proving — the leaf walk and the pinned
+ * vote extension are two reads onto the same fold, and if they disagree
+ * the quorum proof is unsatisfiable, so the mismatch must surface here with
+ * the right taxonomy instead of minutes later in-circuit.
+ */
+function trimTailAtSignedRoot(
+    pushes: ApprovalPushSlice[],
+    chainLeaves: string[],
+    consumed: number,
+    signedRoot: { cosmosHeight: number; actionsReducedRoot: string },
+): { tailLeaves: string[]; terminalRoot: string } {
+    let included = 0;
+    let terminalRoot = "";
+    for (const push of pushes) {
+        if (push.cosmosBlockHeight > signedRoot.cosmosHeight) break;
+        included += push.leaves.length;
+        terminalRoot = push.rootAfter;
+    }
+
+    if (terminalRoot !== signedRoot.actionsReducedRoot) {
+        const walkTip = pushes[pushes.length - 1].cosmosBlockHeight;
+        if (signedRoot.cosmosHeight > walkTip) {
+            // The signed root out-raced the walk (a push landed between the
+            // leaf walk and the vote-extension read): it commits to leaves
+            // the walk has not seen yet. The next attempt re-walks and sees
+            // them.
+            throw new TransientReduceError(
+                `Signed root at cosmos height ` +
+                    `${signedRoot.cosmosHeight} is newer than the walked ` +
+                    `leaf list (tip push at ${walkTip}) and commits to ` +
+                    `${signedRoot.actionsReducedRoot}, not ${terminalRoot} ` +
+                    `— re-walking on the next attempt`,
+            );
+        }
+        throw new ApprovalIntegrityError(
+            `Signed root at cosmos height ` +
+                `${signedRoot.cosmosHeight} commits to actions root ` +
+                `${signedRoot.actionsReducedRoot}, but the verified leaf ` +
+                `walk folds to ${terminalRoot} at that height — the chain's ` +
+                `leaf list and its vote extensions disagree about the ` +
+                `same chain state.`,
+        );
+    }
+
+    return { tailLeaves: chainLeaves.slice(consumed, included), terminalRoot };
 }
 
 /**
@@ -276,14 +476,14 @@ async function recordAttempt(fromActionState: string): Promise<void> {
 }
 
 /**
- * Optimistic 2/3 voting-power pre-check: counts every RECEIVED signature as
+ * Optimistic 2/3 voting-power pre-check: counts every ARCHIVED signature as
  * valid (the circuit is the real enforcer). If even that upper bound misses
- * quorum, GenerateValidateReduceProof is guaranteed to fail in-circuit —
+ * quorum, GenerateApprovalQuorumProof is guaranteed to fail in-circuit —
  * throw the clear error up front instead.
  */
 export function assertPossibleQuorum(
     validators: OrderedValidator[],
-    signatures: Awaited<ReturnType<typeof requestSignatures>>,
+    signatures: ValidatorSignature[],
     logMeta: object = {},
 ): void {
     const signerKeys = new Set(
@@ -308,14 +508,14 @@ export function assertPossibleQuorum(
         });
         throw new Error(
             `Signed voting power ${signedPower}/${totalPower} is below the ` +
-                `2/3 quorum even if every received signature is valid`,
+                `2/3 quorum even if every archived signature is valid`,
         );
     }
 }
 
 export function buildSignatureList(
     validators: OrderedValidator[],
-    signatures: Awaited<ReturnType<typeof requestSignatures>>,
+    signatures: ValidatorSignature[],
 ): SignaturePublicKeyList {
     if (validators.length !== VALIDATOR_NUMBER) {
         throw new Error(

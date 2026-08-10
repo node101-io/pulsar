@@ -44,17 +44,15 @@ export const env = createEnv({
         MINA_PRIVATE_KEY: z.string().min(1),
         MINA_FEE: z.coerce.number().positive().default(1e8),
 
-        // Comma-separated on the wire, a non-empty array everywhere in code.
-        PULSAR_VALIDATOR_ENDPOINTS: z
-            .string()
-            .transform((s) =>
-                s
-                    .split(",")
-                    .map((x) => x.trim())
-                    .filter(Boolean),
-            )
-            .pipe(z.array(z.string()).min(1)),
-        PULSAR_GRPC_ENDPOINT: z.string().optional(),
+        // REQUIRED: the single chain dependency. Everything the bridge asks
+        // the Pulsar chain — validator set, vote-extension bodies and
+        // signatures, adjudicated verdict leaves, the cumulative approval
+        // root — travels over this one gRPC endpoint, and the chain's
+        // verdicts are the only source of the reduce approval data
+        // (the redesign deleted the approve-all escape hatch — a
+        // local verdict cannot produce a signed root), so a bridge without
+        // it cannot reduce at all.
+        PULSAR_GRPC_ENDPOINT: z.string().min(1),
         // Ordered validator set for environments without a Pulsar chain
         // (lightnet). Shape is enforced here; resolveValidatorSetForRoot
         // still hash-gates it against the on-chain merkleListRoot.

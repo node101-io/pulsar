@@ -13,8 +13,22 @@ The bridge is a single process:
 | `bridge` | `dist/src/index.js` | Sequential reduce TX pipeline driven by the contract's on-chain action queue |
 
 It needs MongoDB (a one-document `BridgeState` for failure bookkeeping) and
-Redis (the BullMQ job queue). See [architecture.md](architecture.md) for how
-work is derived from the chain.
+Redis (the BullMQ job queue). See
+[architecture.md](architecture.md) for how work is derived from the chain.
+
+**A full bridge run requires a real Pulsar chain.** The reduce pipeline
+consumes the chain's own verdict leaves and the vote-extension
+signatures its validators produce every block (both over the single gRPC
+endpoint) — there is no stub
+signer, no approve-all mode, and no way to fabricate either input locally: a
+locally invented verdict can never reach a quorum-signed root. What each
+environment can and cannot exercise:
+
+| Environment | What runs |
+| --- | --- |
+| contracts unit tests | The full circuit stack against REAL vote-extension bodies, self-signed with local keys (`MockApprovalQuorumProof` in `utils/testUtils.ts` — a chain stand-in signing the real message, not a fake signer of a fabricated one). No chain needed. |
+| lightnet + `lightnet-setup` | Contract deploy, action dispatch, archive reads, the master/worker loop up to the approval walk. Reduces WAIT (transient) unless a Pulsar chain is answering. |
+| lightnet + single-validator pulsar-chain | The whole pipeline, end to end. The bring-up order is fixed: deploy with anchors, then `MsgRebaseActionsRoot`, then `StartBlockHeight` — not negotiable, since an action dispatched before the chain's start height is never scanned. |
 
 ---
 
@@ -60,9 +74,9 @@ MINA_NETWORK=devnet
 CONTRACT_ADDRESS=<deployed SettlementContract address>
 MINA_PRIVATE_KEY=<base58 private key for the bridge signing account>
 
-# NOT port 6000 (undici's fetch enforces the spec bad-port list — 6000 = X11)
-# and NOT 7000 (macOS AirPlay listens there)
-PULSAR_VALIDATOR_ENDPOINTS=http://localhost:7100,http://localhost:7101
+# A real Pulsar chain node: the single gRPC endpoint serves the verdict
+# leaves, the validator set and the on-demand signed-root reads.
+PULSAR_GRPC_ENDPOINT=localhost:9090
 ```
 
 See the full reference below for all variables. Every variable is parsed and
@@ -91,15 +105,27 @@ node build/src/scripts/lightnet-setup.js
 
 This acquires a funded account from the lightnet account manager, generates a
 throwaway validator key, deploys the contract with the matching
-`merkleListRoot`, dispatches test deposit/withdrawal actions so the archive has
-data, and writes `contracts/.env.lightnet` — which is also what
-`pnpm run test:e2e` consumes. Pass `--no-seed` to skip the test actions.
+`merkleListRoot` (all anchors are set in `deploy()` — there is no separate
+`initialize`), dispatches test deposit/withdrawal actions so the archive has
+data, and writes the resulting env values for the bridge. Pass `--no-seed` to
+skip the test actions.
+
+Without a Pulsar chain the bridge will boot, compile, detect the pending
+actions — and then wait: the approval walk finds no verdict leaves past the
+contract's `approvalCursor`, which is the transient "chain trails the queue"
+path, retried forever without a strike. That is the expected end state of a
+chainless lightnet run; everything past that point (verdict walk, quorum
+proof, reduce) needs the real chain, and the circuit-level behaviour is
+already covered by the contracts unit tests.
 
 ### Against a real Pulsar chain
 
-The bridge must verify signatures against the chain's actual validator set, so
-the contract has to be initialized from the chain's genesis validator root.
-That deploy lives in the prover, which has the ingested block 0:
+The bridge must verify vote-extension signatures against the chain's actual
+validator set, so the contract has to be deployed from the chain's genesis
+validator root, and the chain has to be pointed at the new contract before any
+action is dispatched. Follow the bring-up order above
+(anchored deploy first); the
+genesis-anchored deploy lives in the prover, which has the ingested block 0:
 
 ```bash
 cd prover && pnpm run seed && pnpm run deploy
@@ -159,12 +185,17 @@ pm2 restart all
 | `CONTRACT_ADDRESS`          | —               | Deployed `SettlementContract` address (base58)                               |
 | `MINA_PRIVATE_KEY`          | —               | Signing key for the bridge account that sends reduce TXs (base58)            |
 | `MINA_FEE`                  | `100000000`     | Transaction fee in nanomina (0.1 MINA)                                       |
-| `PULSAR_VALIDATOR_ENDPOINTS`| —               | Comma-separated list of Pulsar signer-node base URLs (e.g. `http://v1:7100`; avoid port 6000 — undici's fetch blocks it — and 7000 — macOS AirPlay) |
-| `PULSAR_GRPC_ENDPOINT`      | —               | Pulsar chain gRPC endpoint (validator set + powers)                          |
-| `VALIDATOR_SET_OVERRIDE`    | —               | Ordered validator set as JSON `[{"minaPublicKey":"B62...","power":"1"},...]` for environments without a Pulsar chain (lightnet). Hash-gated against the contract's `merkleListRoot`, so a wrong set fails fast |
+| `PULSAR_GRPC_ENDPOINT`      | — (required)    | Pulsar chain gRPC endpoint — the single chain dependency: ordered validator set with powers, on-demand signed-root reads (vote-extension bodies + signatures), the chain-adjudicated verdict leaves and the cumulative approval root. Without it the bridge cannot reduce at all, so boot refuses to start |
+| `VALIDATOR_SET_OVERRIDE`    | —               | Ordered validator set as JSON `[{"minaPublicKey":"B62...","power":"1"},...]` for environments without a chain gRPC endpoint. Hash-gated against the contract's `merkleListRoot`, so a wrong set fails fast |
 | `MAX_RETRY`                 | `3`             | Non-transient strikes per queue front before the master halts                |
-| `LOG_LEVEL`                 | `info`          | Log level (pino)                                                             |
-| `NODE_ENV`                  | `production`    | Node environment                                                             |
+| `LOG_LEVEL`                 | `info` (prod) / `debug` | Log level (pino)                                                     |
+| `NODE_ENV`                  | `development`   | Node environment                                                             |
+
+`PULSAR_VALIDATOR_ENDPOINTS` and `PULSAR_VALID_ACTIONS_MODE` no longer exist:
+there are no signer nodes to configure (signatures come from vote extensions
+the validators already produce) and no approval mode to choose (the verdict is
+the chain's, derived from its leaf chain). A `.env` still carrying them is
+stale — the rows are ignored.
 
 ---
 
@@ -192,7 +223,8 @@ redis-cli FLUSHDB
 ```
 
 After a reset, restart the bridge. Nothing else needs rebuilding — the work
-list is always re-derived from the contract's on-chain action queue.
+list is always re-derived from the contract's on-chain action queue, and
+signed roots are read from the chain on demand.
 
 ---
 

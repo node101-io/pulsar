@@ -35,7 +35,7 @@ import {
     getActionStateHistory,
     getContractMerkleRoot,
     getContractActionState,
-    getContractActionListHash,
+    getContractApprovalCursor,
     getContractSettledHeight,
 } from "../client.js";
 
@@ -64,7 +64,7 @@ function makeCtx() {
 }
 
 describe("contract state getters — @state declaration order", () => {
-    // 0=actionState, 1=merkleListRoot, 2=stateRoot, 3=blockHeight, 4=actionListHash
+    // 0=actionState, 1=merkleListRoot, 2=stateRoot, 3=blockHeight, 4=approvalCursor
     const ctx = {
         zkappState: ["10", "11", "12", "13", "14"],
         actionStateHistory: ["t0", "t1", "t2", "t3", "t4"],
@@ -82,8 +82,8 @@ describe("contract state getters — @state declaration order", () => {
         expect(getContractSettledHeight(ctx)).toBe(13);
     });
 
-    it("getContractActionListHash reads slot 4", () => {
-        expect(getContractActionListHash(ctx)).toBe("14");
+    it("getContractApprovalCursor reads slot 4", () => {
+        expect(getContractApprovalCursor(ctx)).toBe("14");
     });
 
     it("getActionStateHistory returns the five stored action states, tip first", () => {
