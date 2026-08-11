@@ -4,7 +4,7 @@ import type { Metadata } from "@grpc/grpc-js";
 import {
     HISTORICAL_HEIGHT_HEADER,
     fetchActionsReducedRoot,
-    fetchLatestValidActionHashes,
+    fetchLatestActionHashes,
 } from "./bridgeQuery.js";
 
 // Fake generated-client methods: capture the metadata and answer via the
@@ -25,18 +25,18 @@ function capture<TRes>(response: TRes) {
     return { seen, method };
 }
 
-describe("fetchLatestValidActionHashes", () => {
+describe("fetchLatestActionHashes", () => {
     const response = {
         start_mina_height: "46",
         latest_fetched_mina_height: "56",
-        valid_action_hashes: ["7"],
-        valid_action_hashes_cosmos_block_height: "1200",
+        action_hashes: ["7"],
+        action_hashes_cosmos_block_height: "1200",
     };
 
     it("sends no height header for an unpinned read", async () => {
         const { seen, method } = capture(response);
-        const res = await fetchLatestValidActionHashes({
-            latestValidActionHashes: method as never,
+        const res = await fetchLatestActionHashes({
+            latestActionHashes: method as never,
         });
         expect(res).toEqual(response);
         expect(seen).toEqual([undefined]);
@@ -44,8 +44,8 @@ describe("fetchLatestValidActionHashes", () => {
 
     it("pins a historical read via the standard height header", async () => {
         const { seen, method } = capture(response);
-        await fetchLatestValidActionHashes(
-            { latestValidActionHashes: method as never },
+        await fetchLatestActionHashes(
+            { latestActionHashes: method as never },
             900,
         );
         expect(seen).toEqual(["900"]);

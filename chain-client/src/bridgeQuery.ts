@@ -3,12 +3,12 @@ import { Metadata } from "@grpc/grpc-js";
 import {
     type BridgeQueryClient,
     type QueryActionsReducedRootResponse,
-    type QueryLatestValidActionHashesResponse,
+    type QueryLatestActionHashesResponse,
     grpcUnary,
 } from "./transport.js";
 
 export { HISTORICAL_HEIGHT_HEADER, historicalHeightMetadata };
-export { fetchLatestValidActionHashes, fetchActionsReducedRoot };
+export { fetchLatestActionHashes, fetchActionsReducedRoot };
 
 // Standard Cosmos historical state query: the request runs against the state
 // version committed at that height. Height 0 means LATEST, not genesis — so
@@ -23,17 +23,17 @@ function historicalHeightMetadata(atCosmosHeight?: number): Metadata {
 }
 
 /**
- * The chain's latest valid-action batch (x/bridge Query/LatestValidActionHashes)
- * as served — decimal-string field elements and quoted int64s straight off the
+ * The chain's latest action batch (x/bridge Query/LatestActionHashes) as
+ * served — decimal-string field elements and quoted int64s straight off the
  * generated codec. Validation (digits, field range, canonicalisation) is the
  * consumer's job: the bridge owns the error taxonomy those checks feed.
  */
-async function fetchLatestValidActionHashes(
-    client: Pick<BridgeQueryClient, "latestValidActionHashes">,
+async function fetchLatestActionHashes(
+    client: Pick<BridgeQueryClient, "latestActionHashes">,
     atCosmosHeight?: number,
-): Promise<QueryLatestValidActionHashesResponse> {
-    return grpcUnary<QueryLatestValidActionHashesResponse>((cb) =>
-        client.latestValidActionHashes(
+): Promise<QueryLatestActionHashesResponse> {
+    return grpcUnary<QueryLatestActionHashesResponse>((cb) =>
+        client.latestActionHashes(
             {},
             historicalHeightMetadata(atCosmosHeight),
             cb,

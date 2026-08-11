@@ -38,14 +38,14 @@ vi.mock("pulsar-contracts/build/src/utils/pulsarActionLeaf.js", () => ({
 // The gRPC transport is pulsar-chain-client's; these tests drive the module
 // through mocked fetch helpers so the oracle stays a pure function of
 // (query, pinned height).
-const { mockFetchLatestValidActionHashes, mockFetchActionsReducedRoot } =
+const { mockFetchLatestActionHashes, mockFetchActionsReducedRoot } =
     vi.hoisted(() => ({
-        mockFetchLatestValidActionHashes: vi.fn(),
+        mockFetchLatestActionHashes: vi.fn(),
         mockFetchActionsReducedRoot: vi.fn(),
     }));
 vi.mock("pulsar-chain-client", () => ({
     BridgeQueryClient: class {},
-    fetchLatestValidActionHashes: mockFetchLatestValidActionHashes,
+    fetchLatestActionHashes: mockFetchLatestActionHashes,
     fetchActionsReducedRoot: mockFetchActionsReducedRoot,
     grpcCredentials: () => ({}),
 }));
@@ -58,23 +58,23 @@ import {
     collectApprovalLeaves,
     decodeFieldElement,
     fetchActionsReducedRoot,
-    fetchValidActionsBatch,
+    fetchActionsBatch,
     resetVerifiedBatchCache,
-} from "../validActions.js";
+} from "../actionHashes.js";
 
 // Symbolic query names — the oracle predates the gRPC move and keys on them.
 const PATHS = {
-    validActions: "LatestValidActionHashes",
+    actionHashes: "LatestActionHashes",
     reducedRoot: "ActionsReducedRoot",
 };
 
 type Oracle = (path: string, heightHeader: string | undefined) => unknown;
 
 function stubFetch(oracle: Oracle) {
-    mockFetchLatestValidActionHashes.mockImplementation(
+    mockFetchLatestActionHashes.mockImplementation(
         async (_client: unknown, atCosmosHeight?: number) =>
             oracle(
-                PATHS.validActions,
+                PATHS.actionHashes,
                 atCosmosHeight === undefined
                     ? undefined
                     : String(atCosmosHeight),
@@ -94,7 +94,7 @@ function stubFetch(oracle: Oracle) {
 // A ServiceError-shaped rejection: what @grpc/grpc-js hands the callback.
 function stubStatus(code: number) {
     const error = Object.assign(new Error(`grpc status ${code}`), { code });
-    mockFetchLatestValidActionHashes.mockRejectedValue(error);
+    mockFetchLatestActionHashes.mockRejectedValue(error);
     mockFetchActionsReducedRoot.mockRejectedValue(error);
 }
 
@@ -128,8 +128,8 @@ function chainOracle(
         return {
             start_mina_height: (last?.start ?? genesisCursor).toString(),
             latest_fetched_mina_height: (last?.cursor ?? genesisCursor).toString(),
-            valid_action_hashes: last?.hashes ?? [],
-            valid_action_hashes_cosmos_block_height: (last?.height ?? 0).toString(),
+            action_hashes: last?.hashes ?? [],
+            action_hashes_cosmos_block_height: (last?.height ?? 0).toString(),
         };
     };
     return (path, heightHeader) => {
@@ -140,7 +140,7 @@ function chainOracle(
                 ? latestHeight
                 : Number(heightHeader);
         switch (path) {
-            case PATHS.validActions:
+            case PATHS.actionHashes:
                 return batchAt(h);
             case PATHS.reducedRoot:
                 return { actions_reduced_root: rootAt(h) };
@@ -151,7 +151,7 @@ function chainOracle(
 }
 
 afterEach(() => {
-    mockFetchLatestValidActionHashes.mockReset();
+    mockFetchLatestActionHashes.mockReset();
     mockFetchActionsReducedRoot.mockReset();
     vi.mocked(foldApprovalCursor).mockClear();
     resetVerifiedBatchCache();
@@ -191,26 +191,26 @@ describe("decodeFieldElement", () => {
     });
 });
 
-describe("fetchValidActionsBatch", () => {
+describe("fetchActionsBatch", () => {
     // The chain team's observed response, verbatim, from the
     // return-string-action-root branch. If this test needs editing, the wire
-    // spec at the top of validActions.ts must move with it.
+    // spec at the top of actionHashes.ts must move with it.
     const OBSERVED_BODY = {
         start_mina_height: "46",
         latest_fetched_mina_height: "56",
-        valid_action_hashes: [
+        action_hashes: [
             "15716941071233514932119286727423960401313156380415428224723275206029618763673",
         ],
-        valid_action_hashes_cosmos_block_height: "1200",
+        action_hashes_cosmos_block_height: "1200",
     };
 
     it("parses the chain's observed response", async () => {
         stubFetch(() => OBSERVED_BODY);
-        await expect(fetchValidActionsBatch()).resolves.toEqual({
+        await expect(fetchActionsBatch()).resolves.toEqual({
             startMinaHeight: 46n,
             latestFetchedMinaHeight: 56n,
             cosmosBlockHeight: 1200n,
-            validActionHashes: OBSERVED_BODY.valid_action_hashes,
+            actionHashes: OBSERVED_BODY.action_hashes,
         });
     });
 
@@ -220,24 +220,24 @@ describe("fetchValidActionsBatch", () => {
             seen.push(height);
             return OBSERVED_BODY;
         });
-        await fetchValidActionsBatch(900);
+        await fetchActionsBatch(900);
         expect(seen).toEqual(["900"]);
     });
 
     it("rejects a missing height field rather than defaulting it", async () => {
         stubFetch(() => ({
             ...OBSERVED_BODY,
-            valid_action_hashes_cosmos_block_height: undefined,
+            action_hashes_cosmos_block_height: undefined,
         }));
-        await expect(fetchValidActionsBatch()).rejects.toThrow(
+        await expect(fetchActionsBatch()).rejects.toThrow(
             ApprovalWireSpecError,
         );
     });
 
     it("rejects a non-array hash list rather than folding zero leaves", async () => {
-        stubFetch(() => ({ ...OBSERVED_BODY, valid_action_hashes: "nope" }));
-        await expect(fetchValidActionsBatch()).rejects.toThrow(
-            /valid_action_hashes is not an array/,
+        stubFetch(() => ({ ...OBSERVED_BODY, action_hashes: "nope" }));
+        await expect(fetchActionsBatch()).rejects.toThrow(
+            /action_hashes is not an array/,
         );
     });
 });
@@ -348,7 +348,7 @@ describe("collectApprovalLeaves", () => {
         ]);
         expect(result.flatMap((slice) => slice.leaves)).toEqual(["5", "7"]);
         const pinnedBatchReads = fetchSpy.mock.calls
-            .filter(([path]) => path === PATHS.validActions)
+            .filter(([path]) => path === PATHS.actionHashes)
             .map(([, height]) => height);
         expect(pinnedBatchReads).toEqual([undefined, "899"]);
     });
@@ -359,8 +359,8 @@ describe("collectApprovalLeaves", () => {
         ]);
         stubFetch((path, height) => {
             const body = oracle(path, height) as Record<string, unknown>;
-            if (path === PATHS.validActions)
-                return { ...body, valid_action_hashes: ["8"] };
+            if (path === PATHS.actionHashes)
+                return { ...body, action_hashes: ["8"] };
             return body;
         });
         await expect(collectApprovalLeaves("0")).rejects.toThrow(
@@ -399,12 +399,12 @@ describe("collectApprovalLeaves", () => {
         // A push at height 1 whose root does not fold from the empty root is
         // a zero-height restart, not corrupt data.
         stubFetch((path, heightHeader) => {
-            if (path === PATHS.validActions)
+            if (path === PATHS.actionHashes)
                 return {
                     start_mina_height: "40",
                     latest_fetched_mina_height: "60",
-                    valid_action_hashes: ["7"],
-                    valid_action_hashes_cosmos_block_height: "1",
+                    action_hashes: ["7"],
+                    action_hashes_cosmos_block_height: "1",
                 };
             return {
                 actions_reduced_root:
@@ -435,8 +435,8 @@ describe("collectApprovalLeaves", () => {
         ]);
         stubFetch((path, height) => {
             const body = oracle(path, height) as Record<string, unknown>;
-            if (path === PATHS.validActions && corrupt)
-                return { ...body, valid_action_hashes: ["8"] };
+            if (path === PATHS.actionHashes && corrupt)
+                return { ...body, action_hashes: ["8"] };
             return body;
         });
         await expect(collectApprovalLeaves("0")).rejects.toThrow(
@@ -456,7 +456,7 @@ describe("collectApprovalLeaves", () => {
 describe("gRPC fault taxonomy", () => {
     it("treats an unimplemented query as a wire-spec violation", async () => {
         stubStatus(12); // UNIMPLEMENTED — the node predates the query set
-        await expect(fetchValidActionsBatch()).rejects.toThrow(
+        await expect(fetchActionsBatch()).rejects.toThrow(
             ApprovalWireSpecError,
         );
     });
@@ -466,7 +466,7 @@ describe("gRPC fault taxonomy", () => {
             // NOT_FOUND (keeper: pruned snapshot) and INVALID_ARGUMENT
             // (baseapp: pruned state version)
             stubStatus(code);
-            await expect(fetchValidActionsBatch(900)).rejects.toThrow(
+            await expect(fetchActionsBatch(900)).rejects.toThrow(
                 ApprovalHistoryPrunedError,
             );
         }
@@ -476,7 +476,7 @@ describe("gRPC fault taxonomy", () => {
         for (const code of [14, 4, 8, 13]) {
             // UNAVAILABLE, DEADLINE_EXCEEDED, RESOURCE_EXHAUSTED, INTERNAL
             stubStatus(code);
-            const error = await fetchValidActionsBatch().catch((e) => e);
+            const error = await fetchActionsBatch().catch((e) => e);
             expect(error).toBeInstanceOf(Error);
             expect(error).not.toBeInstanceOf(ApprovalWireSpecError);
             expect(error).not.toBeInstanceOf(ApprovalHistoryPrunedError);
@@ -484,10 +484,10 @@ describe("gRPC fault taxonomy", () => {
     });
 
     it("keeps a codeless failure transient rather than striking", async () => {
-        mockFetchLatestValidActionHashes.mockRejectedValue(
+        mockFetchLatestActionHashes.mockRejectedValue(
             new Error("socket hang up"),
         );
-        const error = await fetchValidActionsBatch().catch((e) => e);
+        const error = await fetchActionsBatch().catch((e) => e);
         expect(error).toBeInstanceOf(Error);
         expect(error).not.toBeInstanceOf(ApprovalWireSpecError);
         expect(error).not.toBeInstanceOf(ApprovalHistoryPrunedError);

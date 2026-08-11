@@ -46,7 +46,7 @@ import {
     ApprovalWireSpecError,
     type ApprovalPushSlice,
     collectApprovalLeaves,
-} from "../../services/pulsar/validActions.js";
+} from "../../services/pulsar/actionHashes.js";
 import { findSignedRootAtOrBeyond } from "../../services/pulsar/voteExtensions.js";
 import {
     proveReduceTx,

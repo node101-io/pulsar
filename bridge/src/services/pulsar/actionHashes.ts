@@ -5,30 +5,33 @@ import { foldApprovalCursor } from "pulsar-contracts/build/src/utils/pulsarActio
 import {
     BridgeQueryClient,
     fetchActionsReducedRoot as grpcFetchActionsReducedRoot,
-    fetchLatestValidActionHashes,
+    fetchLatestActionHashes,
     grpcCredentials,
 } from "pulsar-chain-client";
 
 import logger from "../../common/logger.js";
 import { env } from "../../config/env.js";
 
-// WIRE SPEC, confirmed against pulsar-chain development (merged from
-// return-string-action-root; proto/pulsarchain/bridge/v1/query.proto), read
+// WIRE SPEC, confirmed against pulsar-chain PR #39 refactor-action head
+// 5a1013a (proto/pulsarchain/bridge/v1/query.proto), read
 // over gRPC via pulsar-chain-client's generated codecs — the same transport
 // and endpoint (PULSAR_GRPC_ENDPOINT) as the validator set and the
 // vote-extension reads, so the chain is one dependency, not two:
-// - Query/LatestValidActionHashes {} -> { start_mina_height,
-//   latest_fetched_mina_height, valid_action_hashes,
-//   valid_action_hashes_cosmos_block_height }. The batch covers the Mina
+// - Query/LatestActionHashes {} -> { start_mina_height,
+//   latest_fetched_mina_height, action_hashes,
+//   action_hashes_cosmos_block_height }. The batch covers the Mina
 //   interval (start_mina_height, latest_fetched_mina_height]; the hashes are
 //   decimal field elements in append order — under the v2 convention one
 //   VERDICT leaf per SCANNED action, approved or not, so the list mirrors the
 //   L1 action queue position for position; the cosmos height is the block
 //   whose state holds this batch. int64s arrive as strings (forceLong=string).
-//   P6 renames the hash field on the chain side — over binary protobuf a
-//   renamed (re-tagged) field decodes as EMPTY rather than failing loudly,
-//   and the fold verification below is what catches that: zero leaves cannot
-//   fold rootBefore into a root that moved.
+//   The chain renamed this query from LatestValidActionHashes (P6, landed as
+//   5a1013a) because the list was never only the VALID actions — a node still
+//   serving the old name answers the new method with UNIMPLEMENTED, which
+//   classifyGrpcFault turns into a wire-spec strike, and field-level drift
+//   (proto renames keep the tags, so a re-tagged field decodes as EMPTY
+//   rather than failing loudly) is what the fold verification below catches:
+//   zero leaves cannot fold rootBefore into a root that moved.
 // - Query/ActionsReducedRoot {} -> { actions_reduced_root }, a decimal field
 //   element (the keeper renders it with mina-signer-go's FieldElement.String).
 //   Under the redesigned leaf it is the cumulative approval-cursor fold
@@ -134,11 +137,11 @@ function classifyGrpcFault(
                 `(no pruning) or reconcile the missing approvals manually. ` +
                 `If the SAME query also fails without a height pin, the node ` +
                 `does not serve it at all — fix the spec block in ` +
-                `validActions.ts instead.`,
+                `actionHashes.ts instead.`,
         );
     return new ApprovalWireSpecError(
         `${message} — this node does not serve the query named in the wire ` +
-            `spec at the top of validActions.ts (a node older than the ` +
+            `spec at the top of actionHashes.ts (a node older than the ` +
             `x/bridge query set, or a chain without the module).`,
     );
 }
@@ -206,23 +209,23 @@ const NO_PUSH_COSMOS_HEIGHT = 0n;
  * keeps the earliest start), so one cosmos height always maps to exactly one
  * verifiable root transition.
  */
-export interface ValidActionsBatch {
+export interface ActionsBatch {
     startMinaHeight: bigint;
     latestFetchedMinaHeight: bigint;
     cosmosBlockHeight: bigint;
-    validActionHashes: string[];
+    actionHashes: string[];
 }
 
-export async function fetchValidActionsBatch(
+export async function fetchActionsBatch(
     atCosmosHeight?: number,
-): Promise<ValidActionsBatch> {
+): Promise<ActionsBatch> {
     let data;
     try {
-        data = await fetchLatestValidActionHashes(getClient(), atCosmosHeight);
+        data = await fetchLatestActionHashes(getClient(), atCosmosHeight);
     } catch (error) {
         throw classifyGrpcFault(
             error,
-            "Query/LatestValidActionHashes",
+            "Query/LatestActionHashes",
             atCosmosHeight,
         );
     }
@@ -233,10 +236,10 @@ export async function fetchValidActionsBatch(
     // guard is for the taxonomy, not the codec: a malformed value must strike
     // as a spec violation, never escape as a bare TypeError the worker would
     // wrap transient and retry forever.
-    const hashes: unknown = data.valid_action_hashes ?? [];
+    const hashes: unknown = data.action_hashes ?? [];
     if (!Array.isArray(hashes))
         throw new ApprovalWireSpecError(
-            `LatestValidActionHashes valid_action_hashes is not an array: ` +
+            `LatestActionHashes action_hashes is not an array: ` +
                 `got ${JSON.stringify(hashes)}`,
         );
     return {
@@ -249,11 +252,11 @@ export async function fetchValidActionsBatch(
             "latest_fetched_mina_height",
         ),
         cosmosBlockHeight: decodeInt64(
-            data.valid_action_hashes_cosmos_block_height,
-            "valid_action_hashes_cosmos_block_height",
+            data.action_hashes_cosmos_block_height,
+            "action_hashes_cosmos_block_height",
         ),
-        validActionHashes: hashes.map((hash) =>
-            decodeFieldElement(hash, "valid_action_hashes entry"),
+        actionHashes: hashes.map((hash) =>
+            decodeFieldElement(hash, "action_hashes entry"),
         ),
     };
 }
@@ -284,10 +287,10 @@ export async function fetchActionsReducedRoot(
  * cumulative root is kept alongside the batch.
  */
 interface VerifiedBatch {
-    batch: ValidActionsBatch;
+    batch: ActionsBatch;
     /** Cumulative root before this push (decimal). */
     rootBefore: string;
-    /** folds[i] = cumulative root after folding validActionHashes[0..i]. */
+    /** folds[i] = cumulative root after folding actionHashes[0..i]. */
     folds: string[];
 }
 
@@ -337,7 +340,7 @@ export function resetVerifiedBatchCache(): void {
  * validators already signed. The fold is the v2 approval-cursor fold — the
  * SAME foldApprovalCursor the reduce circuit runs per batch slot.
  */
-async function verifyBatch(batch: ValidActionsBatch): Promise<VerifiedBatch> {
+async function verifyBatch(batch: ActionsBatch): Promise<VerifiedBatch> {
     const height = Number(batch.cosmosBlockHeight);
     // The cached batch, not the one just fetched, is the verified one — a node
     // that answers differently for a height it already proved must not slip an
@@ -359,7 +362,7 @@ async function verifyBatch(batch: ValidActionsBatch): Promise<VerifiedBatch> {
     ]);
     const folds: string[] = [];
     let running = Field(rootBefore);
-    for (const leaf of batch.validActionHashes) {
+    for (const leaf of batch.actionHashes) {
         running = foldApprovalCursor(running, Field(leaf));
         folds.push(running.toString());
     }
@@ -384,7 +387,7 @@ async function verifyBatch(batch: ValidActionsBatch): Promise<VerifiedBatch> {
                     `manually.`,
             );
         throw new ApprovalIntegrityError(
-            `Valid-actions batch at cosmos height ${height} does not fold ` +
+            `Actions batch at cosmos height ${height} does not fold ` +
                 `root ${rootBefore} into on-chain root ${rootAtHeight} ` +
                 `(folded ${folded}) — this node served a hash list the chain ` +
                 `did not commit at that height.`,
@@ -392,11 +395,11 @@ async function verifyBatch(batch: ValidActionsBatch): Promise<VerifiedBatch> {
     }
     const verified: VerifiedBatch = { batch, rootBefore, folds };
     cacheVerifiedBatch(verified);
-    logger.debug("Valid-actions push verified", {
+    logger.debug("Actions push verified", {
         cosmosBlockHeight: height,
         minaRange: `(${batch.startMinaHeight}, ${batch.latestFetchedMinaHeight}]`,
-        hashCount: batch.validActionHashes.length,
-        event: "valid_actions_push_verified",
+        hashCount: batch.actionHashes.length,
+        event: "actions_push_verified",
     });
     return verified;
 }
@@ -441,7 +444,7 @@ export interface ApprovalPushSlice {
 export async function collectApprovalLeaves(
     approvalCursor: string,
 ): Promise<ApprovalPushSlice[]> {
-    let batch = await fetchValidActionsBatch();
+    let batch = await fetchActionsBatch();
     if (batch.cosmosBlockHeight === NO_PUSH_COSMOS_HEIGHT) {
         if (approvalCursor === EMPTY_ACTIONS_REDUCED_ROOT) return [];
         throw new ApprovalHistoryPrunedError(
@@ -470,7 +473,7 @@ export async function collectApprovalLeaves(
                 ? -1
                 : verified.folds.indexOf(approvalCursor);
         if (verified.rootBefore === approvalCursor || at !== -1) {
-            const leaves = verified.batch.validActionHashes.slice(at + 1);
+            const leaves = verified.batch.actionHashes.slice(at + 1);
             if (leaves.length > 0)
                 slices.unshift({
                     cosmosBlockHeight: Number(batch.cosmosBlockHeight),
@@ -482,7 +485,7 @@ export async function collectApprovalLeaves(
 
         slices.unshift({
             cosmosBlockHeight: Number(batch.cosmosBlockHeight),
-            leaves: verified.batch.validActionHashes,
+            leaves: verified.batch.actionHashes,
             rootAfter: rootAfter(verified),
         });
 
@@ -496,7 +499,7 @@ export async function collectApprovalLeaves(
                     `node retaining the pre-genesis history, or manually.`,
             );
 
-        const previous = await fetchValidActionsBatch(previousBlock);
+        const previous = await fetchActionsBatch(previousBlock);
         if (previous.cosmosBlockHeight === NO_PUSH_COSMOS_HEIGHT)
             throw new ApprovalHistoryPrunedError(
                 `The contract's approvalCursor ${approvalCursor} was not ` +
@@ -513,7 +516,7 @@ export async function collectApprovalLeaves(
         // together would produce a leaf slice no signed root backs.
         if (previous.latestFetchedMinaHeight !== batch.startMinaHeight)
             throw new ApprovalIntegrityError(
-                `Valid-actions batches do not meet: the batch at cosmos ` +
+                `Actions batches do not meet: the batch at cosmos ` +
                     `height ${batch.cosmosBlockHeight} starts at Mina height ` +
                     `${batch.startMinaHeight}, but the batch visible one ` +
                     `block earlier ends at ` +

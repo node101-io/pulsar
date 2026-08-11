@@ -9,7 +9,7 @@ import type {
 import type { QueryVoteExtBodyByHeightResponse } from "./generated/pulsarchain/abci/query.js";
 import type {
     QueryActionsReducedRootResponse,
-    QueryLatestValidActionHashesResponse,
+    QueryLatestActionHashesResponse,
 } from "./generated/pulsarchain/bridge/v1/query.js";
 import type { QueryVoteExtensionsResponse } from "./generated/pulsarchain/votepersistence/v1/query.js";
 import type { QueryGetValidatorSetWithMinaKeysResponse } from "./generated/pulsarchain/keyregistry/v1/query.js";
@@ -30,7 +30,7 @@ export type {
     GetLatestValidatorSetResponse,
     GetValidatorSetByHeightResponse,
     QueryActionsReducedRootResponse,
-    QueryLatestValidActionHashesResponse,
+    QueryLatestActionHashesResponse,
     QueryVoteExtBodyByHeightResponse,
     QueryVoteExtensionsResponse,
     QueryGetValidatorSetWithMinaKeysResponse,

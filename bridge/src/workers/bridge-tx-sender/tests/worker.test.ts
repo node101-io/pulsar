@@ -128,7 +128,7 @@ vi.mock("../../../services/mina/client.js", () => ({
 // The approval walk is an IO boundary. The error classes must be the SAME
 // objects the worker instanceof-checks (and throws itself), so the factory
 // defines them and the test imports them back from the mocked module.
-vi.mock("../../../services/pulsar/validActions.js", () => ({
+vi.mock("../../../services/pulsar/actionHashes.js", () => ({
     collectApprovalLeaves: mockCollectApprovalLeaves,
     ApprovalIntegrityError: class ApprovalIntegrityError extends Error {},
     ApprovalWireSpecError: class ApprovalWireSpecError extends Error {},
@@ -167,7 +167,7 @@ import {
     ApprovalHistoryPrunedError,
     ApprovalIntegrityError,
     ApprovalWireSpecError,
-} from "../../../services/pulsar/validActions.js";
+} from "../../../services/pulsar/actionHashes.js";
 import {
     PulsarAction,
     PulsarAuth,
