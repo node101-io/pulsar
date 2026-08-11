@@ -128,7 +128,7 @@ One MongoDB collection:
 
 **`src/services/pulsar/`**
 
-**`validActions.ts`** — The verdict-leaf walk. Holds the gRPC wire spec in one block (the single adjust point if the chain moves it), decodes decimal field elements and quoted int64s strictly, and exposes `collectApprovalLeaves(approvalCursor)`: the ordered slice of v2 verdict leaves extending the contract's cursor to the chain's tip, grouped per push. Every push is fold-verified against the on-chain `actions_reduced_root` transition before it contributes leaves — see [Approval Flow](#approval-flow).
+**`actionHashes.ts`** — The verdict-leaf walk. Holds the gRPC wire spec in one block (the single adjust point if the chain moves it), decodes decimal field elements and quoted int64s strictly, and exposes `collectApprovalLeaves(approvalCursor)`: the ordered slice of v2 verdict leaves extending the contract's cursor to the chain's tip, grouped per push. Every push is fold-verified against the on-chain `actions_reduced_root` transition before it contributes leaves — see [Approval Flow](#approval-flow).
 
 **`voteExtensions.ts`** — On-demand signed-root reads. `findSignedRootAtOrBeyond(coveringHeight, validatorSetRoot)` tries a pinned read at the covering height first (oldest usable root — shortest approval tail), then falls back to the latest signed root (`tip − VOTE_EXT_PERSISTENCE_LAG`), which always exists while the chain is alive. A record is usable only if its signature window was not missed AND its body carries the contract's validator-set root — a root signed by any other set can never satisfy the quorum circuit. Fetching and byte→field conventions live in `pulsar-chain-client` (`fetchSignedVoteExtension`: `AbciQuery.VoteExtBodyByHeight(H+2)` + `VotePersistence.VoteExtensions` pinned at `H+3`), shared with the prover, so they exist exactly once.
 
@@ -300,23 +300,25 @@ This section describes what the bridge actually runs.
 **The verdict is the chain's, and it is derived, not chosen.** For every action the Pulsar chain scans off the L1 queue — approved or not — it appends one **v2 verdict leaf** to a cumulative hash chain:
 
 ```
-leaf  = PoseidonHashWithPrefix("pulsar_bridge_action_v2",
+leaf  = PoseidonHashWithPrefix("pulsar_bridge_action_v1",
           [approved, account.x, account.isOdd, type, amount])
-fold  = PoseidonHashWithPrefix("pulsar_bridge_actions_root_v2", [root, leaf])
+fold  = PoseidonHashWithPrefix("pulsar_bridge_actions_root_v1", [root, leaf])
 ```
+
+The prefix STRINGS are `_v1` on the wire: the chain kept the v1 prefix strings for the redesigned leaf (a fresh testnet has no old v1-shaped data to collide with), so "v2" names our leaf-shape redesign, not the prefix bytes — see `contracts/src/utils/pulsarActionLeaf.ts`.
 
 Because the chain scans strictly forward in queue order and appends for *every* scanned action, its leaf chain is a position-for-position mirror of the L1 action queue. There is no Mina block height anywhere in the protocol — the leaf keys on the action's own fields (the action's **account**, not the zkApp fee payer) plus one verdict bit. The bridge-side mirror is single-sourced in `contracts/src/utils/pulsarActionLeaf.ts` (`hashPulsarActionLeafV2` + `foldApprovalCursor`, both provable), pinned digit-for-digit by Go-generated vectors.
 
 **`approvalCursor` (contract slot 4)** is the contract's prefix cursor into that chain: the fold of every verdict leaf whose action the contract has consumed. `reduce` folds one leaf per consumed batch slot under the same `isDummy` guard that advances `actionState`, so the two cursors are one counter in two encodings and cannot drift. The quorum proof then requires the batch-end cursor, extended by the tail, to reach an `actions_reduced_root` that ≥2/3 of the contract's committed validator set signed in a real vote extension. With the actions pinned by Mina consensus and the terminal root pinned by the quorum signature, the verdict vector is the only free input to the fold — exactly one vector reaches a signed root: the chain's own. An approved action in the batch MUST be paid (folding it unapproved diverges the cursor); an action left out stays queued. There is no third outcome, and no silent loss.
 
-### The wire: `LatestValidActionHashes` + `ActionsReducedRoot`
+### The wire: `LatestActionHashes` + `ActionsReducedRoot`
 
-The chain serves two x/bridge queries the bridge reads over gRPC — the same `PULSAR_GRPC_ENDPOINT`, generated codecs and historical-height metadata as every other chain read; `src/services/pulsar/validActions.ts` holds the response shapes and the fault taxonomy in one block — the single adjust point if the chain moves them:
+The chain serves two x/bridge queries the bridge reads over gRPC — the same `PULSAR_GRPC_ENDPOINT`, generated codecs and historical-height metadata as every other chain read; `src/services/pulsar/actionHashes.ts` holds the response shapes and the fault taxonomy in one block — the single adjust point if the chain moves them:
 
 ```
-GET /node101-io/pulsar-chain/bridge/v1/latest_valid_action_hashes
+GET /node101-io/pulsar-chain/bridge/v1/latest_action_hashes
 -> { start_mina_height, latest_fetched_mina_height,
-     valid_action_hashes, valid_action_hashes_cosmos_block_height }
+     action_hashes, action_hashes_cosmos_block_height }
 
 GET /node101-io/pulsar-chain/bridge/v1/actions_reduced_root
 -> { actions_reduced_root }
@@ -375,7 +377,7 @@ Failures are charged to the queue front (`txAttemptActionState`), not to a job: 
 | Signed root newer than the walked leaf list | `TransientReduceError` | a push landed between the leaf walk and the vote-extension read — re-walk next attempt |
 | Reconstruction mismatch (refold ∉ 5-slot history) | strike | deterministic bad archive data |
 | Approval fold mismatch, non-meeting batches, or the leaf walk and the pinned vote extension disagreeing about the same height (`ApprovalIntegrityError`) | strike | data inconsistent with the on-chain `actions_reduced_root` transitions |
-| Wire response contradicts the gRPC wire spec (`ApprovalWireSpecError`) | strike | deterministic decode/shape fault (non-decimal field element, HTML 200, renamed field) or an unpinned request refused — needs the spec block in `validActions.ts` adjusted or the node upgraded, not a retry |
+| Wire response contradicts the gRPC wire spec (`ApprovalWireSpecError`) | strike | deterministic decode/shape fault (non-decimal field element, HTML 200, renamed field) or an unpinned request refused — needs the spec block in `actionHashes.ts` adjusted or the node upgraded, not a retry |
 | Cursor out of reach (`ApprovalHistoryPrunedError`) | strike | pruned pinned read, a never-pushed chain under a non-zero cursor, a zero-height restart, or the walk reaching the initial bridge state — the message says which, and which remedy (archive node, manual reconciliation, or governance `MsgRebaseActionsRoot`) |
 | Chain leaf matches neither verdict of the action at its position (`BuildVerdictBatch`) | strike | chain/L1 divergence — a batch across it could never prove; remedy is a governance rebase |
 | Signed voting power below 2/3 even counting every persisted signature | strike | proving would fail in-circuit after minutes — failed fast instead |
