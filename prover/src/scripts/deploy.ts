@@ -30,6 +30,7 @@ import {
     setMinaNetwork,
     SettlementContract,
     MultisigVerifierProgram,
+    SettleAttestProgram,
     ApprovalTailProgram,
     ApprovalQuorumProgram,
     ActionStackProgram,
@@ -83,6 +84,8 @@ async function main() {
     console.log("Compiling ZK programs (this can take several minutes)…");
     await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
     console.log("MultisigVerifierProgram done.");
+    await SettleAttestProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+    console.log("SettleAttestProgram done.");
     await ApprovalTailProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
     console.log("ApprovalTailProgram done.");
     await ApprovalQuorumProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });

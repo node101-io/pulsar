@@ -1,5 +1,9 @@
 import { fetchAccount, Mina, PrivateKey, Transaction } from "o1js";
-import { SettlementProof, waitForTransaction } from "pulsar-contracts";
+import {
+    GenerateSettleAttestProof,
+    SettlementProof,
+    waitForTransaction,
+} from "pulsar-contracts";
 
 import logger from "../../common/logger.js";
 import { getContractBlockHeight, type MinaClientContext } from "./client.js";
@@ -35,10 +39,13 @@ export async function proveSettlementTx(
 
     await fetchAccount({ publicKey: senderPublicKey });
 
+    // The settle branch verifies the small SettleAttest adapter, not the
+    // settlement proof itself (o1js wrap-bug workaround — SettleAttest.ts).
+    const attestProof = await GenerateSettleAttestProof(proof);
     const tx = await Mina.transaction(
         { sender: senderPublicKey, fee },
         async () => {
-            await ctx.settlementContract.settle(proof);
+            await ctx.settlementContract.settle(proof.publicInput, attestProof);
         },
     );
 
