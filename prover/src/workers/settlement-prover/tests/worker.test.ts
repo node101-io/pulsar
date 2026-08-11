@@ -17,6 +17,7 @@ vi.mock("pulsar-contracts", () => ({
         fromJSON: vi.fn(async () => ({})),
     },
     MultisigVerifierProgram: { compile: vi.fn(async () => ({})) },
+    SettleAttestProgram: { compile: vi.fn(async () => ({})) },
     ApprovalTailProgram: { compile: vi.fn(async () => ({})) },
     ApprovalQuorumProgram: { compile: vi.fn(async () => ({})) },
     ActionStackProgram: { compile: vi.fn(async () => ({})) },

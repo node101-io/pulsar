@@ -35,6 +35,7 @@ vi.mock("o1js", () => ({
 
 vi.mock("pulsar-contracts", () => ({
     SettlementProof: {},
+    GenerateSettleAttestProof: vi.fn(async () => ({})),
     waitForTransaction: vi.fn(),
 }));
 
