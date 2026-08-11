@@ -48,9 +48,12 @@ vi.mock("../../../common/logger.js", () => ({
     },
 }));
 
-import { proveSettlementTx, sendProvedSettlement } from "../settlement.js";
+import {
+    proveSettlementTx,
+    broadcastProvedSettlement,
+    fetchFeePayerLedgerNonce,
+} from "../settlement.js";
 import { getContractBlockHeight } from "../client.js";
-import { waitForTransaction } from "pulsar-contracts";
 import { Transaction } from "o1js";
 
 const mockCtx = {
@@ -60,7 +63,7 @@ const mockCtx = {
     endpoint: "http://localhost:8080",
 };
 const mockProof = {} as any;
-// sendProvedSettlement rewrites feePayer.body.nonce before re-signing
+// broadcastProvedSettlement rewrites feePayer.body.nonce before re-signing
 const PROVED_TX_JSON = '{"zkappCommand":{},"feePayer":{"body":{"nonce":"0"}}}';
 
 describe("mina settlement - proveSettlementTx", () => {
@@ -107,111 +110,69 @@ describe("mina settlement - proveSettlementTx", () => {
     });
 });
 
-describe("mina settlement - sendProvedSettlement", () => {
+describe("mina settlement - broadcastProvedSettlement", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         process.env.MINA_PRIVATE_KEY = "EKtest";
     });
 
-    it("skips send when contract is already past epochLastPulsarBlock", async () => {
-        vi.mocked(getContractBlockHeight).mockResolvedValue(100);
-
-        await sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80);
-
-        expect(waitForTransaction).not.toHaveBeenCalled();
-    });
-
-    it("skips send when contract is exactly at epochLastPulsarBlock", async () => {
-        vi.mocked(getContractBlockHeight).mockResolvedValue(80);
-
-        await sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80);
-
-        expect(waitForTransaction).not.toHaveBeenCalled();
-    });
-
     it("throws when MINA_PRIVATE_KEY is not set", async () => {
-        vi.mocked(getContractBlockHeight).mockResolvedValue(0);
         delete process.env.MINA_PRIVATE_KEY;
 
         await expect(
-            sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80),
+            broadcastProvedSettlement(PROVED_TX_JSON, 7, 80),
         ).rejects.toThrow("MINA_PRIVATE_KEY is not set");
     });
 
-    it("sends TX and returns on inclusion success", async () => {
-        vi.mocked(getContractBlockHeight).mockResolvedValue(0);
-        vi.mocked(waitForTransaction).mockResolvedValue({
-            success: true,
-            failureReason: null,
-        });
-
-        await sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80);
+    it("signs with the given nonce and returns the tx hash", async () => {
+        const hash = await broadcastProvedSettlement(PROVED_TX_JSON, 7, 80);
 
         expect(Transaction.fromJSON).toHaveBeenCalledWith({
             zkappCommand: {},
-            // nonce refreshed from the current on-chain account (mocked as "5")
-            feePayer: { body: { nonce: "5" } },
+            // the PIPELINE's nonce, not the ledger's — sends run ahead of
+            // inclusion, so the caller decides the nonce
+            feePayer: { body: { nonce: "7" } },
         });
-        expect(waitForTransaction).toHaveBeenCalledWith(
-            "tx-hash-123",
-            mockCtx.endpoint,
+        expect(hash).toBe("tx-hash-123");
+    });
+
+    it("does not wait for inclusion", async () => {
+        await broadcastProvedSettlement(PROVED_TX_JSON, 7, 80);
+
+        // no polling dependency in scope: broadcast returns after send()
+        expect(mockTx.sign).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws when the node rejects the broadcast", async () => {
+        mockTx.sign.mockReturnValueOnce({
+            send: vi.fn().mockResolvedValue({
+                hash: "tx-hash-123",
+                status: "rejected",
+                errors: ["Invalid_nonce"],
+            }),
+        } as any);
+
+        await expect(
+            broadcastProvedSettlement(PROVED_TX_JSON, 7, 80),
+        ).rejects.toThrow("Settlement broadcast rejected");
+    });
+});
+
+describe("mina settlement - fetchFeePayerLedgerNonce", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        process.env.MINA_PRIVATE_KEY = "EKtest";
+    });
+
+    it("returns the ledger nonce as a number", async () => {
+        await expect(fetchFeePayerLedgerNonce()).resolves.toBe(5);
+    });
+
+    it("throws when MINA_PRIVATE_KEY is not set", async () => {
+        delete process.env.MINA_PRIVATE_KEY;
+
+        await expect(fetchFeePayerLedgerNonce()).rejects.toThrow(
+            "MINA_PRIVATE_KEY is not set",
         );
-        expect(waitForTransaction).toHaveBeenCalledTimes(1);
-    });
-
-    it("retries after TX rejection and succeeds on second attempt", async () => {
-        vi.mocked(getContractBlockHeight).mockResolvedValue(0);
-        vi.mocked(waitForTransaction)
-            .mockResolvedValueOnce({ success: false, failureReason: "rejected" })
-            .mockResolvedValueOnce({ success: true, failureReason: null });
-
-        await sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80);
-
-        expect(waitForTransaction).toHaveBeenCalledTimes(2);
-    });
-
-    it("stops re-sending when the epoch settles during a retry", async () => {
-        // First send's inclusion poll fails (e.g. transient endpoint error),
-        // but the tx actually lands — the retry must detect the advanced
-        // contract state and NOT send a duplicate.
-        vi.mocked(getContractBlockHeight)
-            .mockResolvedValueOnce(0) // entry check: not settled yet
-            .mockResolvedValueOnce(80); // re-check on attempt 2: settled
-        vi.mocked(waitForTransaction).mockResolvedValue({
-            success: false,
-            failureReason: "Max attempts reached",
-        });
-
-        await sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80);
-
-        expect(waitForTransaction).toHaveBeenCalledTimes(1);
-        expect(getContractBlockHeight).toHaveBeenCalledTimes(2);
-    });
-
-    it("throws after MAX_RETRY_COUNT consecutive rejections", async () => {
-        vi.mocked(getContractBlockHeight).mockResolvedValue(0);
-        vi.mocked(waitForTransaction).mockResolvedValue({
-            success: false,
-            failureReason: "rejected",
-        });
-
-        await expect(
-            sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80),
-        ).rejects.toThrow("Settlement send failed after 3 attempts for block 80");
-
-        expect(waitForTransaction).toHaveBeenCalledTimes(3);
-    });
-
-    it("retries after TX send error and throws when all attempts fail", async () => {
-        vi.mocked(getContractBlockHeight).mockResolvedValue(0);
-        vi.mocked(Transaction.fromJSON).mockImplementation(() => {
-            throw new Error("network error");
-        });
-
-        await expect(
-            sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80),
-        ).rejects.toThrow("Settlement send failed after 3 attempts for block 80");
-
-        expect(waitForTransaction).not.toHaveBeenCalled();
     });
 });

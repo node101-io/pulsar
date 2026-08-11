@@ -1,38 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { PROOF_EPOCH_SIZE, SETTLER_WINDOW } from "../../../config/constants.js";
 import { epochLastPulsarBlock } from "../../../common/epoch.js";
 
 vi.mock("../../../db/models/ProofEpoch.js", () => ({
     ProofEpochModel: {
         findOne: vi.fn(),
-        findOneAndUpdate: vi.fn(),
+        countDocuments: vi.fn(),
         updateOne: vi.fn(),
     },
 }));
 
-vi.mock("../../../db/models/Block.js", () => ({
-    BlockModel: {
-        deleteMany: vi.fn(async () => ({ deletedCount: 0 })),
-    },
-}));
-
-vi.mock("../../../db/models/Proof.js", () => ({
-    ProofModel: {
-        deleteMany: vi.fn(async () => ({ deletedCount: 0 })),
-    },
-}));
-
-vi.mock("o1js", () => ({
-    PublicKey: {
-        fromBase58: vi.fn(() => ({})),
-    },
-}));
-
-vi.mock("../../../services/mina/client.js", () => ({
-    initMinaClientContext: vi.fn(async () => ({ network: "lightnet" })),
+vi.mock("../../../db/models/MinaState.js", () => ({
+    getLastSentNonce: vi.fn(),
+    saveLastSentNonce: vi.fn(),
 }));
 
 vi.mock("../../../services/mina/settlement.js", () => ({
-    sendProvedSettlement: vi.fn(),
+    broadcastProvedSettlement: vi.fn(),
+    fetchFeePayerLedgerNonce: vi.fn(),
+}));
+
+vi.mock("../finalize.js", () => ({
+    finalizeSettledEpoch: vi.fn(),
 }));
 
 vi.mock("../../../common/logger.js", () => ({
@@ -45,160 +34,178 @@ vi.mock("../../../common/logger.js", () => ({
 }));
 
 import { ProofEpochModel } from "../../../db/models/ProofEpoch.js";
-import { ProofModel } from "../../../db/models/Proof.js";
-import { sendProvedSettlement } from "../../../services/mina/settlement.js";
+import {
+    getLastSentNonce,
+    saveLastSentNonce,
+} from "../../../db/models/MinaState.js";
+import {
+    broadcastProvedSettlement,
+    fetchFeePayerLedgerNonce,
+} from "../../../services/mina/settlement.js";
+import { finalizeSettledEpoch } from "../finalize.js";
 import { worker } from "../worker.js";
 
-describe("settler worker", () => {
+const HEIGHT = 100;
+
+/** findOne answers: first call = the epoch, second call = its predecessor. */
+function mockEpochAndPredecessor(epoch: any, predecessor: any) {
+    vi.mocked(ProofEpochModel.findOne)
+        .mockResolvedValueOnce(epoch)
+        .mockResolvedValueOnce(predecessor);
+}
+
+describe("settler worker (pipelined send)", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        process.env.CONTRACT_ADDRESS = "B62qtest";
-        process.env.MINA_NETWORK = "lightnet";
+        vi.mocked(ProofEpochModel.countDocuments).mockResolvedValue(0);
+        vi.mocked(getLastSentNonce).mockResolvedValue(null);
+        vi.mocked(fetchFeePayerLedgerNonce).mockResolvedValue(3);
+        vi.mocked(broadcastProvedSettlement).mockResolvedValue("tx-hash-abc");
     });
 
     it("throws when epoch not found", async () => {
         vi.mocked(ProofEpochModel.findOne).mockResolvedValue(null as any);
 
-        await expect(worker({ height: 10 })).rejects.toThrow(
-            "ProofEpoch at height 10 not found.",
+        await expect(worker({ height: HEIGHT })).rejects.toThrow(
+            `ProofEpoch at height ${HEIGHT} not found.`,
         );
     });
 
-    it("skips when epoch is already done", async () => {
+    it("is a no-op when the epoch is no longer claimed (stale job)", async () => {
         vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 10,
-            kind: "done",
-            provedTxJson: "someJson",
+            height: HEIGHT,
+            kind: "txSent",
+            provedTxJson: "json",
         } as any);
 
-        await worker({ height: 10 });
+        await worker({ height: HEIGHT });
 
-        expect(sendProvedSettlement).not.toHaveBeenCalled();
+        expect(broadcastProvedSettlement).not.toHaveBeenCalled();
+        expect(ProofEpochModel.updateOne).not.toHaveBeenCalled();
     });
 
-    it("skips send and marks done when provedTxJson is null (pre-settled on Mina)", async () => {
+    it("finalizes without sending when the epoch was pre-settled during proving", async () => {
         vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
+            height: HEIGHT,
             kind: "txSending",
             provedTxJson: null,
         } as any);
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({} as any);
 
-        await worker({ height: 16 });
+        await worker({ height: HEIGHT });
 
-        expect(sendProvedSettlement).not.toHaveBeenCalled();
-        expect(ProofEpochModel.findOneAndUpdate).toHaveBeenCalledWith(
-            { height: 16, kind: { $in: ["txSending", "settlement"] } },
-            { $set: { kind: "done" } },
+        expect(finalizeSettledEpoch).toHaveBeenCalledWith(HEIGHT);
+        expect(broadcastProvedSettlement).not.toHaveBeenCalled();
+    });
+
+    it("throws when the predecessor is neither settled nor in flight", async () => {
+        mockEpochAndPredecessor(
+            { height: HEIGHT, kind: "txSending", provedTxJson: "json" },
+            { height: HEIGHT - PROOF_EPOCH_SIZE, kind: "settlement" },
+        );
+
+        await expect(worker({ height: HEIGHT })).rejects.toThrow(
+            `Cannot send epoch ${HEIGHT}`,
+        );
+        expect(broadcastProvedSettlement).not.toHaveBeenCalled();
+    });
+
+    it("sends when the predecessor is in flight (txSent)", async () => {
+        mockEpochAndPredecessor(
+            { height: HEIGHT, kind: "txSending", provedTxJson: "json" },
+            { height: HEIGHT - PROOF_EPOCH_SIZE, kind: "txSent" },
+        );
+
+        await worker({ height: HEIGHT });
+
+        expect(broadcastProvedSettlement).toHaveBeenCalledTimes(1);
+    });
+
+    it("sends when the predecessor document is missing (first epoch or reaped)", async () => {
+        mockEpochAndPredecessor(
+            { height: HEIGHT, kind: "txSending", provedTxJson: "json" },
+            null,
+        );
+
+        await worker({ height: HEIGHT });
+
+        expect(broadcastProvedSettlement).toHaveBeenCalledWith(
+            "json",
+            3, // lastSentNonce null -> seeded from the ledger
+            epochLastPulsarBlock(HEIGHT),
         );
     });
 
-    it("calls sendProvedSettlement with correct provedTxJson and epochLastPulsarBlock", async () => {
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "txSending",
-            provedTxJson: "theProvedJson",
-        } as any);
-        vi.mocked(sendProvedSettlement).mockResolvedValue(undefined);
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({} as any);
-
-        await worker({ height: 16 });
-
-        expect(sendProvedSettlement).toHaveBeenCalledWith(
-            expect.anything(),
-            "theProvedJson",
-            // epoch 16 spans blocks 16..47, so settling it lands at 47
-            epochLastPulsarBlock(16),
+    it("returns the claim when the send window is full", async () => {
+        mockEpochAndPredecessor(
+            { height: HEIGHT, kind: "txSending", provedTxJson: "json" },
+            null,
         );
-    });
-
-    it("marks epoch as done after successful send", async () => {
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "txSending",
-            provedTxJson: "theProvedJson",
-        } as any);
-        vi.mocked(sendProvedSettlement).mockResolvedValue(undefined);
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({} as any);
-
-        await worker({ height: 16 });
-
-        expect(ProofEpochModel.findOneAndUpdate).toHaveBeenCalledWith(
-            { height: 16, kind: { $in: ["txSending", "settlement"] } },
-            { $set: { kind: "done" } },
+        vi.mocked(ProofEpochModel.countDocuments).mockResolvedValue(
+            SETTLER_WINDOW,
         );
-    });
 
-    it("prunes the settled epoch's proofs and clears the heavy fields", async () => {
-        const proofA = "proofIdA";
-        const proofB = "proofIdB";
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "txSending",
-            provedTxJson: "theProvedJson",
-        } as any);
-        vi.mocked(sendProvedSettlement).mockResolvedValue(undefined);
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({
-            proofs: [proofA, null, proofB],
-        } as any);
+        await worker({ height: HEIGHT });
 
-        await worker({ height: 16 });
-
-        expect(ProofModel.deleteMany).toHaveBeenCalledWith({
-            _id: { $in: [proofA, proofB] },
-        });
+        expect(broadcastProvedSettlement).not.toHaveBeenCalled();
         expect(ProofEpochModel.updateOne).toHaveBeenCalledWith(
-            { height: 16 },
-            { $set: { proofs: [], provedTxJson: null } },
+            { height: HEIGHT, kind: "txSending" },
+            { $set: { kind: "settlement" } },
         );
     });
 
-    it("skips the proof delete when the epoch has no stored proofs", async () => {
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "txSending",
-            provedTxJson: "theProvedJson",
-        } as any);
-        vi.mocked(sendProvedSettlement).mockResolvedValue(undefined);
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({} as any);
+    it("advances past the ledger nonce while txs are in flight", async () => {
+        mockEpochAndPredecessor(
+            { height: HEIGHT, kind: "txSending", provedTxJson: "json" },
+            null,
+        );
+        vi.mocked(fetchFeePayerLedgerNonce).mockResolvedValue(3);
+        vi.mocked(getLastSentNonce).mockResolvedValue(7); // pipeline is ahead
 
-        await worker({ height: 16 });
+        await worker({ height: HEIGHT });
 
-        expect(ProofModel.deleteMany).not.toHaveBeenCalled();
+        expect(broadcastProvedSettlement).toHaveBeenCalledWith(
+            "json",
+            8, // max(ledger 3, lastSent 7 + 1)
+            epochLastPulsarBlock(HEIGHT),
+        );
+        expect(saveLastSentNonce).toHaveBeenCalledWith(8);
+    });
+
+    it("records the sent tx on the epoch", async () => {
+        mockEpochAndPredecessor(
+            { height: HEIGHT, kind: "txSending", provedTxJson: "json" },
+            null,
+        );
+
+        await worker({ height: HEIGHT });
+
         expect(ProofEpochModel.updateOne).toHaveBeenCalledWith(
-            { height: 16 },
-            { $set: { proofs: [], provedTxJson: null } },
+            { height: HEIGHT, kind: "txSending" },
+            {
+                $set: {
+                    kind: "txSent",
+                    sentTxHash: "tx-hash-abc",
+                    sentNonce: 3,
+                    sentAt: expect.any(Date),
+                },
+            },
         );
     });
 
-    it("throws when epoch cannot be marked done", async () => {
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "txSending",
-            provedTxJson: "theProvedJson",
-        } as any);
-        vi.mocked(sendProvedSettlement).mockResolvedValue(undefined);
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue(null as any);
-
-        await expect(worker({ height: 16 })).rejects.toThrow(
-            "Proof epoch at height 16 not found or not in txSending/settlement state.",
+    it("leaves the epoch claimed when the broadcast throws (master resets it)", async () => {
+        mockEpochAndPredecessor(
+            { height: HEIGHT, kind: "txSending", provedTxJson: "json" },
+            null,
         );
-    });
-
-    it("propagates error from sendProvedSettlement without marking done", async () => {
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "txSending",
-            provedTxJson: "theProvedJson",
-        } as any);
-        vi.mocked(sendProvedSettlement).mockRejectedValue(
-            new Error("Settlement send failed after 3 attempts for block 23"),
+        vi.mocked(broadcastProvedSettlement).mockRejectedValue(
+            new Error("Settlement broadcast rejected by the node"),
         );
 
-        await expect(worker({ height: 16 })).rejects.toThrow(
-            "Settlement send failed after 3 attempts for block 23",
+        await expect(worker({ height: HEIGHT })).rejects.toThrow(
+            "broadcast rejected",
         );
 
-        expect(ProofEpochModel.findOneAndUpdate).not.toHaveBeenCalled();
+        expect(saveLastSentNonce).not.toHaveBeenCalled();
+        expect(ProofEpochModel.updateOne).not.toHaveBeenCalled();
     });
 });

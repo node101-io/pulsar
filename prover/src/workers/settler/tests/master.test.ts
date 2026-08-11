@@ -1,45 +1,61 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { MASTER_SLEEP_INTERVAL_MS } from "../../../config/constants.js";
+import {
+    PROOF_EPOCH_SIZE,
+    SETTLER_STALL_TIMEOUT_MS,
+} from "../../../config/constants.js";
 
 vi.mock("../../../db/index.js", () => ({
     ProofEpochModel: {
+        find: vi.fn(),
         findOne: vi.fn(),
         findOneAndUpdate: vi.fn(),
         updateOne: vi.fn(),
         updateMany: vi.fn(),
-        exists: vi.fn(),
+        countDocuments: vi.fn(),
     },
-    incrementProofEpochFailCount: vi.fn(),
+}));
+
+vi.mock("../../../db/models/MinaState.js", () => ({
+    resetLastSentNonce: vi.fn(),
 }));
 
 vi.mock("../../queue.js", () => ({
     settlerQ: {
         add: vi.fn(),
-        getJobCounts: vi.fn().mockResolvedValue({ waiting: 0, active: 0, delayed: 0 }),
+        getJobCounts: vi.fn(),
     },
 }));
 
-vi.mock("../redis.js", () => ({
+vi.mock("../../redis.js", () => ({
     connection: {},
+}));
+
+vi.mock("o1js", () => ({
+    PublicKey: { fromBase58: vi.fn(() => ({})) },
+}));
+
+vi.mock("pulsar-contracts", () => ({
+    checkZkappTransaction: vi.fn(),
+}));
+
+vi.mock("../../../services/mina/client.js", () => ({
+    initMinaClientContext: vi.fn(async () => ({
+        network: "lightnet",
+        endpoint: "http://localhost:8080",
+    })),
+    getContractBlockHeight: vi.fn(),
+}));
+
+vi.mock("../finalize.js", () => ({
+    finalizeSettledEpoch: vi.fn(),
 }));
 
 vi.mock("../worker.js", () => ({
     worker: vi.fn(),
 }));
 
-vi.mock("o1js", () => ({
-    PublicKey: {
-        fromBase58: vi.fn(() => ({})),
-    },
-}));
-
-vi.mock("../../../services/mina/client.js", () => ({
-    initMinaClientContext: vi.fn(async () => ({ network: "lightnet" })),
-    getContractBlockHeight: vi.fn(async () => 0),
-}));
-
 vi.mock("../../../common/sleep.js", () => ({
-    sleep: vi.fn(),
+    sleep: vi.fn(async () => {}),
 }));
 
 vi.mock("../../../common/logger.js", () => ({
@@ -52,119 +68,233 @@ vi.mock("../../../common/logger.js", () => ({
 }));
 
 import { ProofEpochModel } from "../../../db/index.js";
+import { resetLastSentNonce } from "../../../db/models/MinaState.js";
 import { settlerQ } from "../../queue.js";
-import { sleep } from "../../../common/sleep.js";
+import { checkZkappTransaction } from "pulsar-contracts";
 import { getContractBlockHeight } from "../../../services/mina/client.js";
+import { finalizeSettledEpoch } from "../finalize.js";
 import { SettlerMaster } from "../master.js";
 
-describe("settler master", () => {
+const H = 1000; // contract block height for most tests
+
+/** Runs one handleTask tick on a fresh master. */
+async function tick() {
+    const master = new SettlerMaster();
+    // handleTask is protected; the test drives exactly one tick
+    await (master as any).handleTask();
+}
+
+function mockSorted(mockFn: any, result: any) {
+    mockFn.mockReturnValueOnce({ sort: vi.fn().mockResolvedValue(result) });
+}
+
+describe("settler master (pipeline tick)", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         process.env.CONTRACT_ADDRESS = "B62qtest";
         process.env.MINA_NETWORK = "lightnet";
+        vi.mocked(getContractBlockHeight).mockResolvedValue(H);
+        // defaults: nothing passed, nothing in flight, empty queue
+        vi.mocked(ProofEpochModel.find).mockReturnValue({
+            sort: vi.fn().mockResolvedValue([]),
+        } as any);
+        vi.mocked(ProofEpochModel.findOne).mockReturnValue({
+            sort: vi.fn().mockResolvedValue(null),
+        } as any);
+        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue(
+            null as any,
+        );
+        vi.mocked(ProofEpochModel.countDocuments).mockResolvedValue(0);
         vi.mocked(settlerQ.getJobCounts).mockResolvedValue({
             waiting: 0,
             active: 0,
             delayed: 0,
         } as any);
+    });
+
+    it("finalizes every epoch the contract has passed", async () => {
+        const passed = [
+            { height: H - 2 * PROOF_EPOCH_SIZE + 1, kind: "txSent" },
+            { height: H - PROOF_EPOCH_SIZE + 1, kind: "settlement" },
+        ];
+        mockSorted(vi.mocked(ProofEpochModel.find), passed);
+
+        await tick();
+
+        expect(finalizeSettledEpoch).toHaveBeenCalledTimes(2);
+        expect(finalizeSettledEpoch).toHaveBeenCalledWith(passed[0].height);
+        expect(finalizeSettledEpoch).toHaveBeenCalledWith(passed[1].height);
+    });
+
+    it("resets the pipeline tail when the head tx died past the stall timeout", async () => {
+        const headHeight = H + 1;
+        vi.mocked(ProofEpochModel.findOne)
+            // stall check: oldest txSent, sent long ago
+            .mockReturnValueOnce({
+                sort: vi.fn().mockResolvedValue({
+                    height: headHeight,
+                    kind: "txSent",
+                    sentTxHash: "dead-tx",
+                    sentAt: new Date(Date.now() - SETTLER_STALL_TIMEOUT_MS - 1000),
+                }),
+            } as any);
+        vi.mocked(checkZkappTransaction).mockResolvedValue({
+            success: false,
+            failureReason: [["Account_app_state_precondition_unsatisfied"]],
+        } as any);
         vi.mocked(ProofEpochModel.updateMany).mockResolvedValue({
-            modifiedCount: 0,
-        } as any);
-    });
-
-    it("queues settler job when epoch in settlement state found", async () => {
-        vi.mocked(ProofEpochModel.exists).mockResolvedValue({ _id: 1 } as any);
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({
-            height: 20,
-            kind: "settlement",
+            modifiedCount: 3,
         } as any);
 
-        const m = new SettlerMaster() as any;
-        await m.handleTask();
+        await tick();
 
-        expect(settlerQ.add).toHaveBeenCalledWith("settler", {
-            height: 20,
-        });
-        expect(sleep).not.toHaveBeenCalled();
-    });
-
-    // Settlement is strictly sequential: an epoch at height H starts from block
-    // H-1, and the contract only accepts a proof starting at its current
-    // blockHeight. Claiming any other epoch produces a transaction the contract
-    // must reject, after a full proving cycle.
-    it("claims only the epoch at contractBlockHeight + 1", async () => {
-        vi.mocked(ProofEpochModel.exists).mockResolvedValue({ _id: 1 } as any);
-        vi.mocked(getContractBlockHeight).mockResolvedValue(33);
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({
-            height: 34,
-            kind: "settlement",
-        } as any);
-
-        const m = new SettlerMaster() as any;
-        await m.handleTask();
-
-        const [filter] = vi.mocked(ProofEpochModel.findOneAndUpdate).mock
-            .calls[0];
-        expect(filter).toMatchObject({ height: { $eq: 34 } });
-    });
-
-    it("sleeps when the next epoch in sequence is not ready", async () => {
-        vi.mocked(ProofEpochModel.exists).mockResolvedValue({ _id: 1 } as any);
-        vi.mocked(getContractBlockHeight).mockResolvedValue(33);
-        // A later epoch is settlement-ready, but 34 is not — nothing is claimed.
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue(
-            null as any,
+        expect(ProofEpochModel.updateMany).toHaveBeenCalledWith(
+            { kind: "txSent", height: { $gte: headHeight } },
+            {
+                $set: {
+                    kind: "settlement",
+                    sentTxHash: null,
+                    sentNonce: null,
+                    sentAt: null,
+                },
+            },
         );
-
-        const m = new SettlerMaster() as any;
-        await m.handleTask();
-
-        expect(settlerQ.add).not.toHaveBeenCalled();
-        expect(sleep).toHaveBeenCalledWith(MASTER_SLEEP_INTERVAL_MS);
+        expect(resetLastSentNonce).toHaveBeenCalled();
+        // reset ends the tick — no new claim until the next one
+        expect(ProofEpochModel.findOneAndUpdate).not.toHaveBeenCalled();
     });
 
-    it("sleeps when no epoch in settlement state", async () => {
-        vi.mocked(ProofEpochModel.exists).mockResolvedValue(null as any);
+    it("re-arms the stall timer instead of resetting when the head tx is included", async () => {
+        const headHeight = H + 1;
+        vi.mocked(ProofEpochModel.findOne)
+            .mockReturnValueOnce({
+                sort: vi.fn().mockResolvedValue({
+                    height: headHeight,
+                    kind: "txSent",
+                    sentTxHash: "slow-but-alive",
+                    sentAt: new Date(Date.now() - SETTLER_STALL_TIMEOUT_MS - 1000),
+                }),
+            } as any)
+            // send phase: highest pipelined epoch
+            .mockReturnValueOnce({
+                sort: vi.fn().mockResolvedValue(null),
+            } as any);
+        vi.mocked(checkZkappTransaction).mockResolvedValue({
+            success: true,
+            failureReason: null,
+        } as any);
 
-        const m = new SettlerMaster() as any;
-        await m.handleTask();
+        await tick();
 
-        expect(settlerQ.add).not.toHaveBeenCalled();
-        expect(sleep).toHaveBeenCalledWith(MASTER_SLEEP_INTERVAL_MS);
+        expect(ProofEpochModel.updateMany).not.toHaveBeenCalled();
+        expect(resetLastSentNonce).not.toHaveBeenCalled();
+        expect(ProofEpochModel.updateOne).toHaveBeenCalledWith(
+            { height: headHeight },
+            { $set: { sentAt: expect.any(Date) } },
+        );
     });
 
-    it("waits for the in-flight tx instead of claiming a new epoch", async () => {
+    it("does not touch a young in-flight tx", async () => {
+        vi.mocked(ProofEpochModel.findOne)
+            .mockReturnValueOnce({
+                sort: vi.fn().mockResolvedValue({
+                    height: H + 1,
+                    kind: "txSent",
+                    sentTxHash: "fresh-tx",
+                    sentAt: new Date(),
+                }),
+            } as any)
+            .mockReturnValueOnce({
+                sort: vi.fn().mockResolvedValue(null),
+            } as any);
+
+        await tick();
+
+        expect(checkZkappTransaction).not.toHaveBeenCalled();
+        expect(ProofEpochModel.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("claims the successor of the highest in-flight epoch", async () => {
+        const highestSent = H + 1 + PROOF_EPOCH_SIZE;
+        vi.mocked(ProofEpochModel.findOne)
+            // stall check: nothing old
+            .mockReturnValueOnce({
+                sort: vi.fn().mockResolvedValue(null),
+            } as any)
+            // send phase: highest pipelined
+            .mockReturnValueOnce({
+                sort: vi.fn().mockResolvedValue({
+                    height: highestSent,
+                    kind: "txSent",
+                }),
+            } as any);
+        vi.mocked(ProofEpochModel.countDocuments).mockResolvedValue(2);
+        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({
+            height: highestSent + PROOF_EPOCH_SIZE,
+        } as any);
+
+        await tick();
+
+        expect(ProofEpochModel.findOneAndUpdate).toHaveBeenCalledWith(
+            {
+                kind: { $eq: "settlement" },
+                height: { $eq: highestSent + PROOF_EPOCH_SIZE },
+            },
+            { $set: { kind: "txSending" } },
+            { returnDocument: "before" },
+        );
+        expect(settlerQ.add).toHaveBeenCalledWith("settler", {
+            height: highestSent + PROOF_EPOCH_SIZE,
+        });
+    });
+
+    it("claims contract height + 1 when nothing is in flight", async () => {
+        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({
+            height: H + 1,
+        } as any);
+
+        await tick();
+
+        expect(ProofEpochModel.findOneAndUpdate).toHaveBeenCalledWith(
+            expect.objectContaining({ height: { $eq: H + 1 } }),
+            expect.anything(),
+            expect.anything(),
+        );
+        expect(settlerQ.add).toHaveBeenCalledWith("settler", { height: H + 1 });
+    });
+
+    it("does not claim when the window is full", async () => {
+        vi.mocked(ProofEpochModel.countDocuments).mockResolvedValue(5);
+
+        await tick();
+
+        expect(ProofEpochModel.findOneAndUpdate).not.toHaveBeenCalled();
+        expect(settlerQ.add).not.toHaveBeenCalled();
+    });
+
+    it("does not claim while a settler job is already queued", async () => {
         vi.mocked(settlerQ.getJobCounts).mockResolvedValue({
             waiting: 1,
             active: 0,
             delayed: 0,
         } as any);
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 20,
-            kind: "txSending",
-        } as any);
 
-        const m = new SettlerMaster() as any;
-        await m.handleTask();
+        await tick();
 
-        expect(ProofEpochModel.updateMany).not.toHaveBeenCalled();
+        expect(ProofEpochModel.findOneAndUpdate).not.toHaveBeenCalled();
         expect(settlerQ.add).not.toHaveBeenCalled();
-        expect(sleep).toHaveBeenCalledWith(MASTER_SLEEP_INTERVAL_MS);
     });
 
-    it("rolls back kind to settlement when queue add fails", async () => {
-        vi.mocked(ProofEpochModel.exists).mockResolvedValue({ _id: 1 } as any);
+    it("returns the claim when enqueueing fails", async () => {
         vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({
-            height: 20,
-            kind: "settlement",
+            height: H + 1,
         } as any);
-        vi.mocked(settlerQ.add).mockRejectedValueOnce(new Error("queue error"));
+        vi.mocked(settlerQ.add).mockRejectedValue(new Error("redis down"));
 
-        const m = new SettlerMaster() as any;
-        await expect(m.handleTask()).rejects.toThrow("queue error");
+        await expect(tick()).rejects.toThrow("redis down");
 
         expect(ProofEpochModel.updateOne).toHaveBeenCalledWith(
-            { height: 20, kind: "txSending" },
+            { height: H + 1, kind: "txSending" },
             { $set: { kind: "settlement" } },
         );
     });
