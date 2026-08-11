@@ -3,6 +3,7 @@ import { PublicKey } from "o1js";
 import logger from "../../common/logger.js";
 import { ProofEpochModel } from "../../db/models/ProofEpoch.js";
 import { BlockModel } from "../../db/models/Block.js";
+import { ProofModel } from "../../db/models/Proof.js";
 import { ProofKind } from "../../common/types.js";
 import {
     type MinaClientContext,
@@ -98,4 +99,26 @@ async function setProofEpochDone(height: number) {
         deletedCount: deleted.deletedCount,
         event: "settler_blocks_deleted",
     });
+
+    // Settled proofs are dead weight; the TTL index stays only as the safety
+    // net for epochs that never reach this point.
+    const proofIds = (result.proofs ?? []).filter((id) => id !== null);
+    const prunedProofs =
+        proofIds.length > 0
+            ? await ProofModel.deleteMany({ _id: { $in: proofIds } })
+            : { deletedCount: 0 };
+
+    await ProofEpochModel.updateOne(
+        { height },
+        { $set: { proofs: [], provedTxJson: null } },
+    );
+
+    logger.info(
+        `Pruned ${prunedProofs.deletedCount} proofs for settled epoch at height ${height}`,
+        {
+            epochHeight: height,
+            deletedCount: prunedProofs.deletedCount,
+            event: "settler_proofs_pruned",
+        },
+    );
 }

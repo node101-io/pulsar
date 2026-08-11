@@ -5,11 +5,18 @@ vi.mock("../../../db/models/ProofEpoch.js", () => ({
     ProofEpochModel: {
         findOne: vi.fn(),
         findOneAndUpdate: vi.fn(),
+        updateOne: vi.fn(),
     },
 }));
 
 vi.mock("../../../db/models/Block.js", () => ({
     BlockModel: {
+        deleteMany: vi.fn(async () => ({ deletedCount: 0 })),
+    },
+}));
+
+vi.mock("../../../db/models/Proof.js", () => ({
+    ProofModel: {
         deleteMany: vi.fn(async () => ({ deletedCount: 0 })),
     },
 }));
@@ -38,6 +45,7 @@ vi.mock("../../../common/logger.js", () => ({
 }));
 
 import { ProofEpochModel } from "../../../db/models/ProofEpoch.js";
+import { ProofModel } from "../../../db/models/Proof.js";
 import { sendProvedSettlement } from "../../../services/mina/settlement.js";
 import { worker } from "../worker.js";
 
@@ -118,6 +126,48 @@ describe("settler worker", () => {
         expect(ProofEpochModel.findOneAndUpdate).toHaveBeenCalledWith(
             { height: 16, kind: { $in: ["txSending", "settlement"] } },
             { $set: { kind: "done" } },
+        );
+    });
+
+    it("prunes the settled epoch's proofs and clears the heavy fields", async () => {
+        const proofA = "proofIdA";
+        const proofB = "proofIdB";
+        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
+            height: 16,
+            kind: "txSending",
+            provedTxJson: "theProvedJson",
+        } as any);
+        vi.mocked(sendProvedSettlement).mockResolvedValue(undefined);
+        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({
+            proofs: [proofA, null, proofB],
+        } as any);
+
+        await worker({ height: 16 });
+
+        expect(ProofModel.deleteMany).toHaveBeenCalledWith({
+            _id: { $in: [proofA, proofB] },
+        });
+        expect(ProofEpochModel.updateOne).toHaveBeenCalledWith(
+            { height: 16 },
+            { $set: { proofs: [], provedTxJson: null } },
+        );
+    });
+
+    it("skips the proof delete when the epoch has no stored proofs", async () => {
+        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
+            height: 16,
+            kind: "txSending",
+            provedTxJson: "theProvedJson",
+        } as any);
+        vi.mocked(sendProvedSettlement).mockResolvedValue(undefined);
+        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({} as any);
+
+        await worker({ height: 16 });
+
+        expect(ProofModel.deleteMany).not.toHaveBeenCalled();
+        expect(ProofEpochModel.updateOne).toHaveBeenCalledWith(
+            { height: 16 },
+            { $set: { proofs: [], provedTxJson: null } },
         );
     });
 
