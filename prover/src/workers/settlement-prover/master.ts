@@ -19,7 +19,17 @@ import { worker as processSettlementProof } from "./worker.js";
 import { sleep } from "../../common/sleep.js";
 import logger from "../../common/logger.js";
 
-const EXCLUDED_KINDS: ProofKind[] = ["txProving", "settlement", "txSending", "done"];
+// Every kind at or past tx proving. "txSent" matters: a broadcast epoch still
+// holds its root proof, and reclaiming it here re-proved and re-sent the same
+// settle with a fresh nonce — every duplicate then failed its preconditions
+// on-chain and burned its fee (live incident: nonces 13/14/17 mirroring 11/16).
+const EXCLUDED_KINDS: ProofKind[] = [
+    "txProving",
+    "settlement",
+    "txSending",
+    "txSent",
+    "done",
+];
 
 export class SettlementProverMaster extends Master<SettlementProverJob> {
     constructor() {

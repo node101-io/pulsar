@@ -97,7 +97,9 @@ describe("settlement-prover master", () => {
         expect(filter).toEqual({
             [`proofs.${PROOF_EPOCH_SETTLEMENT_INDEX}`]: { $ne: null },
             kind: {
-                $nin: ["txProving", "settlement", "txSending", "done"],
+                // txSent included: reclaiming a broadcast epoch re-proved and
+                // re-sent the same settle, burning a fee per duplicate
+                $nin: ["txProving", "settlement", "txSending", "txSent", "done"],
             },
         });
         expect(options).toMatchObject({ sort: { height: 1 } });
