@@ -309,15 +309,57 @@ describe("pulsar client", () => {
             );
         });
 
-        it("refuses the body-less fallback when the actions root is already non-zero", async () => {
+        it("refuses a zero actions root from the body-less fallback when the chain's root is non-zero", async () => {
             // VoteExtBodyByHeight fails transiently...
             const mockAbciClient = {
                 voteExtBodyByHeight: vi.fn((req, callback) => {
                     callback(new Error("transient unavailable"), null);
                 }),
             };
+            const mockTmClient = {
+                getBlockByHeight: vi.fn((req, callback) => {
+                    callback(null, {
+                        block: {
+                            header: {
+                                app_hash:
+                                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                            },
+                        },
+                    });
+                }),
+            };
             // ...and the previous block proves the chain's root is non-zero,
             // so defaulting to "0" would poison the signed message
+            vi.mocked(db.BlockModel.findOne).mockResolvedValue({
+                height: 99,
+                actionsReducedRoot: CHAIN_ACTIONS_ROOT_VECTOR.decimal,
+            } as any);
+
+            await expect(
+                getBlockData(
+                    mockTmClient as unknown as TendermintClient,
+                    {} as unknown as VotePersistenceClient,
+                    {} as unknown as KeyregistryClient,
+                    mockAbciClient as unknown as AbciQueryClient,
+                    100,
+                ),
+            ).rejects.toThrow(/corrupt read/);
+        });
+
+        it("refuses a zero actions root even from a SUCCESSFUL body fetch", async () => {
+            // The body arrives, but its root field is empty -> decodes to "0".
+            const mockAbciClient = {
+                voteExtBodyByHeight: vi.fn((req, callback) => {
+                    callback(null, {
+                        vote_ext_body: {
+                            next_validator_set_hash: Buffer.alloc(32, 1),
+                            current_state_root: Buffer.alloc(32, 0),
+                            current_block_height: "100",
+                            actions_reduced_root: Buffer.alloc(0),
+                        },
+                    });
+                }),
+            };
             vi.mocked(db.BlockModel.findOne).mockResolvedValue({
                 height: 99,
                 actionsReducedRoot: CHAIN_ACTIONS_ROOT_VECTOR.decimal,
@@ -331,7 +373,7 @@ describe("pulsar client", () => {
                     mockAbciClient as unknown as AbciQueryClient,
                     100,
                 ),
-            ).rejects.toThrow(/refusing the "0" fallback/);
+            ).rejects.toThrow(/corrupt read/);
         });
     });
 
