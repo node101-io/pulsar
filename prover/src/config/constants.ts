@@ -57,6 +57,13 @@ if (!Number.isFinite(SETTLER_STALL_TIMEOUT_MS) || SETTLER_STALL_TIMEOUT_MS < 60_
         `SETTLER_STALL_TIMEOUT_MS must be >= 60000, got "${process.env.SETTLER_STALL_TIMEOUT_MS}"`,
     );
 
+// Multi-instance claim recovery: a claim (processing / txProving /
+// txSending) whose document has not been touched for this long has a dead
+// owner — healthy workers refresh updatedAt well within it. Must exceed the
+// longest single proving step with margin, or the sweep steals live work.
+export const STALE_CLAIM_TIMEOUT_MS = 2 * WORKER_TIMEOUT_MS; // 10 minutes
+export const STALE_SWEEP_INTERVAL_MS = 60_000; // 1 minute
+
 // Monitor constants
 export const MAX_FAIL_COUNT = 3;
 export const MONITOR_INTERVAL_MS = 30_000; // 30 seconds

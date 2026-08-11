@@ -1,5 +1,6 @@
 import { Job, Worker } from "bullmq";
 import type { ConnectionOptions } from "bullmq";
+import { STALE_SWEEP_INTERVAL_MS } from "../config/constants.js";
 import logger from "../common/logger.js";
 
 export interface MasterConfig<JobData> {
@@ -33,6 +34,17 @@ export abstract class Master<JobData> {
     protected abstract handleTask(): Promise<void>;
 
     protected async onStartup(): Promise<void> {}
+
+    /**
+     * Periodic recovery of claims whose owner died. Overrides MUST gate on
+     * claim age (updatedAt older than STALE_CLAIM_TIMEOUT_MS): several
+     * instances of one master may share the queue, so an unconditional
+     * reset would steal work a sibling process is actively doing — the
+     * historical unconditional on-startup reset did exactly that under
+     * `pm2 scale`, and a flapping instance repeated it on every restart.
+     * Runs once right after startup and then every STALE_SWEEP_INTERVAL_MS.
+     */
+    protected async recoverStaleClaims(): Promise<void> {}
 
     protected async createWorker(
         workerId: number,
@@ -116,7 +128,25 @@ export abstract class Master<JobData> {
     async run(): Promise<never> {
         await this.onStartup();
         await this.initializeWorkers();
+        let lastSweepAt = 0;
         while (true) {
+            if (Date.now() - lastSweepAt >= STALE_SWEEP_INTERVAL_MS) {
+                lastSweepAt = Date.now();
+                try {
+                    await this.recoverStaleClaims();
+                } catch (error) {
+                    logger.error(
+                        `${this.config.workerLabel} stale-claim sweep failed`,
+                        {
+                            errorMessage:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                            event: "stale_sweep_error",
+                        },
+                    );
+                }
+            }
             await this.handleTask();
         }
     }

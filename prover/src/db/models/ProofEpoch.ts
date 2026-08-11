@@ -15,6 +15,8 @@ export interface IProofEpoch extends Document {
     sentTxHash: string | null;
     sentNonce: number | null;
     sentAt: Date | null;
+    // maintained by { timestamps: true }; the stale-claim sweep reads it
+    updatedAt: Date;
 }
 
 const ProofEpochSchema = new Schema<IProofEpoch>(

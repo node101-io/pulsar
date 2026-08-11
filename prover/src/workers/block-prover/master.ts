@@ -2,6 +2,7 @@ import {
     WORKER_COUNT,
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
+    STALE_CLAIM_TIMEOUT_MS,
     MASTER_SLEEP_INTERVAL_MS,
     BLOCK_EPOCH_SIZE,
 } from "../../config/constants.js";
@@ -40,14 +41,18 @@ export class BlockProverMaster extends Master<BlockProverJob> {
         });
     }
 
-    protected async onStartup(): Promise<void> {
+    protected async recoverStaleClaims(): Promise<void> {
+        // Healthy proving refreshes updatedAt every block (~seconds), so a
+        // quiet claim past the cutoff has a dead owner. Age-gated so that
+        // sibling instances never steal each other's live work.
+        const cutoff = new Date(Date.now() - STALE_CLAIM_TIMEOUT_MS);
         const result = await BlockEpochModel.updateMany(
-            { epochStatus: "processing" },
+            { epochStatus: "processing", updatedAt: { $lt: cutoff } },
             { $set: { epochStatus: "waiting" } },
         );
         if (result.modifiedCount > 0) {
             logger.warn(
-                `Recovered ${result.modifiedCount} stuck epoch(s) from 'processing' to 'waiting' on startup`,
+                `Recovered ${result.modifiedCount} stale 'processing' epoch(s) to 'waiting'`,
                 { count: result.modifiedCount, event: "epoch_recovery" },
             );
         }

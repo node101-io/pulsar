@@ -3,6 +3,7 @@ import {
     WORKER_COUNT,
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
+    STALE_CLAIM_TIMEOUT_MS,
     MASTER_SLEEP_INTERVAL_MS,
 } from "../../config/constants.js";
 import { ProofKind } from "../../common/types.js";
@@ -40,14 +41,18 @@ export class SettlementProverMaster extends Master<SettlementProverJob> {
         });
     }
 
-    protected async onStartup(): Promise<void> {
+    protected async recoverStaleClaims(): Promise<void> {
+        // txProving writes nothing while tx.prove() runs, so updatedAt
+        // stays at claim time — the cutoff must exceed the slowest settle
+        // proving. Age-gated so sibling instances never steal live work.
+        const cutoff = new Date(Date.now() - STALE_CLAIM_TIMEOUT_MS);
         const result = await ProofEpochModel.updateMany(
-            { kind: "txProving" as ProofKind },
+            { kind: "txProving" as ProofKind, updatedAt: { $lt: cutoff } },
             { $set: { kind: "blockProof" as ProofKind } },
         );
         if (result.modifiedCount > 0) {
             logger.warn(
-                `Recovered ${result.modifiedCount} epoch(s) stuck in 'txProving' back to 'blockProof' on startup`,
+                `Recovered ${result.modifiedCount} stale 'txProving' epoch(s) back to 'blockProof'`,
                 { count: result.modifiedCount, event: "tx_proving_recovery" },
             );
         }

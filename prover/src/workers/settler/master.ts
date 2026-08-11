@@ -4,6 +4,7 @@ import { checkZkappTransaction } from "pulsar-contracts";
 import {
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
+    STALE_CLAIM_TIMEOUT_MS,
     MASTER_SLEEP_INTERVAL_MS,
     MAX_FAIL_COUNT,
     PROOF_EPOCH_SIZE,
@@ -93,18 +94,20 @@ export class SettlerMaster extends Master<SettlerJob> {
         });
     }
 
-    protected async onStartup(): Promise<void> {
-        // A txSending claim did not survive the restart (its job may replay
-        // as a stale no-op) — hand it back so handleTask re-claims in order.
-        // txSent epochs stay: their txs live on Mina and the confirm loop
-        // picks them up, stall recovery included.
+    protected async recoverStaleClaims(): Promise<void> {
+        // A txSending claim normally resolves in seconds (BullMQ redelivers
+        // interrupted jobs and the worker re-runs them); a claim still there
+        // past the cutoff lost its job — hand it back so handleTask
+        // re-claims in order. txSent epochs are NOT touched: their txs live
+        // on Mina and the confirm loop owns them, stall recovery included.
+        const cutoff = new Date(Date.now() - STALE_CLAIM_TIMEOUT_MS);
         const result = await ProofEpochModel.updateMany(
-            { kind: "txSending" as ProofKind },
+            { kind: "txSending" as ProofKind, updatedAt: { $lt: cutoff } },
             { $set: { kind: "settlement" as ProofKind } },
         );
         if (result.modifiedCount > 0) {
             logger.warn(
-                `Returned ${result.modifiedCount} txSending epoch(s) to settlement on startup`,
+                `Returned ${result.modifiedCount} stale txSending epoch(s) to settlement`,
                 { count: result.modifiedCount, event: "settler_claim_recovery" },
             );
         }

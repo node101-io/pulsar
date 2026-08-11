@@ -13,6 +13,8 @@ export interface IBlockEpoch extends Document {
     status: BlockStatus[];
     epochStatus: BlockStatus;
     failCount: number;
+    // maintained by { timestamps: true }; the stale-claim sweep reads it
+    updatedAt: Date;
 }
 
 const BlockEpochSchema = new Schema<IBlockEpoch>(

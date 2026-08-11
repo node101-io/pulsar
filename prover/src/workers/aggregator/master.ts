@@ -3,6 +3,7 @@ import {
     WORKER_COUNT,
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
+    STALE_CLAIM_TIMEOUT_MS,
     MASTER_SLEEP_INTERVAL_MS,
 } from "../../config/constants.js";
 import {
@@ -75,15 +76,20 @@ export class AggregatorMaster extends Master<AggregatorJob> {
         });
     }
 
-    protected async onStartup(): Promise<void> {
+    protected async recoverStaleClaims(): Promise<void> {
+        // Age-gated so sibling instances never steal each other's live
+        // merges. Any slot finishing refreshes the document's updatedAt, so
+        // a slot stuck in a still-active epoch recovers only once the whole
+        // document goes quiet — delayed, never lost.
+        const cutoff = new Date(Date.now() - STALE_CLAIM_TIMEOUT_MS);
         const result = await ProofEpochModel.updateMany(
-            { status: "processing" },
+            { status: "processing", updatedAt: { $lt: cutoff } },
             { $set: { "status.$[elem]": "waiting" } },
             { arrayFilters: [{ elem: { $eq: "processing" } }] },
         );
         if (result.modifiedCount > 0) {
             logger.warn(
-                `Recovered ${result.modifiedCount} epoch(s) with stuck 'processing' aggregation slots on startup`,
+                `Recovered ${result.modifiedCount} epoch(s) with stale 'processing' aggregation slots`,
                 { count: result.modifiedCount, event: "aggregation_slot_recovery" },
             );
         }
