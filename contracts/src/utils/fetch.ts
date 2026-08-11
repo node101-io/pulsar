@@ -285,10 +285,9 @@ async function waitForTransaction(
       };
     }
   } catch (error) {
-    return {
-      success: false,
-      failureReason: `Error checking transaction: ${error}`,
-    };
+    // A failed poll (rate limit, transient network error) says nothing about
+    // the transaction itself — treating it as a rejection made callers re-send
+    // and burn fees on duplicate txs. Keep polling until maxAttempts.
   }
 
   if (maxAttempts && attempts >= maxAttempts) {
