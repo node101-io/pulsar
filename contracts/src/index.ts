@@ -55,6 +55,7 @@ import {
   ENDPOINTS,
 } from './utils/constants.js';
 import {
+  checkZkappTransaction,
   fetchActions,
   fetchRawActions,
   fetchBlockHeight,
@@ -117,6 +118,7 @@ export {
   ACTION_QUEUE_SIZE,
   APPROVAL_TAIL_CHUNK,
   ENDPOINTS,
+  checkZkappTransaction,
   fetchActions,
   fetchRawActions,
   fetchBlockHeight,

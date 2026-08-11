@@ -5,6 +5,7 @@ import { ENDPOINTS } from './constants.js';
 import { SettlementContract, SettlementEvent } from '../SettlementContract.js';
 
 export {
+  checkZkappTransaction,
   fetchActions,
   fetchRawActions,
   fetchBlockHeight,
