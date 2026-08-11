@@ -35,6 +35,28 @@ export const ANCHOR_BLOCK_HEIGHT = EPOCH_START_HEIGHT - 1;
 // queryable once the chain has produced that later block.
 export const VOTE_EXT_PERSISTENCE_LAG = 3;
 
+// Settler pipeline constants
+// Max settle txs broadcast ahead of on-chain confirmation. Settles chain by
+// nonce AND by state precondition, so several can land in one Mina block —
+// but every tx behind a failed one burns its fee, which bounds the sane
+// window. Keep well under Mina's per-account mempool limit (~10).
+// `||`, not `??`: an empty string in .env means unset.
+export const SETTLER_WINDOW = Number(process.env.SETTLER_WINDOW || 5);
+if (!Number.isInteger(SETTLER_WINDOW) || SETTLER_WINDOW < 1 || SETTLER_WINDOW > 8)
+    throw new Error(
+        `SETTLER_WINDOW must be an integer in [1, 8], got "${process.env.SETTLER_WINDOW}"`,
+    );
+// How long the oldest unconfirmed sent tx may age before the settler checks
+// its fate and, if it died, re-sends the pipeline from that point. Must
+// comfortably exceed a slow Mina block gap or healthy pipelines get reset.
+export const SETTLER_STALL_TIMEOUT_MS = Number(
+    process.env.SETTLER_STALL_TIMEOUT_MS || 20 * 60 * 1000,
+); // 20 minutes
+if (!Number.isFinite(SETTLER_STALL_TIMEOUT_MS) || SETTLER_STALL_TIMEOUT_MS < 60_000)
+    throw new Error(
+        `SETTLER_STALL_TIMEOUT_MS must be >= 60000, got "${process.env.SETTLER_STALL_TIMEOUT_MS}"`,
+    );
+
 // Monitor constants
 export const MAX_FAIL_COUNT = 3;
 export const MONITOR_INTERVAL_MS = 30_000; // 30 seconds

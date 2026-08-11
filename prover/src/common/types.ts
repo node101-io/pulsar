@@ -5,6 +5,7 @@ export type ProofKind =
     | "txProving"
     | "settlement"
     | "txSending"
+    | "txSent"
     | "done";
 export type ProofStatus = "waiting" | "processing" | "done" | "failed";
 export type BlockStatus = "waiting" | "processing" | "done" | "failed";

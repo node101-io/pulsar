@@ -10,6 +10,11 @@ export interface IProofEpoch extends Document {
     kind: ProofKind;
     failCount: number;
     provedTxJson: string | null;
+    // Set while kind === "txSent": the broadcast settle tx awaiting on-chain
+    // confirmation (confirmed by contract height, not by hash — see settler).
+    sentTxHash: string | null;
+    sentNonce: number | null;
+    sentAt: Date | null;
 }
 
 const ProofEpochSchema = new Schema<IProofEpoch>(
@@ -30,11 +35,14 @@ const ProofEpochSchema = new Schema<IProofEpoch>(
         ],
         kind: {
             type: String,
-            enum: ["blockProof", "aggregation", "txProving", "settlement", "txSending", "done"],
+            enum: ["blockProof", "aggregation", "txProving", "settlement", "txSending", "txSent", "done"],
             required: true,
         },
         failCount: { type: Number, default: 0 },
         provedTxJson: { type: String, default: null },
+        sentTxHash: { type: String, default: null },
+        sentNonce: { type: Number, default: null },
+        sentAt: { type: Date, default: null },
     },
     { timestamps: true },
 );

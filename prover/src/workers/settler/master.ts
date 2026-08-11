@@ -1,18 +1,24 @@
 import { PublicKey } from "o1js";
+import { checkZkappTransaction } from "pulsar-contracts";
 
 import {
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
     MASTER_SLEEP_INTERVAL_MS,
     MAX_FAIL_COUNT,
+    PROOF_EPOCH_SIZE,
+    SETTLER_WINDOW,
+    SETTLER_STALL_TIMEOUT_MS,
 } from "../../config/constants.js";
 import { ProofKind } from "../../common/types.js";
 import { ProofEpochModel } from "../../db/index.js";
+import { resetLastSentNonce } from "../../db/models/MinaState.js";
 import { Master } from "../master.js";
 import { settlerQ } from "../queue.js";
 import { SettlerJob } from "../types.js";
 import { connection } from "../redis.js";
 import { worker as processSettlement } from "./worker.js";
+import { finalizeSettledEpoch } from "./finalize.js";
 import { sleep } from "../../common/sleep.js";
 import logger from "../../common/logger.js";
 import {
@@ -65,7 +71,7 @@ export class SettlerMaster extends Master<SettlerJob> {
                     if (!updated) return;
 
                     if (updated.failCount >= MAX_FAIL_COUNT) {
-                        // Stale proof — re-prove with fresh nonce and reset counter
+                        // Stale proof — re-prove and reset counter
                         await ProofEpochModel.updateOne(
                             { height: job.data.height },
                             {
@@ -88,77 +94,135 @@ export class SettlerMaster extends Master<SettlerJob> {
     }
 
     protected async onStartup(): Promise<void> {
-        // Re-queue any epochs stuck in txSending without resetting kind,
-        // so the worker can confirm or re-send the tx safely
-        const stuckEpochs = await ProofEpochModel.find({
-            kind: "txSending" as ProofKind,
-        });
-        for (const epoch of stuckEpochs) {
-            await settlerQ.add("settler", { height: epoch.height });
+        // A txSending claim did not survive the restart (its job may replay
+        // as a stale no-op) — hand it back so handleTask re-claims in order.
+        // txSent epochs stay: their txs live on Mina and the confirm loop
+        // picks them up, stall recovery included.
+        const result = await ProofEpochModel.updateMany(
+            { kind: "txSending" as ProofKind },
+            { $set: { kind: "settlement" as ProofKind } },
+        );
+        if (result.modifiedCount > 0) {
             logger.warn(
-                `Re-queued stuck txSending epoch at height ${epoch.height} on startup`,
-                { epochHeight: epoch.height, event: "tx_sending_requeue" },
+                `Returned ${result.modifiedCount} txSending epoch(s) to settlement on startup`,
+                { count: result.modifiedCount, event: "settler_claim_recovery" },
             );
         }
     }
 
+    /**
+     * One pipeline tick: confirm what the chain has passed, recover a stalled
+     * head, then top up the send window by claiming the next epoch in order.
+     */
     protected async handleTask(): Promise<void> {
-        // Step 3a: is there an in-flight tx? if so, wait for it to land
+        const ctx = await getMinaContext();
+        const contractBlockHeight = await getContractBlockHeight(ctx);
+
+        // ── confirm ─────────────────────────────────────────────────────
+        // The contract's blockHeight is the single source of truth: any
+        // post-proving epoch it has passed IS settled — whoever's tx did it.
+        // Covers txSent, epochs pre-settled during proving (provedTxJson
+        // null) and claims orphaned by restarts, without touching hashes.
+        const passedEpochs = await ProofEpochModel.find({
+            kind: {
+                $in: ["settlement", "txSending", "txSent"] as ProofKind[],
+            },
+            height: { $lte: contractBlockHeight - PROOF_EPOCH_SIZE + 1 },
+        }).sort({ height: 1 });
+        for (const epoch of passedEpochs) {
+            await finalizeSettledEpoch(epoch.height);
+        }
+
+        // ── stall recovery ──────────────────────────────────────────────
+        const oldestUnconfirmed = await ProofEpochModel.findOne({
+            kind: "txSent" as ProofKind,
+        }).sort({ height: 1 });
+
+        if (
+            oldestUnconfirmed?.sentAt &&
+            Date.now() - oldestUnconfirmed.sentAt.getTime() >
+                SETTLER_STALL_TIMEOUT_MS
+        ) {
+            const verdict = await checkZkappTransaction(
+                oldestUnconfirmed.sentTxHash!,
+                ctx.endpoint,
+            ).catch(() => null);
+
+            if (verdict?.success) {
+                // Included — the contract height just hasn't reflected it
+                // yet (indexer lag). Re-arm the timer instead of resetting a
+                // healthy pipeline.
+                await ProofEpochModel.updateOne(
+                    { height: oldestUnconfirmed.height },
+                    { $set: { sentAt: new Date() } },
+                );
+            } else {
+                // Failed on-chain or vanished from the pool. Everything
+                // behind it is doomed (their preconditions chain onto it) —
+                // return the whole tail to settlement. The proofs stay
+                // valid, so recovery is re-sending in order, not re-proving.
+                const reset = await ProofEpochModel.updateMany(
+                    {
+                        kind: "txSent" as ProofKind,
+                        height: { $gte: oldestUnconfirmed.height },
+                    },
+                    {
+                        $set: {
+                            kind: "settlement" as ProofKind,
+                            sentTxHash: null,
+                            sentNonce: null,
+                            sentAt: null,
+                        },
+                    },
+                );
+                await resetLastSentNonce();
+                logger.warn(
+                    `Settle pipeline reset from epoch ${oldestUnconfirmed.height}: ` +
+                        `head tx did not land within the stall timeout`,
+                    {
+                        epochHeight: oldestUnconfirmed.height,
+                        txHash: oldestUnconfirmed.sentTxHash,
+                        resetCount: reset.modifiedCount,
+                        failureReason: verdict?.failureReason ?? "not found",
+                        event: "settler_pipeline_reset",
+                    },
+                );
+                return; // re-send from the head on the next tick
+            }
+        }
+
+        // ── send ────────────────────────────────────────────────────────
+        // One outstanding job at a time keeps sends strictly ordered; the
+        // broadcast itself is cheap, so the window still fills in seconds.
         const counts = await settlerQ.getJobCounts(
             "waiting",
             "active",
             "delayed",
         );
         const queueSize = counts.waiting + counts.active + counts.delayed;
-
-        if (queueSize === 0) {
-            await ProofEpochModel.updateMany(
-                { kind: { $eq: "txSending" as ProofKind } },
-                { $set: { kind: "settlement" as ProofKind } },
-            );
-        } else {
-            const inFlight = await ProofEpochModel.findOne({
-                kind: { $eq: "txSending" as ProofKind },
-            });
-            if (inFlight) {
-                await sleep(MASTER_SLEEP_INTERVAL_MS);
-                return;
-            }
-        }
-
-        // Fast path: any settlement-ready epochs at all?
-        const hasPending = await ProofEpochModel.exists({
-            kind: { $eq: "settlement" as ProofKind },
+        const inFlight = await ProofEpochModel.countDocuments({
+            kind: { $in: ["txSending", "txSent"] as ProofKind[] },
         });
-        if (!hasPending) {
+        if (queueSize > 0 || inFlight >= SETTLER_WINDOW) {
             await sleep(MASTER_SLEEP_INTERVAL_MS);
             return;
         }
 
-        // Step 2: what is Mina's current onchain state?
-        const ctx = await getMinaContext();
-        const contractBlockHeight = await getContractBlockHeight(ctx);
+        // The next sendable epoch continues the pipeline: the successor of
+        // the highest in-flight epoch, or — with nothing in flight — the
+        // epoch the contract expects next. Claiming anything later would
+        // break the precondition chain and burn its fee with certainty.
+        const lastPipelined = await ProofEpochModel.findOne({
+            kind: { $in: ["txSending", "txSent"] as ProofKind[] },
+        }).sort({ height: -1 });
+        const nextHeight = lastPipelined
+            ? lastPipelined.height + PROOF_EPOCH_SIZE
+            : contractBlockHeight + 1;
 
-        logger.debug("Checked on-chain settlement state", {
-            contractBlockHeight,
-            event: "settler_checked_onchain_state",
-        });
-
-        // A proof epoch at height H proves the transitions from block H-1
-        // through H-1+PROOF_EPOCH_SIZE, and `settle` requires the contract's
-        // blockHeight to equal that starting block. So at any moment exactly
-        // one epoch is settleable — the one at contractBlockHeight + 1.
-        //
-        // Matching a range instead would let the settler claim a later epoch
-        // whenever the next one is not ready yet. The contract must reject that
-        // transaction, but only after a full settlement proving cycle and three
-        // send attempts, and the epoch is then re-proved and fails again — an
-        // unbounded loop that never makes progress.
-        const nextEpochHeight = contractBlockHeight + 1;
         const epoch = await ProofEpochModel.findOneAndUpdate(
             {
                 kind: { $eq: "settlement" as ProofKind },
-                height: { $eq: nextEpochHeight },
+                height: { $eq: nextHeight },
             },
             {
                 $set: { kind: "txSending" as ProofKind },
@@ -176,6 +240,7 @@ export class SettlerMaster extends Master<SettlerJob> {
                     {
                         epochHeight: epoch.height,
                         contractBlockHeight,
+                        inFlight,
                         event: "settler_task_queued",
                     },
                 );
