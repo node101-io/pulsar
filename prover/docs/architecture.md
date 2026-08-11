@@ -433,7 +433,7 @@ The settlement-prover queries the Mina contract's current `blockHeight` before p
 
 ### Duplicate proof prevention on retry
 
-The block-prover checks whether the `ProofEpoch` already has proofs before regenerating. The aggregator checks whether an aggregation slot is already marked `done`. Both skip silently if the work was already completed in a previous attempt.
+The block-prover checks whether its OWN leaf slot in the `ProofEpoch` is already filled before regenerating (an any-slot check once marked epochs done while their own leaf was missing, wedging the proof epoch permanently — do not weaken this to `some()`). The aggregator checks whether an aggregation slot is already marked `done`. Both skip silently if the work was already completed in a previous attempt. As defense in depth, the block-prover master's sweep also re-queues any done block epoch whose leaf never reached its proof epoch (`leaf_reconciliation`).
 
 ---
 
