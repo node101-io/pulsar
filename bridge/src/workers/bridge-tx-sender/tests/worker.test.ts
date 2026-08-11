@@ -768,9 +768,14 @@ describe("worker()", () => {
     it("builds the quorum proof from the archived body, the full signature list and the tail proof", async () => {
         await worker({ fromActionState: PROCESSED });
 
-        const [cursorAfter, body, sigList, tailProof] =
+        // the program folds the batch itself, so the generator receives the
+        // batch, the verdicts and both fold start points
+        const [batch, verdicts, fromActionState, cursorBefore, body, sigList, tailProof] =
             mockGenerateApprovalQuorumProof.mock.calls[0];
-        expect(cursorAfter.toString()).toBe(END_CURSOR);
+        expect(batch).toEqual({ __mock: "batch" });
+        expect(verdicts).toEqual({ __mock: "verdicts" });
+        expect(fromActionState.toString()).toBe(PROCESSED);
+        expect(cursorBefore.toString()).toBe(CURSOR);
         // the body is rebuilt field-for-field from the archived signed root —
         // the circuit re-hashes it, so any drift fails signature verification
         expect(body.nextValidatorSetHash.toString()).toBe(MERKLE);

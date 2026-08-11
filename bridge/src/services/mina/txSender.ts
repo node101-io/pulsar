@@ -1,4 +1,4 @@
-import { Bool, fetchAccount, Mina, PrivateKey } from "o1js";
+import { Bool, fetchAccount, Field, Mina, PrivateKey } from "o1js";
 import { waitForTransaction } from "pulsar-contracts/build/src/utils/fetch.js";
 import type { ApprovalQuorumProof } from "pulsar-contracts/build/src/ApprovalQuorum.js";
 import type { ActionStackProof } from "pulsar-contracts/build/src/ActionStack.js";
@@ -17,6 +17,9 @@ export interface ReduceTxParams {
     actionStackProof: ActionStackProof;
     /** Per-slot chain verdicts (was the bridge-chosen mask). */
     verdicts: ApprovalVerdicts;
+    /** Approval cursor after the batch — the value reduce writes to slot 4;
+     * the quorum proof's commitment forces it to be the fold's real result. */
+    cursorAfter: Field;
     /** Quorum proof binding the batch-end approval cursor to a signed root. */
     approvalProof: ApprovalQuorumProof;
     /** Queue front (contract actionState) being reduced — log/telemetry only. */
@@ -33,7 +36,7 @@ export interface ReduceTxParams {
  * fold does not extend its current state.
  */
 export async function proveReduceTx(params: ReduceTxParams): Promise<string> {
-    const { ctx, batch, useActionStack, actionStackProof, verdicts, approvalProof, fromActionState } = params;
+    const { ctx, batch, useActionStack, actionStackProof, verdicts, cursorAfter, approvalProof, fromActionState } = params;
 
     const fee = env.MINA_FEE;
     const senderKey = PrivateKey.fromBase58(env.MINA_PRIVATE_KEY);
@@ -48,6 +51,7 @@ export async function proveReduceTx(params: ReduceTxParams): Promise<string> {
             useActionStack,
             actionStackProof,
             verdicts,
+            cursorAfter,
             approvalProof,
         );
     });

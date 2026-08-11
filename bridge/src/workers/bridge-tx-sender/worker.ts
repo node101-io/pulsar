@@ -3,6 +3,7 @@ import { Cache, Field, PublicKey, Signature } from "o1js";
 
 // contracts
 import { ActionStackProgram } from "pulsar-contracts/build/src/ActionStack.js";
+import { SettleAttestProgram } from "pulsar-contracts/build/src/SettleAttest.js";
 import { ApprovalQuorumProgram } from "pulsar-contracts/build/src/ApprovalQuorum.js";
 import { ApprovalTailProgram } from "pulsar-contracts/build/src/ApprovalTail.js";
 import {
@@ -107,6 +108,7 @@ export async function ensureCompiled(): Promise<void> {
         // contract verifies proofs of the settlement, quorum and stack
         // programs.
         await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
+        await SettleAttestProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
         await ApprovalTailProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
         await ApprovalQuorumProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
         await ActionStackProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
@@ -348,8 +350,15 @@ export async function worker(task: BridgeTxJob): Promise<void> {
         tailLeaves.map((leaf) => Field(leaf)),
     );
 
+    // The program folds the batch's two cursors itself (the in-contract
+    // verdict fold died with the o1js wrap bug — see ApprovalQuorum.ts), so
+    // it takes the batch and its start points; endActionState/cursorAfter
+    // are recomputed inside from the same shared helpers.
     const approvalProof = await GenerateApprovalQuorumProof(
-        endCursor,
+        batch,
+        verdicts,
+        Field(processed),
+        Field(approvalCursor),
         new VoteExtBody({
             nextValidatorSetHash: Field(signedRoot.body.nextValidatorSetHash),
             stateRootHi: Field(signedRoot.body.stateRootHi),
@@ -373,6 +382,7 @@ export async function worker(task: BridgeTxJob): Promise<void> {
         useActionStack,
         actionStackProof,
         verdicts,
+        cursorAfter: Field(endCursor),
         approvalProof,
         fromActionState: processed,
     });
