@@ -5,6 +5,7 @@ import {
   ApprovalQuorumProgram,
   ApprovalQuorumProof,
   ApprovalQuorumPublicInput,
+  reduceCommitmentHash,
 } from '../ApprovalQuorum';
 import {
   ApprovalTailProgram,
@@ -17,6 +18,8 @@ import {
 } from '../utils/generateFunctions';
 import { VoteExtBody } from '../types/voteExtBody';
 import { SignaturePublicKeyList } from '../types/signaturePubKeyList';
+import { Batch } from '../types/PulsarAction';
+import { ApprovalVerdicts } from '../types/common';
 import { VALIDATOR_NUMBER } from '../utils/constants';
 import { computeValidatorListHash } from '../utils/validatorList';
 import { foldApprovalCursor } from '../utils/pulsarActionLeaf';
@@ -98,13 +101,32 @@ function signatureList(signerIndices: number[]): SignaturePublicKeyList {
   );
 }
 
+// This suite exercises the signature/tail half of the program with an EMPTY
+// batch: the fold half is a no-op (cursorBefore == cursorAfter, action-state
+// endpoints equal), so every scenario maps unchanged onto the new public
+// input. The batch-fold half is covered end to end by the reduce-flow tests.
+const emptyBatch = Batch.empty();
+const emptyVerdicts = ApprovalVerdicts.empty();
+
+// Empty-batch commitment: action-state endpoints stay at 0 and the cursor
+// stays where it starts, so the commitment collapses to the cursor choice.
+function commitmentFor(cursorAfter: Field): Field {
+  return reduceCommitmentHash({
+    fromActionState: Field(0),
+    endActionState: Field(0),
+    cursorBefore: cursorAfter,
+    cursorAfter,
+    verdictsPacked: emptyVerdicts.toField(),
+  });
+}
+
 function publicInputFor(
   body: VoteExtBody,
   cursorAfter: Field
 ): ApprovalQuorumPublicInput {
   return new ApprovalQuorumPublicInput({
     validatorSetRoot: body.nextValidatorSetHash,
-    cursorAfter,
+    reduceCommitment: commitmentFor(cursorAfter),
   });
 }
 
@@ -206,6 +228,10 @@ describe('ApprovalQuorumProgram', () => {
       proof = (
         await ApprovalQuorumProgram.verifySignatures(
           publicInputFor(body, signedRoot),
+          emptyBatch,
+          emptyVerdicts,
+          Field(0),
+          signedRoot,
           body,
           signatureList([0, 1, 2]),
           tailAtSignedRoot
@@ -219,8 +245,8 @@ describe('ApprovalQuorumProgram', () => {
       expect(proof.publicInput.validatorSetRoot.toString()).toBe(
         quorum.fields.nextValidatorSetHash
       );
-      expect(proof.publicInput.cursorAfter.toString()).toBe(
-        quorum.fields.actionsReducedRoot
+      expect(proof.publicInput.reduceCommitment.toString()).toBe(
+        commitmentFor(signedRoot).toString()
       );
     });
 
@@ -240,6 +266,10 @@ describe('ApprovalQuorumProgram', () => {
       const proof2 = (
         await ApprovalQuorumProgram.verifySignatures(
           publicInputFor(quorumBody(), signedRoot),
+          emptyBatch,
+          emptyVerdicts,
+          Field(0),
+          signedRoot,
           quorumBody(),
           signatureList([0, 2]),
           tailAtSignedRoot
@@ -280,14 +310,17 @@ describe('ApprovalQuorumProgram', () => {
       });
 
       const proof3 = await GenerateApprovalQuorumProof(
+        emptyBatch,
+        emptyVerdicts,
+        Field(0),
         cursorAfter,
         body,
         TestUtils.GenerateSignaturePubKeyList([body.hash()], mockSigners),
         await GenerateApprovalTailProof(cursorAfter, tailLeaves)
       );
 
-      expect(proof3.publicInput.cursorAfter.toString()).toBe(
-        cursorAfter.toString()
+      expect(proof3.publicInput.reduceCommitment.toString()).toBe(
+        commitmentFor(cursorAfter).toString()
       );
       if (proofsEnabled) {
         expect(await verify(proof3, vk)).toBe(true);
@@ -300,6 +333,10 @@ describe('ApprovalQuorumProgram', () => {
       await expect(
         ApprovalQuorumProgram.verifySignatures(
           publicInputFor(quorumBody(), signedRoot),
+          emptyBatch,
+          emptyVerdicts,
+          Field(0),
+          signedRoot,
           quorumBody(),
           signatureList([1]),
           tailAtSignedRoot
@@ -321,6 +358,10 @@ describe('ApprovalQuorumProgram', () => {
       await expect(
         ApprovalQuorumProgram.verifySignatures(
           publicInputFor(body, signedRoot),
+          emptyBatch,
+          emptyVerdicts,
+          Field(0),
+          signedRoot,
           body,
           impostors,
           tailAtSignedRoot
@@ -342,6 +383,10 @@ describe('ApprovalQuorumProgram', () => {
       await expect(
         ApprovalQuorumProgram.verifySignatures(
           publicInputFor(tampered, signedRoot.add(1)),
+          emptyBatch,
+          emptyVerdicts,
+          Field(0),
+          signedRoot.add(1),
           tampered,
           signatureList([0, 1, 2]),
           tailAtSignedRootPlusOne
@@ -355,6 +400,10 @@ describe('ApprovalQuorumProgram', () => {
       await expect(
         ApprovalQuorumProgram.verifySignatures(
           publicInputFor(quorumBody(), signedRoot),
+          emptyBatch,
+          emptyVerdicts,
+          Field(0),
+          signedRoot,
           quorumBody(),
           signatureList([0, 1, 2]),
           // anchored at signedRoot + 1, cursorAfter says signedRoot
@@ -369,6 +418,10 @@ describe('ApprovalQuorumProgram', () => {
       await expect(
         ApprovalQuorumProgram.verifySignatures(
           publicInputFor(quorumBody(), signedRoot.add(1)),
+          emptyBatch,
+          emptyVerdicts,
+          Field(0),
+          signedRoot.add(1),
           quorumBody(),
           signatureList([0, 1, 2]),
           tailAtSignedRootPlusOne
@@ -385,8 +438,12 @@ describe('ApprovalQuorumProgram', () => {
         ApprovalQuorumProgram.verifySignatures(
           new ApprovalQuorumPublicInput({
             validatorSetRoot: body.nextValidatorSetHash.add(1),
-            cursorAfter: signedRoot,
+            reduceCommitment: commitmentFor(signedRoot),
           }),
+          emptyBatch,
+          emptyVerdicts,
+          Field(0),
+          signedRoot,
           body,
           signatureList([0, 1, 2]),
           tailAtSignedRoot
@@ -417,6 +474,10 @@ describe('ApprovalQuorumProgram', () => {
       await expect(
         ApprovalQuorumProgram.verifySignatures(
           publicInputFor(body, signedRoot),
+          emptyBatch,
+          emptyVerdicts,
+          Field(0),
+          signedRoot,
           body,
           SignaturePublicKeyList.fromArray(
             zeroPowerSet.map(

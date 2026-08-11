@@ -3,6 +3,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
   Bool,
+  Cache,
   Field,
   Mina,
   PrivateKey,
@@ -29,6 +30,8 @@ import { List } from '../types/common';
 import { ActionStackProgram } from '../ActionStack';
 import { ApprovalTailProgram } from '../ApprovalTail';
 import { ApprovalQuorumProgram } from '../ApprovalQuorum';
+import { SettleAttestProgram } from '../SettleAttest';
+import { GenerateSettleAttestProof } from '../utils/generateFunctions';
 import { GenerateActionStackProof } from '../utils/generateFunctions';
 import { fetchActions } from '../utils/fetch';
 import {
@@ -178,10 +181,11 @@ describe('SettlementContract tests', () => {
     settlementProof: SettlementProof
   ) {
     await fetchAccounts([zkappAddress]);
+    const attestProof = await GenerateSettleAttestProof(settlementProof);
     const tx = await Mina.transaction(
       { sender: senderKey.toPublicKey(), fee },
       async () => {
-        await zkapp.settle(settlementProof);
+        await zkapp.settle(settlementProof.publicInput, attestProof);
       }
     );
 
@@ -196,10 +200,11 @@ describe('SettlementContract tests', () => {
     expectedMsg: string = 'Transaction failed'
   ) {
     try {
+      const attestProof = await GenerateSettleAttestProof(settlementProof);
       const tx = await Mina.transaction(
         { sender: senderKey.toPublicKey(), fee },
         async () => {
-          await zkapp.settle(settlementProof);
+          await zkapp.settle(settlementProof.publicInput, attestProof);
         }
       );
       await waitTransactionAndFetchAccount(tx, [senderKey], [zkappAddress]);
@@ -348,9 +353,10 @@ describe('SettlementContract tests', () => {
             hashPulsarActionLeafV2(action, Bool(true))
           );
 
-    const { verdicts: verdictsStruct, approvalProof } =
+    const { verdicts: verdictsStruct, approvalProof, cursorAfter } =
       await TestUtils.MockApprovalQuorumProof({
         validatorSet: activeSet,
+        fromActionState: zkapp.actionState.get(),
         cursorBefore,
         batchActions,
         verdicts,
@@ -361,6 +367,7 @@ describe('SettlementContract tests', () => {
 
     return {
       cursorBefore,
+      cursorAfter,
       batchActions,
       verdicts,
       batch: Batch.fromArray(batchActions),
@@ -381,6 +388,7 @@ describe('SettlementContract tests', () => {
           witness.useActionStack,
           witness.actionStackProof,
           witness.verdictsStruct,
+          witness.cursorAfter,
           witness.approvalProof
         );
       }
@@ -390,10 +398,14 @@ describe('SettlementContract tests', () => {
     return witness;
   }
 
+  // Divergence between the signed truth and the folded batch now surfaces
+  // at quorum-proof GENERATION (the program folds the batch itself), so the
+  // default expected failure is the program's tail-terminal assertion, not
+  // a contract-side one.
   async function expectReduceToFail(
     senderKey: PrivateKey,
     overrides: ReduceOverrides = {},
-    expectedMsg: string = 'Batch verdict fold must reach the quorum-bound approval cursor'
+    expectedMsg: string = 'Tail proof must terminate at the signed actionsReducedRoot'
   ) {
     try {
       await reduce(senderKey, overrides);
@@ -513,29 +525,46 @@ describe('SettlementContract tests', () => {
       reduce: contractAnalyze.reduce.rows,
     };
 
+    // Optional compile cache for PROOFS_ENABLED runs: TEST_CACHE_DIR turns
+    // multi-minute recompiles into cache loads, so proving-path debugging can
+    // iterate on the contract without paying for the (unchanged) programs.
+    const cache = process.env.TEST_CACHE_DIR
+      ? Cache.FileSystem(process.env.TEST_CACHE_DIR)
+      : undefined;
+
     await MultisigVerifierProgram.compile({
       proofsEnabled,
+      cache,
     });
     log('MultisigVerifierProgram compiled');
+
+    await SettleAttestProgram.compile({
+      proofsEnabled,
+      cache,
+    });
+    log('SettleAttestProgram compiled');
 
     // ApprovalQuorumProgram verifies ApprovalTailProofs — tail compiles first
     await ApprovalTailProgram.compile({
       proofsEnabled,
+      cache,
     });
     log('ApprovalTailProgram compiled');
 
     await ApprovalQuorumProgram.compile({
       proofsEnabled,
+      cache,
     });
     log('ApprovalQuorumProgram compiled');
 
     await ActionStackProgram.compile({
       proofsEnabled,
+      cache,
     });
     log('ActionStackProgram compiled');
 
     if (proofsEnabled) {
-      await SettlementContract.compile();
+      await SettlementContract.compile({ cache });
       log('SettlementContract compiled');
     }
   });
