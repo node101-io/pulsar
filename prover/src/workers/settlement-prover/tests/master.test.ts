@@ -141,4 +141,18 @@ describe("settlement-prover master", () => {
         expect(settlementProverQ.add).not.toHaveBeenCalled();
         expect(sleep).toHaveBeenCalledWith(MASTER_SLEEP_INTERVAL_MS);
     });
+
+    it("recovers only stale txProving epochs (age-gated sweep)", async () => {
+        vi.mocked(ProofEpochModel.updateMany).mockResolvedValue({
+            modifiedCount: 1,
+        } as any);
+
+        const m = new SettlementProverMaster() as any;
+        await m.recoverStaleClaims();
+
+        expect(ProofEpochModel.updateMany).toHaveBeenCalledWith(
+            { kind: "txProving", updatedAt: { $lt: expect.any(Date) } },
+            { $set: { kind: "blockProof" } },
+        );
+    });
 });

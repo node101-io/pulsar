@@ -298,4 +298,18 @@ describe("settler master (pipeline tick)", () => {
             { $set: { kind: "settlement" } },
         );
     });
+
+    it("returns only stale txSending claims to settlement (age-gated sweep)", async () => {
+        vi.mocked(ProofEpochModel.updateMany).mockResolvedValue({
+            modifiedCount: 2,
+        } as any);
+
+        const master = new SettlerMaster() as any;
+        await master.recoverStaleClaims();
+
+        expect(ProofEpochModel.updateMany).toHaveBeenCalledWith(
+            { kind: "txSending", updatedAt: { $lt: expect.any(Date) } },
+            { $set: { kind: "settlement" } },
+        );
+    });
 });

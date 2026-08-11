@@ -8,6 +8,7 @@ vi.mock("../../../db/index.js", () => ({
     BlockEpochModel: {
         findOneAndUpdate: vi.fn(),
         updateOne: vi.fn(),
+        updateMany: vi.fn(),
     },
     incrementBlockEpochFailCount: vi.fn(),
 }));
@@ -95,5 +96,24 @@ describe("block-prover master", () => {
             { height: 8, epochStatus: "processing" },
             { $set: { epochStatus: "waiting" } },
         );
+    });
+
+    it("recovers only stale processing epochs (age-gated sweep)", async () => {
+        vi.mocked(BlockEpochModel.updateMany).mockResolvedValue({
+            modifiedCount: 1,
+        } as any);
+
+        const m = new BlockProverMaster() as any;
+        await m.recoverStaleClaims();
+
+        expect(BlockEpochModel.updateMany).toHaveBeenCalledWith(
+            // the age gate is what keeps sibling instances from stealing
+            // each other's live work under pm2 scale
+            { epochStatus: "processing", updatedAt: { $lt: expect.any(Date) } },
+            { $set: { epochStatus: "waiting" } },
+        );
+        const cutoff = (vi.mocked(BlockEpochModel.updateMany).mock
+            .calls[0][0] as any).updatedAt.$lt;
+        expect(cutoff.getTime()).toBeLessThan(Date.now());
     });
 });

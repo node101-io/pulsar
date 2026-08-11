@@ -125,4 +125,19 @@ describe("aggregator master", () => {
             $set: { "status.0": "waiting" },
         });
     });
+
+    it("recovers only stale processing slots (age-gated sweep)", async () => {
+        vi.mocked(ProofEpochModel.updateMany).mockResolvedValue({
+            modifiedCount: 1,
+        } as any);
+
+        const m = new AggregatorMaster() as any;
+        await m.recoverStaleClaims();
+
+        expect(ProofEpochModel.updateMany).toHaveBeenCalledWith(
+            { status: "processing", updatedAt: { $lt: expect.any(Date) } },
+            { $set: { "status.$[elem]": "waiting" } },
+            { arrayFilters: [{ elem: { $eq: "processing" } }] },
+        );
+    });
 });
