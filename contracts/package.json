@@ -43,6 +43,6 @@
   },
   "private": true,
   "dependencies": {
-    "o1js": "2.10.0-dev.be63f"
+    "o1js": "2.15.0"
   }
 }
