@@ -68,7 +68,7 @@ export class SettlementProverMaster extends Master<SettlementProverJob> {
             },
             {
                 sort: { height: 1 },
-                new: false,
+                returnDocument: "before",
             },
         );
 

@@ -89,7 +89,7 @@ export async function storeBlockInBlockEpoch(
                 [`blocks.${index}`]: blockId,
             },
         },
-        { new: true },
+        { returnDocument: "after" },
     );
 
     logger.info(

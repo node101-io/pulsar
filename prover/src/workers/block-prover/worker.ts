@@ -62,7 +62,7 @@ export async function worker(task: BlockProverJob) {
     const updatedEpoch = await BlockEpochModel.findOneAndUpdate(
         { height: epochHeight, epochStatus: "processing" as BlockStatus },
         { $set: { [`status.${blockIndex}`]: "done" as BlockStatus } },
-        { new: true },
+        { returnDocument: "after" },
     );
 
     if (!updatedEpoch) {
@@ -272,7 +272,7 @@ async function createOrUpdateProofEpoch(
     const result = await ProofEpochModel.findOneAndUpdate(
         { height: proofEpochHeight },
         { $set: { [`proofs.${leafIndex}`]: proofId } },
-        { new: true },
+        { returnDocument: "after" },
     );
 
     logger.info(

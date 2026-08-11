@@ -71,7 +71,7 @@ export async function storeBlock(block: BlockData) {
             },
             $setOnInsert: { status: "waiting" },
         },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: "after" },
     );
 
     logger.info(`Stored block at height ${block.height}.`);

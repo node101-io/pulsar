@@ -19,7 +19,7 @@ describe("db minaState utils", () => {
             expect(MinaStateModel.findOneAndUpdate).toHaveBeenCalledWith(
                 {},
                 { lastSettledPulsarBlock: 800 },
-                { upsert: true, new: true },
+                { upsert: true, returnDocument: "after" },
             );
         });
 
@@ -31,7 +31,7 @@ describe("db minaState utils", () => {
             expect(MinaStateModel.findOneAndUpdate).toHaveBeenCalledWith(
                 {},
                 { lastSettledPulsarBlock: 0 },
-                { upsert: true, new: true },
+                { upsert: true, returnDocument: "after" },
             );
         });
     });

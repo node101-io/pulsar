@@ -60,7 +60,7 @@ describe("db block utils", () => {
                 },
                 $setOnInsert: { status: "waiting" },
             }),
-            { upsert: true, new: true },
+            { upsert: true, returnDocument: "after" },
         );
     });
 

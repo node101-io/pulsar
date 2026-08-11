@@ -83,7 +83,7 @@ describe("db blockEpoch utils", () => {
         expect(BlockEpochModel.findOneAndUpdate).toHaveBeenCalledWith(
             { height: expectedEpochHeight },
             { $set: { [`blocks.2`]: blockId } },
-            { new: true },
+            { returnDocument: "after" },
         );
         expect(result).toEqual({ height: 10 });
     });

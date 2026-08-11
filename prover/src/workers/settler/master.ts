@@ -60,7 +60,7 @@ export class SettlerMaster extends Master<SettlerJob> {
                         {
                             $inc: { failCount: 1 },
                         },
-                        { new: true },
+                        { returnDocument: "after" },
                     );
                     if (!updated) return;
 
@@ -164,7 +164,7 @@ export class SettlerMaster extends Master<SettlerJob> {
                 $set: { kind: "txSending" as ProofKind },
             },
             {
-                new: false,
+                returnDocument: "before",
             },
         );
 

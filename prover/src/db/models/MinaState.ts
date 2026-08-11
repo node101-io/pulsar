@@ -24,7 +24,7 @@ export async function saveMinaState(
     await MinaStateModel.findOneAndUpdate(
         {},
         { lastSettledPulsarBlock },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: "after" },
     );
 }
 
