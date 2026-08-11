@@ -366,13 +366,13 @@ stateDiagram-v2
     aggregation --> txProving : SettlementProverMaster claims proofs filled
     blockProof --> txProving : shortcut if tree completes without update
 
-    txProving --> aggregation : restart recovery resetStuckEpochs
+    txProving --> aggregation : stale-claim sweep, owner died
     txProving --> settlement : settlement TX proved success
     txProving --> settlement : already settled on-chain provedTxJson null
 
     settlement --> txSending : SettlerMaster claims next in order
 
-    txSending --> settlement : restart recovery or send window full
+    txSending --> settlement : stale-claim sweep or send window full
     txSending --> txSent : broadcast accepted, no inclusion wait
     txSending --> done : pre-settled, no tx needed
 
@@ -388,7 +388,7 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> waiting : BlockEpoch created
     waiting --> processing : BlockProverMaster claims findOneAndUpdate atomic
-    processing --> waiting : restart recovery resetStuckEpochs
+    processing --> waiting : stale-claim sweep, owner died
     processing --> done : block-prover worker success
     processing --> failed : failCount greater than MAX_FAIL_COUNT
 ```
@@ -417,7 +417,7 @@ On startup, any epoch whose `failCount` has exceeded `MAX_FAIL_COUNT` is permane
 
 ### Restart safety
 
-On every startup, before any processor is started, stuck epoch states are reset:
+Stuck claims are recovered by a periodic **age-gated sweep** (`recoverStaleClaims`, every `STALE_SWEEP_INTERVAL_MS`, first pass right after startup): a claim is reset only when its document's `updatedAt` is older than `STALE_CLAIM_TIMEOUT_MS`, which proves its owner died — healthy workers refresh `updatedAt` well within the cutoff. The historical unconditional on-startup reset assumed a single instance per master ("if I am starting, whoever was processing is dead"); under `pm2 scale` that assumption is false and the reset stole work sibling instances were actively doing, so do not reintroduce it.
 
 | Stuck state                           | Cause                       | Reset to      |
 | ------------------------------------- | --------------------------- | ------------- |
@@ -425,7 +425,7 @@ On every startup, before any processor is started, stuck epoch states are reset:
 | `BlockEpoch.status[n] = processing`   | Crashed per-block worker    | `waiting`     |
 | `ProofEpoch.kind = txProving`         | Crashed settlement-prover   | `aggregation` |
 | `ProofEpoch.kind = txSending`         | Crashed settler             | `settlement`  |
-| `ProofEpoch.kind = txSent`            | Not stuck — survives restarts; confirmed by contract height or reset by the stall timeout | `done` / `settlement` |
+| `ProofEpoch.kind = txSent`            | Not stuck — outside the sweep; confirmed by contract height or reset by the settler's stall timeout | `done` / `settlement` |
 
 ### Max Settle Check
 
