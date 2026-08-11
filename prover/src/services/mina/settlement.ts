@@ -85,6 +85,22 @@ export async function sendProvedSettlement(
 
     for (let attempt = 1; attempt <= MAX_RETRY_COUNT; attempt++) {
         try {
+            // A retry means the previous send's fate is unknown — if it was
+            // included meanwhile, re-sending the same settle can only fail
+            // its preconditions and burn the fee.
+            if (attempt > 1) {
+                const settledBlock = await getContractBlockHeight(ctx);
+                if (settledBlock >= epochLastPulsarBlock) {
+                    logger.info("Epoch settled during retry, skipping re-send", {
+                        epochLastPulsarBlock,
+                        contractBlockHeight: settledBlock,
+                        attempt,
+                        event: "mina_settlement_settled_during_retry",
+                    });
+                    return;
+                }
+            }
+
             // refresh the fee payer nonce so the signature is valid even if
             // the account nonce changed since the TX was proved
             const senderPublicKey = sender.toPublicKey();

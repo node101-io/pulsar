@@ -170,6 +170,24 @@ describe("mina settlement - sendProvedSettlement", () => {
         expect(waitForTransaction).toHaveBeenCalledTimes(2);
     });
 
+    it("stops re-sending when the epoch settles during a retry", async () => {
+        // First send's inclusion poll fails (e.g. transient endpoint error),
+        // but the tx actually lands — the retry must detect the advanced
+        // contract state and NOT send a duplicate.
+        vi.mocked(getContractBlockHeight)
+            .mockResolvedValueOnce(0) // entry check: not settled yet
+            .mockResolvedValueOnce(80); // re-check on attempt 2: settled
+        vi.mocked(waitForTransaction).mockResolvedValue({
+            success: false,
+            failureReason: "Max attempts reached",
+        });
+
+        await sendProvedSettlement(mockCtx, PROVED_TX_JSON, 80);
+
+        expect(waitForTransaction).toHaveBeenCalledTimes(1);
+        expect(getContractBlockHeight).toHaveBeenCalledTimes(2);
+    });
+
     it("throws after MAX_RETRY_COUNT consecutive rejections", async () => {
         vi.mocked(getContractBlockHeight).mockResolvedValue(0);
         vi.mocked(waitForTransaction).mockResolvedValue({
