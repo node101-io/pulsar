@@ -16,6 +16,13 @@ vi.mock("../../../db/index.js", () => ({
     fetchBlockRange: vi.fn(),
 }));
 
+vi.mock("pulsar-contracts", () => ({
+    GeneratePulsarBlock: vi.fn(),
+    GenerateSettlementProof: vi.fn(),
+    SignaturePublicKeyList: { fromArray: vi.fn() },
+    MultisigVerifierProgram: { compile: vi.fn(async () => ({})) },
+}));
+
 vi.mock("../../../common/logger.js", () => ({
     default: {
         info: vi.fn(),
@@ -87,6 +94,35 @@ describe("block-prover worker", () => {
         expect(BlockEpochModel.findOneAndUpdate).toHaveBeenLastCalledWith(
             { height: 8 },
             { $set: { epochStatus: "done" } },
+        );
+    });
+
+    it("re-proves when its own leaf is missing even if sibling leaves exist", async () => {
+        // block epoch 18 -> leaf index 2 with EPOCH_START_HEIGHT=2
+        vi.mocked(BlockEpochModel.findOneAndUpdate).mockResolvedValue({
+            height: 18,
+            failCount: 1,
+            status: Array(8).fill("done"),
+        } as any);
+        // sibling leaves present, OWN slot (2) empty — the old any-slot
+        // check skipped here and wedged the proof epoch permanently
+        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
+            height: 2,
+            kind: "blockProof",
+            proofs: [{}, {}, null, {}],
+        } as any);
+        vi.mocked(fetchBlockRange).mockResolvedValue([] as any);
+
+        await expect(
+            worker({ height: 18, blockIndex: 7 } as any),
+        ).rejects.toThrow(/Expected .* blocks/);
+
+        // it attempted to re-prove instead of skipping
+        expect(fetchBlockRange).toHaveBeenCalled();
+        // and returned the claim on failure
+        expect(BlockEpochModel.findOneAndUpdate).toHaveBeenLastCalledWith(
+            { height: 18 },
+            { $set: { epochStatus: "waiting" } },
         );
     });
 });

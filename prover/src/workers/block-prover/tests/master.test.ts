@@ -10,6 +10,9 @@ vi.mock("../../../db/index.js", () => ({
         updateOne: vi.fn(),
         updateMany: vi.fn(),
     },
+    ProofEpochModel: {
+        find: vi.fn(),
+    },
     incrementBlockEpochFailCount: vi.fn(),
 }));
 
@@ -40,7 +43,7 @@ vi.mock("../../../common/logger.js", () => ({
     },
 }));
 
-import { BlockEpochModel } from "../../../db/index.js";
+import { BlockEpochModel, ProofEpochModel } from "../../../db/index.js";
 import { blockProverQ } from "../../queue.js";
 import { sleep } from "../../../common/sleep.js";
 import { BlockProverMaster } from "../master.js";
@@ -48,6 +51,7 @@ import { BlockProverMaster } from "../master.js";
 describe("block-prover master", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(ProofEpochModel.find).mockResolvedValue([] as any);
     });
 
     it("queues one job per block of the epoch when epoch found", async () => {
@@ -115,5 +119,37 @@ describe("block-prover master", () => {
         const cutoff = (vi.mocked(BlockEpochModel.updateMany).mock
             .calls[0][0] as any).updatedAt.$lt;
         expect(cutoff.getTime()).toBeLessThan(Date.now());
+    });
+
+    it("re-queues a done block epoch whose leaf is missing (reconciliation)", async () => {
+        vi.mocked(BlockEpochModel.updateMany).mockResolvedValue({
+            modifiedCount: 0,
+        } as any);
+        vi.mocked(ProofEpochModel.find).mockResolvedValue([
+            // leaf 1 missing; leaves 0,2,3 present
+            { height: 100, proofs: [{}, null, {}, {}, null, null, null] },
+        ] as any);
+        vi.mocked(BlockEpochModel.updateOne).mockResolvedValue({
+            modifiedCount: 1,
+        } as any);
+
+        const m = new BlockProverMaster() as any;
+        await m.recoverStaleClaims();
+
+        expect(BlockEpochModel.updateOne).toHaveBeenCalledTimes(1);
+        expect(BlockEpochModel.updateOne).toHaveBeenCalledWith(
+            {
+                height: 100 + BLOCK_EPOCH_SIZE,
+                epochStatus: "done",
+                updatedAt: { $lt: expect.any(Date) },
+            },
+            {
+                $set: {
+                    epochStatus: "waiting",
+                    status: Array(BLOCK_EPOCH_SIZE).fill("waiting"),
+                    failCount: 0,
+                },
+            },
+        );
     });
 });
