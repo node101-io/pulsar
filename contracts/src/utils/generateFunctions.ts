@@ -10,6 +10,7 @@ import {
   ApprovalQuorumProgram,
   ApprovalQuorumProof,
   ApprovalQuorumPublicInput,
+  reduceCommitmentHash,
 } from '../ApprovalQuorum.js';
 import { VoteExtBody } from '../types/voteExtBody.js';
 import {
@@ -17,10 +18,21 @@ import {
   SignaturePublicKeyMatrix,
 } from '../types/signaturePubKeyList.js';
 import { log, table } from './loggers.js';
-import { PulsarAction } from '../types/PulsarAction.js';
+import { Batch, PulsarAction } from '../types/PulsarAction.js';
+import { ApprovalVerdicts } from '../types/common.js';
+import {
+  actionListAdd,
+  emptyActionListHash,
+  merkleActionsAdd,
+} from '../types/actionHelpers.js';
+import {
+  foldApprovalCursor,
+  hashPulsarActionLeafV2,
+} from './pulsarActionLeaf.js';
 import {
   ACTION_QUEUE_SIZE,
   APPROVAL_TAIL_CHUNK,
+  BATCH_SIZE,
   SETTLEMENT_MATRIX_SIZE,
 } from './constants.js';
 import {
@@ -33,6 +45,11 @@ import {
   ApprovalTailProof,
   ApprovalTailQueue,
 } from '../ApprovalTail.js';
+import {
+  SettleAttestProgram,
+  SettleAttestProof,
+  settleAttestCommitment,
+} from '../SettleAttest.js';
 
 export {
   GenerateSettlementProof,
@@ -41,8 +58,29 @@ export {
   GenerateApprovalQuorumProof,
   GenerateActionStackProof,
   GenerateApprovalTailProof,
+  GenerateSettleAttestProof,
   GeneratePulsarBlock,
 };
+
+/**
+ * Wraps a finished settlement proof in the SettleAttest adapter (see
+ * SettleAttest.ts for why settle cannot verify SettlementProof directly).
+ */
+async function GenerateSettleAttestProof(
+  settlementProof: SettlementProof
+): Promise<SettleAttestProof> {
+  try {
+    return (
+      await SettleAttestProgram.attest(
+        settleAttestCommitment(settlementProof.publicInput),
+        settlementProof
+      )
+    ).proof;
+  } catch (error) {
+    console.error('Error generating settle attest proof:', error);
+    throw error;
+  }
+}
 
 async function GenerateSettlementProof(
   blocks: Array<Block>,
@@ -216,26 +254,61 @@ function GeneratePulsarBlock(
  * Non-signers must occupy their slots with the dummy Signature {r:1, s:1} —
  * the circuit rebuilds the validator list from all VALIDATOR_NUMBER slots.
  *
- * cursorAfter is the approval cursor the contract reaches after folding the
- * batch; tailProof (GenerateApprovalTailProof(cursorAfter, tailLeaves)) must
- * extend it to body.actionsReducedRoot — for a batch that consumes the whole
- * signed prefix, that is the empty tail, i.e.
- * GenerateApprovalTailProof(body.actionsReducedRoot, []).
+ * The program folds BOTH batch cursors itself (the in-contract verdict fold
+ * died with the o1js wrap bug — see ApprovalQuorum.ts), so this generator
+ * takes the batch and its fold endpoints:
+ * - fromActionState: the contract's actionState the batch starts from;
+ * - cursorBefore: the contract's approvalCursor;
+ * - endActionState/cursorAfter are derived in here by the same shared
+ *   helpers the program constrains against, so a mismatch is impossible by
+ *   construction rather than checked after the fact.
+ * tailProof (GenerateApprovalTailProof(cursorAfter, tailLeaves)) must extend
+ * cursorAfter to body.actionsReducedRoot — for a batch that consumes the
+ * whole signed prefix, that is the empty tail, i.e.
+ * GenerateApprovalTailProof(cursorAfter, []).
  */
 async function GenerateApprovalQuorumProof(
-  cursorAfter: Field,
+  batch: Batch,
+  verdicts: ApprovalVerdicts,
+  fromActionState: Field,
+  cursorBefore: Field,
   body: VoteExtBody,
   signaturePublicKeyList: SignaturePublicKeyList,
   tailProof: ApprovalTailProof
 ) {
+  let endActionState = fromActionState;
+  let cursorAfter = cursorBefore;
+  for (let i = 0; i < BATCH_SIZE; i++) {
+    const action = batch.actions[i];
+    if (PulsarAction.isDummy(action).toBoolean()) continue;
+    endActionState = merkleActionsAdd(
+      endActionState,
+      actionListAdd(emptyActionListHash, action)
+    );
+    cursorAfter = foldApprovalCursor(
+      cursorAfter,
+      hashPulsarActionLeafV2(action, verdicts.list[i])
+    );
+  }
+
   let proof: ApprovalQuorumProof;
   try {
     proof = (
       await ApprovalQuorumProgram.verifySignatures(
         new ApprovalQuorumPublicInput({
           validatorSetRoot: body.nextValidatorSetHash,
-          cursorAfter,
+          reduceCommitment: reduceCommitmentHash({
+            fromActionState,
+            endActionState,
+            cursorBefore,
+            cursorAfter,
+            verdictsPacked: verdicts.toField(),
+          }),
         }),
+        batch,
+        verdicts,
+        fromActionState,
+        cursorBefore,
         body,
         signaturePublicKeyList,
         tailProof
@@ -253,12 +326,19 @@ async function GenerateActionStackProof(
   actions: PulsarAction[]
 ) {
   if (actions.length === 0) {
-    // The contract ignores the proof when useActionStack is false but still
-    // verifies its shape — the dummy convention matches reduceWitness.ts and
-    // replaces a pointlessly real proveBase over an empty queue.
+    // A REAL base proof over an all-dummy queue (the ApprovalTail
+    // convention), NOT ActionStackProof.dummy: the dummy proof fails the
+    // contract wrap in-circuit ("Checked.inv" constraint in pickles
+    // wrap_main) even under verifyIf(false) — first seen live in the
+    // 2026-08-11 lightnet+chain smoke, where every batch that consumed the
+    // whole queue hit this branch and struck out. The base proof over zero
+    // real entries returns its anchor unchanged, so the contract's ignored
+    // publicInput/publicOutput stay consistent either way.
     return {
       useActionStack: Bool(false),
-      actionStackProof: await ActionStackProof.dummy(Field(0), Field(0), 1, 14),
+      actionStackProof: (
+        await ActionStackProgram.proveBase(endActionState, ActionStackQueue.empty())
+      ).proof,
     };
   }
 

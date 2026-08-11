@@ -68,6 +68,7 @@ import {
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
   GenerateApprovalQuorumProof,
+  GenerateSettleAttestProof,
   GenerateActionStackProof,
   GenerateApprovalTailProof,
   GeneratePulsarBlock,
@@ -127,6 +128,7 @@ export {
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
   GenerateApprovalQuorumProof,
+  GenerateSettleAttestProof,
   GenerateActionStackProof,
   GenerateApprovalTailProof,
   GeneratePulsarBlock,
@@ -187,4 +189,11 @@ export {
   ApprovalQuorumProof,
   ApprovalQuorumPublicInput,
   ApprovalQuorumProgram,
+  reduceCommitmentHash,
 } from './ApprovalQuorum.js';
+
+export {
+  SettleAttestProgram,
+  SettleAttestProof,
+  settleAttestCommitment,
+} from './SettleAttest.js';

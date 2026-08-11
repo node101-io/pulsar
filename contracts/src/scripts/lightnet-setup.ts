@@ -29,6 +29,7 @@ import { fileURLToPath } from 'url';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
 import { ApprovalTailProgram } from '../ApprovalTail.js';
+import { SettleAttestProgram } from '../SettleAttest.js';
 import { ApprovalQuorumProgram } from '../ApprovalQuorum.js';
 import { ActionStackProgram } from '../ActionStack.js';
 import { PulsarAuth } from '../types/PulsarAction.js';
@@ -123,6 +124,7 @@ async function main() {
   await MultisigVerifierProgram.compile({ cache });
   console.log('  MultisigVerifierProgram ✓');
   // ApprovalQuorumProgram verifies ApprovalTailProofs, so the tail compiles first
+  await SettleAttestProgram.compile({ cache });
   await ApprovalTailProgram.compile({ cache });
   console.log('  ApprovalTailProgram ✓');
   await ApprovalQuorumProgram.compile({ cache });

@@ -34,6 +34,7 @@ import { readFileSync } from 'fs';
 import { mockProve } from './mock-prove.js';
 import { SettlementContract } from '../SettlementContract.js';
 import { MultisigVerifierProgram } from '../SettlementProof.js';
+import { SettleAttestProgram } from '../SettleAttest.js';
 import { ApprovalTailProgram } from '../ApprovalTail.js';
 import { ApprovalQuorumProgram } from '../ApprovalQuorum.js';
 import { ActionStackProgram } from '../ActionStack.js';
@@ -165,6 +166,7 @@ async function main() {
   if (network !== 'lightnet') {
     console.log('\ncompiling...');
     await MultisigVerifierProgram.compile();
+    await SettleAttestProgram.compile();
     console.log('  MultisigVerifierProgram ✓');
     // ApprovalQuorumProgram verifies ApprovalTailProofs — tail first
     await ApprovalTailProgram.compile();

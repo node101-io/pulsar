@@ -14,14 +14,21 @@ import {
   Struct,
   DeployArgs,
 } from 'o1js';
-import { SettlementProof } from './SettlementProof.js';
+import { SettlementPublicInputs } from './SettlementProof.js';
+import {
+  SettleAttestProof,
+  settleAttestCommitment,
+} from './SettleAttest.js';
 import {
   AGGREGATE_THRESHOLD,
   BATCH_SIZE,
   MINIMUM_DEPOSIT_AMOUNT,
   WITHDRAW_DOWN_PAYMENT,
 } from './utils/constants.js';
-import { ApprovalQuorumProof } from './ApprovalQuorum.js';
+import {
+  ApprovalQuorumProof,
+  reduceCommitmentHash,
+} from './ApprovalQuorum.js';
 import { Batch, PulsarAction, PulsarAuth } from './types/PulsarAction.js';
 import { ApprovalVerdicts } from './types/common.js';
 import { ActionStackProof } from './ActionStack.js';
@@ -30,10 +37,6 @@ import {
   emptyActionListHash,
   merkleActionsAdd,
 } from './types/actionHelpers.js';
-import {
-  foldApprovalCursor,
-  hashPulsarActionLeafV2,
-} from './utils/pulsarActionLeaf.js';
 
 export { SettlementContract, SettlementEvent };
 
@@ -98,9 +101,26 @@ class SettlementContract extends SmartContract {
     this.approvalCursor.set(Field(0));
   }
 
+  /**
+   * Settles through the SettleAttest ADAPTER, not the settlement proof
+   * directly: a branch verifying MultisigVerifier's SettlementProof makes
+   * the reduce branch's wrap unsatisfiable on o1js 2.10–2.15 once reduce
+   * verifies the batch-folding quorum program (2026-08-11 hunt — remove
+   * either side and the other proves). The attest proof's single public
+   * field commits to all six settlement values, and the commitment
+   * recomputed here from the ARGUMENT pins them — security is unchanged,
+   * the indirection is purely a wrap-bug workaround (see SettleAttest.ts).
+   */
   @method
-  async settle(settlementProof: SettlementProof) {
-    settlementProof.verify();
+  async settle(
+    settlementPublicInput: SettlementPublicInputs,
+    attestProof: SettleAttestProof
+  ) {
+    attestProof.verify();
+    settleAttestCommitment(settlementPublicInput).assertEquals(
+      attestProof.publicInput,
+      'Attest proof must commit to these settlement values'
+    );
 
     const {
       InitialMerkleListRoot,
@@ -109,7 +129,7 @@ class SettlementContract extends SmartContract {
       NewBlockHeight,
       NewMerkleListRoot,
       NewStateRoot,
-    } = settlementProof.publicInput;
+    } = settlementPublicInput;
 
     this.blockHeight.requireEquals(InitialBlockHeight);
     this.merkleListRoot.requireEquals(InitialMerkleListRoot);
@@ -171,13 +191,24 @@ class SettlementContract extends SmartContract {
     useActionStack: Bool,
     actionStackProof: ActionStackProof,
     verdicts: ApprovalVerdicts,
+    cursorAfter: Field,
     approvalProof: ApprovalQuorumProof
   ) {
-    let approvalCursor = this.approvalCursor.getAndRequireEquals();
+    const approvalCursor = this.approvalCursor.getAndRequireEquals();
 
     let initialActionState = this.actionState.getAndRequireEquals();
     let actionState = initialActionState;
 
+    // The chain-convention verdict-leaf fold does NOT run here: computing
+    // those hashes inside a SmartContract method makes this contract's
+    // Pickles wrap unsatisfiable on o1js 2.10–2.15 (bisected empirically in
+    // the 2026-08-11 live smoke — the shapes left in this method are the
+    // ones proven to wrap). The fold lives in ApprovalQuorumProgram, and
+    // this method binds itself to it through the endpoint assertions below:
+    // the action-state fold here and the one inside the program run over
+    // batches with equal start AND end states, so by collision resistance
+    // they run over the SAME actions — and verdictsPacked pins the verdict
+    // vector those leaves commit to.
     for (let i = 0; i < BATCH_SIZE; i++) {
       const action = batch.actions[i];
       const isDummy = PulsarAction.isDummy(action);
@@ -192,28 +223,13 @@ class SettlementContract extends SmartContract {
         )
       );
 
-      // Chain cursor: one v2 verdict leaf per consumed slot, folded in
-      // lockstep — the same isDummy guard drives both cursors, so they
-      // advance by the same count and cannot drift (the
-      // alignment invariant). Dummy slots contribute to neither. The verdict is not
-      // chosen here: with the actions pinned by the action-state anchors,
-      // only the chain's own verdict vector folds to a cursor the quorum
-      // proof below can bind to a signed root.
-      const approved = verdicts.list[i];
-      const leaf = hashPulsarActionLeafV2(action, approved);
-      approvalCursor = Provable.if(
-        isDummy,
-        approvalCursor,
-        foldApprovalCursor(approvalCursor, leaf)
-      );
-
       // verdict = 1 on a withdrawal PAYS (amount + the returned down
       // payment); verdict = 0 folds unpaid — the down payment stays with
       // the contract. Deposits are credited chain-side, so their verdict
       // affects only the leaf.
       const shouldWithdraw = PulsarAction.isWithdrawal(action)
         .and(isDummy.not())
-        .and(approved);
+        .and(verdicts.list[i]);
 
       const to = Provable.if(
         shouldWithdraw,
@@ -234,19 +250,37 @@ class SettlementContract extends SmartContract {
     }
 
     // Exactly two proofs are verified in this method (the Pickles limit):
-    // the quorum proof internalizes the tail, extending cursorAfter leaf by
-    // leaf to an actions_reduced_root that >= 2/3 of the validator set
-    // signed in a real vote extension. The slot-1 pin is the second half of
-    // the signer-set authentication — without it a prover could invent an
-    // entire validator set that is merely self-consistent with its body.
+    // the quorum proof internalizes the batch's verdict-leaf fold AND the
+    // tail, extending cursorBefore leaf by leaf to an actions_reduced_root
+    // that >= 2/3 of the validator set signed in a real vote extension. The
+    // slot-1 pin is the second half of the signer-set authentication —
+    // without it a prover could invent an entire validator set that is
+    // merely self-consistent with its body.
     approvalProof.verify();
 
     this.merkleListRoot.requireEquals(
       approvalProof.publicInput.validatorSetRoot
     );
-    approvalCursor.assertEquals(
-      approvalProof.publicInput.cursorAfter,
-      'Batch verdict fold must reach the quorum-bound approval cursor'
+    // The endpoint pin that replaces the in-contract verdict fold: the
+    // commitment recomputed here from the contract's OWN values must equal
+    // the one the program proved its fold against. By collision resistance,
+    // hash equality is equality of all five values at once — same
+    // action-state start AND end ⇒ the program folded the SAME actions;
+    // same packed verdicts ⇒ under the vector the sends above pay from;
+    // same cursorBefore ⇒ anchored at slot 4; same cursorAfter ⇒ the
+    // argument written to slot 4 below is the fold's real result. One plain
+    // zero-init Poseidon — the in-contract hash shape the wrap provably
+    // handles (the chain-convention prefix hashes do NOT prove in here,
+    // which is why the fold lives in the program at all).
+    reduceCommitmentHash({
+      fromActionState: initialActionState,
+      endActionState: actionState,
+      cursorBefore: approvalCursor,
+      cursorAfter,
+      verdictsPacked: verdicts.toField(),
+    }).assertEquals(
+      approvalProof.publicInput.reduceCommitment,
+      'Quorum proof must commit to this exact batch, verdicts and cursors'
     );
 
     actionStackProof.verifyIf(useActionStack);
@@ -271,6 +305,6 @@ class SettlementContract extends SmartContract {
     );
 
     this.actionState.set(actionState);
-    this.approvalCursor.set(approvalCursor);
+    this.approvalCursor.set(cursorAfter);
   }
 }

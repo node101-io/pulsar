@@ -49,7 +49,10 @@ import {
   MultisigVerifierProgram,
   SettlementProof,
 } from '../SettlementProof.js';
-import { GeneratePulsarBlock } from '../utils/generateFunctions.js';
+import {
+  GeneratePulsarBlock,
+  GenerateSettleAttestProof,
+} from '../utils/generateFunctions.js';
 import {
   AGGREGATE_THRESHOLD,
   SETTLEMENT_MATRIX_SIZE,
@@ -494,7 +497,10 @@ async function settle(senderKey: PrivateKey, settlementProof: SettlementProof) {
   await fetchAccounts([zkappAddress]);
   const tx = await bench('Settle transaction', () =>
     Mina.transaction({ sender: senderKey.toPublicKey(), fee }, async () => {
-      await zkapp.settle(settlementProof);
+      await zkapp.settle(
+        settlementProof.publicInput,
+        await GenerateSettleAttestProof(settlementProof)
+      );
     })
   );
 
@@ -565,11 +571,16 @@ async function reduce(senderKey: PrivateKey) {
     hashPulsarActionLeafV2(action, Bool(true))
   );
 
-  const { verdicts: verdictsStruct, approvalProof } = await bench(
+  const {
+    verdicts: verdictsStruct,
+    approvalProof,
+    cursorAfter,
+  } = await bench(
     'Generate ApprovalQuorum proof (incl. tail)',
     () =>
       TestUtils.MockApprovalQuorumProof({
         validatorSet: activeSet,
+        fromActionState: zkapp.actionState.get(),
         cursorBefore: zkapp.approvalCursor.get(),
         batchActions,
         verdicts,
@@ -585,6 +596,7 @@ async function reduce(senderKey: PrivateKey) {
         useActionStack,
         actionStackProof,
         verdictsStruct,
+        cursorAfter,
         approvalProof
       );
     }

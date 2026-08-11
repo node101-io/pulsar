@@ -24,7 +24,13 @@ copy the `[rows]` output in.
 
 | Method           | Rows |
 | ---------------- | ---- |
-| verifySignatures | 1171 |
+| verifySignatures | 5246 |
+
+### SettleAttestProgram zkProgram Analysis
+
+| Method | Rows |
+| ------ | ---- |
+| attest | 50   |
 
 ### ActionStackProgram zkProgram Analysis
 
@@ -45,8 +51,8 @@ copy the `[rows]` output in.
 
 | Method   | Rows      |
 | -------- | --------- |
-| settle   | 368       |
+| settle   | 418       |
 | deposit  | 1065      |
 | withdraw | 1033      |
-| reduce   | 31465     |
-| **Total**| **33931** |
+| reduce   | 14401     |
+| **Total**| **16917** |

@@ -25,7 +25,11 @@ const LIST_LENGTH = (2 * AGGREGATE_THRESHOLD) / SETTLEMENT_MATRIX_SIZE;
 const TOTAL_GENERATORS = LIST_LENGTH - 1;
 const MINIMUM_DEPOSIT_AMOUNT = 1e9;
 const WITHDRAW_DOWN_PAYMENT = 1e9;
-const BATCH_SIZE = 60;
+// 30, not 60: keeps reduce (~14.4k rows) and the quorum program (~5.2k)
+// comfortably inside one step-domain size class while the o1js wrap bug is
+// worked around (2026-08-11 hunt). Throughput is unaffected in the limit:
+// the tail absorbs whatever a batch leaves unconsumed.
+const BATCH_SIZE = 30;
 const MAX_SETTLEMENT_PER_BATCH = 1;
 const MAX_DEPOSIT_PER_BATCH = BATCH_SIZE;
 const MAX_WITHDRAWAL_PER_BATCH = 9;

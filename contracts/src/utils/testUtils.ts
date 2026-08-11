@@ -31,6 +31,7 @@ import {
   hashValidatorLeaf,
 } from './validatorList.js';
 import {
+  Batch,
   CosmosSignature,
   PulsarAction,
   PulsarAuth,
@@ -127,9 +128,11 @@ function FoldVerdictLeaves(
  * Successor to MockReducerVerifierProof, which signed the deleted
  * ValidateReduce batch commitment nothing chain-side ever produces.
  *
- * The signed cursor derives from the SIGNED verdicts over the SCANNED prefix,
- * independent of what the contract folds — so tests can diverge the two on
- * purpose:
+ * The SIGNED root derives from the SIGNED verdicts over the SCANNED prefix,
+ * independent of the verdict vector the proof folds — so tests can diverge
+ * the two on purpose. Under the program-fold design the divergence surfaces
+ * HERE, at proof generation ('Tail proof must terminate at the signed
+ * actionsReducedRoot'), because the quorum program itself folds the batch:
  * - signedVerdicts != verdicts  -> verdict-flip rejection cases;
  * - scannedCount < batch length -> "batch beyond the chain's scan";
  * - tailLeaves                  -> scanned-but-unconsumed suffix the tail
@@ -138,9 +141,11 @@ function FoldVerdictLeaves(
  */
 async function MockApprovalQuorumProof(opts: {
   validatorSet: Array<[PrivateKey, PublicKey]>;
+  /** the contract's actionState the batch starts from */
+  fromActionState: Field;
   cursorBefore: Field;
   batchActions: PulsarAction[];
-  /** what the CONTRACT folds, one bool per batch action */
+  /** what the PROOF folds and the contract pays from, one bool per action */
   verdicts: boolean[];
   /** what the CHAIN signed (default: verdicts) */
   signedVerdicts?: boolean[];
@@ -155,6 +160,7 @@ async function MockApprovalQuorumProof(opts: {
 }> {
   const {
     validatorSet,
+    fromActionState,
     cursorBefore,
     batchActions,
     verdicts,
@@ -163,14 +169,20 @@ async function MockApprovalQuorumProof(opts: {
     tailLeaves = [],
   } = opts;
 
-  const cursorAfter = FoldVerdictLeaves(
+  // What the proof folds — the batch's real cursor under the vector the
+  // contract will pay from.
+  const cursorAfter = FoldVerdictLeaves(cursorBefore, batchActions, verdicts);
+
+  // What the chain signed — scanned prefix under the signed verdicts, plus
+  // the unconsumed tail.
+  const signedCursor = FoldVerdictLeaves(
     cursorBefore,
     batchActions.slice(0, scannedCount),
     signedVerdicts.slice(0, scannedCount)
   );
   const signedRoot = tailLeaves.reduce(
     (cursor, leaf) => foldApprovalCursor(cursor, leaf),
-    cursorAfter
+    signedCursor
   );
 
   const body = new VoteExtBody({
@@ -184,18 +196,23 @@ async function MockApprovalQuorumProof(opts: {
     actionsReducedRoot: signedRoot,
   });
 
+  const verdictsStruct = ApprovalVerdicts.fromArray([
+    ...verdicts,
+    ...new Array(BATCH_SIZE - verdicts.length).fill(false),
+  ]);
+
   const approvalProof = await GenerateApprovalQuorumProof(
-    cursorAfter,
+    Batch.fromArray(batchActions),
+    verdictsStruct,
+    fromActionState,
+    cursorBefore,
     body,
     GenerateSignaturePubKeyList([body.hash()], validatorSet),
     await GenerateApprovalTailProof(cursorAfter, tailLeaves)
   );
 
   return {
-    verdicts: ApprovalVerdicts.fromArray([
-      ...verdicts,
-      ...new Array(BATCH_SIZE - verdicts.length).fill(false),
-    ]),
+    verdicts: verdictsStruct,
     approvalProof,
     cursorAfter,
   };
