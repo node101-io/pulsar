@@ -162,6 +162,7 @@ rather than loading stale keys. Deleting the directory is always safe.
 | `pnpm run deploy`       | Deploy + initialize the SettlementContract on Mina (needs seed)   |
 | `pnpm run smoke`        | One-shot ingest + prove smoke test against the configured node    |
 | `pnpm run gap`          | Log chain tip vs settled contract height (`-- --watch [s]` to repeat) |
+| `pnpm run doctor`       | Diagnose where the pipeline is stuck and why (one-shot verdict)   |
 | `pnpm run reset`        | Drop the MongoDB database                                         |
 | `pnpm run cli`          | Interactive CLI for inspecting stored state                       |
 | `pnpm run worker:*`     | Run one processor standalone (`block-prover`, `aggregator`, `settlement-prover`, `settler`) |

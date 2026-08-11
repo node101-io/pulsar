@@ -16,6 +16,7 @@
         "seed": "pnpm run build && node dist/src/scripts/seed.js",
         "smoke": "pnpm run build && node --max-old-space-size=8192 dist/src/scripts/smokeTest.js",
         "gap": "pnpm run build && node dist/src/scripts/gap.js",
+        "doctor": "pnpm run build && node dist/src/scripts/doctor.js",
         "reset": "pnpm run build && node dist/src/scripts/reset.js",
         "clean": "rimraf dist coverage node_modules"
     },
