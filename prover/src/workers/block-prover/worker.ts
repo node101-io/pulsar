@@ -87,27 +87,25 @@ export async function worker(task: BlockProverJob) {
         { epochHeight, event: "all_blocks_done" },
     );
 
-    // Skip proof generation if a proof already exists (re-run after failure)
-    if (updatedEpoch.failCount > 0) {
-        const proofEpochHeight =
-            EPOCH_START_HEIGHT +
-            Math.floor((epochHeight - EPOCH_START_HEIGHT) / PROOF_EPOCH_SIZE) *
-                PROOF_EPOCH_SIZE;
-        const proofEpoch = await ProofEpochModel.findOne({
-            height: proofEpochHeight,
-            kind: "blockProof" as ProofKind,
-        });
-
-        if (proofEpoch && proofEpoch.proofs.some((p) => p !== null)) {
-            logger.info(
-                `Skipping proof generation for epoch ${epochHeight} — proof already exists after previous failure`,
-            );
-            await BlockEpochModel.findOneAndUpdate(
-                { height: epochHeight },
-                { $set: { epochStatus: "done" as BlockStatus } },
-            );
-            return;
-        }
+    // Re-runs happen after failures and BullMQ redeliveries. If THIS block
+    // epoch's leaf is already in the proof epoch, only the done-mark was
+    // lost — restore it without re-proving. The check must target our OWN
+    // leaf slot: an any-slot check here once marked an epoch done while its
+    // own leaf was still missing, wedging the proof epoch (and the whole
+    // settle chain behind it) in blockProof forever.
+    const proofEpoch = await ProofEpochModel.findOne({
+        height: proofEpochHeightFor(epochHeight),
+    });
+    if (proofEpoch?.proofs[leafIndexFor(epochHeight)]) {
+        logger.info(
+            `Leaf proof for epoch ${epochHeight} already stored — marking done without re-proving`,
+            { epochHeight, event: "leaf_already_stored" },
+        );
+        await BlockEpochModel.findOneAndUpdate(
+            { height: epochHeight },
+            { $set: { epochStatus: "done" as BlockStatus } },
+        );
+        return;
     }
 
     let proofId;
@@ -237,6 +235,23 @@ export async function createProof(height: number) {
     return proofId;
 }
 
+/** Height of the proof epoch this block epoch's leaf belongs to. */
+export function proofEpochHeightFor(blockEpochHeight: number): number {
+    return (
+        EPOCH_START_HEIGHT +
+        Math.floor((blockEpochHeight - EPOCH_START_HEIGHT) / PROOF_EPOCH_SIZE) *
+            PROOF_EPOCH_SIZE
+    );
+}
+
+/** Leaf slot this block epoch's proof occupies within its proof epoch. */
+export function leafIndexFor(blockEpochHeight: number): number {
+    return (
+        Math.floor((blockEpochHeight - EPOCH_START_HEIGHT) / BLOCK_EPOCH_SIZE) %
+        PROOF_EPOCH_LEAF_COUNT
+    );
+}
+
 /**
  * Creates a new proof epoch document if it does not exist and sets the block proof at the correct leaf index.
  * Multiple block epochs (PROOF_EPOCH_LEAF_COUNT of them) contribute leaf proofs to a single proof epoch.
@@ -245,13 +260,8 @@ async function createOrUpdateProofEpoch(
     blockEpochHeight: number,
     proofId: Types.ObjectId,
 ) {
-    const proofEpochHeight =
-        EPOCH_START_HEIGHT +
-        Math.floor((blockEpochHeight - EPOCH_START_HEIGHT) / PROOF_EPOCH_SIZE) *
-            PROOF_EPOCH_SIZE;
-    const leafIndex =
-        Math.floor((blockEpochHeight - EPOCH_START_HEIGHT) / BLOCK_EPOCH_SIZE) %
-        PROOF_EPOCH_LEAF_COUNT;
+    const proofEpochHeight = proofEpochHeightFor(blockEpochHeight);
+    const leafIndex = leafIndexFor(blockEpochHeight);
 
     await ProofEpochModel.updateOne(
         { height: proofEpochHeight },

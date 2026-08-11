@@ -5,9 +5,12 @@ import {
     STALE_CLAIM_TIMEOUT_MS,
     MASTER_SLEEP_INTERVAL_MS,
     BLOCK_EPOCH_SIZE,
+    PROOF_EPOCH_LEAF_COUNT,
 } from "../../config/constants.js";
+import { ProofKind } from "../../common/types.js";
 import {
     BlockEpochModel,
+    ProofEpochModel,
     incrementBlockEpochFailCount,
 } from "../../db/index.js";
 import { Master } from "../master.js";
@@ -55,6 +58,48 @@ export class BlockProverMaster extends Master<BlockProverJob> {
                 `Recovered ${result.modifiedCount} stale 'processing' epoch(s) to 'waiting'`,
                 { count: result.modifiedCount, event: "epoch_recovery" },
             );
+        }
+
+        // Reconciliation: a done block epoch whose leaf never reached the
+        // proof epoch is invisible to the waiting-scan and wedges the proof
+        // epoch — and the strictly ordered settle chain behind it — forever.
+        // Enforce the invariant "done block epoch ⇒ leaf stored" here as
+        // defense in depth; the worker's own-slot skip check is the first
+        // line. Age-gated like the rest of the sweep.
+        const headEpochs = await ProofEpochModel.find({
+            kind: { $in: ["blockProof", "aggregation"] as ProofKind[] },
+        });
+        for (const proofEpoch of headEpochs) {
+            for (let leaf = 0; leaf < PROOF_EPOCH_LEAF_COUNT; leaf++) {
+                if (proofEpoch.proofs[leaf]) continue;
+                const blockEpochHeight =
+                    proofEpoch.height + leaf * BLOCK_EPOCH_SIZE;
+                const reset = await BlockEpochModel.updateOne(
+                    {
+                        height: blockEpochHeight,
+                        epochStatus: "done",
+                        updatedAt: { $lt: cutoff },
+                    },
+                    {
+                        $set: {
+                            epochStatus: "waiting",
+                            status: Array(BLOCK_EPOCH_SIZE).fill("waiting"),
+                            failCount: 0,
+                        },
+                    },
+                );
+                if (reset.modifiedCount > 0) {
+                    logger.warn(
+                        `Re-queued done block epoch ${blockEpochHeight}: its leaf never reached proof epoch ${proofEpoch.height}`,
+                        {
+                            blockEpochHeight,
+                            proofEpochHeight: proofEpoch.height,
+                            leafIndex: leaf,
+                            event: "leaf_reconciliation",
+                        },
+                    );
+                }
+            }
         }
     }
 
