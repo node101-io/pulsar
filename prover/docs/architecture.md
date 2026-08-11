@@ -203,9 +203,11 @@ Takes the root proof from a completed `ProofEpoch` and wraps it into a Mina sett
 
 #### Settler
 
-**Queue:** `settler` | **Workers:** 1 (serialized — only one Mina TX in flight at a time)
+**Queue:** `settler` | **Workers:** 1 (serialized sends — up to `SETTLER_WINDOW` txs in flight)
 
-Reconstructs the pre-proved transaction, signs it, and broadcasts it to Mina. It does **not** re-run `tx.prove()` — the proof is already embedded in the stored JSON. It waits for on-chain inclusion and retries up to `MAX_RETRY_COUNT` times on failure. If the stored transaction is `null` (epoch was already settled during proving), it marks the epoch done without sending anything. The single-worker constraint prevents nonce conflicts on the Mina account. See [Max Settle Check](#max-settle-check).
+Reconstructs the pre-proved transaction, signs it with the pipeline's next fee-payer nonce, and broadcasts it to Mina **without waiting for inclusion** (`kind=txSent`). Because a settle tx's preconditions come from its proof rather than live chain state, consecutive epochs chain by nonce and several can land in a single Mina block — this is what lets settlement throughput exceed one epoch per Mina block. It does **not** re-run `tx.prove()` — the proof is already embedded in the stored JSON. If the stored transaction is `null` (epoch was already settled during proving), it finalizes the epoch without sending anything.
+
+Confirmation is the master's job, not the worker's: each tick compares the contract's on-chain `blockHeight` against sent epochs and finalizes every epoch the contract has passed. If the oldest in-flight tx neither confirms nor appears on-chain within `SETTLER_STALL_TIMEOUT_MS`, the whole in-flight tail is returned to `settlement` (the proofs stay valid — recovery is re-sending in order, not re-proving) and the nonce counter re-seeds from the ledger. The single-worker constraint keeps sends strictly height-ordered.
 
 ---
 
@@ -230,9 +232,10 @@ flowchart TD
     J --> K[Settlement Prover Worker proveSettlementTx]
     K -->|embed zk proof into Mina tx| L[(ProofEpoch kind=settlement)]
 
-    L -->|SettlerMaster polls kind=settlement| M[settler queue - 1 worker serialized]
-    M --> N[Settler Worker sendProvedSettlement]
-    N -->|sign and broadcast| O([Mina SettlementContract blockHeight updated])
+    L -->|SettlerMaster claims next epoch in order| M[settler queue - 1 worker serialized]
+    M --> N[Settler Worker broadcastProvedSettlement]
+    N -->|sign with pipeline nonce, broadcast, no wait| P[(ProofEpoch kind=txSent, up to SETTLER_WINDOW in flight)]
+    P -->|SettlerMaster confirm loop: contract blockHeight passes epoch| O([Mina SettlementContract blockHeight updated])
 ```
 
 ---
@@ -367,10 +370,14 @@ stateDiagram-v2
     txProving --> settlement : settlement TX proved success
     txProving --> settlement : already settled on-chain provedTxJson null
 
-    settlement --> txSending : SettlerMaster claims
+    settlement --> txSending : SettlerMaster claims next in order
 
-    txSending --> settlement : restart recovery resetStuckEpochs
-    txSending --> done : TX confirmed on Mina or no tx needed
+    txSending --> settlement : restart recovery or send window full
+    txSending --> txSent : broadcast accepted, no inclusion wait
+    txSending --> done : pre-settled, no tx needed
+
+    txSent --> done : contract blockHeight passes the epoch
+    txSent --> settlement : pipeline reset, head tx died past stall timeout
 
     done --> [*]
 ```
@@ -418,12 +425,11 @@ On every startup, before any processor is started, stuck epoch states are reset:
 | `BlockEpoch.status[n] = processing`   | Crashed per-block worker    | `waiting`     |
 | `ProofEpoch.kind = txProving`         | Crashed settlement-prover   | `aggregation` |
 | `ProofEpoch.kind = txSending`         | Crashed settler             | `settlement`  |
+| `ProofEpoch.kind = txSent`            | Not stuck — survives restarts; confirmed by contract height or reset by the stall timeout | `done` / `settlement` |
 
 ### Max Settle Check
 
-Both the settlement-prover and the settler query the Mina contract's current `blockHeight` before doing any work. If the contract has already recorded a height that covers this epoch, the operation is skipped entirely. This prevents duplicate transactions and wasted proof computation in case of concurrent workers or a mid-job restart.
-
-The check is intentionally done at **two points**: once before proving (expensive) and once before sending (cheaper but still important for correctness).
+The settlement-prover queries the Mina contract's current `blockHeight` before proving; an epoch the contract already covers is skipped (its `provedTxJson` stays `null`). On the send side the guard moved into the settler master: the confirm loop finalizes any post-proving epoch the contract has passed **before** the claim step runs, so an already-settled epoch is finalized rather than re-sent. This prevents duplicate transactions and wasted proof computation in case of concurrent workers or a mid-job restart.
 
 ### Duplicate proof prevention on retry
 
@@ -454,7 +460,7 @@ The settlement-prover runs with `WORKER_COUNT` concurrent workers. Without the o
 
 ### Settler uses 1 worker intentionally
 
-Mina transactions are nonce-based and sequential. Running two settlement sends in parallel would cause a nonce conflict and a failed transaction. One serialized worker is the correct design.
+Mina transactions are nonce-based and sequential, and settle txs additionally chain by state precondition — they must be signed and broadcast in strict height order. One serialized worker guarantees that order without a distributed lock. Throughput does not come from parallel sends but from **pipelining**: the worker broadcasts without waiting for inclusion, so up to `SETTLER_WINDOW` nonce-chained txs ride the mempool at once and several can land in the same Mina block. The window bounds the fee burned when an in-flight tx dies (everything queued behind it fails its preconditions).
 
 ### Settler queue size is capped at 1 — approach is architecture-dependent
 
