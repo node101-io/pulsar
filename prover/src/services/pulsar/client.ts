@@ -21,7 +21,7 @@ import {
 } from "pulsar-chain-client";
 
 import logger from "../../common/logger.js";
-import { storeBlock, storeBlockInBlockEpoch } from "../../db/index.js";
+import { BlockModel, storeBlock, storeBlockInBlockEpoch } from "../../db/index.js";
 import { BlockData, ValidatorInfo, VoteExt } from "../../common/types.js";
 import {
     BLOCK_EPOCH_SIZE,
@@ -72,6 +72,22 @@ export async function getBlockData(
         validatorListHash = body.nextValidatorSetHash;
         actionsReducedRoot = body.actionsReducedRoot;
     } else {
+        // The body-less fallback exists for the chain's earliest blocks only.
+        // It must never absorb a TRANSIENT VoteExtBodyByHeight failure at a
+        // later height: actionsReducedRoot cannot be recovered from the block
+        // header, and defaulting it to "0" poisons the block with a signed
+        // message the validators never signed — the epoch then fails quorum
+        // forever (live incident: blocks 71548/71677). The actions root never
+        // reverts to "0" once set, so a non-zero root on the previous block
+        // proves this height must have a body — bail out and let sync retry.
+        const previous = await BlockModel.findOne({ height: height - 1 });
+        if (previous && previous.actionsReducedRoot !== "0") {
+            throw new Error(
+                `VoteExtBody unavailable for block ${height} while the actions root ` +
+                    `is non-zero — transient fetch failure, refusing the "0" fallback`,
+            );
+        }
+
         const blockRes = await grpcUnary<GetBlockByHeightResponse>((cb) =>
             tmClient.getBlockByHeight({ height: height.toString() }, cb),
         );

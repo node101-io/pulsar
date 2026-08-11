@@ -308,6 +308,31 @@ describe("pulsar client", () => {
                 CHAIN_ACTIONS_ROOT_VECTOR.decimal,
             );
         });
+
+        it("refuses the body-less fallback when the actions root is already non-zero", async () => {
+            // VoteExtBodyByHeight fails transiently...
+            const mockAbciClient = {
+                voteExtBodyByHeight: vi.fn((req, callback) => {
+                    callback(new Error("transient unavailable"), null);
+                }),
+            };
+            // ...and the previous block proves the chain's root is non-zero,
+            // so defaulting to "0" would poison the signed message
+            vi.mocked(db.BlockModel.findOne).mockResolvedValue({
+                height: 99,
+                actionsReducedRoot: CHAIN_ACTIONS_ROOT_VECTOR.decimal,
+            } as any);
+
+            await expect(
+                getBlockData(
+                    {} as unknown as TendermintClient,
+                    {} as unknown as VotePersistenceClient,
+                    {} as unknown as KeyregistryClient,
+                    mockAbciClient as unknown as AbciQueryClient,
+                    100,
+                ),
+            ).rejects.toThrow(/refusing the "0" fallback/);
+        });
     });
 
     describe("storePulsarBlock", () => {
