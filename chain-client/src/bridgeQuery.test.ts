@@ -4,6 +4,7 @@ import type { Metadata } from "@grpc/grpc-js";
 import {
     HISTORICAL_HEIGHT_HEADER,
     fetchActionsReducedRoot,
+    fetchBridgeParams,
     fetchLatestActionHashes,
 } from "./bridgeQuery.js";
 
@@ -49,6 +50,24 @@ describe("fetchLatestActionHashes", () => {
             900,
         );
         expect(seen).toEqual(["900"]);
+    });
+});
+
+describe("fetchBridgeParams", () => {
+    it("passes the params response through unparsed", async () => {
+        const response = {
+            params: { start_block_height: "542991", max_block_range: "1000" },
+        };
+        const method = (
+            _req: object,
+            cb: (err: null, res: typeof response) => void,
+        ) => {
+            cb(null, response);
+            return {} as never;
+        };
+        await expect(
+            fetchBridgeParams({ params: method as never }),
+        ).resolves.toEqual(response);
     });
 });
 

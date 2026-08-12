@@ -10,6 +10,7 @@ import type { QueryVoteExtBodyByHeightResponse } from "./generated/pulsarchain/a
 import type {
     QueryActionsReducedRootResponse,
     QueryLatestActionHashesResponse,
+    QueryParamsResponse as QueryBridgeParamsResponse,
 } from "./generated/pulsarchain/bridge/v1/query.js";
 import type { QueryVoteExtensionsResponse } from "./generated/pulsarchain/votepersistence/v1/query.js";
 import type { QueryGetValidatorSetWithMinaKeysResponse } from "./generated/pulsarchain/keyregistry/v1/query.js";
@@ -31,6 +32,7 @@ export type {
     GetValidatorSetByHeightResponse,
     QueryActionsReducedRootResponse,
     QueryLatestActionHashesResponse,
+    QueryBridgeParamsResponse,
     QueryVoteExtBodyByHeightResponse,
     QueryVoteExtensionsResponse,
     QueryGetValidatorSetWithMinaKeysResponse,

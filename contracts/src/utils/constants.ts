@@ -5,6 +5,7 @@ export {
   TOTAL_GENERATORS,
   LIST_LENGTH,
   MINIMUM_DEPOSIT_AMOUNT,
+  INT64_AMOUNT_UPPER_BOUND,
   WITHDRAW_DOWN_PAYMENT,
   BATCH_SIZE,
   MAX_SETTLEMENT_PER_BATCH,
@@ -24,6 +25,10 @@ const AGGREGATE_THRESHOLD = 32;
 const LIST_LENGTH = (2 * AGGREGATE_THRESHOLD) / SETTLEMENT_MATRIX_SIZE;
 const TOTAL_GENERATORS = LIST_LENGTH - 1;
 const MINIMUM_DEPOSIT_AMOUNT = 1e9;
+// Action amounts cross the Mina/Cosmos boundary as signed int64 values.
+// Keep the exclusive upper bound here so every dispatch path uses the same
+// wire-domain invariant: 0 < amount < 2^63.
+const INT64_AMOUNT_UPPER_BOUND = 2n ** 63n;
 const WITHDRAW_DOWN_PAYMENT = 1e9;
 // 30, not 60: keeps reduce (~14.4k rows) and the quorum program (~5.2k)
 // comfortably inside one step-domain size class while the o1js wrap bug is

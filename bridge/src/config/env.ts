@@ -60,6 +60,21 @@ export const env = createEnv({
 
         MAX_RETRY: z.coerce.number().int().positive().default(3),
 
+        // Action pusher: the bridge process owns sending the periodic
+        // MsgPushNewActions tx (decided with the chain team — no external
+        // cron). Enabled only when BOTH the Tendermint RPC endpoint and the
+        // signing key are set; a half-configuration is a boot error, checked
+        // in startPusher, so a typo cannot silently disable adjudication.
+        PULSAR_RPC_ENDPOINT: z.string().min(1).optional(),
+        PULSAR_PRIVATE_KEY_HEX: z
+            .string()
+            .regex(/^[0-9a-fA-F]{64}$/, "64 hex chars (secp256k1 key)")
+            .optional(),
+        PULSAR_FEE_AMOUNT: z.coerce.number().int().positive().default(5000),
+        PULSAR_FEE_DENOM: z.string().min(1).default("pmina"),
+        PULSAR_GAS_LIMIT: z.coerce.number().int().positive().default(300000),
+        PUSH_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+
         NODE_ENV: z.string().min(1).default("development"),
         LOG_LEVEL: z.string().optional(),
         DOCKER_CONTAINER: z.string().optional(),

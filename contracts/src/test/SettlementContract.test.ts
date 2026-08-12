@@ -19,6 +19,7 @@ import {
   AGGREGATE_THRESHOLD,
   BATCH_SIZE,
   ENDPOINTS,
+  INT64_AMOUNT_UPPER_BOUND,
   MINIMUM_DEPOSIT_AMOUNT,
   VALIDATOR_NUMBER,
   WITHDRAW_DOWN_PAYMENT,
@@ -762,6 +763,14 @@ describe('SettlementContract tests', () => {
       );
     });
 
+    it('Reject deposit at the 2^63 int64 boundary', async () => {
+      await expectDepositToFail(
+        feePayerKey,
+        UInt64.from(INT64_AMOUNT_UPPER_BOUND),
+        'Deposit amount must fit int64'
+      );
+    });
+
     // A withdraw(0) reaching the chain scanner is the archive-wrapper stall
     // class the redesign closes — the L1 bound is defence in depth.
     it('Reject withdraw of zero', async () => {
@@ -778,7 +787,7 @@ describe('SettlementContract tests', () => {
     it('Reject withdraw at the 2^63 int64 boundary', async () => {
       await expectWithdrawToFail(
         feePayerKey,
-        UInt64.from(2n ** 63n),
+        UInt64.from(INT64_AMOUNT_UPPER_BOUND),
         'Withdrawal amount must fit int64'
       );
     });

@@ -89,7 +89,8 @@ function heightSuffix(atCosmosHeight?: number): string {
 
 let _client: BridgeQueryClient | null = null;
 
-function getClient(): BridgeQueryClient {
+// Shared with the pusher (params read) — one channel per process.
+export function getBridgeQueryClient(): BridgeQueryClient {
     if (_client) return _client;
     _client = new BridgeQueryClient(
         env.PULSAR_GRPC_ENDPOINT,
@@ -221,7 +222,7 @@ export async function fetchActionsBatch(
 ): Promise<ActionsBatch> {
     let data;
     try {
-        data = await fetchLatestActionHashes(getClient(), atCosmosHeight);
+        data = await fetchLatestActionHashes(getBridgeQueryClient(), atCosmosHeight);
     } catch (error) {
         throw classifyGrpcFault(
             error,
@@ -266,7 +267,7 @@ export async function fetchActionsReducedRoot(
 ): Promise<string> {
     let data;
     try {
-        data = await grpcFetchActionsReducedRoot(getClient(), atCosmosHeight);
+        data = await grpcFetchActionsReducedRoot(getBridgeQueryClient(), atCosmosHeight);
     } catch (error) {
         throw classifyGrpcFault(
             error,

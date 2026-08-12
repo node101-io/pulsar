@@ -22,6 +22,7 @@ import {
 import {
   AGGREGATE_THRESHOLD,
   BATCH_SIZE,
+  INT64_AMOUNT_UPPER_BOUND,
   MINIMUM_DEPOSIT_AMOUNT,
   WITHDRAW_DOWN_PAYMENT,
 } from './utils/constants.js';
@@ -151,6 +152,10 @@ class SettlementContract extends SmartContract {
       UInt64.from(MINIMUM_DEPOSIT_AMOUNT),
       `At least ${Number(MINIMUM_DEPOSIT_AMOUNT / 1e9)} MINA is required`
     );
+    amount.assertLessThan(
+      UInt64.from(INT64_AMOUNT_UPPER_BOUND),
+      'Deposit amount must fit int64'
+    );
     const sender = this.sender.getUnconstrained();
     const depositAccountUpdate = AccountUpdate.createSigned(sender);
     depositAccountUpdate.send({ to: this.address, amount });
@@ -170,7 +175,7 @@ class SettlementContract extends SmartContract {
     // the amount inside the chain's int64 domain.
     amount.assertGreaterThan(UInt64.zero, 'Withdrawal amount must be positive');
     amount.assertLessThan(
-      UInt64.from(2n ** 63n),
+      UInt64.from(INT64_AMOUNT_UPPER_BOUND),
       'Withdrawal amount must fit int64'
     );
 

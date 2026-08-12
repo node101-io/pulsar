@@ -3,12 +3,13 @@ import { Metadata } from "@grpc/grpc-js";
 import {
     type BridgeQueryClient,
     type QueryActionsReducedRootResponse,
+    type QueryBridgeParamsResponse,
     type QueryLatestActionHashesResponse,
     grpcUnary,
 } from "./transport.js";
 
 export { HISTORICAL_HEIGHT_HEADER, historicalHeightMetadata };
-export { fetchLatestActionHashes, fetchActionsReducedRoot };
+export { fetchLatestActionHashes, fetchActionsReducedRoot, fetchBridgeParams };
 
 // Standard Cosmos historical state query: the request runs against the state
 // version committed at that height. Height 0 means LATEST, not genesis — so
@@ -39,6 +40,17 @@ async function fetchLatestActionHashes(
             cb,
         ),
     );
+}
+
+/**
+ * The x/bridge module params (Query/Params), as served — start_block_height
+ * and max_block_range bound what a MsgPushNewActions may ask for, so the
+ * pusher reads them from the chain instead of duplicating the constants.
+ */
+async function fetchBridgeParams(
+    client: Pick<BridgeQueryClient, "params">,
+): Promise<QueryBridgeParamsResponse> {
+    return grpcUnary<QueryBridgeParamsResponse>((cb) => client.params({}, cb));
 }
 
 /** The cumulative approval root (x/bridge Query/ActionsReducedRoot), as served. */
