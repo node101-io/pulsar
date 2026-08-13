@@ -36,10 +36,58 @@ import {
     ActionStackProgram,
 } from "pulsar-contracts";
 
+import {
+    BridgeQueryClient,
+    fetchBridgeParams,
+    grpcCredentials,
+} from "pulsar-chain-client";
+
 import { type AnchorBlock, fetchAnchorBlock } from "../db/index.js";
 import { CACHE_DIR } from "../config/constants.js";
 
 type MinaNetwork = "devnet" | "mainnet" | "lightnet";
+
+/**
+ * Refuse to deploy anywhere but the address the Pulsar chain adjudicates.
+ *
+ * The chain bakes contract_address into genesis and its archive wrapper reads
+ * it once at startup, so a contract at any other address is one nothing
+ * indexes — and the keypair is single-use (deploy makes the verification key
+ * immutable and state proof-only), so the remedy is a new keypair AND a new
+ * chain genesis. Both roads here are silent: an unset CONTRACT_PRIVATE_KEY
+ * mints a random one, and a stale one deploys a perfectly valid contract at
+ * yesterday's address.
+ *
+ * The comparison is against the CHAIN, never against CONTRACT_ADDRESS — a
+ * stale .env holds a private key and an address that agree with each other
+ * and with nothing else, which is exactly the case a local check waves
+ * through. If the chain cannot be reached the deploy stops too: proceeding
+ * would mean spending the one keypair on an unverified address.
+ */
+async function assertAddressMatchesChain(deployAddress: string) {
+    const endpoint = process.env.PULSAR_GRPC_ENDPOINT;
+    if (!endpoint)
+        throw new Error(
+            "PULSAR_GRPC_ENDPOINT is not set — cannot confirm the deploy " +
+                "address against the chain's x/bridge params, and deploying " +
+                "to the wrong address is unrecoverable.",
+        );
+
+    const client = new BridgeQueryClient(endpoint, grpcCredentials(endpoint));
+    const configured = (await fetchBridgeParams(client)).params?.contract_address;
+    if (!configured)
+        throw new Error(
+            `x/bridge Query/Params on ${endpoint} served no contract_address.`,
+        );
+    if (configured !== deployAddress)
+        throw new Error(
+            `Refusing to deploy: this key deploys to ${deployAddress}, but ` +
+                `the chain adjudicates ${configured}. Set ` +
+                `CONTRACT_PRIVATE_KEY to the key for the chain's address ` +
+                `(and remember an unset one generates a random key).`,
+        );
+    console.log(`Deploy address matches the chain's params: ${configured}`);
+}
 
 // ── anchor resolution ────────────────────────────────────────────────────────
 
@@ -76,6 +124,8 @@ async function main() {
         ? PrivateKey.fromBase58(process.env.CONTRACT_PRIVATE_KEY)
         : PrivateKey.random();
     const contractPublicKey = contractPrivateKey.toPublicKey();
+
+    await assertAddressMatchesChain(contractPublicKey.toBase58());
 
     // ── network ─────────────────────────────────────────────────────────────
     setMinaNetwork(network);
