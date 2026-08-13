@@ -31,6 +31,7 @@ import {
 import {
     BLOCK_EPOCH_SIZE,
     EPOCH_START_HEIGHT,
+    MAX_FAIL_COUNT,
     PROOF_EPOCH_LEAF_COUNT,
     PROOF_EPOCH_SIZE,
     STALE_CLAIM_TIMEOUT_MS,
@@ -236,6 +237,42 @@ async function main() {
         );
     }
 
+    // Hot fail loop: the worker resets a throwing epoch to "waiting" and the
+    // master re-claims it a second later, so it never reaches "failed" —
+    // markFailedEpochs only runs at startup. Without this check the pipeline
+    // looks busy while one leaf burns CPU forever (live incident: block epoch
+    // 1622, failCount 24977, settle chain wedged for days behind it).
+    const loopingEpochs = await BlockEpochModel.find({
+        failCount: { $gt: MAX_FAIL_COUNT },
+        epochStatus: { $ne: "failed" },
+    }).sort({ height: 1 });
+    for (const be of loopingEpochs) {
+        console.log(
+            `${BAD} block epoch ${be.height} has failed ${be.failCount} times and is still ${be.epochStatus} — hot fail loop`,
+        );
+        const blocks = await BlockModel.find(
+            { height: { $gte: be.height, $lt: be.height + BLOCK_EPOCH_SIZE } },
+            { height: 1, voteExt: 1 },
+        ).sort({ height: 1 });
+        for (const b of blocks) {
+            const n = (b.voteExt ?? []).length;
+            if (n < 2)
+                console.log(
+                    `    block ${b.height}: ${n} vote ext(s) ← quorum impossible`,
+                );
+        }
+        console.log(
+            `    diagnose: the usual cause is a stored field no validator signed. For each\n` +
+                `    block h in the epoch, rebuild the signed message from the block's own\n` +
+                `    stateRoot/validatorListHash/height/actionsReducedRoot (hashVoteExtMessage)\n` +
+                `    and verify its voteExt signatures off-circuit — the block whose signatures\n` +
+                `    fail is the poisoned one. Its stateRoot must equal header(h+1).app_hash.`,
+        );
+        setVerdict(
+            `Block epoch ${be.height} fails every attempt (failCount ${be.failCount}) and blocks every settle behind it — diagnose per "Known failure classes".`,
+        );
+    }
+
     const cutoff = new Date(Date.now() - STALE_CLAIM_TIMEOUT_MS);
     const staleClaims = await ProofEpochModel.countDocuments({
         kind: { $in: ["txProving", "txSending"] },
@@ -268,7 +305,11 @@ async function main() {
         }
     }
 
-    if (failedEpochs.length === 0 && staleClaims + staleProcessing === 0) {
+    if (
+        failedEpochs.length === 0 &&
+        loopingEpochs.length === 0 &&
+        staleClaims + staleProcessing === 0
+    ) {
         console.log(`${OK} none detected`);
     }
 
@@ -324,9 +365,23 @@ async function diagnoseEpoch(epoch: IProofEpoch, chainTip: number | null) {
                         `Wedged leaf for block epoch ${beHeight} — auto-heals via leaf_reconciliation; watch block-prover logs.`,
                     );
                     blocked = true;
+                } else if (be.failCount > MAX_FAIL_COUNT) {
+                    // Nothing marks a block epoch "failed" while the pipeline
+                    // runs — only startup does — so a leaf that throws every
+                    // attempt reads as "waiting, updated seconds ago" forever:
+                    // the worker resets it, the master re-claims it within a
+                    // second, and the settle chain never moves. failCount is
+                    // the only tell.
+                    console.log(
+                        `${BAD}  leaf ${leaf} ← block epoch ${beHeight}: ${be.epochStatus} but failCount ${be.failCount} — FAILING IN A HOT LOOP, not progressing`,
+                    );
+                    setVerdict(
+                        `Block epoch ${beHeight} fails every proving attempt (failCount ${be.failCount}) — see "Known failure classes".`,
+                    );
+                    blocked = true;
                 } else {
                     console.log(
-                        `  leaf ${leaf} ← block epoch ${beHeight}: ${be.epochStatus} (updated ${age(be.updatedAt)} ago) — proving in progress`,
+                        `  leaf ${leaf} ← block epoch ${beHeight}: ${be.epochStatus} (failCount ${be.failCount}, updated ${age(be.updatedAt)} ago) — proving in progress`,
                     );
                 }
             }

@@ -50,9 +50,21 @@ export async function getBlockData(
     try {
         body = await getVoteExtBody(abciClient, height);
     } catch (err) {
-        // VoteExtBodyByHeight(H+2) fails for very early blocks because Cosmos SDK
-        // staking has no historical info before the chain's first staking snapshot.
-        // Fall back to app_hash from GetBlockByHeight as stateRoot.
+        // From EPOCH_START_HEIGHT on, every block appears in a proven pair as
+        // the signed side: its body IS the message the validators signed, and
+        // no header can reconstruct nextValidatorSetHash or actionsReducedRoot.
+        // Falling back there persists a block no signature can ever match,
+        // which wedges its leaf — and the strictly ordered settle chain behind
+        // it — forever (live incident: block 1623 fell back and its epoch
+        // failed 24977 times while the doctor reported no wedge). A retry loop
+        // in sync is visible and recoverable; a poisoned block is neither.
+        if (height >= EPOCH_START_HEIGHT) throw err;
+
+        // Below the anchor no signature is ever verified against these fields,
+        // so the header fallback is safe: those blocks exist only to be
+        // skipped. VoteExtBodyByHeight(H+2) genuinely fails for them because
+        // Cosmos SDK staking has no historical info before the chain's first
+        // staking snapshot.
         logger.warn(
             "VoteExtBody unavailable, falling back to block header for stateRoot",
             {
@@ -72,8 +84,14 @@ export async function getBlockData(
         validatorListHash = body.nextValidatorSetHash;
         actionsReducedRoot = body.actionsReducedRoot;
     } else {
+        // The body commits the app hash block `height` PRODUCED, and CometBFT
+        // publishes that hash in the next header — header H carries the state
+        // after H-1. So the header that matches the signed body is height + 1;
+        // reading header `height` stores the previous block's root. Sync only
+        // reaches H once the tip is at H + VOTE_EXT_PERSISTENCE_LAG, so H+1
+        // always exists here.
         const blockRes = await grpcUnary<GetBlockByHeightResponse>((cb) =>
-            tmClient.getBlockByHeight({ height: height.toString() }, cb),
+            tmClient.getBlockByHeight({ height: (height + 1).toString() }, cb),
         );
         stateRoot = appHashToStateRootField(blockRes.block?.header?.app_hash);
         validatorListHash = undefined; // will be computed from validators in storePulsarBlock

@@ -309,31 +309,18 @@ describe("pulsar client", () => {
             );
         });
 
-        it("refuses a zero actions root from the body-less fallback when the chain's root is non-zero", async () => {
-            // VoteExtBodyByHeight fails transiently...
+        it("refuses the header fallback for a block the circuit verifies", async () => {
+            // VoteExtBodyByHeight fails transiently inside the proving range.
+            // No header carries nextValidatorSetHash or actionsReducedRoot, so
+            // any fallback here persists a block whose signed message can never
+            // match — the block 1623 incident. Sync must retry the height
+            // instead.
             const mockAbciClient = {
                 voteExtBodyByHeight: vi.fn((req, callback) => {
                     callback(new Error("transient unavailable"), null);
                 }),
             };
-            const mockTmClient = {
-                getBlockByHeight: vi.fn((req, callback) => {
-                    callback(null, {
-                        block: {
-                            header: {
-                                app_hash:
-                                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-                            },
-                        },
-                    });
-                }),
-            };
-            // ...and the previous block proves the chain's root is non-zero,
-            // so defaulting to "0" would poison the signed message
-            vi.mocked(db.BlockModel.findOne).mockResolvedValue({
-                height: 99,
-                actionsReducedRoot: CHAIN_ACTIONS_ROOT_VECTOR.decimal,
-            } as any);
+            const mockTmClient = { getBlockByHeight: vi.fn() };
 
             await expect(
                 getBlockData(
@@ -343,7 +330,90 @@ describe("pulsar client", () => {
                     mockAbciClient as unknown as AbciQueryClient,
                     100,
                 ),
-            ).rejects.toThrow(/corrupt read/);
+            ).rejects.toThrow(/transient unavailable/);
+            expect(mockTmClient.getBlockByHeight).not.toHaveBeenCalled();
+        });
+
+        it("falls back to the NEXT header's app hash below the anchor", async () => {
+            // Header H commits the state after H-1, so the app hash the body
+            // for H would have carried lives in header H+1. Reading header H
+            // stores the previous block's root — that is what poisoned 1623.
+            const mockPubkey = PublicKey.fromBase58(
+                "B62qmiWoAewYZuz7tUL1yV8r718dyLhp7Ck83ckuPAhPioERpTTMNNb",
+            );
+            const pubkeyBytes = makePubkeyBytes(mockPubkey);
+
+            const mockAbciClient = {
+                voteExtBodyByHeight: vi.fn((req, callback) => {
+                    callback(new Error("no historical info"), null);
+                }),
+            };
+            const mockTmClient = {
+                getBlockByHeight: vi.fn((req, callback) => {
+                    callback(null, {
+                        block: {
+                            header: {
+                                app_hash: Buffer.alloc(32, 7).toString("base64"),
+                            },
+                        },
+                    });
+                }),
+                getValidatorSetByHeight: vi.fn((req, callback) => {
+                    callback(null, {
+                        validators: [
+                            {
+                                pub_key: {
+                                    value: Buffer.concat([
+                                        Buffer.from([0x0a, 0x20]),
+                                        pubkeyBytes.subarray(0, 32),
+                                    ]).toString("base64"),
+                                },
+                                voting_power: "1",
+                            },
+                        ],
+                    });
+                }),
+            };
+            const mockVpClient = {
+                voteExtensions: vi.fn((req, metadata, callback) => {
+                    callback(null, {
+                        persisted_vote_extensions_block_height: "0",
+                        vote_extensions: [],
+                    });
+                }),
+            };
+            const mockKrClient = {
+                getValidatorSetWithMinaKeys: vi.fn((req, metadata, callback) => {
+                    callback(null, {
+                        registered_validators: req.validators.map(
+                            (v: {
+                                validator_cosmos_pub_key: Uint8Array;
+                                consensus_power: string;
+                            }) => ({
+                                validator_cosmos_pub_key:
+                                    v.validator_cosmos_pub_key,
+                                validator_mina_pub_key: pubkeyBytes,
+                                consensus_power: v.consensus_power,
+                            }),
+                        ),
+                    });
+                }),
+            };
+            vi.mocked(db.BlockModel.findOne).mockResolvedValue(null as any);
+
+            // height 1 is below the default EPOCH_START_HEIGHT (2)
+            await getBlockData(
+                mockTmClient as unknown as TendermintClient,
+                mockVpClient as unknown as VotePersistenceClient,
+                mockKrClient as unknown as KeyregistryClient,
+                mockAbciClient as unknown as AbciQueryClient,
+                1,
+            );
+
+            expect(mockTmClient.getBlockByHeight).toHaveBeenCalledWith(
+                { height: "2" },
+                expect.any(Function),
+            );
         });
 
         it("refuses a zero actions root even from a SUCCESSFUL body fetch", async () => {
