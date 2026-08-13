@@ -70,9 +70,26 @@ export const env = createEnv({
             .string()
             .regex(/^[0-9a-fA-F]{64}$/, "64 hex chars (secp256k1 key)")
             .optional(),
+        // A FLAT fee, deducted in full whatever the tx actually burns — so
+        // trimming it buys nothing, while underpaying stalls the bridge in
+        // the quietest way it can fail: the chain refuses the tx in CheckTx
+        // (code 13), no fee is taken, so there is not even a draining
+        // balance to notice, and the next tick re-sends the identical tx
+        // forever. The floor is gas × the chain's minimum gas price
+        // (0.0001 pmina), i.e. 200 at the gas limit below — this keeps 25×
+        // over that and stays valid for any limit up to 50M gas. Change the
+        // gas limit freely; do NOT lower this to match it.
         PULSAR_FEE_AMOUNT: z.coerce.number().int().positive().default(5000),
         PULSAR_FEE_DENOM: z.string().min(1).default("pmina"),
-        PULSAR_GAS_LIMIT: z.coerce.number().int().positive().default(300000),
+        // Calibrated against the live chain: ~57k gas of fixed cost per push
+        // plus ~35k for a valid deposit to an existing account (~49k for a
+        // first-time user), so 300k would cap one push at 5-7 real actions —
+        // below the contract's own batch size of 30. Running out is not a
+        // retryable failure but a widening deadlock: the cursor cannot
+        // advance past the offending range, so every retry batches MORE
+        // actions than the last while still paying the flat fee. Headroom is
+        // free (the fee does not scale with the limit), so take it.
+        PULSAR_GAS_LIMIT: z.coerce.number().int().positive().default(2_000_000),
         PUSH_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
 
         NODE_ENV: z.string().min(1).default("development"),
