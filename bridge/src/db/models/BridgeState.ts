@@ -38,6 +38,6 @@ export async function getBridgeState(): Promise<IBridgeState> {
     return BridgeStateModel.findOneAndUpdate(
         {},
         { $setOnInsert: { txFailCount: 0, txAttemptActive: false } },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: "after" },
     );
 }

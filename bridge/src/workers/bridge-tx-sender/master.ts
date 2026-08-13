@@ -73,7 +73,7 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
                     const updated = await BridgeStateModel.findOneAndUpdate(
                         {},
                         FAILURE_BOOKKEEPING_PIPELINE,
-                        { new: true, updatePipeline: true },
+                        { returnDocument: "after", updatePipeline: true },
                     );
                     if ((updated?.txFailCount ?? 0) >= MAX_FAIL_COUNT) {
                         logger.error(
@@ -112,7 +112,7 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
             const updated = await BridgeStateModel.findOneAndUpdate(
                 {},
                 FAILURE_BOOKKEEPING_PIPELINE,
-                { new: true, updatePipeline: true },
+                { returnDocument: "after", updatePipeline: true },
             );
             logger.warn("Booked interrupted reduce attempt on startup", {
                 txAttemptActionState: state.txAttemptActionState,
