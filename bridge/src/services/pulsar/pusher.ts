@@ -62,7 +62,12 @@ function computePushDecision(w: PushWindow): PushDecision {
     return { kind: "unreachable_start" };
 }
 
-type PushFailureKind = "raced" | "wrapper_behind" | "config" | "unknown";
+type PushFailureKind =
+    | "raced"
+    | "wrapper_behind"
+    | "config"
+    | "chain_invariant"
+    | "unknown";
 
 // x/bridge registers its errors at codes ≥1102 and the SDK's ante-level
 // codes stay below 100, so with exactly one msg type in the tx the bare code
@@ -78,14 +83,33 @@ const BRIDGE_CONFIG_ERRS = new Set([
 ]);
 const SDK_ERR_OUT_OF_GAS = 11; // config: retrying the same gas limit fails forever
 
+// The chain deliberately fail-fasts the WHOLE push when an action's payload is
+// one the SettlementContract cannot have emitted — amount <= 0, an unknown
+// type, coordinates that are not a field element. Business-invalid actions (an
+// unregistered account, an underfunded withdrawal) are NOT here: those get an
+// approved=false leaf and the batch proceeds. These codes mean an upstream
+// invariant broke, so halting is the correct answer and the cursor must NOT
+// advance past the offending Mina block — consuming it as a false leaf would
+// hash a negative amount as 2^64-1 and invent semantics the protocol does not
+// define. (Chain team decision, 2026-08-12: PR #40 rejected for exactly this.)
+const BRIDGE_INVARIANT_ERRS = new Set([
+    1129, // action is nil
+    1130, // invalid action block_height
+    1131, // invalid action amount
+    1132, // invalid action type
+    1133, // invalid action x coordinate
+]);
+
 function classifyPushFailure(code: number, rawLog = ""): PushFailureKind {
     if (code === BRIDGE_ERR_MUST_ADVANCE) return "raced";
     if (code === BRIDGE_ERR_NOT_FINALIZED) return "wrapper_behind";
+    if (BRIDGE_INVARIANT_ERRS.has(code)) return "chain_invariant";
     if (BRIDGE_CONFIG_ERRS.has(code) || code === SDK_ERR_OUT_OF_GAS)
         return "config";
     if (rawLog.includes("must advance")) return "raced";
     if (rawLog.includes("not finalized")) return "wrapper_behind";
     if (rawLog.includes("out of gas")) return "config";
+    if (rawLog.includes("invalid action")) return "chain_invariant";
     return "unknown";
 }
 
@@ -202,6 +226,15 @@ async function pushTick(
         });
     } else if (failure === "raced") {
         logger.debug("Push not applied (benign race)", meta);
+    } else if (failure === "chain_invariant") {
+        logger.error(
+            "Push refused: the Mina interval carries an action the contract " +
+                "cannot have emitted, so the chain fail-fasts and the cursor " +
+                "stays put — BY DESIGN. Adjudication is halted until the " +
+                "source is fixed; retrying cannot clear it. Inspect the " +
+                "actions the archive wrapper serves for this interval.",
+            { ...meta, rawLog: result.rawLog },
+        );
     } else {
         logger.error("Push rejected", { ...meta, rawLog: result.rawLog });
     }

@@ -103,6 +103,18 @@ describe("classifyPushFailure", () => {
         expect(classifyPushFailure(5)).toBe("unknown"); // e.g. insufficient funds
     });
 
+    it("names a fail-fast on a contract-impossible action instead of shrugging", () => {
+        // The chain refuses the whole push rather than folding a malformed
+        // payload as a false leaf (chain team decision, PR #40 rejected). The
+        // operator must be able to tell this apart from a transport fault:
+        // it is deliberate, permanent until fixed, and not a bridge bug.
+        for (const code of [1129, 1130, 1131, 1132, 1133])
+            expect(classifyPushFailure(code)).toBe("chain_invariant");
+        expect(classifyPushFailure(3, "invalid action amount: got -5")).toBe(
+            "chain_invariant",
+        );
+    });
+
     it("falls back to the registered error text for nodes that still fill the log", () => {
         expect(
             classifyPushFailure(
