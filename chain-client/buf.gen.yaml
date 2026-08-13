@@ -47,3 +47,19 @@ plugins:
       - esModuleInterop=true
       # Emit .js extensions on relative imports (required by nodenext resolution).
       - importSuffix=.js
+  # Second pass, message codecs only. The clients above call
+  # makeGenericClientConstructor at module scope, so importing any generated
+  # file drags @grpc/grpc-js — and node's net/tls — into the bundle. A browser
+  # needs the same codecs without that, and reaches them through
+  # pulsar-chain-client/messages. Same protos, same ts-proto pin: the two trees
+  # can only differ in whether services are emitted.
+  - local: protoc-gen-ts_proto
+    out: src/generated-web
+    include_imports: true
+    opt:
+      - outputServices=false
+      - snakeToCamel=false
+      - forceLong=string
+      - useOptionals=all
+      - esModuleInterop=true
+      - importSuffix=.js

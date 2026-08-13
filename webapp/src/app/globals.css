@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+@plugin 'tailwind-scrollbar' {
+  nocompatible: true;
+  preferredStrategy: 'pseudoelements';
+}
+
+@theme inline {
+  --font-sans: var(--font-aspekta), ui-sans-serif, system-ui, sans-serif;
+}
+
+/*
+ * Pulsar brand tokens, mirrored from the marketing site (pulsarchain.xyz).
+ * Names describe the role, not the colour, so a palette change never means
+ * hunting through components for a hex.
+ */
+@theme {
+  /* Surfaces, lightest to darkest. */
+  --color-canvas: #ffffff;
+  --color-surface: #fff9fc;
+  --color-surface-sunken: #f6eef2;
+  --color-panel: #020203;
+
+  /* Ink, strongest to faintest. */
+  --color-ink: #020106;
+  --color-ink-muted: #432735;
+  --color-ink-subtle: #898989;
+  --color-ink-inverse: #fafafa;
+  --color-ink-inverse-muted: #b3b3b3;
+
+  /* Hairlines. `line` separates, `line-strong` is an input's resting edge. */
+  --color-line: #ece2e7;
+  --color-line-strong: #929292;
+
+  /* Accent. Used sparingly: active nav, focus, markers, alerts. */
+  --color-accent: #ff5ab8;
+  --color-accent-strong: #ff4da2;
+  --color-accent-deep: #c9438f;
+
+  --color-positive: #17794a;
+  --color-negative: #b3261e;
+
+  --header-height: 4.5rem;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* One focus treatment for the whole app, in the brand accent. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * Corner radius scale. Four steps, and nesting decides which one:
+ *
+ *   8px             a top-level surface — a page card, the wallet popup shell
+ *   6px             anything sitting inside one of those
+ *   .brand-squircle a control (7px, squaring to 1px on hover)
+ *   2px             a micro chip, e.g. the DEVNET badge
+ *   rounded-full    avatars and token marks only
+ *
+ * An inner radius never equals or exceeds its container's, which is what keeps
+ * nested cards from looking like they are fighting each other.
+ */
+@layer components {
+  /*
+   * The brand's signature control: a 7px radius that squares off to 1px on
+   * hover. Every interactive surface shares it so the gesture reads as one
+   * system rather than a per-button flourish.
+   *
+   * Deliberately NOT extended to `.group:hover .brand-squircle`: a row-level
+   * hover firing the gesture on every control it happens to contain reads as a
+   * glitch, and it fires on controls the pointer is nowhere near.
+   */
+  .brand-squircle {
+    border-radius: 7px;
+    transition: border-radius 500ms ease-in-out;
+  }
+
+  .brand-squircle:hover:not(:disabled) {
+    border-radius: 1px;
+  }
+
+  /*
+   * The primary action, wherever it appears: Deposit, Send, Sign, Confirm.
+   * Carries the same radius gesture as .brand-squircle plus the one colour
+   * shift the brand allows on a filled control — ink to its muted plum, so a
+   * pointer on the app's most consequential button gets an answer.
+   *
+   * Written out rather than composed, so utilities in markup still override it
+   * and nothing depends on layer ordering. Sizing beyond the height (w-full,
+   * gap, margins) belongs at the call site.
+   */
+  .brand-button {
+    display: inline-flex;
+    height: 42px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    background-color: var(--color-ink);
+    color: var(--color-ink-inverse);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      border-radius 500ms ease-in-out,
+      background-color 200ms ease;
+  }
+
+  .brand-button:hover:not(:disabled) {
+    border-radius: 1px;
+    background-color: var(--color-ink-muted);
+  }
+
+  .brand-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  /* Section and page titles: uppercase, tight, weighted. */
+  .brand-title {
+    font-weight: 550;
+    letter-spacing: -0.025em;
+    text-transform: uppercase;
+  }
+
+  /* Underline input, matching the marketing site's contact form. */
+  .brand-field {
+    border-bottom: 1px solid var(--color-line-strong);
+    background: transparent;
+    transition: border-color 200ms ease;
+  }
+
+  .brand-field:focus,
+  .brand-field:focus-within {
+    border-bottom-color: var(--color-ink);
+    outline: none;
+  }
+
+  .hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-thumb-border::-webkit-scrollbar-thumb {
+    border: 1px solid var(--color-canvas) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-squircle,
+  .brand-button {
+    transition: none;
+  }
+}

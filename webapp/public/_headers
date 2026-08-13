@@ -1,0 +1,16 @@
+# o1js proves with a shared WebAssembly.Memory, which is a SharedArrayBuffer,
+# which the browser only hands to a cross-origin-isolated page. Without both of
+# these headers the deposit flow fails at compile time, not at deploy time —
+# they are load-bearing, not hardening.
+#
+# The dev server sets the same pair from next.config.mjs (ISOLATION_HEADERS),
+# since headers() is dropped under output: "export". Change both together.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+# The o1js compilation cache. A stale entry is harmless — o1js compares the
+# header against the circuit's uniqueId and recompiles on a mismatch — so this
+# can be cached hard.
+/cache/*
+  Cache-Control: public, max-age=86400

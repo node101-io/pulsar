@@ -6,6 +6,16 @@
     "type": "module",
     "main": "build/src/index.js",
     "types": "build/src/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./build/src/index.d.ts",
+            "default": "./build/src/index.js"
+        },
+        "./messages": {
+            "types": "./build/src/messages.d.ts",
+            "default": "./build/src/messages.js"
+        }
+    },
     "scripts": {
         "build": "buf generate && tsc",
         "test": "vitest run",

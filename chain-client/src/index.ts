@@ -4,3 +4,5 @@ export * from "./validatorSet.js";
 export * from "./voteExtensions.js";
 export * from "./bridgeQuery.js";
 export * from "./bridgeTx.js";
+export * from "./keyregistryTx.js";
+export * from "./keyregistryChallenge.js";

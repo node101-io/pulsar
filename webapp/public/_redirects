@@ -1,0 +1,3 @@
+# next.config's redirects() is ignored under output: "export" — there is no
+# server to run it. Bridge is the only entry point the app has.
+/ /bridge 302
