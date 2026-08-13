@@ -65,6 +65,7 @@ function computePushDecision(w: PushWindow): PushDecision {
 type PushFailureKind =
     | "raced"
     | "wrapper_behind"
+    | "wrapper_down"
     | "config"
     | "chain_invariant"
     | "unknown";
@@ -82,6 +83,18 @@ const BRIDGE_CONFIG_ERRS = new Set([
     1127, // range exceeds max_block_range
 ]);
 const SDK_ERR_OUT_OF_GAS = 11; // config: retrying the same gas limit fails forever
+// Refused in CheckTx, so no fee is taken and nothing drains — the quietest
+// possible stall. Without this it would classify as "unknown" and re-send
+// the identical underpaid tx every tick, forever.
+const SDK_ERR_INSUFFICIENT_FEE = 13;
+
+// The wrapper is down, still catching up, or timed out serving the range.
+// Nothing is wrong with our request — the next tick asks again.
+const BRIDGE_WRAPPER_ERRS = new Set([
+    1115, // wrapper query time-out
+    1116, // wrapper query cancelled
+    1135, // archive wrapper is not ready
+]);
 
 // The chain deliberately fail-fasts the WHOLE push when an action's payload is
 // one the SettlementContract cannot have emitted — amount <= 0, an unknown
@@ -103,46 +116,81 @@ const BRIDGE_INVARIANT_ERRS = new Set([
 function classifyPushFailure(code: number, rawLog = ""): PushFailureKind {
     if (code === BRIDGE_ERR_MUST_ADVANCE) return "raced";
     if (code === BRIDGE_ERR_NOT_FINALIZED) return "wrapper_behind";
+    if (BRIDGE_WRAPPER_ERRS.has(code)) return "wrapper_down";
     if (BRIDGE_INVARIANT_ERRS.has(code)) return "chain_invariant";
-    if (BRIDGE_CONFIG_ERRS.has(code) || code === SDK_ERR_OUT_OF_GAS)
+    if (
+        BRIDGE_CONFIG_ERRS.has(code) ||
+        code === SDK_ERR_OUT_OF_GAS ||
+        code === SDK_ERR_INSUFFICIENT_FEE
+    )
         return "config";
     if (rawLog.includes("must advance")) return "raced";
     if (rawLog.includes("not finalized")) return "wrapper_behind";
-    if (rawLog.includes("out of gas")) return "config";
+    if (rawLog.includes("out of gas") || rawLog.includes("insufficient fee"))
+        return "config";
     if (rawLog.includes("invalid action")) return "chain_invariant";
+    if (rawLog.includes("wrapper")) return "wrapper_down";
     return "unknown";
 }
 
 // The archive wrapper serves its "latest CONFIRMED and indexed" height
-// (wrapper_query_client.go) — an unqueryable confirmation depth behind the
-// live tip, so targeting the raw tip could fail "not finalized" on every
-// tick and never adjudicate. The margin self-tunes onto that depth: each
-// rejection widens it a step (one rejected tx per step, then stable), a
-// streak of accepted pushes narrows it to follow a wrapper that catches up.
-// Deliberately not an env knob — the depth is the wrapper's fact, a guessed
-// constant burns fees or adds lag. Process-lifetime state; reset() is the
-// test hook.
+// (wrapper_query_client.go), which trails the live Mina tip by two distinct
+// amounts:
+//
+//   1. params.confirmation_depth — the chain publishes it, so it is KNOWN.
+//      Aiming above it fails "not finalized" on every tick, and each failed
+//      push still pays its fee. At the deployed depth of 40, discovering it
+//      two blocks at a time would burn 20 rejections before the first
+//      success; reading it costs nothing, since pushTick already fetches
+//      params for the range bounds.
+//   2. the archive node's own indexing lag on top — NOT observable from
+//      here, and it drifts. That is what the self-tuning slack absorbs: each
+//      rejection widens it a step, a streak of accepted pushes narrows it
+//      again so a wrapper that catches up is followed rather than
+//      permanently under-shot.
+//
+// Slack alone (a blind margin) would be wrong now that the depth is
+// published, and depth alone would stall the moment the archive node fell
+// behind — so the effective target is tip − (depth + slack). Slack is
+// process-lifetime state; reset() is the test hook.
 const wrapperMargin = {
-    margin: 0n,
+    slack: 0n,
     streak: 0,
-    effectiveTip(tip: bigint): bigint {
-        return tip > this.margin ? tip - this.margin : 0n;
+    /** Highest Mina height the wrapper can plausibly have confirmed. */
+    effectiveTip(tip: bigint, confirmationDepth: bigint): bigint {
+        const lag = confirmationDepth + EDGE_SAFETY + this.slack;
+        return tip > lag ? tip - lag : 0n;
     },
     onRejected(): void {
-        if (this.margin < 64n) this.margin += 2n;
+        if (this.slack < MAX_SLACK) this.slack += SLACK_STEP;
         this.streak = 0;
     },
     onApplied(): void {
-        if (this.margin > 0n && ++this.streak >= 10) {
-            this.margin--;
+        if (this.slack > 0n && ++this.streak >= SLACK_DECAY_AFTER) {
+            this.slack--;
             this.streak = 0;
         }
     },
     reset(): void {
-        this.margin = 0n;
+        this.slack = 0n;
         this.streak = 0;
     },
 };
+
+const SLACK_STEP = 2n;
+const MAX_SLACK = 64n;
+const SLACK_DECAY_AFTER = 10;
+
+// Aim a little INSIDE the confirmed zone rather than at its exact edge. Each
+// validator answers PushNewActions from its OWN archive wrapper, inside
+// consensus execution (a known pre-production TODO in the keeper), so two
+// validators whose indexers differ by a block at the boundary return
+// different results for the same transaction — one applies state, the other
+// rejects, and the chain halts on an app-hash mismatch. Targeting the exact
+// boundary is the pattern most likely to sit on that disagreement, and the
+// self-tuning slack would otherwise oscillate across it forever. A couple of
+// blocks of standoff costs minutes of latency and removes the whole class.
+const EDGE_SAFETY = 3n;
 
 // One push per tick is plenty: a push spans up to max_block_range (1000)
 // Mina blocks and Mina produces ~one block per 3 min, so even a week-long
@@ -156,6 +204,9 @@ async function pushTick(
         throw new Error(
             "x/bridge Query/Params served no start_block_height/max_block_range",
         );
+    // confirmation_depth may legitimately be absent or "0" on a chain that
+    // does not delay the wrapper; the slack alone then covers the lag.
+    const confirmationDepth = BigInt(params.confirmation_depth ?? "0");
 
     const tip = (
         await fetchLastBlock(ENDPOINTS.NODE[env.MINA_NETWORK])
@@ -163,7 +214,7 @@ async function pushTick(
 
     const decision = computePushDecision({
         cursor: (await fetchActionsBatch()).latestFetchedMinaHeight,
-        tip: wrapperMargin.effectiveTip(tip),
+        tip: wrapperMargin.effectiveTip(tip, confirmationDepth),
         startBlockHeight: BigInt(params.start_block_height),
         maxBlockRange: BigInt(params.max_block_range),
     });
@@ -205,7 +256,7 @@ async function pushTick(
         wrapperMargin.onApplied();
         logger.info("Pushed new actions", {
             target: decision.target.toString(),
-            tipMargin: wrapperMargin.margin.toString(),
+            wrapperSlack: wrapperMargin.slack.toString(),
             txHash: result.transactionHash,
             event: "push_new_actions_sent",
         });
@@ -222,10 +273,18 @@ async function pushTick(
         wrapperMargin.onRejected();
         logger.debug("Push behind the wrapper, widening tip margin", {
             ...meta,
-            tipMargin: wrapperMargin.margin.toString(),
+            wrapperSlack: wrapperMargin.slack.toString(),
         });
     } else if (failure === "raced") {
         logger.debug("Push not applied (benign race)", meta);
+    } else if (failure === "wrapper_down") {
+        logger.warn(
+            "Push refused: the archive wrapper is unavailable or still " +
+                "catching up. Nothing is wrong with the request — the next " +
+                "tick asks again. Persisting means the wrapper or its Mina " +
+                "archive database needs attention.",
+            meta,
+        );
     } else if (failure === "chain_invariant") {
         logger.error(
             "Push refused: the Mina interval carries an action the contract " +

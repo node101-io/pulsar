@@ -115,6 +115,23 @@ describe("classifyPushFailure", () => {
         );
     });
 
+    it("separates a wrapper outage from our own faults", () => {
+        // Nothing is wrong with the request — retrying is the right answer,
+        // so it must not read as a config fault the operator chases.
+        for (const code of [1115, 1116, 1135])
+            expect(classifyPushFailure(code)).toBe("wrapper_down");
+    });
+
+    it("catches an underpaid fee, the quietest possible stall", () => {
+        // Refused in CheckTx: no fee taken, no balance drain, and the next
+        // tick re-sends the identical tx. Left as 'unknown' it would repeat
+        // forever with nothing to notice.
+        expect(classifyPushFailure(13)).toBe("config");
+        expect(classifyPushFailure(3, "insufficient fee: got 30, want 200")).toBe(
+            "config",
+        );
+    });
+
     it("falls back to the registered error text for nodes that still fill the log", () => {
         expect(
             classifyPushFailure(
@@ -130,49 +147,61 @@ describe("classifyPushFailure", () => {
     });
 });
 
-// The wrapper indexes with its own (unqueryable) confirmation depth; the
-// margin must converge onto it and follow it back down — otherwise the
-// pusher either never lands a push (no margin) or permanently lags (margin
-// never decays).
-describe("tip margin self-tuning", () => {
+// The wrapper trails the tip by a KNOWN part (params.confirmation_depth) and
+// an unknown one (the archive node's indexing lag). The known part must be
+// used as-is — discovering the live chain's depth of 40 two blocks at a time
+// would burn 20 rejected, fee-paying pushes — while the unknown part is what
+// the slack discovers and gives back.
+describe("wrapper lag targeting", () => {
+    const DEPTH = 40n; // the deployed chain's params.confirmation_depth
+    const EDGE = 3n; // standoff so targets never sit on the wrapper's boundary
     beforeEach(() => wrapperMargin.reset());
 
-    it("starts at zero: the common case pays no lag", () => {
-        expect(wrapperMargin.effectiveTip(1000n)).toBe(1000n);
+    it("subtracts the published confirmation depth from the very first tick", () => {
+        expect(wrapperMargin.effectiveTip(1000n, DEPTH)).toBe(1000n - DEPTH - EDGE);
     });
 
-    it("widens by one step per wrapper rejection and converges", () => {
-        wrapperMargin.onRejected();
-        expect(wrapperMargin.effectiveTip(1000n)).toBe(998n);
-        wrapperMargin.onRejected();
-        expect(wrapperMargin.effectiveTip(1000n)).toBe(996n);
+    it("still stands off the edge when the chain publishes no depth", () => {
+        expect(wrapperMargin.effectiveTip(1000n, 0n)).toBe(1000n - EDGE);
     });
 
-    it("caps the margin so a broken wrapper cannot push it to infinity", () => {
+    it("widens by one step per rejection, on top of the depth", () => {
+        wrapperMargin.onRejected();
+        expect(wrapperMargin.effectiveTip(1000n, DEPTH)).toBe(1000n - DEPTH - EDGE - 2n);
+        wrapperMargin.onRejected();
+        expect(wrapperMargin.effectiveTip(1000n, DEPTH)).toBe(1000n - DEPTH - EDGE - 4n);
+    });
+
+    it("caps the slack so a broken wrapper cannot widen it forever", () => {
         for (let i = 0; i < 100; i++) wrapperMargin.onRejected();
-        expect(1000n - wrapperMargin.effectiveTip(1000n)).toBe(64n);
+        expect(1000n - wrapperMargin.effectiveTip(1000n, DEPTH)).toBe(
+            DEPTH + EDGE + 64n,
+        );
     });
 
     it("never yields a negative tip on a young chain", () => {
         wrapperMargin.onRejected();
-        expect(wrapperMargin.effectiveTip(1n)).toBe(0n);
+        expect(wrapperMargin.effectiveTip(1n, DEPTH)).toBe(0n);
     });
 
-    it("decays one block after a streak of accepted pushes", () => {
-        wrapperMargin.onRejected(); // margin 2
+    it("gives slack back after a streak of accepted pushes", () => {
+        const base = 1000n - DEPTH - EDGE;
+        wrapperMargin.onRejected(); // slack 2
         for (let i = 0; i < 10; i++) wrapperMargin.onApplied();
-        expect(wrapperMargin.effectiveTip(1000n)).toBe(999n); // margin 1
+        expect(wrapperMargin.effectiveTip(1000n, DEPTH)).toBe(base - 1n);
         for (let i = 0; i < 9; i++) wrapperMargin.onApplied();
-        expect(wrapperMargin.effectiveTip(1000n)).toBe(999n); // streak not reached yet
+        expect(wrapperMargin.effectiveTip(1000n, DEPTH)).toBe(base - 1n); // streak not reached
         wrapperMargin.onApplied();
-        expect(wrapperMargin.effectiveTip(1000n)).toBe(1000n); // margin back to 0
+        expect(wrapperMargin.effectiveTip(1000n, DEPTH)).toBe(base); // back to depth + edge
     });
 
     it("a rejection resets the decay streak", () => {
-        wrapperMargin.onRejected(); // margin 2
+        wrapperMargin.onRejected(); // slack 2
         for (let i = 0; i < 9; i++) wrapperMargin.onApplied();
-        wrapperMargin.onRejected(); // margin 4, streak 0
+        wrapperMargin.onRejected(); // slack 4, streak 0
         for (let i = 0; i < 9; i++) wrapperMargin.onApplied();
-        expect(wrapperMargin.effectiveTip(1000n)).toBe(996n); // no decay yet
+        expect(wrapperMargin.effectiveTip(1000n, DEPTH)).toBe(
+            1000n - DEPTH - EDGE - 4n,
+        ); // no decay yet
     });
 });
