@@ -1,0 +1,27 @@
+# Dependencies
+node_modules
+
+# Build output — both dirs, since dev and the static export are kept apart
+# (see next.config.mjs distDir).
+.next
+.next-dev
+out
+dev-assets
+
+# Generated
+next-env.d.ts
+worker-configuration.d.ts
+*.tsbuildinfo
+
+# o1js compilation artifacts, written by `pnpm cache:build`
+public/cache
+
+# Wrangler local state
+.wrangler
+
+# Binary assets prettier cannot parse anyway
+fonts
+public
+
+# System
+.DS_Store

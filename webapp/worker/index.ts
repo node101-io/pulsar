@@ -7,22 +7,35 @@
 import { grantRegistrationFee, granterAddress, hasAllowance } from "./feegrant";
 
 // Env comes from `wrangler types` (worker-configuration.d.ts), generated from
-// wrangler.jsonc — run `pnpm cf-typegen` after changing bindings.
+// wrangler.jsonc — run `pnpm cf-typegen` after changing bindings. It carries
+// the secrets too, because wrangler.jsonc lists them under secrets.required;
+// naming them here as well would just be a second copy to drift.
 //
-// DEV_ORIGIN is not one of them: the dev script passes it with --var and
-// production never sets it. Optional here, so the proxy branch below is
-// correctly unreachable in a deployed Worker rather than assumed present.
+// The declarations are still only a build-time promise — a secret nobody
+// uploaded is absent at runtime whatever the type says — so both handlers
+// below check before use.
+//
+// DEV_ORIGIN is the one exception: the dev script passes it with --var and
+// production never sets it, so it is not a secret and not in that list.
+// Optional here, which is what makes the proxy branch below correctly
+// unreachable in a deployed Worker rather than assumed present.
 type WorkerEnv = Env & {
   DEV_ORIGIN?: string;
-  // `wrangler secret put PULSAR_GRANTER_KEY_HEX`. Absent means the fee-grant
-  // route is off rather than broken.
-  PULSAR_GRANTER_KEY_HEX?: string;
 };
 
 const COINGECKO =
   "https://api.coingecko.com/api/v3/simple/price?ids=mina-protocol&vs_currencies=usd&include_24hr_change=true";
 
 const CACHE_SECONDS = 60 * 60;
+
+// How long a good quote stays usable as a fallback after the feed starts
+// failing. Long, because a stale MINA price is far better than none: it only
+// drives the "~$x.xx" estimate, never an amount that gets signed.
+const PRICE_FALLBACK_SECONDS = 24 * 60 * 60;
+
+// Cache API key for the last good quote. A synthetic URL — it is only ever a
+// cache index, never fetched.
+const PRICE_FALLBACK_KEY = "https://price-fallback.pulsar.internal/mina";
 
 const PULSAR_RPC_ORIGIN = "https://rpc.pulsarchain.xyz";
 const PULSAR_REST_ORIGIN = "https://rest.pulsarchain.xyz";
@@ -33,7 +46,7 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/price") {
-      return handlePrice();
+      return handlePrice(env);
     }
 
     if (url.pathname === "/api/feegrant") {
@@ -158,53 +171,111 @@ async function handleFeegrant(request: Request, env: WorkerEnv): Promise<Respons
   return Response.json({ status: "pending", granter });
 }
 
-async function handlePrice(): Promise<Response> {
-  let upstream: Response;
+/**
+ * The MINA quote, with the feed's rate limit designed around rather than
+ * hoped away.
+ *
+ * CoinGecko's keyless tier is throttled per client IP, and a Worker's egress
+ * IPs are shared with every other Worker on the platform — so the 429 arrives
+ * because of strangers' traffic, not ours, and no amount of edge caching on
+ * our side prevents it. Two things follow:
+ *
+ *   1. COINGECKO_API_KEY is required, not a nicety: it moves the quota from
+ *      that shared IP onto our own account. A free Demo key is enough. An
+ *      unkeyed deploy does not degrade, it 429s on someone else's traffic.
+ *   2. A failed fetch falls back to the last good quote instead of surfacing
+ *      an error, because a price this app only uses for a "~$x.xx" estimate
+ *      should never be the reason the screen looks broken.
+ */
+async function handlePrice(env: WorkerEnv): Promise<Response> {
+  // A named cache, not caches.default: the default one already holds the
+  // CoinGecko response that cf.cacheEverything put there, and the fallback
+  // should not share a namespace with it.
+  const cache = await caches.open("price-fallback");
+  const fallbackKey = new Request(PRICE_FALLBACK_KEY);
+
+  // Typed as required, but a secret is only ever present at runtime. A missing
+  // one is an operator error, so say so plainly rather than firing a request
+  // that is guaranteed to be throttled — while still serving a stale quote if
+  // there is one, since the misconfiguration is not the visitor's problem.
+  if (!env.COINGECKO_API_KEY) {
+    return (
+      (await cache.match(fallbackKey)) ??
+      Response.json(
+        { error: "Price feed is not configured" },
+        { status: 500 },
+      )
+    );
+  }
+
+  let upstream: Response | undefined;
   try {
-    // cacheEverything + cacheTtl makes Cloudflare hold the upstream response
-    // at the edge, so CoinGecko sees one request per colo per 5 minutes
-    // instead of one per visitor — their free tier is rate-limited by IP.
+    // cacheEverything + cacheTtl holds the upstream response at the edge, so
+    // CoinGecko sees one request per colo per CACHE_SECONDS rather than one
+    // per visitor. It bounds OUR share of the quota; it cannot bound anyone
+    // else's on the same egress IP.
     upstream = await fetch(COINGECKO, {
-      // CoinGecko 403s workerd's default User-Agent; identifying ourselves is
-      // what gets the request through, not a nicety.
       headers: {
         Accept: "application/json",
+        // CoinGecko 403s workerd's default User-Agent; identifying ourselves
+        // is what gets the request through, not a nicety.
         "User-Agent": "pulsar-webapp/1.0 (+https://pulsarchain.xyz)",
+        "x-cg-demo-api-key": env.COINGECKO_API_KEY,
       },
       cf: { cacheEverything: true, cacheTtl: CACHE_SECONDS },
     });
   } catch {
-    return priceError("Could not reach the price feed", 502);
+    // Network failure: nothing to read, go straight to the fallback.
   }
 
-  if (!upstream.ok) {
-    return priceError(`Price feed returned ${upstream.status}`, 502);
+  const quote = upstream?.ok ? await readQuote(upstream) : undefined;
+
+  if (!quote) {
+    const stale = await cache.match(fallbackKey);
+    if (stale) return stale;
+
+    const reason = !upstream
+      ? "Could not reach the price feed"
+      : !upstream.ok
+        ? `Price feed returned ${upstream.status}`
+        : "Price feed returned an unexpected shape";
+    return Response.json({ error: reason }, { status: 502 });
   }
 
-  const body = (await upstream.json()) as {
-    "mina-protocol"?: { usd?: number; usd_24h_change?: number };
-  };
-  const quote = body["mina-protocol"];
-  if (typeof quote?.usd !== "number") {
-    return priceError("Price feed returned an unexpected shape", 502);
-  }
-
-  return Response.json(
-    {
-      price: Number(quote.usd.toFixed(4)),
-      change24h: Number((quote.usd_24h_change ?? 0).toFixed(2)),
+  const response = Response.json(quote, {
+    headers: {
+      "Cache-Control": `public, max-age=${CACHE_SECONDS}`,
+      // The page is cross-origin isolated (see public/_headers); every
+      // subresource it loads must opt in, including same-origin JSON.
+      "Cross-Origin-Resource-Policy": "same-origin",
     },
-    {
-      headers: {
-        "Cache-Control": `public, max-age=${CACHE_SECONDS}`,
-        // The page is cross-origin isolated (see public/_headers); every
-        // subresource it loads must opt in, including same-origin JSON.
-        "Cross-Origin-Resource-Policy": "same-origin",
-      },
-    },
-  );
+  });
+
+  // Keep this quote as the fallback. Its own max-age is what decides how long
+  // the Cache API will still hand it back, so it is set independently of the
+  // max-age the browser sees.
+  const fallback = new Response(response.clone().body, response);
+  fallback.headers.set("Cache-Control", `public, max-age=${PRICE_FALLBACK_SECONDS}`);
+  await cache.put(fallbackKey, fallback);
+
+  return response;
 }
 
-function priceError(message: string, status: number): Response {
-  return Response.json({ error: message }, { status });
+async function readQuote(
+  upstream: Response,
+): Promise<{ price: number; change24h: number } | undefined> {
+  let body: { "mina-protocol"?: { usd?: number; usd_24h_change?: number } };
+  try {
+    body = await upstream.json();
+  } catch {
+    return undefined;
+  }
+
+  const quote = body["mina-protocol"];
+  if (typeof quote?.usd !== "number") return undefined;
+
+  return {
+    price: Number(quote.usd.toFixed(4)),
+    change24h: Number((quote.usd_24h_change ?? 0).toFixed(2)),
+  };
 }

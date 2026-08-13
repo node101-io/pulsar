@@ -8,6 +8,24 @@
   "compatibility_date": "2026-08-13",
   // cosmjs signs the fee-grant transaction with node crypto APIs.
   "compatibility_flags": ["nodejs_compat"],
+  // Custom domain rather than a route pattern: Cloudflare then owns the DNS
+  // record and the certificate for this hostname, and every request to it
+  // reaches the Worker. The pulsarchain.xyz zone must be on the same account —
+  // `wrangler deploy` creates the record on first publish.
+  "routes": [{ "pattern": "app.pulsarchain.xyz", "custom_domain": true }],
+  // The secrets this Worker expects, by name. Declaring them here is what
+  // makes `wrangler types` put them in Env — otherwise it guesses from
+  // whatever happens to be in .dev.vars locally — and what makes `wrangler
+  // dev` warn when one is missing instead of failing at the first request.
+  //
+  // Upload with `wrangler secret put <NAME>`; never as "vars", which are
+  // plain text in the config and would land in the repo.
+  //
+  // DEV_ORIGIN is deliberately absent: it is a dev-only --var, and production
+  // must never have it (see worker/index.ts).
+  "secrets": {
+    "required": ["PULSAR_GRANTER_KEY_HEX", "COINGECKO_API_KEY"]
+  },
   "assets": {
     "directory": "./out",
     "binding": "ASSETS",
