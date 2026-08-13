@@ -7,6 +7,7 @@
         "test:watch": "vitest",
         "build": "pnpm --filter pulsar-contracts --filter pulsar-chain-client build && tsc",
         "start": "pnpm run build && node --max-old-space-size=8192 dist/src/index.js",
+        "doctor": "pnpm run build && node dist/src/scripts/doctor.js",
         "clean": "rimraf dist node_modules"
     },
     "keywords": [

@@ -394,6 +394,21 @@ The master backs off exponentially (`1s · 2^strikes`, capped at 60 s) before re
 
 `sendProvedReduceTx` has its own inner retry loop (up to `MAX_RETRY` attempts, separate from job retries). On each attempt it refreshes the sender nonce from the chain, re-signs the already-proved transaction, and retries the broadcast. This handles transient node failures or nonce staleness without re-running the expensive `tx.prove()` step.
 
+### Diagnosing a stall: `pnpm run doctor`
+
+Every stall looks identical from outside — nothing happens — because the reduce pipeline is a chain of links and any one of them can be the broken one. `src/scripts/doctor.ts` walks those links in dependency order and prints the **first** one that is broken, because repairing a later link while an earlier one is down changes nothing:
+
+| Section | Answers |
+| ------- | ------- |
+| Contract | Is the account readable, and does its `actionState` lag the queue tip (i.e. is there work at all)? Prints all five slots. |
+| Chain | Does `x/bridge` adjudicate *our* contract, and is its Mina scan cursor still moving? A frozen cursor means the pusher is dead, not the bridge. |
+| Approval walk | Runs the worker's own `collectApprovalLeaves` against the contract's cursor and prints the thrown class **verbatim** — the class is the diagnosis, and each one has a different remedy. |
+| Proof inputs | Resolves the validator set, finds a usable signed root, runs the quorum pre-check — the same three calls the worker makes, minus the minutes of proving. |
+| Archive | Only when work is pending: does the archive actually return the actions the account claims exist? |
+| Breaker & fee payer | Is the circuit breaker open on the current front (with the exact `mongosh` command to clear it), and can the fee payer still pay? |
+
+It is strictly read-only — no Mongo writes, no enqueues, no transactions — so it is safe against a live bridge and equally useful against a stopped one.
+
 ---
 
 ## Startup Sequence
