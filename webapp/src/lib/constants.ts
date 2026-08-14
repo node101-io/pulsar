@@ -10,11 +10,14 @@ export const MINA_RPC_URL = "https://api.minascan.io/node/devnet/v1/graphql";
 // a wallet bug, so the UI checks before it builds anything.
 export const EXPECTED_MINA_NETWORK_IDS = ["mina:devnet", "mina:testnet"];
 
-// SettlementContract on Mina devnet, deployed 2026-08-13 against the fresh
-// Pulsar chain. The chain adjudicates exactly this address (x/bridge
-// params.contract_address) — they are one deployment, not two settings.
+// SettlementContract on Mina devnet, deployed 2026-08-14 against the
+// re-genesis'd Pulsar chain. The chain adjudicates exactly this address
+// (x/bridge params.contract_address) — they are one deployment, not two
+// settings. A chain re-genesis ALWAYS forces a new address here: deploy
+// seals the account (verification key immutable, state proof-only), so the
+// old contract can never be re-anchored to a new chain.
 export const BRIDGE_ADDRESS =
-  "B62qoNfsWteQFdfjTZnT91o5rRmUmwwozD68Aj5W1nFVCx29vp6eL69";
+  "B62qje6kuVppRQNfL3ot7cF1o4tLK5w2Tg3rRBFHe8RmY9YUJrPkFKW";
 
 // Deposits below this are rejected by the contract (MINIMUM_DEPOSIT_AMOUNT).
 //
