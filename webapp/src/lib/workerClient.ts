@@ -7,6 +7,7 @@ export type ZkappWorkerType = {
   fetchAccount(args: { publicKey: string }): Promise<any>;
   getMinaBalance(args: { userAddress: string }): Promise<string>;
   deposit(args: { sender: string; amount: string; fee: string }): Promise<string>;
+  withdraw(args: { sender: string; amount: string; fee: string }): Promise<string>;
   waitForTransaction(args: { hash: string; rpcUrl: string }): Promise<any>;
   getState(): Promise<State>;
 };
@@ -46,6 +47,9 @@ export default class WorkerClient {
     return this.api.deposit(args);
   }
 
+  async withdraw(args: { sender: string; amount: string; fee: string }) {
+    return this.api.withdraw(args);
+  }
 
   async waitForTransaction(args: { hash: string; rpcUrl: string }) {
     return this.api.waitForTransaction(args);

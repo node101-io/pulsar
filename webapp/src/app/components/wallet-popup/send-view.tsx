@@ -10,6 +10,7 @@ import { useConnectedWallet } from "@/app/components/use-connected-wallet";
 import { SEND_TOKEN_FEE, createSendTokenTx } from "@/lib/tx";
 import { fetchAccountAuth } from "@/lib/utils";
 import { DECIMALS, formatAmount, parseAmount, toDisplayNumber } from "@/lib/amount";
+import { usePendingWithdrawalsFrom } from "@/lib/pending-transfers";
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 import { BroadcastMode, CosmosWallet } from "@interchain-kit/core";
 import { consumerChain } from "@/lib/constants";
@@ -74,9 +75,21 @@ export const SendView = ({ setCurrentView }: {
 
   const balance = pminaBalance ?? 0n;
   const amountBase = parseAmount(sendAmount);
+
+  // pMINA a pending withdrawal will burn from this account when the chain
+  // scans it, hours from now. The chain does not reserve it — nothing stops a
+  // send from spending it — but a send that does voids the withdrawal and
+  // forfeits its 1 MINA down payment on Mina. So this UI reserves it: the
+  // offered maximum excludes it, and the insufficient-balance check charges
+  // it. The user can still see the full balance; they just cannot walk into
+  // the forfeit unwarned.
+  const pendingWithdrawals = usePendingWithdrawalsFrom(pulsarAddress);
+  const reserved = pendingWithdrawals.reduce((sum, w) => sum + w.amount, 0n);
+
+  const spendable = balance > reserved ? balance - reserved : 0n;
   // The fee comes out of this same balance, so the whole balance is never
   // sendable. Rendered at full precision because it is parsed back, not read.
-  const maxSendable = balance > SEND_TOKEN_FEE ? balance - SEND_TOKEN_FEE : 0n;
+  const maxSendable = spendable > SEND_TOKEN_FEE ? spendable - SEND_TOKEN_FEE : 0n;
 
   const handleMaxClick = () => {
     setSendAmount(formatAmount(maxSendable, DECIMALS));
@@ -174,8 +187,18 @@ export const SendView = ({ setCurrentView }: {
           <span className="text-ink-subtle mr-auto tabular-nums">
             ~${calculateUsdValue()}
           </span>
-          <span className="text-ink-subtle tabular-nums">
+          <span
+            className="text-ink-subtle tabular-nums"
+            title={
+              reserved > 0n
+                ? `${formatAmount(reserved)} pMINA is reserved for a pending withdrawal until it settles`
+                : undefined
+            }
+          >
             Balance: {formatAmount(balance)}
+            {reserved > 0n && (
+              <span className="text-ink-muted"> ({formatAmount(reserved)} reserved)</span>
+            )}
           </span>
           <button
             onClick={handleMaxClick}
@@ -299,11 +322,15 @@ export const SendView = ({ setCurrentView }: {
               if (!recipientAddress || recipientAddress.trim() === '')
                 return toast.error('Please enter a recipient address', { id: 'invalid-recipient' });
 
-              // Against the fee-adjusted maximum, not the raw balance: the ante
-              // handler rejects a transaction whose fee the sender cannot cover.
+              // Against the fee-adjusted, reservation-adjusted maximum, not
+              // the raw balance: the ante handler rejects a fee the sender
+              // cannot cover, and spending what a pending withdrawal needs
+              // forfeits its down payment. Name whichever is the actual cause.
               if (amountBase > maxSendable)
                 return toast.error(
-                  `Insufficient balance — ${formatAmount(SEND_TOKEN_FEE, DECIMALS)} pMINA is needed for the fee`,
+                  reserved > 0n && amountBase <= balance
+                    ? `${formatAmount(reserved)} pMINA is reserved for a pending withdrawal — sending it would void the withdrawal and forfeit its 1 MINA deposit`
+                    : `Insufficient balance — ${formatAmount(SEND_TOKEN_FEE, DECIMALS)} pMINA is needed for the fee`,
                   { id: 'insufficient-balance' },
                 );
 

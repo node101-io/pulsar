@@ -5,13 +5,13 @@ import { formatAmount } from "@/lib/amount"
 import {
   useBridgeScanProgress,
   useBridgeTransactions,
-  usePendingBridgeDeposits,
+  usePendingBridgeTransfers,
   usePulsarAddress,
 } from "@/lib/hooks"
 import {
-  forgetPendingDeposit,
-  type PendingDeposit,
-} from "@/lib/pending-deposits"
+  forgetPendingTransfer,
+  type PendingTransfer,
+} from "@/lib/pending-transfers"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { MINA_EXPLORER_TX_URL, PULSAR_EXPLORER_URL } from "@/lib/constants"
 import { useState } from "react"
@@ -34,22 +34,22 @@ const formatWhen = (timestamp: string) => {
 }
 
 /**
- * What the chain can honestly say about a deposit it has not credited yet.
+ * What the chain can honestly say about a transfer it has not answered yet.
  *
- * The deposit's own Mina block is unknowable from here — it is consumed by the
- * keeper and never published — so the height recorded when it was sent stands
- * in as a lower bound. That is enough to say whether the scan has even reached
- * the neighbourhood, and never enough to claim it is done. A missing reading
- * says so rather than inventing an estimate.
+ * The transfer's own Mina block is unknowable from here — it is consumed by
+ * the keeper and never published — so the height recorded when it was sent
+ * stands in as a lower bound. That is enough to say whether the scan has even
+ * reached the neighbourhood, and never enough to claim it is done. A missing
+ * reading says so rather than inventing an estimate.
  */
 const describeProgress = (
-  deposit: PendingDeposit,
+  transfer: PendingTransfer,
   cursor: number | null | undefined,
 ): string => {
-  if (cursor == null || deposit.minaHeightAtSend == null)
+  if (cursor == null || transfer.minaHeightAtSend == null)
     return "Waiting for Pulsar to scan it"
 
-  const remaining = deposit.minaHeightAtSend - cursor
+  const remaining = transfer.minaHeightAtSend - cursor
   if (remaining > 0)
     return `Pulsar has ${remaining.toLocaleString()} Mina block${remaining === 1 ? "" : "s"} to scan before reaching it`
 
@@ -57,56 +57,61 @@ const describeProgress = (
 }
 
 const PendingRow = ({
-  deposit,
+  transfer,
   cursor,
 }: {
-  deposit: PendingDeposit
+  transfer: PendingTransfer
   cursor: number | null | undefined
-}) => (
-  <div className="border-line flex items-center gap-3 border-b px-4 py-3 last:border-b-0">
-    <span className="border-line flex size-8 shrink-0 items-center justify-center rounded-full border border-dashed">
-      <Image src="/clock.svg" alt="" width={12} height={12} className="opacity-60" />
-    </span>
+}) => {
+  const isDeposit = transfer.direction === "deposit"
 
-    <span className="flex min-w-0 flex-col gap-1">
-      <span className="text-ink text-[13px] leading-none font-medium">
-        Deposit ·{" "}
-        <span className="text-ink-subtle font-normal">
-          {formatWhen(new Date(deposit.sentAt).toISOString())}
+  return (
+    <div className="border-line flex items-center gap-3 border-b px-4 py-3 last:border-b-0">
+      <span className="border-line flex size-8 shrink-0 items-center justify-center rounded-full border border-dashed">
+        <Image src="/clock.svg" alt="" width={12} height={12} className="opacity-60" />
+      </span>
+
+      <span className="flex min-w-0 flex-col gap-1">
+        <span className="text-ink text-[13px] leading-none font-medium">
+          {isDeposit ? "Deposit" : "Withdraw"} ·{" "}
+          <span className="text-ink-subtle font-normal">
+            {formatWhen(new Date(transfer.sentAt).toISOString())}
+          </span>
+        </span>
+        <span className="text-ink-subtle truncate text-[12px] leading-none">
+          {describeProgress(transfer, cursor)}
         </span>
       </span>
-      <span className="text-ink-subtle truncate text-[12px] leading-none">
-        {describeProgress(deposit, cursor)}
-      </span>
-    </span>
 
-    <span className="ml-auto flex shrink-0 flex-col items-end gap-1">
-      <span className="text-ink-muted text-[13px] leading-none font-medium tabular-nums">
-        +{formatAmount(deposit.amount)} pMINA
+      <span className="ml-auto flex shrink-0 flex-col items-end gap-1">
+        <span className="text-ink-muted text-[13px] leading-none font-medium tabular-nums">
+          {isDeposit ? "+" : "−"}{formatAmount(transfer.amount)} pMINA
+        </span>
+        <span className="flex items-center gap-2 text-[12px] leading-none">
+          <a
+            href={`${MINA_EXPLORER_TX_URL}/${transfer.minaTxHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-ink-subtle hover:text-ink transition-colors"
+          >
+            Mina tx
+          </a>
+          {/* Never expires on its own: a transfer that never settles is the one
+              a user most needs to keep seeing — an unanswered withdrawal means
+              its down payment was forfeited. Only they can retire it. */}
+          <button
+            type="button"
+            onClick={() => forgetPendingTransfer(transfer.minaTxHash)}
+            className="text-ink-subtle hover:text-negative cursor-pointer transition-colors"
+            title={`Remove this from the list. It does not affect the ${isDeposit ? "deposit" : "withdrawal"}.`}
+          >
+            Dismiss
+          </button>
+        </span>
       </span>
-      <span className="flex items-center gap-2 text-[12px] leading-none">
-        <a
-          href={`${MINA_EXPLORER_TX_URL}/${deposit.minaTxHash}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-ink-subtle hover:text-ink transition-colors"
-        >
-          Mina tx
-        </a>
-        {/* Never expires on its own: a deposit that never settles is the one a
-            user most needs to keep seeing. Only they can retire it. */}
-        <button
-          type="button"
-          onClick={() => forgetPendingDeposit(deposit.minaTxHash)}
-          className="text-ink-subtle hover:text-negative cursor-pointer transition-colors"
-          title="Remove this from the list. It does not affect the deposit."
-        >
-          Dismiss
-        </button>
-      </span>
-    </span>
-  </div>
-)
+    </div>
+  )
+}
 
 const Row = ({ transfer }: { transfer: BridgeTransfer }) => {
   const isDeposit = transfer.direction === "deposit"
@@ -159,7 +164,7 @@ const BridgePanel = () => {
   const { data: address, isLoading: isResolvingAddress } = usePulsarAddress()
   const { data: transfers, isPending, isError, error } = useBridgeTransactions(address)
   const { account: minaAccount } = useMinaWallet()
-  const stillPending = usePendingBridgeDeposits(minaAccount)
+  const stillPending = usePendingBridgeTransfers(minaAccount)
 
   // Only worth asking the chain where its scan is while something is waiting on
   // the answer.
@@ -195,10 +200,10 @@ const BridgePanel = () => {
     <div className="flex flex-col">
       {/* In flight first: it is the only thing on this page the user cannot
           check anywhere else. */}
-      {stillPending.map((deposit) => (
+      {stillPending.map((transfer) => (
         <PendingRow
-          key={deposit.minaTxHash}
-          deposit={deposit}
+          key={transfer.minaTxHash}
+          transfer={transfer}
           cursor={progress?.cursor}
         />
       ))}

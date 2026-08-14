@@ -115,6 +115,31 @@ class ZkappWorker {
     return tx.toJSON();
   }
 
+  async withdraw({
+    sender,
+    amount,
+    fee,
+  }: {
+    sender: string;
+    amount: string;
+    fee: string;
+  }) {
+    const senderPubKey = PublicKey.fromBase58(sender);
+
+    // The method takes only the amount: the payout target is the sender
+    // itself, fixed by the action, and the 1 MINA down payment is moved by an
+    // AccountUpdate the method adds — Auro shows it as part of this
+    // transaction. amount is pmina to burn on Pulsar, expressed in the same
+    // base units, and comes back as MINA (plus the down payment) when the
+    // chain's verdict settles.
+    const tx = await Mina.transaction({ sender: senderPubKey, fee }, async () => {
+      await state.contract!.withdraw(UInt64.from(amount));
+    });
+
+    await tx.prove();
+    return tx.toJSON();
+  }
+
   async waitForTransaction({ hash, rpcUrl }: { hash: string; rpcUrl: string }) {
     return await waitForTransaction(hash, rpcUrl);
   }

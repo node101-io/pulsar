@@ -22,10 +22,10 @@ import { toBech32 } from "@cosmjs/encoding"
 import { MINA_RPC_URL, consumerChain } from "./constants"
 import { formatMinaPublicKey } from "./crypto"
 import {
-  forgetPendingDeposit,
-  reconcilePendingDeposits,
-  usePendingDeposits,
-} from "./pending-deposits"
+  forgetPendingTransfer,
+  reconcilePendingTransfers,
+  usePendingTransfers,
+} from "./pending-transfers"
 
 export function useMinaPrice(options?: {
   enabled?: boolean;
@@ -124,19 +124,27 @@ export function useBridgeTransactions(address?: string | null) {
 }
 
 /**
- * Deposits this Mina account has sent that the chain has not credited yet.
+ * Bridge transfers this Mina account has signed that the chain has not
+ * answered yet — deposits waiting on their credit, withdrawals on their burn.
  *
- * The one place a pending deposit is compared against settled history, so that
+ * The one place pending records are compared against settled history, so that
  * every page agrees on what is still in flight. Reconciling in each consumer
- * instead let a page the user had not opened keep showing a deposit the chain
- * had already paid out.
+ * instead let a page the user had not opened keep showing a transfer the
+ * chain had already answered.
+ *
+ * History is read for the REGISTERED Pulsar account, not the connected
+ * wallet: that is the account deposits credit and withdrawals burn from, so
+ * it is the only place the answers can appear — and it keeps this working
+ * with no Cosmos wallet connected at all, which a withdrawal never needs.
  */
-export function usePendingBridgeDeposits(minaAccount?: string | null) {
-  const recorded = usePendingDeposits(minaAccount);
-  const { data: pulsarAddress } = usePulsarAddress();
-  const { data: transfers } = useBridgeTransactions(pulsarAddress);
+export function usePendingBridgeTransfers(minaAccount?: string | null) {
+  const recorded = usePendingTransfers(minaAccount);
+  const { data: keyStore } = useKeyStore(minaAccount);
+  const { data: transfers } = useBridgeTransactions(
+    keyStore?.keyStore?.pulsarAddress,
+  );
 
-  const { settledHashes, stillPending } = reconcilePendingDeposits(
+  const { settledHashes, stillPending } = reconcilePendingTransfers(
     recorded,
     transfers ?? [],
   );
@@ -147,7 +155,7 @@ export function usePendingBridgeDeposits(minaAccount?: string | null) {
   const settledKey = settledHashes.join(",");
   useEffect(() => {
     if (!settledKey) return;
-    for (const hash of settledKey.split(",")) forgetPendingDeposit(hash);
+    for (const hash of settledKey.split(",")) forgetPendingTransfer(hash);
   }, [settledKey]);
 
   return stillPending;

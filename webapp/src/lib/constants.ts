@@ -27,6 +27,17 @@ export const MINIMUM_DEPOSIT_NANOMINA = 1_000_000_000n;
 // old 1 MINA meant a user needed 2 MINA to make the 1 MINA minimum deposit.
 export const MINA_TX_FEE_NANOMINA = 100_000_000n;
 
+// What a withdrawal locks up on Mina until it settles (WITHDRAW_DOWN_PAYMENT,
+// mirrored the way MINIMUM_DEPOSIT_NANOMINA mirrors its contract constant —
+// importing pulsar-contracts here would pull o1js into every page bundle).
+//
+// The contract returns it WITH the payout when the chain judges the
+// withdrawal valid, and keeps it when it does not — an unregistered sender or
+// a pMINA balance that no longer covers the amount at scan time forfeits it.
+// Everything the UI blocks or warns about around withdrawals exists to keep a
+// user from ever paying this.
+export const WITHDRAW_DOWN_PAYMENT_NANOMINA = 1_000_000_000n;
+
 export const PULSAR_RPC_URL = "https://rpc.pulsarchain.xyz";
 export const PULSAR_REST_URL = "https://rest.pulsarchain.xyz";
 
