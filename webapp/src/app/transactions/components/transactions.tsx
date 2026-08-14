@@ -161,6 +161,27 @@ const Row = ({ transfer, isMine }: { transfer: BridgeTransfer; isMine: boolean }
   )
 }
 
+const BridgeStats = () => {
+  const { data: transfers } = useAllBridgeTransactions()
+
+  // Reserved height either way: the line appearing after load must not shove
+  // the card down.
+  return (
+    <p className="text-ink-subtle mt-3 min-h-3.25 text-[13px] leading-none tabular-nums">
+      {transfers && transfers.length > 0 && (
+        <>
+          <span className="text-ink font-medium">{transfers.length}</span>
+          {" "}bridge transaction{transfers.length === 1 ? "" : "s"}
+          <span className="mx-1.5">·</span>
+          {transfers.filter((t) => t.direction === "deposit").length} Mina → Pulsar
+          <span className="mx-1.5">·</span>
+          {transfers.filter((t) => t.direction === "withdraw").length} Pulsar → Mina
+        </>
+      )}
+    </p>
+  )
+}
+
 const Centered = ({ children }: { children: React.ReactNode }) => (
   <p className="text-ink-subtle my-auto px-8 text-center text-sm leading-normal">
     {children}
@@ -240,6 +261,7 @@ export default function Transactions() {
         <h1 className="brand-title text-ink text-[clamp(28px,3vw,40px)] leading-none font-[750] tracking-[-0.03em]">
           Transactions
         </h1>
+        <BridgeStats />
       </div>
 
       <div className="bg-surface border-line mx-auto flex w-full max-w-140 flex-col rounded-lg border p-2">

@@ -65,6 +65,12 @@ type RestTxResponse = {
 
 const BRIDGE_TRANSFER_PAGE_SIZE = 100;
 
+// Backstop against a runaway loop, not an expected ceiling — at testnet scale
+// the whole history fits in a handful of pages. If the feed ever grows past
+// this, the count under the page title silently becomes a floor, so raise it
+// alongside real traffic.
+const BRIDGE_TRANSFER_MAX_PAGES = 50;
+
 /** "12000000000pmina", or a comma-joined coin list containing one. */
 function parsePminaAmount(raw: string | undefined): bigint | null {
   if (!raw) return null;
@@ -105,48 +111,62 @@ async function fetchDirectionalTransfers(
   const conditions = [`transfer.${moduleSide}='${BRIDGE_MODULE_ADDRESS}'`];
   if (account) conditions.push(`transfer.${userSide}='${account}'`);
 
-  const params = new URLSearchParams({
-    query: conditions.join(" AND "),
-    limit: String(BRIDGE_TRANSFER_PAGE_SIZE),
-    order_by: "ORDER_BY_DESC",
-  });
+  // Every page, not just the newest: this list is also where the bridge's
+  // headline transfer count comes from, and a count clipped to one page would
+  // quietly stall at the page size. Keyed by id because a transaction landing
+  // mid-walk shifts the pages under us — the same tx can then appear twice.
+  const transfers = new Map<string, BridgeTransfer>();
 
-  const res = await fetch(`${PULSAR_REST_URL}/cosmos/tx/v1beta1/txs?${params}`);
-  if (!res.ok) throw new Error(`Could not read bridge history (${res.status})`);
-
-  const { tx_responses: responses = [] } = (await res.json()) as {
-    tx_responses?: RestTxResponse[];
-  };
-
-  return responses.flatMap((tx) => {
-    // A reverted push moves nothing, but its events are indexed all the same.
-    if (tx.code !== 0) return [];
-
-    return (tx.events ?? []).flatMap((event, index) => {
-      if (event.type !== "transfer") return [];
-
-      // The query matched the transaction, not this event: the same push also
-      // carries every other account it settled, plus the pusher's fee.
-      const attrs = Object.fromEntries(event.attributes.map((a) => [a.key, a.value]));
-      if (attrs[moduleSide] !== BRIDGE_MODULE_ADDRESS) return [];
-      const eventAccount = attrs[userSide];
-      if (!eventAccount) return [];
-      if (account && eventAccount !== account) return [];
-
-      const amount = parsePminaAmount(attrs.amount);
-      if (amount === null) return [];
-
-      return [{
-        id: `${tx.txhash}-${index}`,
-        direction,
-        account: eventAccount,
-        amount,
-        height: Number(tx.height),
-        timestamp: tx.timestamp,
-        txHash: tx.txhash,
-      }];
+  for (let page = 1; page <= BRIDGE_TRANSFER_MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      query: conditions.join(" AND "),
+      page: String(page),
+      limit: String(BRIDGE_TRANSFER_PAGE_SIZE),
+      order_by: "ORDER_BY_DESC",
     });
-  });
+
+    const res = await fetch(`${PULSAR_REST_URL}/cosmos/tx/v1beta1/txs?${params}`);
+    if (!res.ok) throw new Error(`Could not read bridge history (${res.status})`);
+
+    const { tx_responses: responses = [], total = "0" } = (await res.json()) as {
+      tx_responses?: RestTxResponse[];
+      total?: string;
+    };
+
+    for (const tx of responses) {
+      // A reverted push moves nothing, but its events are indexed all the same.
+      if (tx.code !== 0) continue;
+
+      (tx.events ?? []).forEach((event, index) => {
+        if (event.type !== "transfer") return;
+
+        // The query matched the transaction, not this event: the same push also
+        // carries every other account it settled, plus the pusher's fee.
+        const attrs = Object.fromEntries(event.attributes.map((a) => [a.key, a.value]));
+        if (attrs[moduleSide] !== BRIDGE_MODULE_ADDRESS) return;
+        const eventAccount = attrs[userSide];
+        if (!eventAccount) return;
+        if (account && eventAccount !== account) return;
+
+        const amount = parsePminaAmount(attrs.amount);
+        if (amount === null) return;
+
+        transfers.set(`${tx.txhash}-${index}`, {
+          id: `${tx.txhash}-${index}`,
+          direction,
+          account: eventAccount,
+          amount,
+          height: Number(tx.height),
+          timestamp: tx.timestamp,
+          txHash: tx.txhash,
+        });
+      });
+    }
+
+    if (page * BRIDGE_TRANSFER_PAGE_SIZE >= Number(total)) break;
+  }
+
+  return [...transfers.values()];
 }
 
 /**
@@ -170,9 +190,9 @@ export async function fetchBridgeTransfers(address: string): Promise<BridgeTrans
 }
 
 /**
- * Every account's bridge movements, newest first — the public feed. The most
- * recent page of each direction; a movement older than both pages is not
- * shown, which for a feed is the right kind of incomplete.
+ * Every account's bridge movements, newest first — the public feed, complete.
+ * Completeness is load-bearing here: the transactions page derives its
+ * bridged-transfer counts from this list's length.
  */
 export async function fetchAllBridgeTransfers(): Promise<BridgeTransfer[]> {
   const [deposits, withdrawals] = await Promise.all([
