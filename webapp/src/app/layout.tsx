@@ -1,21 +1,28 @@
-"use client"
-
+import type { Metadata, Viewport } from "next"
 import { Toaster } from "react-hot-toast"
 import { MinaWalletProvider } from "@/app/_providers/mina-wallet"
 import { QueryClientProvider } from "@/app/_providers/query-client"
 import { WorkerProvider } from "@/app/_providers/worker"
-import dynamic from "next/dynamic"
+import WalletHeaderSlot from "./components/wallet-header-slot"
 import localFont from "next/font/local"
 
 import "./globals.css"
 
-// Client-only: it carries the interchain-kit chain store, which cannot exist
-// during prerender and whose dependency graph reaches libsodium's top-level
-// await. Excluding it from the server bundle is what lets the pages prerender.
-const WalletHeader = dynamic(() => import("./components/wallet-header"), {
-  ssr: false,
-  loading: () => <div className="h-[var(--header-height)] shrink-0" />,
-})
+export const metadata: Metadata = {
+  title: "Pulsar",
+  description: "Jump to Pulsar",
+  icons: {
+    icon: [
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "320x320" }],
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: "#ffffff",
+}
 
 // One variable face covers the whole brand: the marketing site draws every
 // weight from 50–1000 off this same axis.
@@ -32,14 +39,6 @@ export default function RootLayout({ children }: {
 }) {
   return (
     <html lang="en" className={`${aspekta.variable} bg-canvas text-ink h-dvh w-dvw hide-scrollbar`}>
-      <head>
-        <title>Pulsar</title>
-        <meta name="description" content="Jump to Pulsar" />
-        <meta name="theme-color" content="#ffffff" />
-        <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png" />
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="320x320" />
-      </head>
       <body className="font-sans antialiased h-dvh w-dvw overscroll-none flex flex-col">
         <MinaWalletProvider>
           <QueryClientProvider>
@@ -70,7 +69,7 @@ export default function RootLayout({ children }: {
                   },
                 }}
               />
-              <WalletHeader />
+              <WalletHeaderSlot />
               {children}
             </WorkerProvider>
           </QueryClientProvider>
