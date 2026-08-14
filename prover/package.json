@@ -27,27 +27,27 @@
     "license": "MIT",
     "description": "",
     "dependencies": {
-        "@grpc/grpc-js": "^1.13.4",
-        "@o1js/native": "^2.10.0-dev.e7f2f",
-        "@types/inquirer": "^9.0.9",
-        "bullmq": "^5.58.5",
-        "dotenv": "^17.2.2",
-        "inquirer": "^12.9.4",
+        "@grpc/grpc-js": "^1.14.4",
+        "@o1js/native": "^2.15.0",
+        "@types/inquirer": "^9.0.10",
+        "bullmq": "^5.79.2",
+        "dotenv": "^17.4.2",
+        "inquirer": "^12.11.1",
         "ioredis": "5.10.1",
-        "mongodb": "^6.19.0",
-        "mongoose": "^9.1.6",
+        "mongodb": "^6.21.0",
+        "mongoose": "^9.7.3",
         "node-fetch": "^3.3.2",
         "o1js": "2.15.0",
+        "pulsar-chain-client": "workspace:*",
         "pulsar-contracts": "workspace:*",
-        "rimraf": "^6.0.1",
-        "winston": "^3.17.0",
-        "pulsar-chain-client": "workspace:*"
+        "rimraf": "^6.1.3",
+        "winston": "^3.19.0"
     },
     "devDependencies": {
-        "@types/express": "^5.0.3",
-        "@types/node": "^24.3.1",
-        "typescript": "^5.9.2",
-        "vitest": "^4.0.18"
+        "@types/express": "^5.0.6",
+        "@types/node": "^24.13.2",
+        "typescript": "^5.9.3",
+        "vitest": "^4.1.9"
     },
     "peerDependencies": {
         "o1js": "2.15.0"
