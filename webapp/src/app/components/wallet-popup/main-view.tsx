@@ -8,9 +8,11 @@ import { formatAmount, toDisplayNumber } from "@/lib/amount"
 import { useQueryClient } from "@tanstack/react-query"
 import { WalletState } from "@interchain-kit/core"
 
-export const MainView = ({ setCurrentView, setPopupWalletType }: {
-  setCurrentView: (view: 'main' | 'send' | 'receive') => void
+export const MainView = ({ setCurrentView, setPopupWalletType, preferredWallet }: {
+  setCurrentView: (view: 'connect' | 'main' | 'send' | 'receive') => void
   setPopupWalletType: (isOpen: boolean) => void
+  /** The wallet the user chose on the connect screen; honored while connected. */
+  preferredWallet?: 'mina' | 'pulsar' | null
 }) => {
   const { disconnectWallet: disconnectMina, account: minaAccount, isConnected: isMinaConnected } = useMinaWallet();
   const { disconnect: disconnectPulsar, address: pulsarAddress, status: pulsarStatus } = usePulsarWallet();
@@ -18,7 +20,13 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
   const { data: keyStore } = useKeyStore(minaAccount);
 
   const isPulsarConnected = pulsarStatus === WalletState.Connected;
-  const currentWallet = isMinaConnected && minaAccount ? 'mina' : isPulsarConnected ? 'pulsar' : null;
+  // The user's pick wins when both wallets are connected; a stale pick for a
+  // wallet that has since disconnected falls back to whatever is.
+  const fallbackWallet = isMinaConnected && minaAccount ? 'mina' : isPulsarConnected ? 'pulsar' : null;
+  const currentWallet =
+    (preferredWallet === 'mina' && isMinaConnected && minaAccount) ? 'mina'
+    : (preferredWallet === 'pulsar' && isPulsarConnected) ? 'pulsar'
+    : fallbackWallet;
   const currentAddress = currentWallet === 'mina' ? minaAccount : pulsarAddress;
 
   const {
@@ -92,6 +100,14 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
 
   return (
     <>
+      <button
+        className="text-ink m-1 flex w-fit cursor-pointer items-center gap-2.5"
+        onClick={() => setCurrentView('connect')}
+      >
+        <Image src="/back-arrow.svg" alt="" width={8} height={14} />
+        <h3 className="text-[15px] leading-none font-medium">Wallet</h3>
+      </button>
+
       <div className="bg-surface border-line flex w-full items-center gap-2 rounded-[6px] border p-4">
         <Image
           src={currentWallet === 'mina' ? "/mina-token-logo.png" : "/pulsar-token-logo.svg"}

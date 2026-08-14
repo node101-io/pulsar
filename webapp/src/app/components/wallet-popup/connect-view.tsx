@@ -17,8 +17,12 @@ import { useQueryClient } from "@tanstack/react-query"
 import { AnimatePresence, motion } from "motion/react"
 import { getPulsarSigner, suggestPulsarToKeplr } from "@/lib/keplr"
 
-export const ConnectView = ({ keyStore: keyStoreData }: {
+export const ConnectView = ({ keyStore: keyStoreData, onOpenWallet, onWalletConnected }: {
   keyStore: { keyStore?: { cosmosPublicKey: string } } | undefined;
+  /** A click on a wallet that is already connected: enter it, don't reconnect. */
+  onOpenWallet: (wallet: 'mina' | 'pulsar') => void;
+  /** A fresh connection succeeded — remember which wallet the user came for. */
+  onWalletConnected: (wallet: 'mina' | 'pulsar') => void;
 }) => {
   const { isWalletInstalled: isMinaWalletInstalled, isConnecting: minaConnecting, connectWallet: connectMina, signFields: minaSignFields, account: minaAccount, isConnected: isMinaConnected } = useMinaWallet();
   const { status: pulsarStatus, connect: connectPulsar, address: pulsarAddress } = usePulsarWallet();
@@ -172,6 +176,10 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
   };
 
   const handleAuroClick = async () => {
+    if (isMinaConnected && minaAccount) {
+      onOpenWallet('mina');
+      return;
+    }
     if (!isMinaWalletInstalled) {
       toast.error('Auro Wallet not found. Please install the extension first.', {
         id: 'wallet-not-found'
@@ -182,6 +190,7 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
 
     try {
       await connectMina();
+      onWalletConnected('mina');
       toast.success('Auro Wallet connected successfully!', {
         id: 'wallet-connected'
       });
@@ -194,6 +203,10 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
   };
 
   const handleKeplrClick = async () => {
+    if (isPulsarConnected) {
+      onOpenWallet('pulsar');
+      return;
+    }
     try {
       if (!isPulsarWalletInstalled) {
         toast.error('Pulsar Wallet not found. Please install the extension first.', {
@@ -210,6 +223,7 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
       }
 
       await connectPulsar();
+      onWalletConnected('pulsar');
 
       toast.success('Keplr Wallet connected successfully!', {
         id: 'keplr-connected'
