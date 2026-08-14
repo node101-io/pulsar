@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { Asset, AssetList, Chain } from "@chain-registry/types";
 import { consumerAssetList, consumerChain } from "./constants";
 
@@ -98,9 +99,9 @@ export function buildKeplrChainConfigFromRegistry(
 /**
  * The connected Pulsar account, read straight from the extension.
  *
- * Pages cannot reach usePulsarWallet: its provider wraps the header alone, and
- * deliberately — interchain-kit's graph reaches libsodium's top-level await,
- * which a prerendered page cannot carry. getKey answers without that graph.
+ * Pages cannot reach usePulsarWallet: its provider wraps the header alone,
+ * and deliberately — pages have no business holding wallet-session state.
+ * getKey answers without any provider above the caller.
  *
  * It throws when the chain has never been approved, which here means exactly
  * "no wallet connected", so the rejection is an answer rather than a failure.
@@ -121,11 +122,10 @@ export async function getPulsarAddress(): Promise<string | null> {
 
 /**
  * The connected account's secp256k1 public key, read straight from the
- * extension like getPulsarAddress above — and for one more reason: the
- * interchain-kit wallet object cannot answer this until its async init has
- * finished, so a read through it during mount silently yields nothing and
- * gets cached as "no key". getKey talks to the extension directly and is
- * ready the moment Keplr is.
+ * extension like getPulsarAddress above. It once went through interchain-kit,
+ * whose wallet object could not answer until its async init finished — a read
+ * during mount silently yielded nothing and got cached as "no key". getKey
+ * talks to the extension directly and is ready the moment Keplr is.
  */
 export async function getPulsarPubkey(): Promise<Uint8Array | null> {
   if (typeof window === "undefined") return null;
@@ -145,12 +145,13 @@ export async function getPulsarPubkey(): Promise<Uint8Array | null> {
  * The three operations a send or a registration needs from the wallet —
  * account, signDirect, sendTx — spoken straight to the extension.
  *
- * interchain-kit's wallet object offers the same three, and its
- * CosmosWallet.signDirect/sendTx are verbatim passthroughs to window.keplr.
- * But reaching them goes through getWalletOfType, a prototype-identity lookup
- * that silently returns undefined when the bundle carries a second copy of
- * the wallet classes — which read as "Please connect a wallet first" to a
- * user whose wallet was connected. The extension object cannot fail that way.
+ * interchain-kit's wallet object offered the same three as verbatim
+ * passthroughs to window.keplr — but reaching them went through
+ * getWalletOfType, a prototype-identity lookup that silently returned
+ * undefined when the bundle carried a second copy of the wallet classes,
+ * which read as "Please connect a wallet first" to a user whose wallet was
+ * connected. That failure mode is why the library is gone and this speaks to
+ * the extension object, which cannot fail that way.
  */
 export function getPulsarSigner(): {
   getAccount: () => Promise<{ address: string; pubkey: Uint8Array }>;
@@ -181,6 +182,41 @@ export function getPulsarSigner(): {
       keplr.signDirect(chainId, signerAddress, signDoc),
     sendTx: (tx) => keplr.sendTx(chainId, tx, "sync"),
   };
+}
+
+/**
+ * Whether the Keplr extension is present, read off window.keplr itself.
+ *
+ * interchain-kit's WalletState.NotExist was the wrong source for this: the
+ * verdict of that library's own async init, which raced the extension's
+ * injection and, once wrong, stayed wrong — an installed wallet rendered as
+ * "Install Keplr" in production. The extension object is the ground truth,
+ * but it appears after our bundle is already running, so one mount-time look
+ * is not enough either: poll briefly and settle.
+ */
+export function useKeplrInstalled(): boolean {
+  const [installed, setInstalled] = useState(false);
+
+  useEffect(() => {
+    // @ts-ignore - Keplr injects itself on window
+    if (window.keplr) {
+      setInstalled(true);
+      return;
+    }
+    let tries = 0;
+    const timer = setInterval(() => {
+      // @ts-ignore - Keplr injects itself on window
+      if (window.keplr) {
+        setInstalled(true);
+        clearInterval(timer);
+      } else if (++tries >= 20) {
+        clearInterval(timer);
+      }
+    }, 250);
+    return () => clearInterval(timer);
+  }, []);
+
+  return installed;
 }
 
 export async function suggestPulsarToKeplr(): Promise<void> {

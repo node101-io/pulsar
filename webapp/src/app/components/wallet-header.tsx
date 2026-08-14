@@ -4,11 +4,12 @@ import { PulsarWalletProvider } from "@/app/_providers/pulsar-wallet";
 import Header from "./header";
 
 /**
- * The header and the Cosmos wallet context it needs, as one client-only unit.
+ * The header and the Cosmos wallet context it needs, as one unit.
  *
- * The context wraps nothing else: no page reads it, and keeping it out of the
- * root tree keeps interchain-kit — and libsodium's top-level await with it —
- * out of the server bundle, so pages still prerender.
+ * The context wraps nothing else on purpose: no page reads it. Pages that
+ * need the connected address read it straight off the extension via
+ * lib/keplr.ts, and keeping the provider scoped here keeps that boundary
+ * honest.
  */
 export default function WalletHeader() {
   return (

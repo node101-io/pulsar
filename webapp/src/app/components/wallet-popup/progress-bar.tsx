@@ -1,8 +1,7 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { usePulsarWallet } from "@/app/_providers/pulsar-wallet";
+import { usePulsarWallet, WalletState } from "@/app/_providers/pulsar-wallet";
 import { useMinaWallet } from "@/app/_providers/mina-wallet";
-import { WalletState } from "@interchain-kit/core";
 
 const Step = ({ name, connected, icon, width, height }: {
   name: string

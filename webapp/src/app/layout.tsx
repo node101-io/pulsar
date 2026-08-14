@@ -3,7 +3,7 @@ import { Toaster } from "react-hot-toast"
 import { MinaWalletProvider } from "@/app/_providers/mina-wallet"
 import { QueryClientProvider } from "@/app/_providers/query-client"
 import { WorkerProvider } from "@/app/_providers/worker"
-import WalletHeaderSlot from "./components/wallet-header-slot"
+import WalletHeader from "./components/wallet-header"
 import localFont from "next/font/local"
 
 import "./globals.css"
@@ -69,7 +69,7 @@ export default function RootLayout({ children }: {
                   },
                 }}
               />
-              <WalletHeaderSlot />
+              <WalletHeader />
               {children}
             </WorkerProvider>
           </QueryClientProvider>

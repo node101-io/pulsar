@@ -77,8 +77,8 @@ export function useMinaBalance(account: string | null | undefined, options?: {
 
 
 /**
- * The connected Pulsar address, for pages that cannot hold the interchain-kit
- * provider — see getPulsarAddress. Refetches when the user switches accounts
+ * The connected Pulsar address, for pages outside the wallet provider's
+ * subtree — see getPulsarAddress. Refetches when the user switches accounts
  * in the extension, which fires keplr_keystorechange.
  */
 export function usePulsarAddress() {
@@ -182,9 +182,9 @@ export function usePendingBridgeTransfers(minaAccount?: string | null) {
  * Mina signature is the point of a registration — but *being* registered
  * must be visible from either wallet.
  *
- * The pubkey comes straight from the extension (getPulsarPubkey), not from
- * the interchain-kit wallet object: that object cannot answer until its
- * async init completes, and a query that ran before it did cached "no key"
+ * The pubkey comes straight from the extension (getPulsarPubkey). It used to
+ * come from interchain-kit's wallet object, which could not answer until its
+ * async init completed, and a query that ran before it did cached "no key"
  * as "not registered" — the registry was never even asked. A missing pubkey
  * here is therefore a failure to ask, so it throws and retries rather than
  * caching an answer nobody gave.

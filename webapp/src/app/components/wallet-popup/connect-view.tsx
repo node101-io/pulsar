@@ -2,11 +2,10 @@ import { useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import toast from "react-hot-toast"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
-import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
+import { usePulsarWallet, WalletState } from "@/app/_providers/pulsar-wallet"
 import { LegalNotice } from "./legal-notice"
 import { ExtensionItem } from "./extension-item"
 import { ProgressBar } from "./progress-bar"
-import { WalletState } from "@interchain-kit/core"
 import { consumerChain } from "@/lib/constants"
 import { fetchAccountAuth, requestFeeGrant, waitForTxCommit } from "@/lib/utils"
 import { formatMinaPublicKey, signatureFromBase58 } from "@/lib/crypto"
@@ -15,7 +14,7 @@ import { ActorType, KeySigningOperation, keySigningChallenge } from "pulsar-chai
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx"
 import { useQueryClient } from "@tanstack/react-query"
 import { AnimatePresence, motion } from "motion/react"
-import { getPulsarSigner, suggestPulsarToKeplr } from "@/lib/keplr"
+import { getPulsarSigner, suggestPulsarToKeplr, useKeplrInstalled } from "@/lib/keplr"
 
 export const ConnectView = ({ keyStore: keyStoreData, onOpenWallet, onWalletConnected }: {
   keyStore: { keyStore?: { cosmosPublicKey: string } } | undefined;
@@ -37,7 +36,9 @@ export const ConnectView = ({ keyStore: keyStoreData, onOpenWallet, onWalletConn
   const cosmosPublicKeyRef = useRef<Uint8Array | null>(null);
 
   const isPulsarConnecting = pulsarStatus === WalletState.Connecting;
-  const isPulsarWalletInstalled = pulsarStatus !== WalletState.NotExist;
+  // Straight off window.keplr: interchain-kit's NotExist races the
+  // extension's injection and reported an installed Keplr as missing in prod.
+  const isPulsarWalletInstalled = useKeplrInstalled();
   const isPulsarConnected = pulsarStatus === WalletState.Connected && pulsarAddress;
 
   useEffect(() => {

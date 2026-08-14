@@ -1,12 +1,11 @@
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
-import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
+import { usePulsarWallet, WalletState } from "@/app/_providers/pulsar-wallet"
 import toast from "react-hot-toast"
 import { useKeyStore, useMinaPrice, usePminaBalance } from "@/lib/hooks"
 import { formatAmount, toDisplayNumber } from "@/lib/amount"
 import { useQueryClient } from "@tanstack/react-query"
-import { WalletState } from "@interchain-kit/core"
 
 export const MainView = ({ setCurrentView, setPopupWalletType, preferredWallet }: {
   setCurrentView: (view: 'connect' | 'main' | 'send' | 'receive') => void
