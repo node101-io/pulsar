@@ -2,9 +2,6 @@ import { useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 
 import {
-  AbciQueryError,
-  SDK_ERR_KEY_NOT_FOUND,
-  abciQuery,
   fetchAllBridgeTransfers,
   fetchBridgeTransfers,
   fetchMinaHeight,
@@ -13,15 +10,8 @@ import {
   fetchPminaBalance,
 } from "./utils"
 import { getPulsarAddress } from "./keplr"
-import {
-  KEYREGISTRY_QUERY_USER_COSMOS_KEY,
-  QueryGetUserCosmosPublicKeyRequest,
-  QueryGetUserCosmosPublicKeyResponse,
-} from "pulsar-chain-client/messages"
-import { rawSecp256k1PubkeyToRawAddress } from "@cosmjs/amino"
-import { toBech32 } from "@cosmjs/encoding"
-import { MINA_RPC_URL, consumerChain } from "./constants"
-import { formatMinaPublicKey } from "./crypto"
+import { MINA_RPC_URL } from "./constants"
+import { resolveMinaAddress } from "./registry"
 import {
   forgetPendingTransfer,
   reconcilePendingTransfers,
@@ -210,18 +200,6 @@ export function useBridgeScanProgress(options?: { enabled?: boolean }) {
 }
 
 /**
- * Where a deposit from this Mina key lands, derived exactly the way the chain
- * derives it: ripemd160(sha256(compressed secp256k1 key)) in bech32. See
- * x/bridge applyDeposit -> userAddressFromCosmosPubKey.
- */
-function pulsarAddressFromCosmosPubkey(cosmosPublicKey: Uint8Array): string {
-  return toBech32(
-    consumerChain.bech32Prefix!,
-    rawSecp256k1PubkeyToRawAddress(cosmosPublicKey),
-  );
-}
-
-/**
  * Whether this Mina key is registered on Pulsar, and to which Cosmos key.
  * A deposit from an unregistered key still reaches the chain but is judged
  * invalid, so the UI gates on this rather than letting funds strand.
@@ -236,35 +214,12 @@ export function useKeyStore(minaAddress?: string | null) {
   return useQuery({
     queryKey: ["keyStore", minaAddress],
     queryFn: async () => {
-      const packed = await formatMinaPublicKey(minaAddress!);
-      const request = QueryGetUserCosmosPublicKeyRequest.encode(
-        QueryGetUserCosmosPublicKeyRequest.fromPartial({
-          user_mina_public_key: Buffer.from(packed),
-        }),
-      ).finish();
-
-      let value: Uint8Array;
-      try {
-        value = await abciQuery(KEYREGISTRY_QUERY_USER_COSMOS_KEY, request);
-      } catch (error) {
-        // The keeper reports a miss as an error; for us "not registered" is an
-        // answer. Every other code is a real failure and stays one.
-        if (
-          error instanceof AbciQueryError &&
-          error.code === SDK_ERR_KEY_NOT_FOUND
-        ) {
-          return { keyStore: undefined };
-        }
-        throw error;
-      }
-
-      const { user_cosmos_public_key: cosmosKey } =
-        QueryGetUserCosmosPublicKeyResponse.decode(value);
-      return cosmosKey?.length
+      const resolved = await resolveMinaAddress(minaAddress!);
+      return resolved
         ? {
             keyStore: {
-              cosmosPublicKey: Buffer.from(cosmosKey).toString("base64"),
-              pulsarAddress: pulsarAddressFromCosmosPubkey(cosmosKey),
+              cosmosPublicKey: Buffer.from(resolved.cosmosPublicKey).toString("base64"),
+              pulsarAddress: resolved.pulsarAddress,
             },
           }
         : { keyStore: undefined };

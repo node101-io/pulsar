@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react"
 import { SendView } from "./send-view"
 import { ConnectView } from "./connect-view"
 import { MainView } from "./main-view"
+import { ReceiveView } from "./receive-view"
 import { useKeyStore } from "@/lib/hooks"
 import { useConnectedWallet } from "@/app/components/use-connected-wallet"
 import { useQueryClient } from "@tanstack/react-query"
@@ -18,7 +19,7 @@ export default function WalletPopup({
   setIsWalletPopupOpen: (isOpen: boolean) => void
   walletButtonRef: RefObject<HTMLButtonElement | null>
 }) {
-  const [currentView, setCurrentView] = useState<'connect' | 'main' | 'send'>('connect');
+  const [currentView, setCurrentView] = useState<'connect' | 'main' | 'send' | 'receive'>('connect');
   const popupRef = useRef<HTMLDivElement>(null);
   const { account: minaAccount } = useMinaWallet();
   const { address: pulsarAddress } = usePulsarWallet();
@@ -98,6 +99,7 @@ export default function WalletPopup({
           {currentView === 'connect' && <ConnectView keyStore={keyStore} />}
           {currentView === 'main' && <MainView setCurrentView={setCurrentView} setPopupWalletType={setIsWalletPopupOpen} />}
           {currentView === 'send' && <SendView setCurrentView={setCurrentView} />}
+          {currentView === 'receive' && <ReceiveView setCurrentView={setCurrentView} />}
         </motion.div>
       )}
     </AnimatePresence>

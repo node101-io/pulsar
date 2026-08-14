@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { WalletState } from "@interchain-kit/core"
 
 export const MainView = ({ setCurrentView, setPopupWalletType }: {
-  setCurrentView: (view: 'main' | 'send') => void
+  setCurrentView: (view: 'main' | 'send' | 'receive') => void
   setPopupWalletType: (isOpen: boolean) => void
 }) => {
   const { disconnectWallet: disconnectMina, account: minaAccount, isConnected: isMinaConnected } = useMinaWallet();
@@ -110,6 +110,7 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
         </button>
         <div className="flex gap-1.5">
           <button
+            hidden
             aria-label="Settings"
             className="brand-squircle border-line hover:border-ink flex size-7 cursor-pointer items-center justify-center border transition-colors"
           >
@@ -165,7 +166,10 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
             <Image src="/arrow-dark.svg" alt="" width={14} height={14} className="-rotate-45" />
             <span className="text-ink text-[13px] leading-none font-medium">Send</span>
           </button>
-          <button className="brand-squircle bg-canvas border-line hover:border-ink flex flex-1 cursor-pointer flex-col items-center gap-1.5 border py-3 transition-colors">
+          <button
+            onClick={() => setCurrentView("receive")}
+            className="brand-squircle bg-canvas border-line hover:border-ink flex flex-1 cursor-pointer flex-col items-center gap-1.5 border py-3 transition-colors"
+          >
             <Image src="/arrow-dark.svg" alt="" width={14} height={14} className="rotate-135" />
             <span className="text-ink text-[13px] leading-none font-medium">Receive</span>
           </button>

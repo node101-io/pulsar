@@ -11,6 +11,7 @@ import { SEND_TOKEN_FEE, createSendTokenTx } from "@/lib/tx";
 import { fetchAccountAuth } from "@/lib/utils";
 import { DECIMALS, formatAmount, parseAmount, toDisplayNumber } from "@/lib/amount";
 import { usePendingWithdrawalsFrom } from "@/lib/pending-transfers";
+import { resolveMinaAddress } from "@/lib/registry";
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 import { BroadcastMode, CosmosWallet } from "@interchain-kit/core";
 import { consumerChain } from "@/lib/constants";
@@ -322,6 +323,37 @@ export const SendView = ({ setCurrentView }: {
               if (!recipientAddress || recipientAddress.trim() === '')
                 return toast.error('Please enter a recipient address', { id: 'invalid-recipient' });
 
+              // A Mina address is a valid recipient only through the registry:
+              // the chain's MsgSend takes bech32 alone and rewrites nothing,
+              // so the resolution happens here or not at all. Refusing an
+              // unregistered key is what keeps this safe — its derived
+              // address exists but nobody holds its Cosmos key, so pMINA sent
+              // there would be stranded forever.
+              let toAddress = recipientAddress.trim();
+              if (toAddress.startsWith('B62')) {
+                toast.loading('Resolving Mina address…', { id: 'signing-transaction' });
+                let resolved;
+                try {
+                  resolved = await resolveMinaAddress(toAddress);
+                } catch {
+                  toast.dismiss('signing-transaction');
+                  return toast.error('That is not a valid Mina address', { id: 'invalid-recipient' });
+                }
+                if (!resolved) {
+                  toast.dismiss('signing-transaction');
+                  return toast.error(
+                    'This Mina address is not registered with Pulsar, so it cannot receive pMINA',
+                    { id: 'invalid-recipient' },
+                  );
+                }
+                toAddress = resolved.pulsarAddress;
+              } else if (!toAddress.startsWith('pulsar1')) {
+                return toast.error(
+                  'Recipient must be a pulsar1… or B62… address',
+                  { id: 'invalid-recipient' },
+                );
+              }
+
               // Against the fee-adjusted, reservation-adjusted maximum, not
               // the raw balance: the ante handler rejects a fee the sender
               // cannot cover, and spending what a pending withdrawal needs
@@ -359,7 +391,7 @@ export const SendView = ({ setCurrentView }: {
                 pubkeyBytes: account.pubkey,
                 accountNumber,
                 fromAddress: connectedWallet.address,
-                toAddress: recipientAddress.trim(),
+                toAddress,
                 amount: amountBase.toString(),
               });
   
