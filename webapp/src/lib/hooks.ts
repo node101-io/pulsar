@@ -225,6 +225,15 @@ export function useBridgeScanProgress(options?: { enabled?: boolean }) {
         fetchMinaHeight(),
         fetchBridgeConfirmationDepth(),
       ]);
+      // A rejected read degrades the progress line to its vague fallback for
+      // a whole refetch interval, and allSettled would otherwise bury which
+      // source did it. Name it, so the console answers what the UI cannot.
+      if (cursor.status === "rejected")
+        console.warn("Pulsar scan cursor read failed:", cursor.reason);
+      if (minaTip.status === "rejected")
+        console.warn("Mina tip read failed:", minaTip.reason);
+      if (confirmationDepth.status === "rejected")
+        console.warn("x/bridge confirmation_depth read failed:", confirmationDepth.reason);
       return {
         cursor: cursor.status === "fulfilled" ? cursor.value : null,
         minaTip: minaTip.status === "fulfilled" ? minaTip.value : null,

@@ -1,6 +1,6 @@
 export const LegalNotice = () => {
   return (
-    <p className="text-ink-subtle mx-2 my-3 text-center text-[12px] leading-[1.5]">
+    <p className="text-ink-subtle mx-2 my-3 text-center text-xs leading-normal">
       By connecting a wallet, you agree to Pulsar&apos;s{' '}
       <a
         href="/terms-of-service"

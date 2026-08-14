@@ -67,14 +67,14 @@ export const ReceiveView = ({ setCurrentView }: {
       </button>
 
       {entries.length === 0 && (
-        <p className="text-ink-subtle my-auto text-center text-[14px]">
+        <p className="text-ink-subtle my-auto text-center text-sm">
           Connect a wallet to see your addresses.
         </p>
       )}
 
       <div className="flex flex-col gap-2">
         {entries.map(({ label, symbol, address, icon, note }) => (
-          <div key={label} className="bg-surface border-line flex flex-col gap-3 rounded-[6px] border p-4">
+          <div key={label} className="bg-surface border-line flex flex-col gap-3 rounded-md border p-4">
             <div className="flex items-center gap-2.5">
               <Image
                 src={icon}
@@ -85,7 +85,7 @@ export const ReceiveView = ({ setCurrentView }: {
               />
               <div className="mr-auto flex flex-col gap-1 leading-none">
                 <span className="text-ink text-[13px] font-medium">{label}</span>
-                <span className="text-ink-subtle text-[12px]">{symbol}</span>
+                <span className="text-ink-subtle text-xs">{symbol}</span>
               </div>
               <button
                 type="button"
@@ -99,12 +99,12 @@ export const ReceiveView = ({ setCurrentView }: {
             <button
               type="button"
               onClick={() => copy(label, address)}
-              className="text-ink cursor-pointer text-left font-mono text-[12px] leading-[1.5] break-all"
+              className="text-ink cursor-pointer text-left font-mono text-xs leading-normal break-all"
               title="Copy"
             >
               {address}
             </button>
-            <p className="text-ink-subtle text-[12px] leading-[1.4]">{note}</p>
+            <p className="text-ink-subtle text-xs leading-[1.4]">{note}</p>
           </div>
         ))}
       </div>

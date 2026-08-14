@@ -9,6 +9,7 @@ import { useConnectedWallet } from "@/app/components/use-connected-wallet"
 import { useQueryClient } from "@tanstack/react-query"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
+import type { WalletKind } from "@/lib/connected-wallet"
 
 export default function WalletPopup({
   isOpen,
@@ -20,10 +21,10 @@ export default function WalletPopup({
   walletButtonRef: RefObject<HTMLButtonElement | null>
 }) {
   const [currentView, setCurrentView] = useState<'connect' | 'main' | 'send' | 'receive'>('connect');
-  // Which wallet the main view speaks for when both are connected — the one
-  // the user last chose on the connect screen. Falls back to whatever is
-  // connected when the choice is stale.
-  const [preferredWallet, setPreferredWallet] = useState<'mina' | 'pulsar' | null>(null);
+  // Which wallet the main and send views speak for when both are connected —
+  // the one the user last chose on the connect screen. Falls back to whatever
+  // is connected when the choice is stale.
+  const [preferredWallet, setPreferredWallet] = useState<WalletKind | null>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const { account: minaAccount } = useMinaWallet();
   const { address: pulsarAddress } = usePulsarWallet();
@@ -136,7 +137,7 @@ export default function WalletPopup({
           }}
           role="dialog"
           aria-label="Wallet"
-          className="bg-canvas border-line fixed top-[calc(var(--header-height)+var(--spacing)*3)] right-8 z-50 flex h-[calc(100dvh-var(--header-height)-var(--spacing)*6)] w-88 flex-col gap-2 overflow-hidden rounded-[8px] border p-3 shadow-[0_8px_30px_rgb(2_1_6/8%)] md:right-[30px]"
+          className="bg-canvas border-line fixed top-[calc(var(--header-height)+var(--spacing)*3)] right-8 z-50 flex h-[calc(100dvh-var(--header-height)-var(--spacing)*6)] w-88 flex-col gap-2 overflow-hidden rounded-lg border p-3 shadow-[0_8px_30px_rgb(2_1_6/8%)] md:right-7.5"
         >
           {currentView === 'connect' && (
             <ConnectView
@@ -155,7 +156,9 @@ export default function WalletPopup({
               preferredWallet={preferredWallet}
             />
           )}
-          {currentView === 'send' && <SendView setCurrentView={setCurrentView} />}
+          {currentView === 'send' && (
+            <SendView setCurrentView={setCurrentView} preferredWallet={preferredWallet} />
+          )}
           {currentView === 'receive' && <ReceiveView setCurrentView={setCurrentView} />}
         </motion.div>
       )}

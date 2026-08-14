@@ -272,17 +272,17 @@ export default function Bridge() {
         <h1 className="brand-title text-ink text-[clamp(32px,4vw,56px)] leading-[0.95] font-[750] tracking-[-0.035em]">
           {isDeposit ? "Jump To Pulsar" : "Back To Mina"}
         </h1>
-        <p className="text-ink-muted mx-auto mt-4 max-w-[420px] text-[17px] leading-[1.35]">
+        <p className="text-ink-muted mx-auto mt-4 max-w-105 text-[17px] leading-[1.35]">
           {isDeposit
             ? "Bridge your MINA funds to Pulsar for a seamless DeFi experience"
             : "Bridge your pMINA back to the Mina account it is registered to"}
         </p>
       </div>
 
-      <div className="bg-surface border-line mx-auto flex w-full max-w-[420px] flex-col gap-2 rounded-[8px] border p-2">
-        <div className="bg-canvas border-line flex flex-col rounded-[6px] border p-5">
+      <div className="bg-surface border-line mx-auto flex w-full max-w-105 flex-col gap-2 rounded-lg border p-2">
+        <div className="bg-canvas border-line flex flex-col rounded-md border p-5">
           <div className="mb-4 flex items-center justify-between">
-            <span className="text-ink-subtle text-[12px] leading-none tracking-[0.08em] uppercase">
+            <span className="text-ink-subtle text-xs leading-none tracking-[0.08em] uppercase">
               From
             </span>
             {isDeposit ? (
@@ -297,18 +297,18 @@ export default function Bridge() {
               step="1.000"
               placeholder="0.000"
               aria-label={`Amount to ${direction}`}
-              className="text-ink placeholder:text-ink-subtle w-full text-[30px] leading-none font-[550] tracking-[-0.02em] tabular-nums focus:outline-none"
+              className="text-ink placeholder:text-ink-subtle w-full text-3xl leading-none font-[550] tracking-[-0.02em] tabular-nums focus:outline-none"
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
-            <div className="border-line flex shrink-0 items-center gap-2 rounded-[6px] border px-3 py-2">
+            <div className="border-line flex shrink-0 items-center gap-2 rounded-md border px-3 py-2">
               <Image
                 src={isDeposit ? "/mina-token-logo.png" : "/pulsar-token-logo.svg"}
                 alt=""
                 width={18}
                 height={18}
-                className="size-[18px] rounded-full"
+                className="size-4.5 rounded-full"
               />
               <span className="text-ink text-[13px] leading-none font-medium">
                 {isDeposit ? "MINA" : "pMINA"}
@@ -344,12 +344,12 @@ export default function Bridge() {
             type="button"
             aria-label={isDeposit ? "Switch to withdraw" : "Switch to deposit"}
             onClick={switchDirection}
-            className="border-line bg-surface hover:border-ink absolute -top-[17px] left-1/2 z-1 flex size-8 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border transition-colors"
+            className="border-line bg-surface hover:border-ink absolute -top-4.25 left-1/2 z-1 flex size-8 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border transition-colors"
           >
             <Image src="/opposite-arrows.svg" alt="" width={12} height={12} />
           </button>
-          <div className="bg-canvas border-line flex items-start justify-between gap-2 rounded-[6px] border p-5">
-            <span className="text-ink-subtle text-[12px] leading-none tracking-[0.08em] uppercase">
+          <div className="bg-canvas border-line flex items-start justify-between gap-2 rounded-md border p-5">
+            <span className="text-ink-subtle text-xs leading-none tracking-[0.08em] uppercase">
               To
             </span>
             {isDeposit ? pulsarSide : minaSide}
@@ -363,9 +363,9 @@ export default function Bridge() {
           )}
         >
           <div className="overflow-hidden">
-            <div className="bg-canvas border-line flex flex-col gap-4 rounded-[6px] border p-5">
+            <div className="bg-canvas border-line flex flex-col gap-4 rounded-md border p-5">
               <div className="flex w-full items-start justify-between gap-2">
-                <span className="text-ink-subtle max-w-[90px] text-[12px] leading-[1.3] tracking-[0.08em] uppercase">
+                <span className="text-ink-subtle max-w-22.5 text-xs leading-[1.3] tracking-[0.08em] uppercase">
                   You will receive
                 </span>
                 <div className="flex flex-col items-end gap-1">

@@ -67,7 +67,7 @@ const PendingRow = ({
             {formatWhen(new Date(transfer.sentAt).toISOString())}
           </span>
         </span>
-        <span className="text-ink-subtle truncate text-[12px] leading-none">
+        <span className="text-ink-subtle truncate text-xs leading-none">
           {describePendingProgress(transfer, progress)}
         </span>
       </span>
@@ -76,7 +76,7 @@ const PendingRow = ({
         <span className="text-ink-muted text-[13px] leading-none font-medium tabular-nums">
           {isDeposit ? "+" : "−"}{formatAmount(transfer.amount)} pMINA
         </span>
-        <span className="flex items-center gap-2 text-[12px] leading-none">
+        <span className="flex items-center gap-2 text-xs leading-none">
           <a
             href={`${MINA_EXPLORER_TX_URL}/${transfer.minaTxHash}`}
             target="_blank"
@@ -140,7 +140,7 @@ const Row = ({ transfer, isMine }: { transfer: BridgeTransfer; isMine: boolean }
             </span>
           )}
         </span>
-        <span className="text-ink-subtle truncate text-[12px] leading-none tabular-nums">
+        <span className="text-ink-subtle truncate text-xs leading-none tabular-nums">
           {isMine ? formatWhen(transfer.timestamp) : (
             <>
               {truncateAddress(transfer.account)} · {formatWhen(transfer.timestamp)}
@@ -153,7 +153,7 @@ const Row = ({ transfer, isMine }: { transfer: BridgeTransfer; isMine: boolean }
         <span className="text-ink text-[13px] leading-none font-medium tabular-nums">
           {isDeposit ? "+" : "−"}{formatAmount(transfer.amount)} pMINA
         </span>
-        <span className="text-ink-subtle text-[12px] leading-none tabular-nums">
+        <span className="text-ink-subtle text-xs leading-none tabular-nums">
           #{transfer.height}
         </span>
       </span>
@@ -162,7 +162,7 @@ const Row = ({ transfer, isMine }: { transfer: BridgeTransfer; isMine: boolean }
 }
 
 const Centered = ({ children }: { children: React.ReactNode }) => (
-  <p className="text-ink-subtle my-auto px-8 text-center text-[14px] leading-[1.5]">
+  <p className="text-ink-subtle my-auto px-8 text-center text-sm leading-normal">
     {children}
   </p>
 )
@@ -242,7 +242,7 @@ export default function Transactions() {
         </h1>
       </div>
 
-      <div className="bg-surface border-line mx-auto flex w-full max-w-[560px] flex-col rounded-[8px] border p-2">
+      <div className="bg-surface border-line mx-auto flex w-full max-w-140 flex-col rounded-lg border p-2">
         <div role="tablist" aria-label="Transaction type" className="flex gap-1">
           {TABS.map(({ id, label }) => {
             const isActive = activeTransactionType === id
@@ -267,7 +267,7 @@ export default function Transactions() {
 
         <div
           role="tabpanel"
-          className="bg-canvas border-line hide-scrollbar mt-2 flex h-72 flex-col overflow-y-auto rounded-[6px] border"
+          className="bg-canvas border-line hide-scrollbar mt-2 flex h-72 flex-col overflow-y-auto rounded-md border"
         >
           {activeTransactionType === 'bridge' ? (
             <BridgePanel />

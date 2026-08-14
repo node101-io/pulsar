@@ -13,7 +13,7 @@ const Step = ({ name, connected, icon, width, height }: {
   <h3 className="text-ink flex items-center gap-2 text-[13px] leading-none font-medium">
     <span
       className={cn(
-        "flex size-[18px] items-center justify-center rounded-full border transition-colors",
+        "flex size-4.5 items-center justify-center rounded-full border transition-colors",
         connected ? "border-accent bg-accent" : "border-line-strong bg-canvas",
       )}
     >
@@ -43,7 +43,7 @@ export const ProgressBar = () => {
       </div>
 
       <div className="border-accent-strong border-l-2 py-1 pl-4">
-        <p className="text-ink-muted text-[12px] leading-[1.5]">
+        <p className="text-ink-muted text-xs leading-normal">
           <span className="text-ink font-medium">Attention!</span> To dive into Pulsar,
           you should connect both your <span className="text-ink font-medium">Mina</span> and{" "}
           <span className="text-ink font-medium">Pulsar</span> wallets. Don&apos;t worry, this

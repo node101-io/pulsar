@@ -1,7 +1,9 @@
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
-import { usePulsarWallet, WalletState } from "@/app/_providers/pulsar-wallet"
+import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
+import { useConnectedWallet } from "@/app/components/use-connected-wallet"
+import type { WalletKind } from "@/lib/connected-wallet"
 import toast from "react-hot-toast"
 import { useKeyStore, useMinaPrice, usePminaBalance } from "@/lib/hooks"
 import { formatAmount, toDisplayNumber } from "@/lib/amount"
@@ -11,22 +13,34 @@ export const MainView = ({ setCurrentView, setPopupWalletType, preferredWallet }
   setCurrentView: (view: 'connect' | 'main' | 'send' | 'receive') => void
   setPopupWalletType: (isOpen: boolean) => void
   /** The wallet the user chose on the connect screen; honored while connected. */
-  preferredWallet?: 'mina' | 'pulsar' | null
+  preferredWallet?: WalletKind | null
 }) => {
   const { disconnectWallet: disconnectMina, account: minaAccount, isConnected: isMinaConnected } = useMinaWallet();
-  const { disconnect: disconnectPulsar, address: pulsarAddress, status: pulsarStatus } = usePulsarWallet();
+  const { disconnect: disconnectPulsar, address: pulsarAddress } = usePulsarWallet();
   const queryClient = useQueryClient();
   const { data: keyStore } = useKeyStore(minaAccount);
 
-  const isPulsarConnected = pulsarStatus === WalletState.Connected;
-  // The user's pick wins when both wallets are connected; a stale pick for a
-  // wallet that has since disconnected falls back to whatever is.
-  const fallbackWallet = isMinaConnected && minaAccount ? 'mina' : isPulsarConnected ? 'pulsar' : null;
-  const currentWallet =
-    (preferredWallet === 'mina' && isMinaConnected && minaAccount) ? 'mina'
-    : (preferredWallet === 'pulsar' && isPulsarConnected) ? 'pulsar'
-    : fallbackWallet;
+  const currentWallet = useConnectedWallet(preferredWallet)?.type ?? null;
   const currentAddress = currentWallet === 'mina' ? minaAccount : pulsarAddress;
+
+  // Where this view's pMINA actually lives. Bridge credits land at the
+  // REGISTERED account — the registry's answer for the Mina key, which is not
+  // necessarily the connected Keplr account (see useKeyStore) — so the Mina
+  // view reads that, falling back to the connected account only when there is
+  // no registration to ask. The Pulsar view reads the connected account
+  // itself: that is the wallet it speaks for.
+  const registeredPulsarAddress = keyStore?.keyStore?.pulsarAddress ?? null;
+  const balanceAddress =
+    currentWallet === 'mina'
+      ? registeredPulsarAddress ?? pulsarAddress
+      : pulsarAddress;
+
+  // Both wallets connected, but Keplr is not on the account this Mina key is
+  // registered to. Everything the bridge does keys on the registered account,
+  // so the user must know — and the app cannot switch Keplr accounts for
+  // them, so the notice below tells them to.
+  const isMismatched =
+    !!registeredPulsarAddress && !!pulsarAddress && registeredPulsarAddress !== pulsarAddress;
 
   const {
     data: pminaBalance,
@@ -34,8 +48,8 @@ export const MainView = ({ setCurrentView, setPopupWalletType, preferredWallet }
     isFetching: isFetchingBalance,
     error: balanceError,
     refetch: refetchBalance
-  } = usePminaBalance(pulsarAddress, {
-    enabled: !!pulsarAddress,
+  } = usePminaBalance(balanceAddress, {
+    enabled: !!balanceAddress,
   });
 
   const {
@@ -50,6 +64,12 @@ export const MainView = ({ setCurrentView, setPopupWalletType, preferredWallet }
   const handleCopyAddress = () => {
     navigator.clipboard.writeText(currentAddress || '')
       .then(() => toast.success('Address copied to clipboard!'))
+      .catch(() => toast.error('Failed to copy address. Please try again.'));
+  };
+
+  const handleCopyRegisteredAddress = () => {
+    navigator.clipboard.writeText(registeredPulsarAddress || '')
+      .then(() => toast.success('Registered address copied — find it in Keplr'))
       .catch(() => toast.error('Failed to copy address. Please try again.'));
   };
 
@@ -89,7 +109,7 @@ export const MainView = ({ setCurrentView, setPopupWalletType, preferredWallet }
 
   if (!currentWallet) {
     return (
-      <div className="text-ink-subtle text-center text-[14px]">
+      <div className="text-ink-subtle text-center text-sm">
         No wallet connected
       </div>
     );
@@ -107,7 +127,7 @@ export const MainView = ({ setCurrentView, setPopupWalletType, preferredWallet }
         <h3 className="text-[15px] leading-none font-medium">Wallet</h3>
       </button>
 
-      <div className="bg-surface border-line flex w-full items-center gap-2 rounded-[6px] border p-4">
+      <div className="bg-surface border-line flex w-full items-center gap-2 rounded-md border p-4">
         <Image
           src={currentWallet === 'mina' ? "/mina-token-logo.png" : "/pulsar-token-logo.svg"}
           alt=""
@@ -141,7 +161,27 @@ export const MainView = ({ setCurrentView, setPopupWalletType, preferredWallet }
         </div>
       </div>
 
-      <div className="bg-surface border-line mt-2 rounded-[6px] border p-4">
+      {isMismatched && (
+        <div className="border-negative/40 bg-surface mt-2 rounded-md border px-3.5 py-3 text-xs leading-[1.6]">
+          <span className="text-negative font-medium">Keplr is on a different account. </span>
+          <span className="text-ink">
+            This Mina wallet is registered to{' '}
+            <button
+              type="button"
+              onClick={handleCopyRegisteredAddress}
+              title={`${registeredPulsarAddress} — click to copy`}
+              className="cursor-pointer font-medium tabular-nums underline decoration-dotted underline-offset-2"
+            >
+              {registeredPulsarAddress!.slice(0, 6)}...{registeredPulsarAddress!.slice(-6)}
+            </button>
+            {' '}— bridge deposits land there, not on the connected{' '}
+            <span className="tabular-nums">{pulsarAddress!.slice(0, 6)}...{pulsarAddress!.slice(-6)}</span>.
+            Switch to that account in the Keplr extension to line them up.
+          </span>
+        </div>
+      )}
+
+      <div className="bg-surface border-line mt-2 rounded-md border p-4">
         <h1 className="text-ink text-[26px] leading-none font-[550] tracking-[-0.02em] tabular-nums">
           {getBalance()}
         </h1>
@@ -160,7 +200,7 @@ export const MainView = ({ setCurrentView, setPopupWalletType, preferredWallet }
               }}
               disabled={isRefreshing}
               className={cn(
-                "flex items-center gap-1 text-[12px] leading-none transition-colors",
+                "flex items-center gap-1 text-xs leading-none transition-colors",
                 isRefreshing
                   ? "text-ink-subtle cursor-not-allowed"
                   : "text-ink-subtle hover:text-ink cursor-pointer",

@@ -14,6 +14,7 @@ import { usePendingWithdrawalsFrom } from "@/lib/pending-transfers";
 import { resolveMinaAddress } from "@/lib/registry";
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 import { getPulsarSigner } from "@/lib/keplr";
+import type { WalletKind } from "@/lib/connected-wallet";
 
 interface SavedAddress {
   name: string;
@@ -21,8 +22,10 @@ interface SavedAddress {
   id: string;
 }
 
-export const SendView = ({ setCurrentView }: {
+export const SendView = ({ setCurrentView, preferredWallet }: {
   setCurrentView: (view: 'main' | 'send') => void
+  /** The wallet whose view the user pressed Send in; it decides the signer. */
+  preferredWallet?: WalletKind | null
 }) => {
   const [sendAmount, setSendAmount] = useState<string>('');
   const [recipientAddress, setRecipientAddress] = useState<string>('');
@@ -32,7 +35,7 @@ export const SendView = ({ setCurrentView }: {
 
   const { isConnected: isMinaConnected, account: minaAccount } = useMinaWallet();
   const { address: pulsarAddress } = usePulsarWallet();
-  const connectedWallet = useConnectedWallet();
+  const connectedWallet = useConnectedWallet(preferredWallet);
   const { data: keyStore } = useKeyStore(minaAccount);
 
   const { data: priceData } = useMinaPrice();
@@ -160,7 +163,7 @@ export const SendView = ({ setCurrentView }: {
         <h3 className="text-[15px] leading-none font-medium">Send pMINA</h3>
       </button>
 
-      <div className="bg-surface border-line flex items-center gap-3 rounded-[6px] border p-4">
+      <div className="bg-surface border-line flex items-center gap-3 rounded-md border p-4">
         <Image
           src="/pulsar-token-logo.svg"
           alt=""
@@ -171,7 +174,7 @@ export const SendView = ({ setCurrentView }: {
         <span className="text-ink text-[15px] leading-none font-medium">pMINA</span>
       </div>
 
-      <div className="bg-surface border-line flex flex-col gap-2 rounded-[6px] border px-4 pt-4 pb-3">
+      <div className="bg-surface border-line flex flex-col gap-2 rounded-md border px-4 pt-4 pb-3">
         <input
           type="number"
           value={sendAmount}
@@ -209,10 +212,10 @@ export const SendView = ({ setCurrentView }: {
         </div>
       </div>
 
-      <div className="bg-surface border-line flex flex-col gap-2 rounded-[6px] border p-4">
+      <div className="bg-surface border-line flex flex-col gap-2 rounded-md border p-4">
         <label
           htmlFor="recipient-address"
-          className="text-ink-subtle text-[12px] leading-none tracking-[0.08em] uppercase"
+          className="text-ink-subtle text-xs leading-none tracking-[0.08em] uppercase"
         >
           Recipient Address
         </label>
@@ -228,7 +231,7 @@ export const SendView = ({ setCurrentView }: {
           <button
             type="button"
             aria-label="Save this address"
-            className="brand-squircle border-line hover:border-ink text-ink flex size-5 shrink-0 cursor-pointer items-center justify-center border text-[14px] leading-none transition-colors"
+            className="brand-squircle border-line hover:border-ink text-ink flex size-5 shrink-0 cursor-pointer items-center justify-center border text-sm leading-none transition-colors"
             onClick={handleSaveAddressClick}
           >
             +
@@ -243,7 +246,7 @@ export const SendView = ({ setCurrentView }: {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="bg-ink/20 absolute inset-0 z-5 rounded-[8px]"
+              className="bg-ink/20 absolute inset-0 z-5 rounded-lg"
               onClick={() => {
                 setShowSaveDialog(false);
                 setAddressName('');
@@ -259,11 +262,11 @@ export const SendView = ({ setCurrentView }: {
                   stiffness: 300,
                   duration: 0.3
                 }}
-                className="bg-surface border-line absolute right-0 bottom-0 left-0 z-10 flex flex-col gap-3 rounded-t-[8px] border-t p-5 shadow-[0_-8px_30px_rgb(2_1_6/8%)]"
+                className="bg-surface border-line absolute right-0 bottom-0 left-0 z-10 flex flex-col gap-3 rounded-t-lg border-t p-5 shadow-[0_-8px_30px_rgb(2_1_6/8%)]"
               >
                 <h3 className="text-ink text-[15px] leading-none font-medium">Give it an alias</h3>
 
-                <div className="bg-canvas border-line flex items-center gap-3 rounded-[6px] border p-3">
+                <div className="bg-canvas border-line flex items-center gap-3 rounded-md border p-3">
                   <Image
                     src="/pulsar-token-logo.svg"
                     alt=""
@@ -280,7 +283,7 @@ export const SendView = ({ setCurrentView }: {
                       }
                     }}
                     placeholder="Please enter alias here"
-                    className="text-ink placeholder:text-ink-subtle flex-1 bg-transparent text-[14px] leading-none font-medium focus:outline-none"
+                    className="text-ink placeholder:text-ink-subtle flex-1 bg-transparent text-sm leading-none font-medium focus:outline-none"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         saveAddress();
@@ -292,7 +295,7 @@ export const SendView = ({ setCurrentView }: {
                     }}
                     autoFocus
                   />
-                  <span className="text-ink-subtle text-[12px] leading-none tabular-nums">{addressName.length}/20</span>
+                  <span className="text-ink-subtle text-xs leading-none tabular-nums">{addressName.length}/20</span>
                 </div>
 
                 <button
@@ -309,7 +312,7 @@ export const SendView = ({ setCurrentView }: {
 
       <button
         onClick={async () => {
-          if (connectedWallet?.type === 'cosmos') {
+          if (connectedWallet?.type === 'pulsar') {
             try {
               const signer = getPulsarSigner();
 
@@ -427,19 +430,19 @@ export const SendView = ({ setCurrentView }: {
         disabled={!connectedWallet}
         className="brand-button shrink-0"
       >
-        Send {connectedWallet?.type === 'mina' ? 'with Auro Wallet' : connectedWallet?.type === 'cosmos' ? 'with Keplr Wallet' : ''}
+        Send {connectedWallet?.type === 'mina' ? 'with Auro Wallet' : connectedWallet?.type === 'pulsar' ? 'with Keplr Wallet' : ''}
       </button>
 
       {savedAddresses.length > 0 && (
         <div className="mt-3 flex min-h-0 flex-col gap-1.5">
-          <h2 className="text-ink-subtle px-1 text-[12px] leading-none tracking-[0.08em] uppercase">
+          <h2 className="text-ink-subtle px-1 text-xs leading-none tracking-[0.08em] uppercase">
             Saved addresses
           </h2>
           <div className="hide-scrollbar flex w-full flex-col overflow-y-auto">
             {savedAddresses.map((savedAddress) => (
               <div
                 key={savedAddress.id}
-                className="group hover:bg-surface flex w-full cursor-pointer items-center gap-2.5 rounded-[6px] p-2 transition-colors duration-200"
+                className="group hover:bg-surface flex w-full cursor-pointer items-center gap-2.5 rounded-md p-2 transition-colors duration-200"
                 onClick={() => {
                   setRecipientAddress(savedAddress.address);
                 }}
@@ -453,7 +456,7 @@ export const SendView = ({ setCurrentView }: {
                 />
                 <div className="mr-auto flex flex-col gap-1 leading-none">
                   <p className="text-ink text-[13px] font-medium">{savedAddress.name}</p>
-                  <p className="text-ink-subtle text-[12px] tabular-nums">{savedAddress.address.slice(0, 6)}...{savedAddress.address.slice(-6)}</p>
+                  <p className="text-ink-subtle text-xs tabular-nums">{savedAddress.address.slice(0, 6)}...{savedAddress.address.slice(-6)}</p>
                 </div>
                 <Image
                   src="/trash-icon.svg"

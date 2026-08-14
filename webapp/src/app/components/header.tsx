@@ -71,12 +71,12 @@ export default function Header() {
   const showConnectedWallet = isMounted && connectedWallet
 
   return (
-    <header className="bg-canvas border-line flex h-[var(--header-height)] w-full shrink-0 items-center justify-between border-b px-8 md:px-[30px]">
+    <header className="bg-canvas border-line flex h-[var(--header-height)] w-full shrink-0 items-center justify-between border-b px-8 md:px-7.5">
       <div className="flex items-center gap-2.5">
         <Link href="/bridge" aria-label="Pulsar home" className="flex items-center">
-          <Image src="/logo.svg" alt="Pulsar" width={80} height={23} className="h-[23px] w-auto" priority />
+          <Image src="/logo.svg" alt="Pulsar" width={80} height={23} className="h-5.75 w-auto" priority />
         </Link>
-        <span className="bg-surface text-accent-deep rounded-[2px] px-[5px] py-[3px] text-[8px] leading-none font-medium tracking-[0.08em] uppercase">
+        <span className="bg-surface text-accent-deep rounded-xs px-1.25 py-0.75 text-[8px] leading-none font-medium tracking-[0.08em] uppercase">
           Devnet
         </span>
       </div>
@@ -102,7 +102,7 @@ export default function Header() {
                     : "border-line text-ink hover:border-ink",
                 )
               : cn(
-                  "h-[34px] px-4",
+                  "h-8.5 px-4",
                   isWalletPopupOpen ? "bg-ink-muted text-ink-inverse" : "bg-ink text-ink-inverse",
                 ),
           )}

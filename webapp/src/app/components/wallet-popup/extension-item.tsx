@@ -30,7 +30,7 @@ export const ExtensionItem = ({ icon, title, subtitle, onClick, disabled, isLoad
         className="border-line size-9 shrink-0 rounded-full border"
       />
       <div className="flex-1">
-        <div className="text-ink text-[14px] leading-[1.25] font-medium">
+        <div className="text-ink text-sm leading-tight font-medium">
           {isLoading ? 'Connecting…' : title}
         </div>
         {subtitle && (

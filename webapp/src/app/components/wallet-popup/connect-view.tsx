@@ -272,7 +272,7 @@ export const ConnectView = ({ keyStore: keyStoreData, onOpenWallet, onWalletConn
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="bg-ink/20 absolute inset-0 z-5 rounded-[8px]"
+              className="bg-ink/20 absolute inset-0 z-5 rounded-lg"
             />
             <motion.div
               initial={{ y: '100%', opacity: 0 }}
@@ -284,11 +284,11 @@ export const ConnectView = ({ keyStore: keyStoreData, onOpenWallet, onWalletConn
                 stiffness: 300,
                 duration: 0.3
               }}
-              className="bg-surface border-line absolute right-0 bottom-0 left-0 z-10 flex flex-col items-center gap-3 rounded-t-[8px] border-t p-6 shadow-[0_-8px_30px_rgb(2_1_6/8%)]"
+              className="bg-surface border-line absolute right-0 bottom-0 left-0 z-10 flex flex-col items-center gap-3 rounded-t-lg border-t p-6 shadow-[0_-8px_30px_rgb(2_1_6/8%)]"
             >
               <Image src="/welcome.svg" alt="" width={32} height={32} />
               <div className="flex flex-col items-center gap-1.5 text-center">
-                <h3 className="text-ink text-[16px] leading-none font-medium">{getOverlayTitle()}</h3>
+                <h3 className="text-ink text-base leading-none font-medium">{getOverlayTitle()}</h3>
                 <p className="text-ink-muted text-[13px] leading-[1.4]">{getOverlaySubtitle()}</p>
               </div>
 
