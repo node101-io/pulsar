@@ -67,14 +67,21 @@ const PendingRow = ({
   const isDeposit = transfer.direction === "deposit"
 
   return (
-    <div className="border-line flex items-center gap-3 border-b px-4 py-3 last:border-b-0">
+    // Pending records are always the viewer's own, so they wear the same
+    // "mine" mark as settled rows — without it, a page mixing marked settled
+    // rows with unmarked pending ones reads as if the pending belonged to
+    // someone else.
+    <div className="border-accent-strong bg-surface border-line flex items-center gap-3 border-b border-l-2 px-4 py-3 last:border-b-0">
       <span className="border-line flex size-8 shrink-0 items-center justify-center rounded-full border border-dashed">
         <Image src="/clock.svg" alt="" width={12} height={12} className="opacity-60" />
       </span>
 
       <span className="flex min-w-0 flex-col gap-1">
-        <span className="text-ink text-[13px] leading-none font-medium">
-          {isDeposit ? "Deposit" : "Withdraw"} ·{" "}
+        <span className="text-ink flex items-center gap-1.5 text-[13px] leading-none font-medium">
+          {isDeposit ? "Deposit" : "Withdraw"}
+          <span className="text-accent-deep text-[11px] leading-none font-medium">
+            You
+          </span>
           <span className="text-ink-subtle font-normal">
             {formatWhen(new Date(transfer.sentAt).toISOString())}
           </span>
