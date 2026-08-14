@@ -179,14 +179,14 @@ export const MainView = ({ setCurrentView, setPopupWalletType, preferredWallet }
             onClick={() => setCurrentView("send")}
             className="brand-squircle bg-canvas border-line hover:border-ink flex flex-1 cursor-pointer flex-col items-center gap-1.5 border py-3 transition-colors"
           >
-            <Image src="/arrow-dark.svg" alt="" width={14} height={14} className="-rotate-45" />
+            <Image src="/arrow-dark.svg" alt="" width={14} height={14} className="w-auto -rotate-45" />
             <span className="text-ink text-[13px] leading-none font-medium">Send</span>
           </button>
           <button
             onClick={() => setCurrentView("receive")}
             className="brand-squircle bg-canvas border-line hover:border-ink flex flex-1 cursor-pointer flex-col items-center gap-1.5 border py-3 transition-colors"
           >
-            <Image src="/arrow-dark.svg" alt="" width={14} height={14} className="rotate-135" />
+            <Image src="/arrow-dark.svg" alt="" width={14} height={14} className="w-auto rotate-135" />
             <span className="text-ink text-[13px] leading-none font-medium">Receive</span>
           </button>
         </div>

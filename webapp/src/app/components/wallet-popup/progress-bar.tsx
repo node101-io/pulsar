@@ -18,7 +18,7 @@ const Step = ({ name, connected, icon, width, height }: {
         connected ? "border-accent bg-accent" : "border-line-strong bg-canvas",
       )}
     >
-      <Image src={icon} alt="" width={width} height={height} />
+      <Image src={icon} alt="" width={width} height={height} className="w-auto" />
     </span>
     {name}
   </h3>

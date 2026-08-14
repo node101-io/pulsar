@@ -16,13 +16,11 @@ type KeplrChainConfig = {
   rpc: string;
   rest: string;
   bip44: { coinType: number };
-  coinType: number;
   bech32Config: Required<Chain>["bech32Config"];
   currencies: KeplrCurrency[];
   feeCurrencies: (KeplrCurrency & {
     gasPriceStep?: { low: number; average: number; high: number };
   })[];
-  gasPriceStep?: { low: number; average: number; high: number };
   stakeCurrency: KeplrCurrency;
   features?: string[];
 };
@@ -87,11 +85,9 @@ export function buildKeplrChainConfigFromRegistry(
     rpc,
     rest,
     bip44: { coinType: chain.slip44 ?? 118 },
-    coinType: chain.slip44 ?? 118,
     bech32Config: chain.bech32Config!,
     currencies: [currency],
     feeCurrencies: [{ ...currency, gasPriceStep }],
-    gasPriceStep,
     stakeCurrency: currency,
     features: [],
   };

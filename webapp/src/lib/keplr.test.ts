@@ -32,7 +32,7 @@ describe("buildKeplrChainConfigFromRegistry", () => {
     // by the decimals above — the chain's minimum-gas-prices is 0.0001pmina.
     const config = buildKeplrChainConfigFromRegistry(consumerChain, consumerAssetList);
 
-    expect(config.gasPriceStep?.average).toBe(
+    expect(config.feeCurrencies[0]!.gasPriceStep?.average).toBe(
       consumerChain.fees!.feeTokens[0]!.fixedMinGasPrice,
     );
   });
