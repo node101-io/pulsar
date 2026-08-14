@@ -13,6 +13,10 @@ import {
   forgetPendingTransfer,
   type PendingTransfer,
 } from "@/lib/pending-transfers"
+import {
+  describePendingProgress,
+  type BridgeScanProgress,
+} from "@/lib/bridge-progress"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { MINA_EXPLORER_TX_URL, PULSAR_EXPLORER_URL } from "@/lib/constants"
 import { useState } from "react"
@@ -34,35 +38,12 @@ const formatWhen = (timestamp: string) => {
   return `${Math.floor(minutes / (60 * 24))}d ago`
 }
 
-/**
- * What the chain can honestly say about a transfer it has not answered yet.
- *
- * The transfer's own Mina block is unknowable from here — it is consumed by
- * the keeper and never published — so the height recorded when it was sent
- * stands in as a lower bound. That is enough to say whether the scan has even
- * reached the neighbourhood, and never enough to claim it is done. A missing
- * reading says so rather than inventing an estimate.
- */
-const describeProgress = (
-  transfer: PendingTransfer,
-  cursor: number | null | undefined,
-): string => {
-  if (cursor == null || transfer.minaHeightAtSend == null)
-    return "Waiting for Pulsar to scan it"
-
-  const remaining = transfer.minaHeightAtSend - cursor
-  if (remaining > 0)
-    return `Pulsar has ${remaining.toLocaleString()} Mina block${remaining === 1 ? "" : "s"} to scan before reaching it`
-
-  return "Pulsar is scanning the blocks that carry it"
-}
-
 const PendingRow = ({
   transfer,
-  cursor,
+  progress,
 }: {
   transfer: PendingTransfer
-  cursor: number | null | undefined
+  progress: BridgeScanProgress | undefined
 }) => {
   const isDeposit = transfer.direction === "deposit"
 
@@ -71,7 +52,7 @@ const PendingRow = ({
     // "mine" mark as settled rows — without it, a page mixing marked settled
     // rows with unmarked pending ones reads as if the pending belonged to
     // someone else.
-    <div className="border-accent-strong bg-surface border-line flex items-center gap-3 border-b border-l-2 px-4 py-3 last:border-b-0">
+    <div className="border-line bg-surface border-l-accent-strong flex items-center gap-3 border-b border-l-2 px-4 py-3 last:border-b-0">
       <span className="border-line flex size-8 shrink-0 items-center justify-center rounded-full border border-dashed">
         <Image src="/clock.svg" alt="" width={12} height={12} className="opacity-60" />
       </span>
@@ -87,7 +68,7 @@ const PendingRow = ({
           </span>
         </span>
         <span className="text-ink-subtle truncate text-[12px] leading-none">
-          {describeProgress(transfer, cursor)}
+          {describePendingProgress(transfer, progress)}
         </span>
       </span>
 
@@ -137,7 +118,7 @@ const Row = ({ transfer, isMine }: { transfer: BridgeTransfer; isMine: boolean }
         // The viewer's own movements, marked rather than filtered: the feed is
         // everyone's, and "which of these are mine" is the one question a
         // wallet can answer that the chain data alone cannot.
-        isMine && "border-accent-strong bg-surface border-l-2",
+        isMine && "border-l-accent-strong bg-surface border-l-2",
       )}
     >
       <span className="border-line flex size-8 shrink-0 items-center justify-center rounded-full border">
@@ -236,7 +217,7 @@ const BridgePanel = () => {
         <PendingRow
           key={transfer.minaTxHash}
           transfer={transfer}
-          cursor={progress?.cursor}
+          progress={progress}
         />
       ))}
       {transfers.map((transfer) => (

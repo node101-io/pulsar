@@ -3,12 +3,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 
 import {
   fetchAllBridgeTransfers,
+  fetchBridgeConfirmationDepth,
   fetchBridgeTransfers,
   fetchMinaHeight,
   fetchMinaPrice,
   fetchMinaScanCursor,
   fetchPminaBalance,
 } from "./utils"
+import type { BridgeScanProgress } from "./bridge-progress"
 import { getPulsarAddress } from "./keplr"
 import { MINA_RPC_URL } from "./constants"
 import { resolveMinaAddress } from "./registry"
@@ -180,14 +182,17 @@ export function usePendingBridgeTransfers(minaAccount?: string | null) {
 export function useBridgeScanProgress(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["bridgeScanProgress"],
-    queryFn: async (): Promise<{ cursor: number | null; minaTip: number | null }> => {
-      const [cursor, minaTip] = await Promise.allSettled([
+    queryFn: async (): Promise<BridgeScanProgress> => {
+      const [cursor, minaTip, confirmationDepth] = await Promise.allSettled([
         fetchMinaScanCursor(),
         fetchMinaHeight(),
+        fetchBridgeConfirmationDepth(),
       ]);
       return {
         cursor: cursor.status === "fulfilled" ? cursor.value : null,
         minaTip: minaTip.status === "fulfilled" ? minaTip.value : null,
+        confirmationDepth:
+          confirmationDepth.status === "fulfilled" ? confirmationDepth.value : null,
       };
     },
     // The cursor only moves when the bridge pushes a batch, which is minutes

@@ -7,6 +7,9 @@ import {
 } from "./constants";
 import {
   BRIDGE_QUERY_LATEST_ACTION_HASHES,
+  BRIDGE_QUERY_PARAMS,
+  BridgeQueryParamsRequest,
+  BridgeQueryParamsResponse,
   QueryLatestActionHashesRequest,
   QueryLatestActionHashesResponse,
 } from "pulsar-chain-client/messages";
@@ -348,6 +351,30 @@ export async function fetchMinaScanCursor(): Promise<number> {
     throw new Error("Pulsar reported no Mina scan cursor");
   }
   return height;
+}
+
+/**
+ * How many blocks past a Mina block the tip must be before the chain reads
+ * it (x/bridge params.confirmation_depth).
+ *
+ * This single number is most of the bridge's latency, which is why the UI
+ * fetches it instead of hard-coding "about two hours": with it, a pending
+ * transfer's wait splits into "Mina is still confirming the block" and
+ * "Pulsar's scan is behind" — different problems with different owners.
+ */
+export async function fetchBridgeConfirmationDepth(): Promise<number> {
+  const request = BridgeQueryParamsRequest.encode(
+    BridgeQueryParamsRequest.fromPartial({}),
+  ).finish();
+
+  const value = await abciQuery(BRIDGE_QUERY_PARAMS, request);
+  const depth = Number(
+    BridgeQueryParamsResponse.decode(value).params?.confirmation_depth,
+  );
+  if (!Number.isSafeInteger(depth) || depth < 0) {
+    throw new Error("Pulsar reported no confirmation depth");
+  }
+  return depth;
 }
 
 // Cosmos SDK error code that /abci_query reports in `codespace: "sdk"` when a

@@ -23,6 +23,8 @@ export {
 export {
   QueryLatestActionHashesRequest,
   QueryLatestActionHashesResponse,
+  QueryParamsRequest as BridgeQueryParamsRequest,
+  QueryParamsResponse as BridgeQueryParamsResponse,
 } from "./generated-web/pulsarchain/bridge/v1/query.js";
 
 // gRPC method paths, as /abci_query expects them.
@@ -33,3 +35,8 @@ export const KEYREGISTRY_QUERY_USER_COSMOS_KEY =
 // progress that comes from the chain itself rather than from a wall clock.
 export const BRIDGE_QUERY_LATEST_ACTION_HASHES =
   "/pulsarchain.bridge.v1.Query/LatestActionHashes";
+
+// Carries confirmation_depth: how many blocks past a Mina block the tip must
+// be before the chain will read it — the number that makes a bridge wait
+// explainable rather than mysterious.
+export const BRIDGE_QUERY_PARAMS = "/pulsarchain.bridge.v1.Query/Params";
