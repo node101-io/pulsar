@@ -67,7 +67,7 @@
  *
  *   8px             a top-level surface — a page card, the wallet popup shell
  *   6px             anything sitting inside one of those
- *   .brand-squircle a control (7px, squaring to 1px on hover)
+ *   .brand-squircle a control (7px)
  *   2px             a micro chip, e.g. the DEVNET badge
  *   rounded-full    avatars and token marks only
  *
@@ -75,29 +75,16 @@
  * nested cards from looking like they are fighting each other.
  */
 @layer components {
-  /*
-   * The brand's signature control: a 7px radius that squares off to 1px on
-   * hover. Every interactive surface shares it so the gesture reads as one
-   * system rather than a per-button flourish.
-   *
-   * Deliberately NOT extended to `.group:hover .brand-squircle`: a row-level
-   * hover firing the gesture on every control it happens to contain reads as a
-   * glitch, and it fires on controls the pointer is nowhere near.
-   */
+  /* The control radius. Every interactive surface shares it. */
   .brand-squircle {
     border-radius: 7px;
-    transition: border-radius 500ms ease-in-out;
-  }
-
-  .brand-squircle:hover:not(:disabled) {
-    border-radius: 1px;
   }
 
   /*
    * The primary action, wherever it appears: Deposit, Send, Sign, Confirm.
-   * Carries the same radius gesture as .brand-squircle plus the one colour
-   * shift the brand allows on a filled control — ink to its muted plum, so a
-   * pointer on the app's most consequential button gets an answer.
+   * Carries the control radius plus the one colour shift the brand allows on a
+   * filled control — ink to its muted plum, so a pointer on the app's most
+   * consequential button gets an answer.
    *
    * Written out rather than composed, so utilities in markup still override it
    * and nothing depends on layer ordering. Sizing beyond the height (w-full,
@@ -114,13 +101,10 @@
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition:
-      border-radius 500ms ease-in-out,
-      background-color 200ms ease;
+    transition: background-color 200ms ease;
   }
 
   .brand-button:hover:not(:disabled) {
-    border-radius: 1px;
     background-color: var(--color-ink-muted);
   }
 
@@ -160,12 +144,5 @@
 
   .scrollbar-thumb-border::-webkit-scrollbar-thumb {
     border: 1px solid var(--color-canvas) !important;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .brand-squircle,
-  .brand-button {
-    transition: none;
   }
 }

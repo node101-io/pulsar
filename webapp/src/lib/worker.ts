@@ -85,6 +85,9 @@ class ZkappWorker {
     }
   }
 
+  // Both amounts cross as decimal strings of nanomina: bigint is what the app
+  // counts in (see lib/amount.ts), and a number here would be one more place
+  // an amount could pick up float error on its way to a signature.
   async deposit({
     sender,
     amount,
@@ -92,7 +95,7 @@ class ZkappWorker {
   }: {
     sender: string;
     amount: string;
-    fee: number;
+    fee: string;
   }) {
     const senderPubKey = PublicKey.fromBase58(sender);
 

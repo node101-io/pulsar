@@ -1,10 +1,15 @@
 import {
   BRIDGE_MODULE_ADDRESS,
+  MINA_RPC_URL,
   PMINA_DENOM,
-  PMINA_EXPONENT,
   PULSAR_REST_URL,
   PULSAR_RPC_URL,
 } from "./constants";
+import {
+  BRIDGE_QUERY_LATEST_ACTION_HASHES,
+  QueryLatestActionHashesRequest,
+  QueryLatestActionHashesResponse,
+} from "pulsar-chain-client/messages";
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { consumerChain } from "./constants";
@@ -13,13 +18,21 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-const PMINA_PER_UNIT = 10 ** PMINA_EXPONENT;
-
-export const fetchPminaBalance = async (account: string): Promise<number> => {
+/**
+ * A Pulsar account's pMINA, in base units.
+ *
+ * Base units and not a token float: the node reports an exact integer, and
+ * dividing it here would hand every caller a value they cannot compare against
+ * a typed amount without reintroducing float error. lib/amount.ts converts at
+ * the point of display instead.
+ */
+export const fetchPminaBalance = async (account: string): Promise<bigint> => {
   const balance = await fetch(`${PULSAR_REST_URL}/cosmos/bank/v1beta1/balances/${account}`);
   const json = await balance.json() as { balances: { denom: string, amount: string }[] };
-  const amount = Number(json.balances.find(item => item.denom === PMINA_DENOM)?.amount ?? 0);
-  return amount / PMINA_PER_UNIT;
+  const raw = json.balances.find(item => item.denom === PMINA_DENOM)?.amount;
+  // The node answers in whole base units. Anything else is a response we do not
+  // understand, and guessing at it would be worse than reading zero.
+  return raw && /^\d+$/.test(raw) ? BigInt(raw) : 0n;
 };
 
 export type BridgeTransfer = {
@@ -136,10 +149,6 @@ export async function fetchBridgeTransfers(address: string): Promise<BridgeTrans
   return [...deposits, ...withdrawals].sort((a, b) => b.height - a.height);
 }
 
-export function formatPmina(amount: bigint): string {
-  return (Number(amount) / PMINA_PER_UNIT).toFixed(3);
-}
-
 export const formatTimeLeft = (ms: number): string => {
   const hours = Math.floor(ms / (1000 * 60 * 60))
   const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60))
@@ -226,6 +235,88 @@ export async function fetchMinaPrice(): Promise<MinaPrice> {
   const res = await fetch("/api/price");
   if (!res.ok) throw new Error(`Failed to read MINA price: ${res.status}`);
   return (await res.json()) as MinaPrice;
+}
+
+/**
+ * The Pulsar chain's current block height.
+ *
+ * Recorded against a pending deposit as the watermark that later tells a
+ * settled credit apart from one that was already there. A height and not a
+ * timestamp on purpose: both sides of that comparison then come from the same
+ * monotonic chain clock, so a browser whose clock is minutes off cannot make a
+ * settled deposit look unsettled — or, far worse, an old one look new.
+ */
+export async function fetchPulsarHeight(): Promise<number> {
+  const res = await fetch(`${PULSAR_RPC_URL}/status`);
+  if (!res.ok) throw new Error(`Pulsar RPC returned ${res.status}`);
+
+  const body = (await res.json()) as {
+    result?: { sync_info?: { latest_block_height?: string } };
+  };
+  const height = Number(body.result?.sync_info?.latest_block_height);
+  if (!Number.isSafeInteger(height) || height <= 0) {
+    throw new Error("Pulsar RPC returned no block height");
+  }
+  return height;
+}
+
+/**
+ * Mina's current block height, read from the same node the deposit is sent to.
+ *
+ * A deposit lands at some height above this one, which makes it a sound lower
+ * bound for progress: until the chain's scan cursor passes it, the deposit
+ * certainly has not been read yet.
+ */
+export async function fetchMinaHeight(): Promise<number> {
+  const res = await fetch(MINA_RPC_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query: "{ bestChain(maxLength: 1) { protocolState { consensusState { blockHeight } } } }",
+    }),
+  });
+  if (!res.ok) throw new Error(`Mina node returned ${res.status}`);
+
+  const body = (await res.json()) as {
+    data?: {
+      bestChain?: {
+        protocolState?: { consensusState?: { blockHeight?: string } };
+      }[];
+    };
+  };
+  const height = Number(
+    body.data?.bestChain?.[0]?.protocolState?.consensusState?.blockHeight,
+  );
+  if (!Number.isSafeInteger(height) || height <= 0) {
+    throw new Error("Mina node returned no block height");
+  }
+  return height;
+}
+
+/**
+ * How far into Mina the chain has scanned (x/bridge, inclusive upper cursor).
+ *
+ * This is the honest answer to "where is my deposit": every credit waits on
+ * this number reaching the block that carried it. A flat "about two hours"
+ * cannot tell a busy bridge from a stopped one; this can.
+ */
+export async function fetchMinaScanCursor(): Promise<number> {
+  const request = QueryLatestActionHashesRequest.encode(
+    QueryLatestActionHashesRequest.fromPartial({}),
+  ).finish();
+
+  const value = await abciQuery(BRIDGE_QUERY_LATEST_ACTION_HASHES, request);
+  const { latest_fetched_mina_height: cursor } =
+    QueryLatestActionHashesResponse.decode(value);
+
+  // The codec types this int64 as an optional string, so an absent field would
+  // reach callers as NaN — which compares false against everything and would
+  // render as confident progress the chain never reported. Fail instead.
+  const height = Number(cursor);
+  if (!Number.isSafeInteger(height) || height < 0) {
+    throw new Error("Pulsar reported no Mina scan cursor");
+  }
+  return height;
 }
 
 // Cosmos SDK error code that /abci_query reports in `codespace: "sdk"` when a

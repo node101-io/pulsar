@@ -5,17 +5,28 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useMinaWallet } from "@/app/_providers/mina-wallet";
 import {
-  BRIDGE_ADDRESS,
   EXPECTED_MINA_NETWORK_IDS,
   MINA_RPC_URL,
   MINA_TX_FEE_NANOMINA,
   MINIMUM_DEPOSIT_NANOMINA,
 } from "@/lib/constants";
 import { toast } from "react-hot-toast";
-import { useMinaPrice, useMinaBalance, useKeyStore } from "@/lib/hooks";
+import {
+  useMinaPrice,
+  useMinaBalance,
+  useKeyStore,
+  usePendingBridgeDeposits,
+  usePulsarAddress,
+} from "@/lib/hooks";
 import { useWorker, useWorkerInit } from "@/app/_providers/worker";
+import { formatAmount, parseAmount, toDisplayNumber } from "@/lib/amount";
+import { recordPendingDeposit } from "@/lib/pending-deposits";
+import { fetchMinaHeight, fetchPulsarHeight } from "@/lib/utils";
+import Link from "next/link";
 
-const NANO = 1_000_000_000;
+function truncateAddress(address: string): string {
+  return `${address.slice(0, 10)}…${address.slice(-6)}`;
+}
 
 export default function Bridge() {
   const { account, isConnected, network } = useMinaWallet();
@@ -33,18 +44,35 @@ export default function Bridge() {
 
   const { data: priceData } = useMinaPrice();
   const { data: keyStore } = useKeyStore(account);
+  const { data: connectedPulsarAddress } = usePulsarAddress();
+  const pendingDeposits = usePendingBridgeDeposits(account);
 
   const { data: balanceData } = useMinaBalance(account, {
     enabled: !!account && isConnected,
   });
 
-  const balance = balanceData ? Number(balanceData) / NANO : 0;
-  const amountNano = amount ? BigInt(Math.floor(Number(amount) * NANO)) : 0n;
+  const balanceNano = balanceData ?? 0n;
+  // The fee leaves the same account as the deposit, so this — not the balance
+  // — is the most that can be sent. Offering the full balance builds a
+  // transaction Mina rejects for insufficient funds.
+  const maxDepositNano =
+    balanceNano > MINA_TX_FEE_NANOMINA ? balanceNano - MINA_TX_FEE_NANOMINA : 0n;
+  const amountNano = parseAmount(amount);
 
-  const isRegistered = !!keyStore?.keyStore;
+  // Where the chain will credit this deposit, which is the registration's
+  // Cosmos key and nothing else. A Mina key can never be re-pointed at another
+  // account, so depositing into a mismatch is unrecoverable — hence a block
+  // rather than a warning.
+  const destination = keyStore?.keyStore?.pulsarAddress;
+  const isRegistered = !!destination;
+  const isWrongDestination =
+    !!destination &&
+    !!connectedPulsarAddress &&
+    destination !== connectedPulsarAddress;
+
   const onExpectedNetwork =
     !network || EXPECTED_MINA_NETWORK_IDS.includes(network.networkID);
-  const isOverBalance = Number(amount) > balance;
+  const isOverBalance = amountNano > 0n && amountNano + MINA_TX_FEE_NANOMINA > balanceNano;
   const isBelowMinimum = amountNano > 0n && amountNano < MINIMUM_DEPOSIT_NANOMINA;
 
   // Compiling takes minutes, so start as soon as a wallet is connected rather
@@ -62,11 +90,13 @@ export default function Bridge() {
       ? `Auro is on ${network?.networkID} — switch to Devnet`
       : !isRegistered
         ? "Register your keys before depositing"
-        : isBelowMinimum
-          ? `Minimum deposit is ${Number(MINIMUM_DEPOSIT_NANOMINA) / NANO} MINA`
-          : isOverBalance
-            ? "Insufficient MINA balance"
-            : null;
+        : isWrongDestination
+          ? `This Mina account is registered to ${truncateAddress(destination!)}, not the connected ${truncateAddress(connectedPulsarAddress!)} — the deposit would land there. Switch Keplr to that account.`
+          : isBelowMinimum
+            ? `Minimum deposit is ${formatAmount(MINIMUM_DEPOSIT_NANOMINA)} MINA`
+            : isOverBalance
+              ? `Insufficient MINA — ${formatAmount(MINA_TX_FEE_NANOMINA)} MINA is needed for the fee on top of the deposit`
+              : null;
 
   const handleDeposit = async () => {
     if (blockedReason || !account || !worker) return;
@@ -82,7 +112,7 @@ export default function Bridge() {
       const json = await worker.deposit({
         sender: account,
         amount: amountNano.toString(),
-        fee: MINA_TX_FEE_NANOMINA,
+        fee: MINA_TX_FEE_NANOMINA.toString(),
       });
 
       const result = await window.mina.sendTransaction({ transaction: json });
@@ -97,6 +127,28 @@ export default function Bridge() {
 
       toast.success(`Deposit submitted: ${result.hash.slice(0, 10)}…`);
 
+      // Recorded the moment the wallet accepts it, before waiting on anything:
+      // this is the only trace the deposit leaves until Pulsar credits it, and
+      // a user who closes the tab during the wait would otherwise lose it. The
+      // two heights are the watermarks that later tell this deposit apart from
+      // an older one — see reconcilePendingDeposits. They are read together and
+      // may fail independently, which the record allows for.
+      const [pulsarHeight, minaHeight] = await Promise.allSettled([
+        fetchPulsarHeight(),
+        fetchMinaHeight(),
+      ]);
+      recordPendingDeposit({
+        minaTxHash: result.hash,
+        minaSender: account,
+        destination: destination!,
+        amount: amountNano,
+        pulsarHeightAtSend:
+          pulsarHeight.status === "fulfilled" ? pulsarHeight.value : null,
+        minaHeightAtSend:
+          minaHeight.status === "fulfilled" ? minaHeight.value : null,
+        sentAt: Date.now(),
+      });
+
       const pending = toast.loading("Waiting for confirmation on Mina…");
       const status = await worker.waitForTransaction({
         hash: result.hash,
@@ -109,10 +161,10 @@ export default function Bridge() {
       }
 
       // The chain reads Mina at its confirmation depth, so the credit lands
-      // long after the transaction does. Saying so here prevents a support
-      // ticket for every deposit.
+      // long after the transaction does. Saying so here, and pointing at the
+      // page that tracks it, prevents a support ticket for every deposit.
       toast.success(
-        "Deposit confirmed on Mina. Pulsar credits it once the chain scans this block — allow about two hours.",
+        "Deposit confirmed on Mina. Pulsar credits it once the chain scans this block — follow it under Transactions.",
         { duration: 8000 },
       );
       setAmount("");
@@ -164,25 +216,41 @@ export default function Bridge() {
             {(isOverBalance || isBelowMinimum) && amount !== "" && (
               <span className="text-negative">
                 {isBelowMinimum
-                  ? `Minimum ${Number(MINIMUM_DEPOSIT_NANOMINA) / NANO} MINA`
+                  ? `Minimum ${formatAmount(MINIMUM_DEPOSIT_NANOMINA)} MINA`
                   : "Insufficient MINA balance"}
               </span>
             )}
             <button
               type="button"
               className="text-ink-subtle hover:text-ink ml-auto cursor-pointer transition-colors"
-              onClick={() => setAmount(balance.toFixed(3))}
+              title={`Balance minus the ${formatAmount(MINA_TX_FEE_NANOMINA)} MINA fee`}
+              onClick={() => setAmount(formatAmount(maxDepositNano))}
             >
-              Max: <span className="tabular-nums">{balance.toFixed(3)}</span> MINA
+              Max: <span className="tabular-nums">{formatAmount(maxDepositNano)}</span> MINA
             </button>
           </div>
         </div>
 
-        <div className="bg-canvas border-line flex items-center justify-between rounded-[6px] border p-5">
+        <div className="bg-canvas border-line flex items-start justify-between gap-2 rounded-[6px] border p-5">
           <span className="text-ink-subtle text-[12px] leading-none tracking-[0.08em] uppercase">
             To
           </span>
-          <span className="text-ink-muted text-[13px] leading-none">Pulsar Network</span>
+          <div className="flex flex-col items-end gap-1.5">
+            <span className="text-ink-muted text-[13px] leading-none">Pulsar Network</span>
+            {/* The registry picks this, not the connected wallet. Showing it is
+                the only way a user can tell the two apart before signing. */}
+            {destination && (
+              <span
+                className={cn(
+                  "text-[13px] leading-none tabular-nums",
+                  isWrongDestination ? "text-negative" : "text-ink-subtle",
+                )}
+                title={destination}
+              >
+                {truncateAddress(destination)}
+              </span>
+            )}
+          </div>
         </div>
 
         <div
@@ -199,10 +267,10 @@ export default function Bridge() {
                 </span>
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-ink text-[15px] leading-none font-medium tabular-nums">
-                    {Number(amount || 0).toFixed(3)} pMINA
+                    {formatAmount(amountNano)} pMINA
                   </span>
                   <span className="text-ink-subtle text-[13px] leading-none tabular-nums">
-                    ~${(Number(amount || 0) * (priceData?.price || 0)).toFixed(2)}
+                    ~${(toDisplayNumber(amountNano) * (priceData?.price ?? 0)).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -211,7 +279,7 @@ export default function Bridge() {
                 <Image src="/clock.svg" alt="" width={14} height={14} className="opacity-60" />
                 <span className="text-ink-subtle mr-auto text-[13px] leading-none">~2 hours</span>
                 <span className="text-ink-subtle text-[13px] leading-none tabular-nums">
-                  Fee {MINA_TX_FEE_NANOMINA / NANO} MINA
+                  Fee {formatAmount(MINA_TX_FEE_NANOMINA)} MINA
                 </span>
               </div>
             </div>
@@ -222,6 +290,21 @@ export default function Bridge() {
           <p className="border-accent-strong text-ink-muted mx-3 my-1 border-l-2 py-0.5 pl-4 text-[13px] leading-[1.4]">
             {blockedReason}
           </p>
+        )}
+
+        {/* The minutes after a deposit are when a user is most likely to think
+            the money vanished. This is the one place they are still looking. */}
+        {pendingDeposits.length > 0 && (
+          <Link
+            href="/transactions"
+            className="text-ink-muted hover:text-ink mx-3 my-1 flex items-center gap-2 text-[13px] leading-[1.4] transition-colors"
+          >
+            <Image src="/clock.svg" alt="" width={13} height={13} className="opacity-60" />
+            {pendingDeposits.length === 1
+              ? `${formatAmount(pendingDeposits[0].amount)} MINA in flight`
+              : `${pendingDeposits.length} deposits in flight`}
+            <span className="text-ink-subtle ml-auto">Track →</span>
+          </Link>
         )}
 
         <button

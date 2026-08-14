@@ -4,6 +4,7 @@ import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
 import toast from "react-hot-toast"
 import { useKeyStore, useMinaPrice, usePminaBalance } from "@/lib/hooks"
+import { formatAmount, toDisplayNumber } from "@/lib/amount"
 import { useQueryClient } from "@tanstack/react-query"
 import { WalletState } from "@interchain-kit/core"
 
@@ -57,7 +58,7 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
   };
 
   const getBalance = () => {
-    return pminaBalance ? `${pminaBalance.toFixed(2)} pMINA` : '0.000 pMINA';
+    return `${formatAmount(pminaBalance ?? 0n)} pMINA`;
   };
 
   const getBalanceUSD = () => {
@@ -68,7 +69,7 @@ export const MainView = ({ setCurrentView, setPopupWalletType }: {
           (isLoadingPrice || isFetchingPrice || isFetchingBalance) && "opacity-30",
         )}>
           <span className="text-ink font-medium">
-            ${(pminaBalance * priceData.price).toFixed(2)}
+            ${(toDisplayNumber(pminaBalance) * priceData.price).toFixed(2)}
           </span>
           <span className={cn("ml-2", priceData.change24h >= 0 ? "text-positive" : "text-negative")}>
             ({priceData.change24h >= 0 ? '+' : ''}{priceData.change24h.toFixed(2)}%)

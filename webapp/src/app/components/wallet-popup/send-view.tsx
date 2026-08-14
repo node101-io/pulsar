@@ -7,8 +7,9 @@ import { useMinaWallet } from "@/app/_providers/mina-wallet";
 import { usePulsarWallet } from "@/app/_providers/pulsar-wallet";
 import { usePminaBalance, } from "@/lib/hooks"
 import { useConnectedWallet } from "@/app/components/use-connected-wallet";
-import { createSendTokenTx } from "@/lib/tx";
+import { SEND_TOKEN_FEE, createSendTokenTx } from "@/lib/tx";
 import { fetchAccountAuth } from "@/lib/utils";
+import { DECIMALS, formatAmount, parseAmount, toDisplayNumber } from "@/lib/amount";
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 import { BroadcastMode, CosmosWallet } from "@interchain-kit/core";
 import { consumerChain } from "@/lib/constants";
@@ -71,16 +72,19 @@ export const SendView = ({ setCurrentView }: {
     setAddressName('');
   };
 
+  const balance = pminaBalance ?? 0n;
+  const amountBase = parseAmount(sendAmount);
+  // The fee comes out of this same balance, so the whole balance is never
+  // sendable. Rendered at full precision because it is parsed back, not read.
+  const maxSendable = balance > SEND_TOKEN_FEE ? balance - SEND_TOKEN_FEE : 0n;
+
   const handleMaxClick = () => {
-    if (pminaBalance) {
-      setSendAmount(pminaBalance.toString());
-    }
+    setSendAmount(formatAmount(maxSendable, DECIMALS));
   };
 
   const calculateUsdValue = () => {
-    const amount = parseFloat(sendAmount) || 0;
-    if (priceData && amount > 0) {
-      return (amount * priceData.price).toFixed(2);
+    if (priceData && amountBase > 0n) {
+      return (toDisplayNumber(amountBase) * priceData.price).toFixed(2);
     }
     return '0.00';
   };
@@ -160,7 +164,7 @@ export const SendView = ({ setCurrentView }: {
           value={sendAmount}
           onChange={(e) => setSendAmount(e.target.value)}
           min={0}
-          max={pminaBalance || 0}
+          max={formatAmount(maxSendable, DECIMALS)}
           step="0.001"
           placeholder="0.000"
           aria-label="Amount to send"
@@ -171,7 +175,7 @@ export const SendView = ({ setCurrentView }: {
             ~${calculateUsdValue()}
           </span>
           <span className="text-ink-subtle tabular-nums">
-            Balance: {pminaBalance?.toFixed(3) || '0.000'}
+            Balance: {formatAmount(balance)}
           </span>
           <button
             onClick={handleMaxClick}
@@ -289,16 +293,20 @@ export const SendView = ({ setCurrentView }: {
               if (!wallet)
                 return toast.error('Please connect a wallet first', { id: 'no-wallet' });
   
-              const amount = parseFloat(sendAmount);
-              if (!sendAmount || amount <= 0)
+              if (amountBase <= 0n)
                 return toast.error('Please enter a valid amount', { id: 'invalid-amount' });
-  
+
               if (!recipientAddress || recipientAddress.trim() === '')
                 return toast.error('Please enter a recipient address', { id: 'invalid-recipient' });
-  
-              if (pminaBalance && amount > pminaBalance)
-                return toast.error('Insufficient balance', { id: 'insufficient-balance' });
-  
+
+              // Against the fee-adjusted maximum, not the raw balance: the ante
+              // handler rejects a transaction whose fee the sender cannot cover.
+              if (amountBase > maxSendable)
+                return toast.error(
+                  `Insufficient balance — ${formatAmount(SEND_TOKEN_FEE, DECIMALS)} pMINA is needed for the fee`,
+                  { id: 'insufficient-balance' },
+                );
+
               if (!connectedWallet)
                 return toast.error('Please connect a wallet first', { id: 'no-wallet' });
   
@@ -319,15 +327,13 @@ export const SendView = ({ setCurrentView }: {
               }
 
 
-              const upminaAmount = Math.floor(amount * 1e9).toString();
-  
               const signDoc = createSendTokenTx({
                 sequence,
                 pubkeyBytes: account.pubkey,
                 accountNumber,
                 fromAddress: connectedWallet.address,
                 toAddress: recipientAddress.trim(),
-                amount: upminaAmount,
+                amount: amountBase.toString(),
               });
   
               const signedTx = await wallet.signDirect(consumerChain.chainId!, account.address, signDoc);

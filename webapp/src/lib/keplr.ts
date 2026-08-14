@@ -27,10 +27,24 @@ type KeplrChainConfig = {
   features?: string[];
 };
 
+/**
+ * How many decimals a wallet should render this asset with.
+ *
+ * Throws rather than defaulting when the asset list has no unit for its own
+ * display denom. The default that used to sit here was 6, which is not a safe
+ * guess but a specific wrong answer for this chain — it would render every
+ * balance a thousandfold off — and it would do so silently, in a wallet, where
+ * nothing in this codebase could catch it. A misconfigured asset list is a
+ * mistake to surface at the first connect, not to paper over.
+ */
 function pickDisplayDecimals(asset: Asset): number {
-  const displayDenom = asset.display;
-  const unit = asset.denomUnits.find((u) => u.denom === displayDenom);
-  return unit?.exponent ?? 6;
+  const unit = asset.denomUnits.find((u) => u.denom === asset.display);
+  if (!unit) {
+    throw new Error(
+      `Asset ${asset.base} declares display denom "${asset.display}" with no matching denom unit`,
+    );
+  }
+  return unit.exponent;
 }
 
 export function buildKeplrChainConfigFromRegistry(

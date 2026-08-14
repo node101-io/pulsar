@@ -12,9 +12,27 @@ import { consumerChain } from "./constants";
 // extension as Cosmos-authenticated, which is what a Keplr signature is — so
 // nothing here needs an extension option.
 
-export { createRegisterKeysTx, createSendTokenTx };
+export { SEND_TOKEN_FEE, createRegisterKeysTx, createSendTokenTx };
 
 const FEE_DENOM = consumerChain.fees!.feeTokens[0]!.denom;
+const MIN_GAS_PRICE = consumerChain.fees!.feeTokens[0]!.fixedMinGasPrice!;
+
+const REGISTER_KEYS_GAS = 200_000;
+const SEND_TOKEN_GAS = 100_000;
+
+/** gas x the chain's minimum gas price, rounded up, with room to spare. */
+function feeForGas(gas: number): bigint {
+  return BigInt(Math.ceil(gas * MIN_GAS_PRICE) * 10);
+}
+
+/**
+ * What a send costs its sender, in base units.
+ *
+ * Exported because it comes out of the same balance as the amount: a Max button
+ * that offers the whole balance builds a transaction the ante handler rejects
+ * for an unpayable fee.
+ */
+const SEND_TOKEN_FEE = feeForGas(SEND_TOKEN_GAS);
 
 function feeAndAuth(
   pubkeyBytes: Uint8Array,
@@ -26,8 +44,7 @@ function feeAndAuth(
     type: "tendermint/PubKeySecp256k1",
     value: Buffer.from(pubkeyBytes).toString("base64"),
   });
-  // gas x the chain's minimum gas price, rounded up, with room to spare.
-  const fee = coin(String(Math.ceil(gas * 0.0001) * 10), FEE_DENOM);
+  const fee = coin(feeForGas(gas).toString(), FEE_DENOM);
   return makeAuthInfoBytes([{ pubkey, sequence }], [fee], gas, feeGranter, undefined);
 }
 
@@ -84,7 +101,7 @@ function createRegisterKeysTx({
 
   return SignDoc.fromPartial({
     bodyBytes,
-    authInfoBytes: feeAndAuth(pubkeyBytes, sequence, 200_000, feeGranter),
+    authInfoBytes: feeAndAuth(pubkeyBytes, sequence, REGISTER_KEYS_GAS, feeGranter),
     chainId: consumerChain.chainId,
     accountNumber,
   });
@@ -124,7 +141,7 @@ function createSendTokenTx({
 
   return SignDoc.fromPartial({
     bodyBytes,
-    authInfoBytes: feeAndAuth(pubkeyBytes, sequence, 100_000),
+    authInfoBytes: feeAndAuth(pubkeyBytes, sequence, SEND_TOKEN_GAS),
     chainId: consumerChain.chainId,
     accountNumber,
   });

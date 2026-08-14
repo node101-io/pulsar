@@ -20,6 +20,16 @@ export {
   QueryGetUserCosmosPublicKeyResponse,
 } from "./generated-web/pulsarchain/keyregistry/v1/query.js";
 
-// gRPC method path, as /abci_query expects it.
+export {
+  QueryLatestActionHashesRequest,
+  QueryLatestActionHashesResponse,
+} from "./generated-web/pulsarchain/bridge/v1/query.js";
+
+// gRPC method paths, as /abci_query expects them.
 export const KEYREGISTRY_QUERY_USER_COSMOS_KEY =
   "/pulsarchain.keyregistry.v1.Query/GetUserCosmosPublicKey";
+
+// Answers how far into Mina the chain has scanned. The only reading of bridge
+// progress that comes from the chain itself rather than from a wall clock.
+export const BRIDGE_QUERY_LATEST_ACTION_HASHES =
+  "/pulsarchain.bridge.v1.Query/LatestActionHashes";

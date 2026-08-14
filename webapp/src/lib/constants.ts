@@ -17,16 +17,24 @@ export const BRIDGE_ADDRESS =
   "B62qoNfsWteQFdfjTZnT91o5rRmUmwwozD68Aj5W1nFVCx29vp6eL69";
 
 // Deposits below this are rejected by the contract (MINIMUM_DEPOSIT_AMOUNT).
+//
+// Nanomina, like every amount in this app — see lib/amount.ts, which owns the
+// conversion to and from what a user types. Deliberately bigint: a number here
+// invites the float arithmetic that module exists to keep out.
 export const MINIMUM_DEPOSIT_NANOMINA = 1_000_000_000n;
 
 // Transaction fee for the deposit. 0.1 MINA is the going rate on devnet; the
 // old 1 MINA meant a user needed 2 MINA to make the 1 MINA minimum deposit.
-export const MINA_TX_FEE_NANOMINA = 100_000_000;
+export const MINA_TX_FEE_NANOMINA = 100_000_000n;
 
 export const PULSAR_RPC_URL = "https://rpc.pulsarchain.xyz";
 export const PULSAR_REST_URL = "https://rest.pulsarchain.xyz";
 
 export const PULSAR_EXPLORER_URL = "https://explorer.pulsarchain.xyz/pulsar";
+
+// Where a deposit can be checked while Pulsar has not credited it yet. Until
+// then the Mina transaction is the only public evidence it happened at all.
+export const MINA_EXPLORER_TX_URL = `https://minascan.io/${MINA_NETWORK}/tx`;
 
 // The x/bridge module account.
 //
@@ -70,6 +78,18 @@ export const PULSAR_CHAIN_NAME = "pulsar";
 // display exponent is 9 for that reason — 6 would show balances 1000x wrong.
 export const PMINA_EXPONENT = 9;
 
+// The name of the unit balances are SHOWN in, as distinct from the one the
+// chain counts in. No such denomination exists on chain, and that is the
+// convention: a display unit is a rendering of the base denom, the way ATOM
+// renders uatom. It needs a name of its own only because this chain's base
+// denom is already called pmina, so the two cannot share the string.
+//
+// Not cosmetic. A wallet reads the exponent attached to the DISPLAY denom, so
+// while the asset list named the base as its own display unit, every wallet
+// took the exponent beside it — 0 — and rendered balances in raw base units,
+// a billion times what this app showed for the same account.
+export const PMINA_DISPLAY_DENOM = "PMINA";
+
 export const consumerChain: Chain = {
   chainType: "cosmos",
   chainName: PULSAR_CHAIN_NAME,
@@ -107,12 +127,19 @@ export const consumerAssetList: AssetList = {
   chainName: PULSAR_CHAIN_NAME,
   assets: [
     {
-      base: "pmina",
+      base: PMINA_DENOM,
       name: "Pulsar MINA",
-      display: "pmina",
+      display: PMINA_DISPLAY_DENOM,
       symbol: "pMINA",
       typeAsset: "sdk.coin",
-      denomUnits: [{ denom: "pmina", exponent: 0 }],
+      // Both ends of the scale, which is what a wallet needs to convert between
+      // them: the denom the chain counts in at exponent 0, and the one balances
+      // are shown in at PMINA_EXPONENT. Listing only the base leaves a reader
+      // no exponent to find and nothing to say it is missing.
+      denomUnits: [
+        { denom: PMINA_DENOM, exponent: 0 },
+        { denom: PMINA_DISPLAY_DENOM, exponent: PMINA_EXPONENT },
+      ],
     },
   ],
 };
