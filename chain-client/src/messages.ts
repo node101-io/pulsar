@@ -18,6 +18,8 @@ export * from "./keyregistryChallenge.js";
 export {
   QueryGetUserCosmosPublicKeyRequest,
   QueryGetUserCosmosPublicKeyResponse,
+  QueryGetUserMinaPublicKeyRequest,
+  QueryGetUserMinaPublicKeyResponse,
 } from "./generated-web/pulsarchain/keyregistry/v1/query.js";
 
 export {
@@ -30,6 +32,12 @@ export {
 // gRPC method paths, as /abci_query expects them.
 export const KEYREGISTRY_QUERY_USER_COSMOS_KEY =
   "/pulsarchain.keyregistry.v1.Query/GetUserCosmosPublicKey";
+
+// The reverse direction: which Mina key a Cosmos key is registered to. What
+// lets a Cosmos-wallet-only session learn it is registered without a Mina
+// wallet connected to ask from the other side.
+export const KEYREGISTRY_QUERY_USER_MINA_KEY =
+  "/pulsarchain.keyregistry.v1.Query/GetUserMinaPublicKey";
 
 // Answers how far into Mina the chain has scanned. The only reading of bridge
 // progress that comes from the chain itself rather than from a wall clock.

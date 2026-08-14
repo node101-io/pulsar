@@ -123,6 +123,28 @@ export async function getPulsarAddress(): Promise<string | null> {
   }
 }
 
+/**
+ * The connected account's secp256k1 public key, read straight from the
+ * extension like getPulsarAddress above — and for one more reason: the
+ * interchain-kit wallet object cannot answer this until its async init has
+ * finished, so a read through it during mount silently yields nothing and
+ * gets cached as "no key". getKey talks to the extension directly and is
+ * ready the moment Keplr is.
+ */
+export async function getPulsarPubkey(): Promise<Uint8Array | null> {
+  if (typeof window === "undefined") return null;
+  // @ts-ignore - Keplr injects itself on window
+  const keplr = window.keplr as any | undefined;
+  if (!keplr) return null;
+
+  try {
+    const key = await keplr.getKey(consumerChain.chainId);
+    return (key?.pubKey as Uint8Array | undefined) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function suggestPulsarToKeplr(): Promise<void> {
   if (typeof window === "undefined")
     throw new Error("Not in a browser context");

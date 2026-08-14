@@ -11,9 +11,9 @@ import {
   fetchPminaBalance,
 } from "./utils"
 import type { BridgeScanProgress } from "./bridge-progress"
-import { getPulsarAddress } from "./keplr"
+import { getPulsarAddress, getPulsarPubkey } from "./keplr"
 import { MINA_RPC_URL } from "./constants"
-import { resolveMinaAddress } from "./registry"
+import { resolveCosmosPublicKey, resolveMinaAddress } from "./registry"
 import {
   forgetPendingTransfer,
   reconcilePendingTransfers,
@@ -169,6 +169,43 @@ export function usePendingBridgeTransfers(minaAccount?: string | null) {
   }, [settledKey]);
 
   return stillPending;
+}
+
+/**
+ * Whether the connected Cosmos wallet's key is registered, and to which Mina
+ * address — the registry read from its other side.
+ *
+ * This is what lets a Keplr-only session act like the registered account it
+ * is: without it, registration could only be checked through the connected
+ * AURO account, and a user with just Keplr connected was pushed into
+ * onboarding they had already completed. Registering still takes Auro — the
+ * Mina signature is the point of a registration — but *being* registered
+ * must be visible from either wallet.
+ *
+ * The pubkey comes straight from the extension (getPulsarPubkey), not from
+ * the interchain-kit wallet object: that object cannot answer until its
+ * async init completes, and a query that ran before it did cached "no key"
+ * as "not registered" — the registry was never even asked. A missing pubkey
+ * here is therefore a failure to ask, so it throws and retries rather than
+ * caching an answer nobody gave.
+ */
+export function useCosmosKeyStore(pulsarAddress?: string | null) {
+  return useQuery({
+    queryKey: ["cosmosKeyStore", pulsarAddress],
+    queryFn: async () => {
+      const pubkey = await getPulsarPubkey();
+      if (!pubkey) throw new Error("Keplr has not answered for this chain yet");
+      const resolved = await resolveCosmosPublicKey(pubkey);
+      return resolved
+        ? { keyStore: { minaAddress: resolved.minaAddress } }
+        : { keyStore: undefined };
+    },
+    staleTime: 15_000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+    retryDelay: (attemptIndex) => 500 * 2 ** attemptIndex,
+    enabled: Boolean(pulsarAddress),
+  });
 }
 
 /**

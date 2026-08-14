@@ -10,15 +10,18 @@ import { rawSecp256k1PubkeyToRawAddress } from "@cosmjs/amino";
 import { toBech32 } from "@cosmjs/encoding";
 import {
   KEYREGISTRY_QUERY_USER_COSMOS_KEY,
+  KEYREGISTRY_QUERY_USER_MINA_KEY,
   QueryGetUserCosmosPublicKeyRequest,
   QueryGetUserCosmosPublicKeyResponse,
+  QueryGetUserMinaPublicKeyRequest,
+  QueryGetUserMinaPublicKeyResponse,
 } from "pulsar-chain-client/messages";
 
 import { consumerChain } from "./constants";
-import { formatMinaPublicKey } from "./crypto";
+import { formatMinaPublicKey, parseMinaPublicKey } from "./crypto";
 import { AbciQueryError, SDK_ERR_KEY_NOT_FOUND, abciQuery } from "./utils";
 
-export { pulsarAddressFromCosmosPubkey, resolveMinaAddress };
+export { pulsarAddressFromCosmosPubkey, resolveCosmosPublicKey, resolveMinaAddress };
 
 /**
  * A Cosmos pubkey as the Pulsar address deposits credit and sends pay into,
@@ -69,5 +72,42 @@ async function resolveMinaAddress(
   return {
     cosmosPublicKey: cosmosKey,
     pulsarAddress: pulsarAddressFromCosmosPubkey(cosmosKey),
+  };
+}
+
+/**
+ * The registry's answer for one Cosmos public key, or null when it has none.
+ *
+ * The reverse of resolveMinaAddress, and what makes a Keplr-only session
+ * whole: registration can only be QUERIED from this side without a Mina
+ * wallet — performing one still takes Auro, since it is the Mina signature
+ * that a registration exists to prove.
+ */
+async function resolveCosmosPublicKey(
+  cosmosPublicKey: Uint8Array,
+): Promise<{ minaPublicKey: Uint8Array; minaAddress: string } | null> {
+  const request = QueryGetUserMinaPublicKeyRequest.encode(
+    QueryGetUserMinaPublicKeyRequest.fromPartial({
+      user_cosmos_public_key: Buffer.from(cosmosPublicKey),
+    }),
+  ).finish();
+
+  let value: Uint8Array;
+  try {
+    value = await abciQuery(KEYREGISTRY_QUERY_USER_MINA_KEY, request);
+  } catch (error) {
+    if (error instanceof AbciQueryError && error.code === SDK_ERR_KEY_NOT_FOUND) {
+      return null;
+    }
+    throw error;
+  }
+
+  const { user_mina_public_key: minaKey } =
+    QueryGetUserMinaPublicKeyResponse.decode(value);
+  if (!minaKey?.length) return null;
+
+  return {
+    minaPublicKey: minaKey,
+    minaAddress: await parseMinaPublicKey(minaKey),
   };
 }

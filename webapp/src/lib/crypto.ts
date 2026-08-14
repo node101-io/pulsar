@@ -11,6 +11,7 @@
 // "invalid signature".
 export {
   formatMinaPublicKey,
+  parseMinaPublicKey,
   signatureFromBase58,
 };
 
@@ -41,6 +42,28 @@ async function formatMinaPublicKey(base58: string): Promise<Uint8Array> {
   if (publicKey.isOdd.toBoolean()) packed[31] |= 0x80;
 
   return packed;
+}
+
+/**
+ * The exact inverse of formatMinaPublicKey: the chain's packed 32-byte
+ * little-endian x (odd-y flag in the top bit) back to a B62 address. Round
+ * trips with it by construction — the flag is masked off before the bytes are
+ * read as a field element.
+ */
+async function parseMinaPublicKey(packed: Uint8Array): Promise<string> {
+  const { Bool, Field, PublicKey } = await import("o1js");
+  if (packed.length !== 32) {
+    throw new Error(`packed mina public key must be 32 bytes, got ${packed.length}`);
+  }
+
+  const isOdd = (packed[31] & 0x80) !== 0;
+  let x = 0n;
+  for (let i = 31; i >= 0; i--) {
+    const byte = i === 31 ? packed[31] & 0x7f : packed[i];
+    x = (x << 8n) | BigInt(byte);
+  }
+
+  return PublicKey.fromValue({ x: Field(x), isOdd: Bool(isOdd) }).toBase58();
 }
 
 const BASE58_ALPHABET =

@@ -4,7 +4,7 @@ import { SendView } from "./send-view"
 import { ConnectView } from "./connect-view"
 import { MainView } from "./main-view"
 import { ReceiveView } from "./receive-view"
-import { useKeyStore } from "@/lib/hooks"
+import { useCosmosKeyStore, useKeyStore } from "@/lib/hooks"
 import { useConnectedWallet } from "@/app/components/use-connected-wallet"
 import { useQueryClient } from "@tanstack/react-query"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
@@ -25,10 +25,16 @@ export default function WalletPopup({
   const { address: pulsarAddress } = usePulsarWallet();
   const connectedWallet = useConnectedWallet();
   const queryClient = useQueryClient();
-  const { data: keyStore } = useKeyStore(minaAccount);
+  const { data: keyStore, isLoading: isKeyStoreLoading } = useKeyStore(minaAccount);
+
+  // Registration read from the Keplr side, for sessions with no Auro to ask
+  // through. Either direction proves the same on-chain fact.
+  const { data: cosmosKeyStore, isLoading: isCosmosKeyStoreLoading } =
+    useCosmosKeyStore(pulsarAddress);
 
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ["keyStore"] });
+    queryClient.invalidateQueries({ queryKey: ["cosmosKeyStore"] });
   }, [connectedWallet?.type, connectedWallet?.address, queryClient]);
 
   useEffect(() => {
@@ -39,14 +45,29 @@ export default function WalletPopup({
       return;
     }
 
-    console.log("keyStore", keyStore);
-    if (!keyStore?.keyStore) {
-      setCurrentView('connect');
-      return;
-    }
+    // Registered through EITHER wallet's lens is registered. The Auro-side
+    // answer requires Auro connected; the Keplr-side answer covers the rest —
+    // without it, a registered Keplr-only session was marched back through an
+    // onboarding it had already finished.
+    const isRegistered = Boolean(keyStore?.keyStore || cosmosKeyStore?.keyStore);
+    // While either lookup is still in flight, hold the current view instead of
+    // flashing the connect screen at a user who will turn out to be registered.
+    const isResolving =
+      (minaAccount && isKeyStoreLoading) ||
+      (pulsarAddress && !minaAccount && isCosmosKeyStoreLoading);
 
-    setCurrentView('main');
-  }, [isOpen, connectedWallet, keyStore]);
+    if (isResolving) return;
+    setCurrentView(isRegistered ? 'main' : 'connect');
+  }, [
+    isOpen,
+    connectedWallet,
+    keyStore,
+    cosmosKeyStore,
+    minaAccount,
+    pulsarAddress,
+    isKeyStoreLoading,
+    isCosmosKeyStoreLoading,
+  ]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
