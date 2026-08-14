@@ -40,6 +40,8 @@ export type BridgeTransfer = {
   // the transaction hash alone does not identify a row.
   id: string;
   direction: "deposit" | "withdraw";
+  /** The user side of the movement — who was credited, or whose burn it was. */
+  account: string;
   // Base units (pmina).
   amount: bigint;
   height: number;
@@ -72,25 +74,36 @@ function parsePminaAmount(raw: string | undefined): bigint | null {
 }
 
 /**
- * One direction of bridge movement for one account.
+ * One direction of bridge movement — everyone's, or one account's when
+ * `account` is given.
  *
- * Both attributes are matched on the SAME `transfer` event, which is not a
- * stylistic choice: this chain's indexer only ANDs conditions that belong to
- * one event type. `transfer.sender AND transfer.recipient` resolves, while
- * `transfer.sender AND message.module` returns an empty list even for a
- * transaction that satisfies both — silently, with no error. Do not add a
- * message.action clause to "narrow" this; it returns nothing.
+ * The query is anchored on the MODULE side of the `transfer` event, which is
+ * what makes the global read possible at all: a deposit credit is the one
+ * transfer FROM the module account, a withdrawal burn the one transfer TO it,
+ * so the module's side plus a direction enumerates every bridge movement on
+ * the chain. The user side is then read off each matched event rather than
+ * queried for.
  *
- * The (module account, user) pair is what identifies the movement and its
- * direction, since x/bridge emits no events of its own.
+ * When both sides are in the query they are matched on the SAME `transfer`
+ * event, which is not a stylistic choice: this chain's indexer only ANDs
+ * conditions that belong to one event type. `transfer.sender AND
+ * transfer.recipient` resolves, while `transfer.sender AND message.module`
+ * returns an empty list even for a transaction that satisfies both —
+ * silently, with no error. Do not add a message.action clause to "narrow"
+ * this; it returns nothing.
  */
 async function fetchDirectionalTransfers(
-  sender: string,
-  recipient: string,
   direction: BridgeTransfer["direction"],
+  account?: string,
 ): Promise<BridgeTransfer[]> {
+  const moduleSide = direction === "deposit" ? "sender" : "recipient";
+  const userSide = direction === "deposit" ? "recipient" : "sender";
+
+  const conditions = [`transfer.${moduleSide}='${BRIDGE_MODULE_ADDRESS}'`];
+  if (account) conditions.push(`transfer.${userSide}='${account}'`);
+
   const params = new URLSearchParams({
-    query: `transfer.sender='${sender}' AND transfer.recipient='${recipient}'`,
+    query: conditions.join(" AND "),
     limit: String(BRIDGE_TRANSFER_PAGE_SIZE),
     order_by: "ORDER_BY_DESC",
   });
@@ -112,7 +125,10 @@ async function fetchDirectionalTransfers(
       // The query matched the transaction, not this event: the same push also
       // carries every other account it settled, plus the pusher's fee.
       const attrs = Object.fromEntries(event.attributes.map((a) => [a.key, a.value]));
-      if (attrs.sender !== sender || attrs.recipient !== recipient) return [];
+      if (attrs[moduleSide] !== BRIDGE_MODULE_ADDRESS) return [];
+      const eventAccount = attrs[userSide];
+      if (!eventAccount) return [];
+      if (account && eventAccount !== account) return [];
 
       const amount = parsePminaAmount(attrs.amount);
       if (amount === null) return [];
@@ -120,6 +136,7 @@ async function fetchDirectionalTransfers(
       return [{
         id: `${tx.txhash}-${index}`,
         direction,
+        account: eventAccount,
         amount,
         height: Number(tx.height),
         timestamp: tx.timestamp,
@@ -142,8 +159,22 @@ async function fetchDirectionalTransfers(
  */
 export async function fetchBridgeTransfers(address: string): Promise<BridgeTransfer[]> {
   const [deposits, withdrawals] = await Promise.all([
-    fetchDirectionalTransfers(BRIDGE_MODULE_ADDRESS, address, "deposit"),
-    fetchDirectionalTransfers(address, BRIDGE_MODULE_ADDRESS, "withdraw"),
+    fetchDirectionalTransfers("deposit", address),
+    fetchDirectionalTransfers("withdraw", address),
+  ]);
+
+  return [...deposits, ...withdrawals].sort((a, b) => b.height - a.height);
+}
+
+/**
+ * Every account's bridge movements, newest first — the public feed. The most
+ * recent page of each direction; a movement older than both pages is not
+ * shown, which for a feed is the right kind of incomplete.
+ */
+export async function fetchAllBridgeTransfers(): Promise<BridgeTransfer[]> {
+  const [deposits, withdrawals] = await Promise.all([
+    fetchDirectionalTransfers("deposit"),
+    fetchDirectionalTransfers("withdraw"),
   ]);
 
   return [...deposits, ...withdrawals].sort((a, b) => b.height - a.height);

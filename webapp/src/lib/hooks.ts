@@ -5,6 +5,7 @@ import {
   AbciQueryError,
   SDK_ERR_KEY_NOT_FOUND,
   abciQuery,
+  fetchAllBridgeTransfers,
   fetchBridgeTransfers,
   fetchMinaHeight,
   fetchMinaPrice,
@@ -116,6 +117,23 @@ export function useBridgeTransactions(address?: string | null) {
     queryKey: ["bridgeTransactions", address],
     queryFn: () => fetchBridgeTransfers(address!),
     enabled: Boolean(address),
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+    retryDelay: 1000,
+  });
+}
+
+/**
+ * Everyone's settled bridge movements — the public feed. Needs no wallet:
+ * the registry and the bank events are public data, and the transactions
+ * page shows them to anyone, highlighting the viewer's own rows when a
+ * wallet says which those are.
+ */
+export function useAllBridgeTransactions() {
+  return useQuery({
+    queryKey: ["bridgeTransactions", "all"],
+    queryFn: fetchAllBridgeTransfers,
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
     retry: 2,

@@ -3,8 +3,9 @@
 import { cn, type BridgeTransfer } from "@/lib/utils"
 import { formatAmount } from "@/lib/amount"
 import {
+  useAllBridgeTransactions,
   useBridgeScanProgress,
-  useBridgeTransactions,
+  useKeyStore,
   usePendingBridgeTransfers,
   usePulsarAddress,
 } from "@/lib/hooks"
@@ -113,7 +114,10 @@ const PendingRow = ({
   )
 }
 
-const Row = ({ transfer }: { transfer: BridgeTransfer }) => {
+const truncateAddress = (address: string) =>
+  `${address.slice(0, 10)}…${address.slice(-6)}`
+
+const Row = ({ transfer, isMine }: { transfer: BridgeTransfer; isMine: boolean }) => {
   const isDeposit = transfer.direction === "deposit"
 
   return (
@@ -121,7 +125,13 @@ const Row = ({ transfer }: { transfer: BridgeTransfer }) => {
       href={`${PULSAR_EXPLORER_URL}/tx/${transfer.txHash}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="hover:bg-surface border-line flex items-center gap-3 border-b px-4 py-3 transition-colors last:border-b-0"
+      className={cn(
+        "hover:bg-surface border-line flex items-center gap-3 border-b px-4 py-3 transition-colors last:border-b-0",
+        // The viewer's own movements, marked rather than filtered: the feed is
+        // everyone's, and "which of these are mine" is the one question a
+        // wallet can answer that the chain data alone cannot.
+        isMine && "border-accent-strong bg-surface border-l-2",
+      )}
     >
       <span className="border-line flex size-8 shrink-0 items-center justify-center rounded-full border">
         <Image
@@ -133,16 +143,25 @@ const Row = ({ transfer }: { transfer: BridgeTransfer }) => {
         />
       </span>
 
-      <span className="flex flex-col gap-1">
-        <span className="text-ink text-[13px] leading-none font-medium">
+      <span className="flex min-w-0 flex-col gap-1">
+        <span className="text-ink flex items-center gap-1.5 text-[13px] leading-none font-medium">
           {isDeposit ? "Deposit" : "Withdraw"}
+          {isMine && (
+            <span className="text-accent-deep text-[11px] leading-none font-medium">
+              You
+            </span>
+          )}
         </span>
-        <span className="text-ink-subtle text-[12px] leading-none tabular-nums">
-          {formatWhen(transfer.timestamp)}
+        <span className="text-ink-subtle truncate text-[12px] leading-none tabular-nums">
+          {isMine ? formatWhen(transfer.timestamp) : (
+            <>
+              {truncateAddress(transfer.account)} · {formatWhen(transfer.timestamp)}
+            </>
+          )}
         </span>
       </span>
 
-      <span className="ml-auto flex flex-col items-end gap-1">
+      <span className="ml-auto flex shrink-0 flex-col items-end gap-1">
         <span className="text-ink text-[13px] leading-none font-medium tabular-nums">
           {isDeposit ? "+" : "−"}{formatAmount(transfer.amount)} pMINA
         </span>
@@ -161,21 +180,26 @@ const Centered = ({ children }: { children: React.ReactNode }) => (
 )
 
 const BridgePanel = () => {
-  const { data: address, isLoading: isResolvingAddress } = usePulsarAddress()
-  const { data: transfers, isPending, isError, error } = useBridgeTransactions(address)
+  // The feed is public data and renders for anyone. Wallets only sharpen it:
+  // Auro names the registered account (where this user's movements actually
+  // happen — Keplr is not needed for that, or for anything after
+  // registration), a connected Keplr adds its own address to the highlight
+  // set for good measure.
+  const { data: transfers, isPending, isError, error } = useAllBridgeTransactions()
   const { account: minaAccount } = useMinaWallet()
+  const { data: keyStore } = useKeyStore(minaAccount)
+  const { data: connectedPulsarAddress } = usePulsarAddress()
   const stillPending = usePendingBridgeTransfers(minaAccount)
+
+  const myAddresses = new Set(
+    [keyStore?.keyStore?.pulsarAddress, connectedPulsarAddress].filter(Boolean),
+  )
 
   // Only worth asking the chain where its scan is while something is waiting on
   // the answer.
   const { data: progress } = useBridgeScanProgress({ enabled: stillPending.length > 0 })
 
-  if (isResolvingAddress) return <Centered>Checking your wallet…</Centered>
-
-  if (!address)
-    return <Centered>Connect your Pulsar wallet to see your bridge transactions.</Centered>
-
-  if (isPending) return <Centered>Loading your bridge transactions…</Centered>
+  if (isPending) return <Centered>Loading bridge transactions…</Centered>
 
   if (isError)
     return (
@@ -198,8 +222,9 @@ const BridgePanel = () => {
 
   return (
     <div className="flex flex-col">
-      {/* In flight first: it is the only thing on this page the user cannot
-          check anywhere else. */}
+      {/* The viewer's in-flight transfers first: they are the only thing on
+          this page nobody else can see — the chain has not witnessed them yet,
+          only this browser has. */}
       {stillPending.map((transfer) => (
         <PendingRow
           key={transfer.minaTxHash}
@@ -208,7 +233,11 @@ const BridgePanel = () => {
         />
       ))}
       {transfers.map((transfer) => (
-        <Row key={transfer.id} transfer={transfer} />
+        <Row
+          key={transfer.id}
+          transfer={transfer}
+          isMine={myAddresses.has(transfer.account)}
+        />
       ))}
     </div>
   )

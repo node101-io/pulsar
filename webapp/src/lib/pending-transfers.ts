@@ -325,6 +325,10 @@ function reconcilePendingTransfers(
             (answer) =>
               !claimed.has(answer.id) &&
               answer.direction === transfer.direction &&
+              // The account check is what keeps this safe to run against the
+              // GLOBAL feed: without it, someone else's same-sized movement
+              // would clear this user's record.
+              answer.account === transfer.pulsarAccount &&
               answer.amount === transfer.amount &&
               answer.height > watermark,
           );

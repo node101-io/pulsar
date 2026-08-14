@@ -22,6 +22,7 @@ const pending = (over: Partial<PendingTransfer> = {}): PendingTransfer => ({
 const answer = (over: Partial<BridgeTransfer> = {}): BridgeTransfer => ({
   id: "hash-0",
   direction: "deposit",
+  account: "pulsar1account",
   amount: 5_000_000_000n,
   height: 150,
   timestamp: "2026-08-14T00:00:00Z",
@@ -118,6 +119,18 @@ describe("reconcilePendingTransfers", () => {
 
     expect(settledHashes).toEqual(["wd"]);
     expect(stillPending.map((t) => t.minaTxHash)).toEqual(["dep"]);
+  });
+
+  it("does not let another account's movement clear this user's record", () => {
+    // What makes reconciling against the GLOBAL feed safe: same direction,
+    // same amount, valid height — but someone else's.
+    const { settledHashes, stillPending } = reconcilePendingTransfers(
+      [pending()],
+      [answer({ account: "pulsar1someoneelse" })],
+    );
+
+    expect(settledHashes).toEqual([]);
+    expect(stillPending).toHaveLength(1);
   });
 
   it("does not match a different amount", () => {
