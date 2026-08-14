@@ -6,3 +6,5 @@ export * from "./bridgeQuery.js";
 export * from "./bridgeTx.js";
 export * from "./keyregistryTx.js";
 export * from "./keyregistryChallenge.js";
+export * from "./txSigningChallenge.js";
+export * from "./txAuth.js";

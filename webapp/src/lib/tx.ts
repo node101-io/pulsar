@@ -4,13 +4,16 @@ import { makeAuthInfoBytes, encodePubkey, coin } from "@cosmjs/proto-signing";
 import {
   MSG_REGISTER_USER_KEYS_TYPE_URL,
   MsgRegisterUserKeys,
+  TX_AUTH_MODE_EXTENSION_TYPE_URL,
+  TxAuthMode,
+  TxAuthModeExtension,
 } from "pulsar-chain-client/messages";
 
 import { consumerChain } from "./constants";
 
 // Every Pulsar transaction the UI builds. The chain reads a tx with no auth
-// extension as Cosmos-authenticated, which is what a Keplr signature is — so
-// nothing here needs an extension option.
+// extension as Cosmos-authenticated, which is what a Keplr signature is; a tx
+// a Mina wallet authorizes instead carries the extension option below.
 
 export { SEND_TOKEN_FEE, createRegisterKeysTx, createSendTokenTx };
 
@@ -107,6 +110,23 @@ function createRegisterKeysTx({
   });
 }
 
+/**
+ * The extension option that tells the ante chain to verify this tx with the
+ * sender's registered Mina key instead of a Cosmos signature. The signature
+ * itself then goes over the challenge txSigningChallenge derives from the
+ * SignDoc's encoded bytes, not over the bytes directly — see the send flow.
+ */
+function minaAuthExtensionOption() {
+  return {
+    typeUrl: TX_AUTH_MODE_EXTENSION_TYPE_URL,
+    value: TxAuthModeExtension.encode(
+      TxAuthModeExtension.fromPartial({
+        tx_auth_mode: TxAuthMode.TX_AUTH_MODE_MINA,
+      }),
+    ).finish(),
+  };
+}
+
 function createSendTokenTx({
   sequence,
   accountNumber,
@@ -114,13 +134,18 @@ function createSendTokenTx({
   fromAddress,
   toAddress,
   amount,
+  minaAuthenticated,
 }: {
   sequence: number | bigint;
   accountNumber: bigint;
+  /** Always the sender's Cosmos pubkey — with Mina auth it is what the chain
+   * looks the registered Mina key up by, not what verifies the signature. */
   pubkeyBytes: Uint8Array;
   fromAddress: string;
   toAddress: string;
   amount: string;
+  /** Authorize with the sender's registered Mina key instead of Keplr. */
+  minaAuthenticated?: boolean;
 }): SignDoc {
   const bodyBytes = TxBody.encode(
     TxBody.fromPartial({
@@ -136,6 +161,7 @@ function createSendTokenTx({
           ).finish(),
         },
       ],
+      extensionOptions: minaAuthenticated ? [minaAuthExtensionOption()] : [],
     }),
   ).finish();
 

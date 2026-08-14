@@ -277,6 +277,39 @@ export async function fetchAccountAuth(
   };
 }
 
+/**
+ * Broadcasts a signed tx over REST and returns its hash for waitForTxCommit.
+ *
+ * This is the path for transactions Keplr never sees — a Mina-authorized tx is
+ * signed by Auro, and Auro has no broadcast API for a Cosmos chain. Sync mode
+ * to match Keplr's sendTx: acceptance here means CheckTx passed, commitment is
+ * waitForTxCommit's job.
+ */
+export async function broadcastTx(txBytes: Uint8Array): Promise<string> {
+  const res = await fetch(`${PULSAR_REST_URL}/cosmos/tx/v1beta1/txs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tx_bytes: Buffer.from(txBytes).toString("base64"),
+      mode: "BROADCAST_MODE_SYNC",
+    }),
+  });
+  if (!res.ok) throw new Error(`Failed to broadcast transaction: ${res.status}`);
+
+  const data = (await res.json()) as {
+    tx_response?: { code?: number; txhash?: string; raw_log?: string };
+  };
+  const txResponse = data.tx_response;
+  if (!txResponse?.txhash) {
+    throw new Error("Broadcast response did not carry a tx hash");
+  }
+  if (txResponse.code) {
+    throw new Error(txResponse.raw_log || `Transaction rejected (code ${txResponse.code})`);
+  }
+
+  return txResponse.txhash;
+}
+
 export type MinaPrice = { price: number; change24h: number };
 
 /**

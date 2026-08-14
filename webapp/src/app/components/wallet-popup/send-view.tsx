@@ -8,11 +8,14 @@ import { usePulsarWallet } from "@/app/_providers/pulsar-wallet";
 import { usePminaBalance, } from "@/lib/hooks"
 import { useConnectedWallet } from "@/app/components/use-connected-wallet";
 import { SEND_TOKEN_FEE, createSendTokenTx } from "@/lib/tx";
-import { fetchAccountAuth } from "@/lib/utils";
+import { broadcastTx, fetchAccountAuth, waitForTxCommit } from "@/lib/utils";
+import { signatureFromBase58 } from "@/lib/crypto";
 import { DECIMALS, formatAmount, parseAmount, toDisplayNumber } from "@/lib/amount";
 import { usePendingWithdrawalsFrom } from "@/lib/pending-transfers";
 import { resolveMinaAddress } from "@/lib/registry";
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
+import { makeSignBytes } from "@cosmjs/proto-signing";
+import { txSigningChallenge } from "pulsar-chain-client/messages";
 import { getPulsarSigner } from "@/lib/keplr";
 import type { WalletKind } from "@/lib/connected-wallet";
 
@@ -33,14 +36,23 @@ export const SendView = ({ setCurrentView, preferredWallet }: {
   const [addressName, setAddressName] = useState<string>('');
   const [showSaveDialog, setShowSaveDialog] = useState<boolean>(false);
 
-  const { isConnected: isMinaConnected, account: minaAccount } = useMinaWallet();
+  const { account: minaAccount, signFields: minaSignFields } = useMinaWallet();
   const { address: pulsarAddress } = usePulsarWallet();
   const connectedWallet = useConnectedWallet(preferredWallet);
   const { data: keyStore } = useKeyStore(minaAccount);
 
   const { data: priceData } = useMinaPrice();
-  const { data: pminaBalance } = usePminaBalance(pulsarAddress, {
-    enabled: !!pulsarAddress,
+
+  // The account this send spends from. The Keplr view speaks for the connected
+  // Keplr account itself. The Mina view spends from the account its key is
+  // REGISTERED to — the only account a Mina signature can move funds from —
+  // which is not necessarily the connected Keplr account (see useKeyStore).
+  const registeredPulsarAddress = keyStore?.keyStore?.pulsarAddress ?? null;
+  const sendFromAddress =
+    connectedWallet?.type === 'mina' ? registeredPulsarAddress : pulsarAddress;
+
+  const { data: pminaBalance } = usePminaBalance(sendFromAddress, {
+    enabled: !!sendFromAddress,
   });
 
   const getSavedAddresses = (): SavedAddress[] => {
@@ -86,7 +98,7 @@ export const SendView = ({ setCurrentView, preferredWallet }: {
   // offered maximum excludes it, and the insufficient-balance check charges
   // it. The user can still see the full balance; they just cannot walk into
   // the forfeit unwarned.
-  const pendingWithdrawals = usePendingWithdrawalsFrom(pulsarAddress);
+  const pendingWithdrawals = usePendingWithdrawalsFrom(sendFromAddress);
   const reserved = pendingWithdrawals.reduce((sum, w) => sum + w.amount, 0n);
 
   const spendable = balance > reserved ? balance - reserved : 0n;
@@ -150,6 +162,191 @@ export const SendView = ({ setCurrentView, preferredWallet }: {
     const updatedAddresses = savedAddresses.filter(addr => addr.id !== id);
     saveSavedAddresses(updatedAddresses);
     toast.success('Address deleted successfully!');
+  };
+
+  /**
+   * One send, two authorizations, one sign doc. Keplr signs the doc's bytes
+   * with secp256k1 and broadcasts through the extension. Auro cannot sign
+   * bytes — it signs the field element txSigningChallenge derives from them —
+   * so that tx carries the Mina auth extension option to route the chain's
+   * verification, and broadcasts over REST because Auro has no Cosmos
+   * broadcast API.
+   */
+  const handleSend = async () => {
+    if (!connectedWallet) return;
+
+    if (amountBase <= 0n)
+      return toast.error('Please enter a valid amount', { id: 'invalid-amount' });
+
+    if (!recipientAddress || recipientAddress.trim() === '')
+      return toast.error('Please enter a recipient address', { id: 'invalid-recipient' });
+
+    try {
+      // A Mina address is a valid recipient only through the registry:
+      // the chain's MsgSend takes bech32 alone and rewrites nothing,
+      // so the resolution happens here or not at all. Refusing an
+      // unregistered key is what keeps this safe — its derived
+      // address exists but nobody holds its Cosmos key, so pMINA sent
+      // there would be stranded forever.
+      let toAddress = recipientAddress.trim();
+      if (toAddress.startsWith('B62')) {
+        toast.loading('Resolving Mina address…', { id: 'signing-transaction' });
+        let resolved;
+        try {
+          resolved = await resolveMinaAddress(toAddress);
+        } catch {
+          toast.dismiss('signing-transaction');
+          return toast.error('That is not a valid Mina address', { id: 'invalid-recipient' });
+        }
+        if (!resolved) {
+          toast.dismiss('signing-transaction');
+          return toast.error(
+            'This Mina address is not registered with Pulsar, so it cannot receive pMINA',
+            { id: 'invalid-recipient' },
+          );
+        }
+        toAddress = resolved.pulsarAddress;
+      } else if (!toAddress.startsWith('pulsar1')) {
+        return toast.error(
+          'Recipient must be a pulsar1… or B62… address',
+          { id: 'invalid-recipient' },
+        );
+      }
+
+      // Against the fee-adjusted, reservation-adjusted maximum, not
+      // the raw balance: the ante handler rejects a fee the sender
+      // cannot cover, and spending what a pending withdrawal needs
+      // forfeits its down payment. Name whichever is the actual cause.
+      if (amountBase > maxSendable) {
+        toast.dismiss('signing-transaction');
+        return toast.error(
+          reserved > 0n && amountBase <= balance
+            ? `${formatAmount(reserved)} pMINA is reserved for a pending withdrawal — sending it would void the withdrawal and forfeit its 1 MINA deposit`
+            : `Insufficient balance — ${formatAmount(SEND_TOKEN_FEE, DECIMALS)} pMINA is needed for the fee`,
+          { id: 'insufficient-balance' },
+        );
+      }
+
+      if (connectedWallet.type === 'pulsar') {
+        const signer = getPulsarSigner();
+
+        if (!signer)
+          return toast.error('Keplr extension not detected', { id: 'no-wallet' });
+
+        toast.loading('Please sign the transaction in your wallet...', { id: 'signing-transaction' });
+
+        const account = await signer.getAccount();
+
+        let accountNumber: bigint;
+        let sequence: number;
+        try {
+          ({ accountNumber, sequence } = await fetchAccountAuth(account.address));
+        } catch (error) {
+          toast.dismiss('signing-transaction');
+          return toast.error(
+            error instanceof Error ? error.message : 'Could not read your Pulsar account',
+            { id: 'no-account' },
+          );
+        }
+
+        const signDoc = createSendTokenTx({
+          sequence,
+          pubkeyBytes: account.pubkey,
+          accountNumber,
+          // The extension's answer, not the store's: the signature only
+          // authorizes a send FROM the account that makes it.
+          fromAddress: account.address,
+          toAddress,
+          amount: amountBase.toString(),
+        });
+
+        const signedTx = await signer.signDirect(account.address, signDoc);
+
+        const protobufTx = TxRaw.encode({
+          bodyBytes: signedTx.signed.bodyBytes,
+          authInfoBytes: signedTx.signed.authInfoBytes,
+          signatures: [new Uint8Array(Buffer.from(signedTx.signature.signature, 'base64'))],
+        }).finish();
+
+        const txResponse = await signer.sendTx(protobufTx);
+        console.log('tx hash', Buffer.from(txResponse).toString('hex').toUpperCase());
+      } else {
+        // A Mina signature can only move funds of the account its key is
+        // registered to; without a registration there is nothing to spend.
+        if (!keyStore?.keyStore || !registeredPulsarAddress) {
+          toast.dismiss('signing-transaction');
+          return toast.error(
+            'This Auro account is not registered with Pulsar yet — complete registration before sending.',
+            { id: 'not-registered' },
+          );
+        }
+
+        const pubkeyBytes = Uint8Array.from(
+          Buffer.from(keyStore.keyStore.cosmosPublicKey, 'base64'),
+        );
+
+        let accountNumber: bigint;
+        let sequence: number;
+        try {
+          ({ accountNumber, sequence } = await fetchAccountAuth(registeredPulsarAddress));
+        } catch (error) {
+          toast.dismiss('signing-transaction');
+          return toast.error(
+            error instanceof Error ? error.message : 'Could not read your Pulsar account',
+            { id: 'no-account' },
+          );
+        }
+
+        const signDoc = createSendTokenTx({
+          sequence,
+          pubkeyBytes,
+          accountNumber,
+          fromAddress: registeredPulsarAddress,
+          toAddress,
+          amount: amountBase.toString(),
+          minaAuthenticated: true,
+        });
+
+        // The challenge is derived from the doc's exact encoded bytes — the
+        // same bytes the chain re-derives it from at verification.
+        const challenge = await txSigningChallenge(makeSignBytes(signDoc));
+
+        toast.loading('Please sign the transaction in Auro...', { id: 'signing-transaction' });
+        const signed = await minaSignFields({ message: [challenge.toString()] });
+
+        // Auro signs with whatever account is selected at the moment of the
+        // prompt. If that drifted from the connected one, the signature is
+        // from a key the sender's account is not registered to, and the
+        // chain would reject it as a bad signature.
+        if (signed.publicKey !== minaAccount)
+          throw new Error('Auro signed with a different account than the connected one. Reconnect and try again.');
+
+        const protobufTx = TxRaw.encode({
+          bodyBytes: signDoc.bodyBytes,
+          authInfoBytes: signDoc.authInfoBytes,
+          signatures: [signatureFromBase58(signed.signature)],
+        }).finish();
+
+        toast.loading('Broadcasting transaction...', { id: 'signing-transaction' });
+        const txHashHex = await broadcastTx(protobufTx);
+        console.log('tx hash', txHashHex);
+        // A sync broadcast only proves CheckTx passed. The Keplr path leaves
+        // delivery to the extension's own UI; this path has none, so wait
+        // for the commit before reporting success.
+        await waitForTxCommit(txHashHex);
+      }
+
+      toast.dismiss('signing-transaction');
+      toast.success('Transaction successful', { id: 'transaction-success' });
+
+      setSendAmount('');
+      setRecipientAddress('');
+      setCurrentView('main');
+    } catch (error) {
+      toast.dismiss('signing-transaction');
+      toast.error(error instanceof Error ? error.message : 'Failed to process transaction', { id: 'transaction-failed' });
+      console.error('Transaction failed:', error);
+    }
   };
 
   return (
@@ -311,122 +508,7 @@ export const SendView = ({ setCurrentView, preferredWallet }: {
       </AnimatePresence>
 
       <button
-        onClick={async () => {
-          if (connectedWallet?.type === 'pulsar') {
-            try {
-              const signer = getPulsarSigner();
-
-              if (!signer)
-                return toast.error('Keplr extension not detected', { id: 'no-wallet' });
-
-              if (amountBase <= 0n)
-                return toast.error('Please enter a valid amount', { id: 'invalid-amount' });
-
-              if (!recipientAddress || recipientAddress.trim() === '')
-                return toast.error('Please enter a recipient address', { id: 'invalid-recipient' });
-
-              // A Mina address is a valid recipient only through the registry:
-              // the chain's MsgSend takes bech32 alone and rewrites nothing,
-              // so the resolution happens here or not at all. Refusing an
-              // unregistered key is what keeps this safe — its derived
-              // address exists but nobody holds its Cosmos key, so pMINA sent
-              // there would be stranded forever.
-              let toAddress = recipientAddress.trim();
-              if (toAddress.startsWith('B62')) {
-                toast.loading('Resolving Mina address…', { id: 'signing-transaction' });
-                let resolved;
-                try {
-                  resolved = await resolveMinaAddress(toAddress);
-                } catch {
-                  toast.dismiss('signing-transaction');
-                  return toast.error('That is not a valid Mina address', { id: 'invalid-recipient' });
-                }
-                if (!resolved) {
-                  toast.dismiss('signing-transaction');
-                  return toast.error(
-                    'This Mina address is not registered with Pulsar, so it cannot receive pMINA',
-                    { id: 'invalid-recipient' },
-                  );
-                }
-                toAddress = resolved.pulsarAddress;
-              } else if (!toAddress.startsWith('pulsar1')) {
-                return toast.error(
-                  'Recipient must be a pulsar1… or B62… address',
-                  { id: 'invalid-recipient' },
-                );
-              }
-
-              // Against the fee-adjusted, reservation-adjusted maximum, not
-              // the raw balance: the ante handler rejects a fee the sender
-              // cannot cover, and spending what a pending withdrawal needs
-              // forfeits its down payment. Name whichever is the actual cause.
-              if (amountBase > maxSendable)
-                return toast.error(
-                  reserved > 0n && amountBase <= balance
-                    ? `${formatAmount(reserved)} pMINA is reserved for a pending withdrawal — sending it would void the withdrawal and forfeit its 1 MINA deposit`
-                    : `Insufficient balance — ${formatAmount(SEND_TOKEN_FEE, DECIMALS)} pMINA is needed for the fee`,
-                  { id: 'insufficient-balance' },
-                );
-
-              toast.loading('Please sign the transaction in your wallet...', { id: 'signing-transaction' });
-
-              const account = await signer.getAccount();
-
-              let accountNumber: bigint;
-              let sequence: number;
-              try {
-                ({ accountNumber, sequence } = await fetchAccountAuth(account.address));
-              } catch (error) {
-                toast.dismiss('signing-transaction');
-                return toast.error(
-                  error instanceof Error ? error.message : 'Could not read your Pulsar account',
-                  { id: 'no-account' },
-                );
-              }
-
-
-              const signDoc = createSendTokenTx({
-                sequence,
-                pubkeyBytes: account.pubkey,
-                accountNumber,
-                // The extension's answer, not the store's: the signature only
-                // authorizes a send FROM the account that makes it.
-                fromAddress: account.address,
-                toAddress,
-                amount: amountBase.toString(),
-              });
-
-              const signedTx = await signer.signDirect(account.address, signDoc);
-  
-              const protobufTx = TxRaw.encode({
-                bodyBytes: signedTx.signed.bodyBytes,
-                authInfoBytes: signedTx.signed.authInfoBytes,
-                signatures: [new Uint8Array(Buffer.from(signedTx.signature.signature, 'base64'))],
-              }).finish();
-  
-              const txResponse = await signer.sendTx(protobufTx);
-              console.log('tx hash', Buffer.from(txResponse).toString('hex').toUpperCase());
-  
-              toast.success('Transaction successful', { id: 'transaction-success' });
-  
-              setSendAmount('');
-              setRecipientAddress('');
-              setCurrentView('main');
-            } catch (error) {
-              toast.dismiss('signing-transaction');
-              toast.error(error instanceof Error ? error.message : 'Failed to process transaction', { id: 'transaction-failed' });
-              console.error('Transaction failed:', error);
-            }  
-          } else if (connectedWallet?.type === 'mina') {
-            // Signing a Pulsar tx with a Mina key needs the chain to verify a
-            // signature a wallet can make. It verifies with VerifyBytes today,
-            // which only a raw private key can satisfy — the same mismatch the
-            // key registration had. Until that path moves to signFields, send
-            // from the Pulsar wallet.
-            toast.error('Sending with Auro is not available yet — connect Keplr to send pMINA.', { id: 'mina-send-unsupported' });
-            return;
-          }
-        }}
+        onClick={handleSend}
         disabled={!connectedWallet}
         className="brand-button shrink-0"
       >

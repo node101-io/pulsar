@@ -11,6 +11,12 @@ export * from "./keyregistryTx.js";
 // module still costs nothing until a challenge is actually built.
 export * from "./keyregistryChallenge.js";
 
+// The same idea for a whole transaction: the challenge a wallet signs to
+// authorize it, and the extension option that tells the chain to verify that
+// signature instead of a Cosmos one.
+export * from "./txSigningChallenge.js";
+export * from "./txAuth.js";
+
 // Query codecs, for callers that reach the chain through Tendermint's
 // /abci_query rather than a gRPC channel. The chain serves more keyregistry
 // queries than these; a codec earns its place here when something imports it,
