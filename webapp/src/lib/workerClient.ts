@@ -1,13 +1,24 @@
 import * as Comlink from "comlink";
-import type { State } from "./worker";
+import type { CompileProgress, State } from "./worker";
 
 export type ZkappWorkerType = {
   setActiveInstance({ url }: { url: string }): Promise<void>;
-  compile({ contractAddress }: { contractAddress: string }): Promise<void>;
+  compile(
+    { contractAddress }: { contractAddress: string },
+    onProgress?: (progress: CompileProgress) => void
+  ): Promise<void>;
   fetchAccount(args: { publicKey: string }): Promise<any>;
   getMinaBalance(args: { userAddress: string }): Promise<string>;
-  deposit(args: { sender: string; amount: string; fee: string }): Promise<string>;
-  withdraw(args: { sender: string; amount: string; fee: string }): Promise<string>;
+  deposit(args: {
+    sender: string;
+    amount: string;
+    fee: string;
+  }): Promise<string>;
+  withdraw(args: {
+    sender: string;
+    amount: string;
+    fee: string;
+  }): Promise<string>;
   waitForTransaction(args: { hash: string; rpcUrl: string }): Promise<any>;
   getState(): Promise<State>;
 };
@@ -31,8 +42,14 @@ export default class WorkerClient {
     return this.api.setActiveInstance({ url });
   }
 
-  async compile({ contractAddress }: { contractAddress: string }) {
-    return this.api.compile({ contractAddress });
+  async compile(
+    { contractAddress }: { contractAddress: string },
+    onProgress?: (progress: CompileProgress) => void
+  ) {
+    return this.api.compile(
+      { contractAddress },
+      onProgress ? Comlink.proxy(onProgress) : undefined
+    );
   }
 
   async fetchAccount(args: { publicKey: string }) {

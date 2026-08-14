@@ -22,6 +22,7 @@ const state = {
 };
 
 export type State = typeof state;
+export type CompileProgress = Pick<State, "compiledCount" | "totalPrograms">;
 
 // A zkApp method call needs a proof, so the browser must compile the contract
 // — and compiling it means compiling every program whose proofs its methods
@@ -40,11 +41,18 @@ class ZkappWorker {
     Mina.setActiveInstance(Mina.Network({ mina: url }));
   }
 
-  async compile({ contractAddress }: { contractAddress: string }) {
+  async compile(
+    { contractAddress }: { contractAddress: string },
+    onProgress?: (progress: CompileProgress) => void
+  ) {
     if (state.status !== "idle") return;
     state.status = "compiling";
     state.compiledCount = 0;
     state.totalPrograms = PROGRAMS.length + 1;
+    onProgress?.({
+      compiledCount: state.compiledCount,
+      totalPrograms: state.totalPrograms,
+    });
 
     // Prebuilt cache, fetched once: without it these six compiles take about
     // four minutes, with it about sixteen seconds.
@@ -58,21 +66,31 @@ class ZkappWorker {
       await program.compile({ cache });
       console.timeEnd(`compile ${name}`);
       state.compiledCount++;
+      onProgress?.({
+        compiledCount: state.compiledCount,
+        totalPrograms: state.totalPrograms,
+      });
     }
 
     console.time("compile SettlementContract");
     await SettlementContract.compile({ cache });
     console.timeEnd("compile SettlementContract");
     state.compiledCount++;
+    onProgress?.({
+      compiledCount: state.compiledCount,
+      totalPrograms: state.totalPrograms,
+    });
 
     state.contract = new SettlementContract(
-      PublicKey.fromBase58(contractAddress),
+      PublicKey.fromBase58(contractAddress)
     );
     state.status = "ready";
   }
 
   async fetchAccount(args: { publicKey: string }) {
-    return await fetchAccount({ publicKey: PublicKey.fromBase58(args.publicKey) });
+    return await fetchAccount({
+      publicKey: PublicKey.fromBase58(args.publicKey),
+    });
   }
 
   async getMinaBalance({ userAddress }: { userAddress: string }) {
@@ -104,12 +122,15 @@ class ZkappWorker {
     // amount], and the keeper resolves the destination through keyregistry
     // instead. Passing empty keeps the action shape valid without implying a
     // binding that is not enforced — the registration IS the binding.
-    const tx = await Mina.transaction({ sender: senderPubKey, fee }, async () => {
-      await state.contract!.deposit(
-        UInt64.from(amount),
-        PulsarAuth.from(Field(0), CosmosSignature.empty()),
-      );
-    });
+    const tx = await Mina.transaction(
+      { sender: senderPubKey, fee },
+      async () => {
+        await state.contract!.deposit(
+          UInt64.from(amount),
+          PulsarAuth.from(Field(0), CosmosSignature.empty())
+        );
+      }
+    );
 
     await tx.prove();
     return tx.toJSON();
@@ -132,9 +153,12 @@ class ZkappWorker {
     // transaction. amount is pmina to burn on Pulsar, expressed in the same
     // base units, and comes back as MINA (plus the down payment) when the
     // chain's verdict settles.
-    const tx = await Mina.transaction({ sender: senderPubKey, fee }, async () => {
-      await state.contract!.withdraw(UInt64.from(amount));
-    });
+    const tx = await Mina.transaction(
+      { sender: senderPubKey, fee },
+      async () => {
+        await state.contract!.withdraw(UInt64.from(amount));
+      }
+    );
 
     await tx.prove();
     return tx.toJSON();

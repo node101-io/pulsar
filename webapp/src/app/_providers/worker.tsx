@@ -28,7 +28,6 @@ export function WorkerProvider({ children }: WorkerProviderProps) {
     const [compiledCount, setCompiledCount] = useState(0);
     const [totalPrograms, setTotalPrograms] = useState(0);
     const initializationRef = useRef<Promise<void> | null>(null);
-    const pollIntervalRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (!workerRef.current && typeof window !== "undefined") {
@@ -58,41 +57,19 @@ export function WorkerProvider({ children }: WorkerProviderProps) {
             try {
                 await workerRef.current!.setActiveInstance({ url: MINA_RPC_URL });
                 console.log("Mina instance set to", MINA_RPC_URL);
-                // start polling worker state for compile progress
-                if (pollIntervalRef.current) {
-                    window.clearInterval(pollIntervalRef.current);
-                    pollIntervalRef.current = null;
-                }
-                pollIntervalRef.current = window.setInterval(async () => {
-                    try {
-                        const st = await workerRef.current!.getState();
-                        if (typeof (st as any).compiledCount === "number") {
-                            setCompiledCount((st as any).compiledCount);
-                        }
-                        if (typeof (st as any).totalPrograms === "number") {
-                            setTotalPrograms((st as any).totalPrograms);
-                        }
-                        if ((st as any).status === "ready") {
-                            if (pollIntervalRef.current) {
-                                window.clearInterval(pollIntervalRef.current);
-                                pollIntervalRef.current = null;
-                            }
-                        }
-                    } catch (e) {
-                        // ignore transient polling errors
+                await workerRef.current!.compile(
+                    { contractAddress: BRIDGE_ADDRESS },
+                    ({ compiledCount, totalPrograms }) => {
+                        setCompiledCount(compiledCount);
+                        setTotalPrograms(totalPrograms);
                     }
-                }, 300);
-                await workerRef.current!.compile({ contractAddress: BRIDGE_ADDRESS });
+                );
                 setIsInitialized(true);
             } catch (error) {
                 console.error("Worker initialization failed:", error);
                 throw error;
             } finally {
                 setIsInitializing(false);
-                if (pollIntervalRef.current) {
-                    window.clearInterval(pollIntervalRef.current);
-                    pollIntervalRef.current = null;
-                }
                 initializationRef.current = null;
             }
         })();
