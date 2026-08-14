@@ -145,6 +145,48 @@ export async function getPulsarPubkey(): Promise<Uint8Array | null> {
   }
 }
 
+/**
+ * The three operations a send or a registration needs from the wallet —
+ * account, signDirect, sendTx — spoken straight to the extension.
+ *
+ * interchain-kit's wallet object offers the same three, and its
+ * CosmosWallet.signDirect/sendTx are verbatim passthroughs to window.keplr.
+ * But reaching them goes through getWalletOfType, a prototype-identity lookup
+ * that silently returns undefined when the bundle carries a second copy of
+ * the wallet classes — which read as "Please connect a wallet first" to a
+ * user whose wallet was connected. The extension object cannot fail that way.
+ */
+export function getPulsarSigner(): {
+  getAccount: () => Promise<{ address: string; pubkey: Uint8Array }>;
+  signDirect: (
+    signerAddress: string,
+    signDoc: unknown,
+  ) => Promise<{
+    signed: { bodyBytes: Uint8Array; authInfoBytes: Uint8Array };
+    signature: { signature: string };
+  }>;
+  sendTx: (tx: Uint8Array) => Promise<Uint8Array>;
+} | null {
+  if (typeof window === "undefined") return null;
+  // @ts-ignore - Keplr injects itself on window
+  const keplr = window.keplr as any | undefined;
+  if (!keplr) return null;
+
+  const chainId = consumerChain.chainId!;
+  return {
+    getAccount: async () => {
+      const key = await keplr.getKey(chainId);
+      return {
+        address: key.bech32Address as string,
+        pubkey: key.pubKey as Uint8Array,
+      };
+    },
+    signDirect: (signerAddress, signDoc) =>
+      keplr.signDirect(chainId, signerAddress, signDoc),
+    sendTx: (tx) => keplr.sendTx(chainId, tx, "sync"),
+  };
+}
+
 export async function suggestPulsarToKeplr(): Promise<void> {
   if (typeof window === "undefined")
     throw new Error("Not in a browser context");

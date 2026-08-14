@@ -13,8 +13,7 @@ import { DECIMALS, formatAmount, parseAmount, toDisplayNumber } from "@/lib/amou
 import { usePendingWithdrawalsFrom } from "@/lib/pending-transfers";
 import { resolveMinaAddress } from "@/lib/registry";
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
-import { BroadcastMode, CosmosWallet } from "@interchain-kit/core";
-import { consumerChain } from "@/lib/constants";
+import { getPulsarSigner } from "@/lib/keplr";
 
 interface SavedAddress {
   name: string;
@@ -32,7 +31,7 @@ export const SendView = ({ setCurrentView }: {
   const [showSaveDialog, setShowSaveDialog] = useState<boolean>(false);
 
   const { isConnected: isMinaConnected, account: minaAccount } = useMinaWallet();
-  const { getSigningClient, isSigningClientLoading, wallet: pulsarWallet, address: pulsarAddress } = usePulsarWallet();
+  const { address: pulsarAddress } = usePulsarWallet();
   const connectedWallet = useConnectedWallet();
   const { data: keyStore } = useKeyStore(minaAccount);
 
@@ -312,11 +311,11 @@ export const SendView = ({ setCurrentView }: {
         onClick={async () => {
           if (connectedWallet?.type === 'cosmos') {
             try {
-              const wallet = pulsarWallet.getWalletOfType(CosmosWallet);
-  
-              if (!wallet)
-                return toast.error('Please connect a wallet first', { id: 'no-wallet' });
-  
+              const signer = getPulsarSigner();
+
+              if (!signer)
+                return toast.error('Keplr extension not detected', { id: 'no-wallet' });
+
               if (amountBase <= 0n)
                 return toast.error('Please enter a valid amount', { id: 'invalid-amount' });
 
@@ -366,12 +365,9 @@ export const SendView = ({ setCurrentView }: {
                   { id: 'insufficient-balance' },
                 );
 
-              if (!connectedWallet)
-                return toast.error('Please connect a wallet first', { id: 'no-wallet' });
-  
               toast.loading('Please sign the transaction in your wallet...', { id: 'signing-transaction' });
-  
-              const account = await wallet.getAccount(consumerChain.chainId!);
+
+              const account = await signer.getAccount();
 
               let accountNumber: bigint;
               let sequence: number;
@@ -390,12 +386,14 @@ export const SendView = ({ setCurrentView }: {
                 sequence,
                 pubkeyBytes: account.pubkey,
                 accountNumber,
-                fromAddress: connectedWallet.address,
+                // The extension's answer, not the store's: the signature only
+                // authorizes a send FROM the account that makes it.
+                fromAddress: account.address,
                 toAddress,
                 amount: amountBase.toString(),
               });
-  
-              const signedTx = await wallet.signDirect(consumerChain.chainId!, account.address, signDoc);
+
+              const signedTx = await signer.signDirect(account.address, signDoc);
   
               const protobufTx = TxRaw.encode({
                 bodyBytes: signedTx.signed.bodyBytes,
@@ -403,7 +401,7 @@ export const SendView = ({ setCurrentView }: {
                 signatures: [new Uint8Array(Buffer.from(signedTx.signature.signature, 'base64'))],
               }).finish();
   
-              const txResponse = await wallet.sendTx(consumerChain.chainId!, protobufTx, BroadcastMode.Sync);
+              const txResponse = await signer.sendTx(protobufTx);
               console.log('tx hash', Buffer.from(txResponse).toString('hex').toUpperCase());
   
               toast.success('Transaction successful', { id: 'transaction-success' });
@@ -426,7 +424,7 @@ export const SendView = ({ setCurrentView }: {
             return;
           }
         }}
-        disabled={!connectedWallet || (connectedWallet.type === 'cosmos' && isSigningClientLoading)}
+        disabled={!connectedWallet}
         className="brand-button shrink-0"
       >
         Send {connectedWallet?.type === 'mina' ? 'with Auro Wallet' : connectedWallet?.type === 'cosmos' ? 'with Keplr Wallet' : ''}

@@ -6,23 +6,22 @@ import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
 import { LegalNotice } from "./legal-notice"
 import { ExtensionItem } from "./extension-item"
 import { ProgressBar } from "./progress-bar"
-import { CosmosWallet, WalletState } from "@interchain-kit/core"
+import { WalletState } from "@interchain-kit/core"
 import { consumerChain } from "@/lib/constants"
 import { fetchAccountAuth, requestFeeGrant, waitForTxCommit } from "@/lib/utils"
 import { formatMinaPublicKey, signatureFromBase58 } from "@/lib/crypto"
 import { createRegisterKeysTx } from "@/lib/tx"
 import { ActorType, KeySigningOperation, keySigningChallenge } from "pulsar-chain-client/messages"
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx"
-import { BroadcastMode } from "@interchain-kit/core/types"
 import { useQueryClient } from "@tanstack/react-query"
 import { AnimatePresence, motion } from "motion/react"
-import { suggestPulsarToKeplr } from "@/lib/keplr"
+import { getPulsarSigner, suggestPulsarToKeplr } from "@/lib/keplr"
 
 export const ConnectView = ({ keyStore: keyStoreData }: {
   keyStore: { keyStore?: { cosmosPublicKey: string } } | undefined;
 }) => {
   const { isWalletInstalled: isMinaWalletInstalled, isConnecting: minaConnecting, connectWallet: connectMina, signFields: minaSignFields, account: minaAccount, isConnected: isMinaConnected } = useMinaWallet();
-  const { status: pulsarStatus, connect: connectPulsar, wallet: pulsarWallet, address: pulsarAddress } = usePulsarWallet();
+  const { status: pulsarStatus, connect: connectPulsar, address: pulsarAddress } = usePulsarWallet();
   const [onboardDialog, setOnboardDialog] = useState<'done' | ''>('');
   const queryClient = useQueryClient();
   const [signStep, setSignStep] = useState<'auro' | 'keplr' | 'broadcast' | 'done'>('auro');
@@ -77,9 +76,9 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
     if (isBusy || signStep === 'done') return;
     try {
       if (!isMinaConnected || !minaAccount) throw new Error('Connect Auro');
-      const wallet = pulsarWallet.getWalletOfType(CosmosWallet);
-      if (!wallet) throw new Error('Cosmos wallet not available');
-      const account = await wallet.getAccount(consumerChain.chainId!);
+      const signer = getPulsarSigner();
+      if (!signer) throw new Error('Keplr extension not detected');
+      const account = await signer.getAccount();
 
       if (signStep === 'auro') {
         setIsBusy(true);
@@ -141,7 +140,7 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
           feeGranter: granter,
         });
 
-        const signedTx = await wallet.signDirect(consumerChain.chainId!, account.address, signDoc);
+        const signedTx = await signer.signDirect(account.address, signDoc);
         setSignStep('broadcast');
         await new Promise((r) => setTimeout(r, 0));
 
@@ -151,7 +150,7 @@ export const ConnectView = ({ keyStore: keyStoreData }: {
           signatures: [new Uint8Array(Buffer.from(signedTx.signature.signature, 'base64'))],
         }).finish();
 
-        const txResponse = await wallet.sendTx(consumerChain.chainId!, protobufTx, BroadcastMode.Sync);
+        const txResponse = await signer.sendTx(protobufTx);
         const txHashHex = Buffer.from(txResponse).toString('hex').toUpperCase();
         console.log('tx hash', txHashHex);
 
