@@ -20,6 +20,12 @@ import {
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { MINA_EXPLORER_TX_URL, PULSAR_EXPLORER_URL } from "@/lib/constants"
 import { useState } from "react"
+
+// Render cap, not a fetch cap: the full history is always loaded — the
+// headline count must be exact — but thousands of DOM rows for a feed nobody
+// scrolls to the bottom of is pure weight. "Load more" lifts the cap in
+// steps for whoever actually reaches for the tail.
+const TRANSFERS_PER_PAGE = 50
 import Image from "next/image"
 
 const TABS = [
@@ -195,6 +201,7 @@ const BridgePanel = () => {
   // registration), a connected Keplr adds its own address to the highlight
   // set for good measure.
   const { data: transfers, isPending, isError, error } = useAllBridgeTransactions()
+  const [visibleCount, setVisibleCount] = useState(TRANSFERS_PER_PAGE)
   const { account: minaAccount } = useMinaWallet()
   const { data: keyStore } = useKeyStore(minaAccount)
   const { data: connectedPulsarAddress } = usePulsarAddress()
@@ -241,13 +248,22 @@ const BridgePanel = () => {
           progress={progress}
         />
       ))}
-      {transfers.map((transfer) => (
+      {transfers.slice(0, visibleCount).map((transfer) => (
         <Row
           key={transfer.id}
           transfer={transfer}
           isMine={myAddresses.has(transfer.account)}
         />
       ))}
+      {transfers.length > visibleCount && (
+        <button
+          type="button"
+          onClick={() => setVisibleCount((count) => count + TRANSFERS_PER_PAGE)}
+          className="text-ink-subtle hover:text-ink cursor-pointer py-3 text-center text-[13px] leading-none font-medium transition-colors"
+        >
+          Load more ({transfers.length - visibleCount} hidden)
+        </button>
+      )}
     </div>
   )
 }

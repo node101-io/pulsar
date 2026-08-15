@@ -1,8 +1,9 @@
 {
-  // Wrangler's own docs point at node_modules/wrangler/config-schema.json, but
-  // pnpm makes that a symlink out of this package and editors will not follow
-  // it. Same schema, fetched over the network.
-  "$schema": "https://www.unpkg.com/wrangler/config-schema.json",
+  // Local path, not a URL: VS Code refuses to download schemas from domains
+  // it does not trust (unpkg among them), so a network $schema just shows an
+  // "untrusted" error instead of validating. pnpm's node_modules/wrangler is
+  // a symlink, which the editor resolves fine for a relative path like this.
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "pulsar-webapp",
   "main": "worker/index.ts",
   "compatibility_date": "2026-08-13",
