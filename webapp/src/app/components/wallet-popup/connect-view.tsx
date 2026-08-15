@@ -7,7 +7,7 @@ import { LegalNotice } from "./legal-notice"
 import { ExtensionItem } from "./extension-item"
 import { ProgressBar } from "./progress-bar"
 import { consumerChain } from "@/lib/constants"
-import { fetchAccountAuth, requestFeeGrant, waitForTxCommit } from "@/lib/utils"
+import { fetchAccountAuth, requestFeeGrant, shortenAddress, waitForTxCommit } from "@/lib/utils"
 import { formatMinaPublicKey, signatureFromBase58 } from "@/lib/crypto"
 import { createRegisterKeysTx } from "@/lib/tx"
 import { ActorType, KeySigningOperation, keySigningChallenge } from "pulsar-chain-client/messages"
@@ -248,6 +248,8 @@ export const ConnectView = ({ keyStore: keyStoreData, onOpenWallet, onWalletConn
         <ExtensionItem
           icon="/auro-wallet-logo.png"
           title={!isMinaWalletInstalled ? 'Install Auro Wallet Extension' : 'Auro Wallet Extension'}
+          subtitle={isMinaConnected && minaAccount ? shortenAddress(minaAccount) : undefined}
+          connected={Boolean(isMinaConnected && minaAccount)}
           onClick={handleAuroClick}
           disabled={minaConnecting}
           isLoading={minaConnecting}
@@ -255,6 +257,8 @@ export const ConnectView = ({ keyStore: keyStoreData, onOpenWallet, onWalletConn
         <ExtensionItem
           icon="/keplr-wallet-logo.png"
           title={!isPulsarWalletInstalled ? 'Install Keplr Wallet Extension' : 'Keplr Wallet Extension'}
+          subtitle={isPulsarConnected ? shortenAddress(pulsarAddress!) : undefined}
+          connected={Boolean(isPulsarConnected)}
           onClick={handleKeplrClick}
           disabled={isPulsarConnecting}
           isLoading={isPulsarConnecting}

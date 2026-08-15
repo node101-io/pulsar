@@ -209,6 +209,10 @@ export const formatTimeLeft = (ms: number): string => {
   return `${hours}h ${minutes}m`
 }
 
+/** Head and tail of an address, the way every wallet surface here shows one. */
+export const shortenAddress = (address: string): string =>
+  address.length <= 15 ? address : `${address.slice(0, 6)}...${address.slice(-6)}`
+
 export const waitForTxCommit = async (txHashHex: string): Promise<any> => {
   const timeoutMs = 90_000;
   const pollIntervalMs = 1_500;
