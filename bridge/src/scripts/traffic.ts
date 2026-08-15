@@ -33,6 +33,7 @@ import {
     ApprovalQuorumProgram,
     ActionStackProgram,
     setMinaNetwork,
+    withArchiveFailover,
     ENDPOINTS,
 } from "pulsar-contracts";
 import {
@@ -855,11 +856,18 @@ async function minaTxStatus(hash: string): Promise<"INCLUDED" | "PENDING" | "UNK
     // on inclusion, so ask it first and use the pool only to separate
     // "in flight" from "gone".
     try {
-        const included = await checkZkappTransaction(hash);
+        // withArchiveFailover: the primary archive shares minascan's flaky
+        // path from this host; without the fallback a dead archive makes
+        // every included tx read as UNKNOWN and the wave re-sends forever.
+        const included = await withArchiveFailover(`inclusion check ${hash}`, () =>
+            checkZkappTransaction(hash),
+        );
         if (included.success) return "INCLUDED";
-    } catch {
-        // Archive hiccup: fall through to the pool check; a wrong UNKNOWN is
-        // shielded by the 30-minute staleness guard in wavePhase.
+    } catch (error) {
+        // Fall through to the pool check; a wrong UNKNOWN is shielded by the
+        // 30-minute staleness guard in wavePhase. Logged because a systematic
+        // archive failure must be visible, not swallowed.
+        logger.warn(`archive inclusion check failed for ${hash}: ${(error as Error).message}`);
     }
     try {
         const data = await gql<{ transactionStatus: string }>(

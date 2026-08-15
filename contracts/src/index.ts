@@ -63,6 +63,7 @@ import {
   setMinaNetwork,
   sliceActionHistory,
   waitForTransaction,
+  withArchiveFailover,
 } from './utils/fetch.js';
 import {
   GenerateSettlementProof,
@@ -126,6 +127,7 @@ export {
   setMinaNetwork,
   sliceActionHistory,
   waitForTransaction,
+  withArchiveFailover,
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,
