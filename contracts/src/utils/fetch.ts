@@ -1,7 +1,7 @@
 import { fetchLastBlock, Field, Mina, PublicKey, UInt32 } from 'o1js';
 import { log } from './loggers.js';
 import { PulsarAction } from '../types/PulsarAction.js';
-import { ENDPOINTS } from './constants.js';
+import { ARCHIVE_FALLBACKS, ENDPOINTS } from './constants.js';
 import { SettlementContract, SettlementEvent } from '../SettlementContract.js';
 
 export {
@@ -13,29 +13,86 @@ export {
   setMinaNetwork,
   sliceActionHistory,
   waitForTransaction,
+  withArchiveFailover,
 };
+
+// The network setMinaNetwork last configured, or null when it never ran —
+// null means the active instance is caller-managed (LocalBlockchain in
+// tests), where rebuilding it would clobber state and there is no fallback
+// archive to reach anyway.
+let configuredNetwork: 'devnet' | 'mainnet' | 'lightnet' | null = null;
+
+function useArchiveEndpoint(archiveUrl: string) {
+  Mina.setActiveInstance(
+    Mina.Network({
+      mina: ENDPOINTS.NODE[configuredNetwork!],
+      archive: archiveUrl,
+    })
+  );
+}
+
+/**
+ * Run an archive-backed fetch, walking ARCHIVE_FALLBACKS in order when it
+ * fails. Sequential on purpose — o1js's own multi-endpoint support races
+ * endpoints in pairs and a fast-failing primary wins the race (see the
+ * ARCHIVE_FALLBACKS comment in constants.ts).
+ *
+ * The first attempt runs against whatever endpoint the active instance
+ * already points at, so a fallback that worked stays sticky for later calls
+ * (mid-outage the primary is not re-probed on every fetch). On total failure
+ * the instance is reset to the primary and the LAST error propagates —
+ * swallowing it into an empty result would make an archive outage
+ * indistinguishable from a genuinely empty action queue.
+ */
+async function withArchiveFailover<T>(
+  what: string,
+  run: () => Promise<T>
+): Promise<T> {
+  let lastError: unknown;
+  try {
+    return await run();
+  } catch (error) {
+    lastError = error;
+  }
+  if (configuredNetwork !== null) {
+    for (const archiveUrl of ARCHIVE_FALLBACKS[configuredNetwork]) {
+      console.warn(
+        `${what} failed (${
+          lastError instanceof Error ? lastError.message : lastError
+        }), retrying via fallback archive ${archiveUrl}`
+      );
+      useArchiveEndpoint(archiveUrl);
+      try {
+        return await run();
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    useArchiveEndpoint(ENDPOINTS.ARCHIVE[configuredNetwork]);
+  }
+  throw lastError;
+}
 
 async function fetchRawActions(
   address: PublicKey,
   fromActionState?: Field,
   endActionState?: Field
 ) {
-  // Errors must propagate: swallowing them into an empty result makes an
-  // archive outage indistinguishable from a genuinely empty action queue,
-  // which callers cannot handle safely.
-  const result = await Mina.fetchActions(address, {
-    fromActionState,
-    endActionState,
+  return withArchiveFailover('Action fetch', async () => {
+    const result = await Mina.fetchActions(address, {
+      fromActionState,
+      endActionState,
+    });
+
+    log('Fetched actions:', JSON.stringify(result), null, 2);
+
+    if (!Array.isArray(result)) {
+      throw new Error(
+        `Error fetching actions: ${JSON.stringify(result.error)}`
+      );
+    }
+    return result;
   });
-
-  log('Fetched actions:', JSON.stringify(result), null, 2);
-
-  if (!Array.isArray(result)) {
-    throw new Error(
-      `Error fetching actions: ${JSON.stringify(result.error)}`
-    );
-  }
-  return result;
 }
 
 async function fetchActions(
@@ -130,7 +187,10 @@ async function fetchEvents(
   to?: UInt32
 ) {
   try {
-    const result = await contractInstance.fetchEvents(from, to);
+    // Events come from the archive too — same failover as actions.
+    const result = await withArchiveFailover('Event fetch', () =>
+      contractInstance.fetchEvents(from, to)
+    );
     const events = result
       .map((item) => item.event.data as any)
       .map(
@@ -150,16 +210,16 @@ async function fetchEvents(
 }
 
 function setMinaNetwork(network: 'devnet' | 'mainnet' | 'lightnet' = 'devnet') {
-  const Network = Mina.Network({
-    mina: ENDPOINTS.NODE[network],
-    archive: ENDPOINTS.ARCHIVE[network],
-  });
+  configuredNetwork = network;
+  useArchiveEndpoint(ENDPOINTS.ARCHIVE[network]);
 
+  const fallbacks = ARCHIVE_FALLBACKS[network];
   console.log(
-    `Setting Mina network to ${network}, Mina endpoint: ${ENDPOINTS.NODE[network]}, Archive endpoint: ${ENDPOINTS.ARCHIVE[network]}`
+    `Setting Mina network to ${network}, Mina endpoint: ${ENDPOINTS.NODE[network]}, Archive endpoint: ${ENDPOINTS.ARCHIVE[network]}` +
+      (fallbacks.length > 0
+        ? ` (+${fallbacks.length} fallback(s): ${fallbacks.join(', ')})`
+        : '')
   );
-
-  Mina.setActiveInstance(Network);
 }
 
 type FailureReasonResponse = {

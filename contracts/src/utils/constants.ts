@@ -14,6 +14,7 @@ export {
   ACTION_QUEUE_SIZE,
   APPROVAL_TAIL_CHUNK,
   ENDPOINTS,
+  ARCHIVE_FALLBACKS,
 };
 
 const SETTLEMENT_MATRIX_SIZE = 8;
@@ -66,8 +67,14 @@ const ENDPOINTS = {
     ),
   },
   ARCHIVE: {
-    devnet: 'https://api.minascan.io/archive/devnet/v1/graphql',
-    mainnet: 'https://api.minascan.io/archive/mainnet/v1/graphql',
+    devnet: envOrDefault(
+      'MINA_ARCHIVE_URL',
+      'https://api.minascan.io/archive/devnet/v1/graphql'
+    ),
+    mainnet: envOrDefault(
+      'MINA_ARCHIVE_URL',
+      'https://api.minascan.io/archive/mainnet/v1/graphql'
+    ),
     lightnet: envOrDefault(
       'LIGHTNET_ARCHIVE_URL',
       process.env.DOCKER
@@ -85,3 +92,35 @@ const ENDPOINTS = {
     lightnet: envOrDefault('LIGHTNET_EXPLORER_URL', ''),
   },
 };
+
+function envListOrDefault(key: string, fallback: string[]) {
+  const raw = envOrDefault(key, '');
+  return raw === ''
+    ? fallback
+    : raw
+        .split(',')
+        .map((url) => url.trim())
+        .filter((url) => url !== '');
+}
+
+// Archive endpoints tried IN ORDER after ENDPOINTS.ARCHIVE fails — see
+// withArchiveFailover in fetch.ts. The failover cannot ride on o1js's own
+// `archive: string[]` support: that races endpoints in pairs and only advances
+// past a pair on timeout (408), so a primary that fails FAST — Minascan's
+// 2026-08-15 outage answered 404/504 immediately — wins the race and the
+// fallback is never consulted. Archive data needs no trust (callers refold it
+// against the contract's on-chain actionState), so trying alternates is safe.
+// The o1test endpoints are o1Labs' hosted Archive-Node-API instances: free,
+// no SLA — a second leg, not a substitute for running our own archive.
+const ARCHIVE_FALLBACKS: { [key in keyof typeof ENDPOINTS.ARCHIVE]: string[] } =
+  {
+    devnet: envListOrDefault('MINA_ARCHIVE_FALLBACK_URLS', [
+      'https://devnet-archive-node-api.gcp.o1test.net',
+    ]),
+    mainnet: envListOrDefault('MINA_ARCHIVE_FALLBACK_URLS', [
+      'https://archive-node-api.gcp.o1test.net',
+    ]),
+    // A lightnet's archive is the local docker container — there is no
+    // second instance to fall back to.
+    lightnet: [],
+  };
