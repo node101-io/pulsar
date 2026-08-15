@@ -191,7 +191,16 @@ export async function worker(task: BridgeTxJob): Promise<void> {
         // the archive read legitimately move the tip forward.
         await refreshContractState(ctx);
         if (!getActionStateHistory(ctx).includes(computedTip)) {
-            throw new Error(
+            // Transient like its two siblings above: under sustained action
+            // traffic the archive trailing the node by more than the
+            // account's five stored states produces exactly this mismatch,
+            // and it heals the moment the archive catches up (live
+            // 2026-08-16: three such strikes halted a healthy front mid-M1).
+            // No strike is right here regardless of cause — the refusal
+            // happens before any proving or fee, and strikes exist to stop
+            // fee burn, not free retries. A genuinely corrupt archive stays
+            // visible as this error repeating at level 50.
+            throw new TransientReduceError(
                 `Refolded action queue ends at ${computedTip}, which matches ` +
                     `none of the account's stored action states — refusing ` +
                     `to prove against an unverifiable reconstruction`,

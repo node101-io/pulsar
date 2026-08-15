@@ -425,7 +425,7 @@ describe("worker()", () => {
         expect(mockBuildVerdictBatch).not.toHaveBeenCalled();
     });
 
-    it("throws a NON-transient error when the refolded queue matches no stored action state", async () => {
+    it("throws a TRANSIENT error when the refolded queue matches no stored action state", async () => {
         mockCalculateFinalActionState.mockReturnValue(Field(123456)); // matches nothing
 
         const rejection = await worker({ fromActionState: PROCESSED }).then(
@@ -435,8 +435,11 @@ describe("worker()", () => {
             (error) => error,
         );
         expect(rejection.message).toMatch(/unverifiable reconstruction/);
-        // deterministic bad archive data MUST charge the front's budget
-        expect(rejection).not.toBeInstanceOf(TransientReduceError);
+        // Transient, no strike: under sustained traffic this is the archive
+        // trailing the account's five stored states (halted a healthy front
+        // live on 2026-08-16), and the refusal costs no proving and no fee —
+        // strikes exist to stop fee burn, not free retries.
+        expect(rejection).toBeInstanceOf(TransientReduceError);
         // ...and the identity was already stamped, so the strike lands on the
         // right front
         expect(mockBridgeStateUpdateOne).toHaveBeenCalledTimes(1);
