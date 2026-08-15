@@ -5,3 +5,5 @@ logs/
 dist/
 cache/
 coverage/
+# traffic generator artifacts (keypairs — never commit)
+traffic-data/

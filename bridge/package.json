@@ -8,6 +8,7 @@
         "build": "pnpm --filter pulsar-contracts --filter pulsar-chain-client build && tsc",
         "start": "pnpm run build && node --max-old-space-size=8192 dist/src/index.js",
         "doctor": "pnpm run build && node dist/src/scripts/doctor.js",
+        "traffic": "pnpm run build && node --max-old-space-size=8192 dist/src/scripts/traffic.js",
         "clean": "rimraf dist node_modules"
     },
     "keywords": [
@@ -27,6 +28,7 @@
         "cosmjs-types": "^0.10.1",
         "dotenv": "^17.4.2",
         "ioredis": "5.10.1",
+        "mina-signer": "^3.1.0",
         "mongoose": "^9.7.3",
         "o1js": "2.15.0",
         "pino": "^10.3.1",
