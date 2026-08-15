@@ -1,5 +1,6 @@
 import { defineConfig } from "vitepress";
 import { withMermaid } from "vitepress-plugin-mermaid";
+import llmstxt from "vitepress-plugin-llms";
 
 export default withMermaid(defineConfig({
   title: "Pulsar",
@@ -24,6 +25,7 @@ export default withMermaid(defineConfig({
       // production build is unaffected either way.
       include: ["mermaid", "dayjs"],
     },
+    plugins: [llmstxt()],
   },
 
   themeConfig: {

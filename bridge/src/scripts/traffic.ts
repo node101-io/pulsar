@@ -126,11 +126,21 @@ const JITTER_MAX_MS = intEnv("TRAFFIC_JITTER_MAX_MS", 15_000);
 
 const POLL_MS = 30_000;
 const MINA_GRAPHQL = ENDPOINTS.NODE[MINA_NETWORK];
+const HTTP_TIMEOUT_MS = 30_000;
 
 function intEnv(name: string, fallback: number): number {
     const raw = process.env[name];
     const value = raw ? Number(raw) : NaN;
     return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
+// A stalled connection (TCP up, server never answers) hangs a bare fetch
+// forever — seen live stalling the whole campaign on one unlucky request.
+// Every network call in this script goes through this so a single bad
+// connection surfaces as an error the retry loops can recover from, not a
+// silent freeze.
+function fetchTimed(input: string, init?: RequestInit): Promise<Response> {
+    return fetch(input, { ...init, signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) });
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +195,7 @@ const randNano = (min: number, max: number) => String(min + Math.floor(Math.rand
 // Mina GraphQL (payments and account reads — no o1js needed)
 
 async function gql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-    const res = await fetch(MINA_GRAPHQL, {
+    const res = await fetchTimed(MINA_GRAPHQL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, variables }),
@@ -249,7 +259,7 @@ async function sendMinaPayment(
  * keys containing "/", the RPC hex form always can. */
 async function abciQuery(path: string, request: Uint8Array): Promise<Uint8Array | null> {
     const url = `${PULSAR_RPC_URL}/abci_query?path=${encodeURIComponent(`"${path}"`)}&data=0x${toHex(request)}`;
-    const res = await fetch(url);
+    const res = await fetchTimed(url);
     if (!res.ok) throw new Error(`Pulsar RPC returned ${res.status}`);
     const body = (await res.json()) as {
         error?: { message?: string };
@@ -290,7 +300,7 @@ async function isRegistered(minaAddress: string): Promise<boolean> {
 }
 
 async function pminaBalance(pulsarAddress: string): Promise<bigint> {
-    const res = await fetch(`${PULSAR_REST_URL}/cosmos/bank/v1beta1/balances/${pulsarAddress}`);
+    const res = await fetchTimed(`${PULSAR_REST_URL}/cosmos/bank/v1beta1/balances/${pulsarAddress}`);
     if (!res.ok) throw new Error(`balance read failed (${res.status})`);
     const body = (await res.json()) as { balances: { denom: string; amount: string }[] };
     const raw = body.balances.find((coin) => coin.denom === PMINA_DENOM)?.amount;
@@ -310,7 +320,7 @@ async function chainEventCount(direction: "deposit" | "withdraw"): Promise<numbe
             limit: "100",
             order_by: "ORDER_BY_DESC",
         });
-        const res = await fetch(`${PULSAR_REST_URL}/cosmos/tx/v1beta1/txs?${params}`);
+        const res = await fetchTimed(`${PULSAR_REST_URL}/cosmos/tx/v1beta1/txs?${params}`);
         if (!res.ok) throw new Error(`tx query failed (${res.status})`);
         const { tx_responses = [], total = "0" } = (await res.json()) as {
             tx_responses?: { code: number; events?: { type: string; attributes: { key: string; value: string }[] }[] }[];
@@ -465,7 +475,7 @@ async function fundPhase(accounts: Account[]) {
 // Phase: register
 
 async function requestFeeGrant(pulsarAddress: string): Promise<void> {
-    const post = await fetch(FEEGRANT_URL, {
+    const post = await fetchTimed(FEEGRANT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address: pulsarAddress }),
@@ -477,7 +487,7 @@ async function requestFeeGrant(pulsarAddress: string): Promise<void> {
     const deadline = Date.now() + 90_000;
     while (Date.now() < deadline) {
         await sleep(2_000);
-        const res = await fetch(`${FEEGRANT_URL}?address=${encodeURIComponent(pulsarAddress)}`);
+        const res = await fetchTimed(`${FEEGRANT_URL}?address=${encodeURIComponent(pulsarAddress)}`);
         const body = (await res.json()) as { status?: string; granter?: string; error?: string };
         if (!res.ok) throw new Error(body.error ?? `fee grant poll failed: ${res.status}`);
         if (body.status === "ready") return;
@@ -486,14 +496,14 @@ async function requestFeeGrant(pulsarAddress: string): Promise<void> {
 }
 
 async function feeGranterAddress(): Promise<string> {
-    const res = await fetch(`${FEEGRANT_URL}?address=${encodeURIComponent("pulsar1probe")}`);
+    const res = await fetchTimed(`${FEEGRANT_URL}?address=${encodeURIComponent("pulsar1probe")}`);
     const body = (await res.json()) as { granter?: string };
     if (!body.granter) throw new Error("feegrant endpoint reported no granter");
     return body.granter;
 }
 
 async function fetchChainId(): Promise<string> {
-    const res = await fetch(`${PULSAR_RPC_URL}/status`);
+    const res = await fetchTimed(`${PULSAR_RPC_URL}/status`);
     const body = (await res.json()) as { result?: { node_info?: { network?: string } } };
     const chainId = body.result?.node_info?.network;
     if (!chainId) throw new Error("could not read Pulsar chain id");
@@ -501,7 +511,7 @@ async function fetchChainId(): Promise<string> {
 }
 
 async function fetchCosmosAuth(address: string): Promise<{ accountNumber: bigint; sequence: number }> {
-    const res = await fetch(`${PULSAR_REST_URL}/cosmos/auth/v1beta1/accounts/${address}`);
+    const res = await fetchTimed(`${PULSAR_REST_URL}/cosmos/auth/v1beta1/accounts/${address}`);
     if (!res.ok) throw new Error(`account ${address} unavailable (${res.status})`);
     const body = (await res.json()) as { account?: { account_number?: string; sequence?: string } };
     if (!body.account?.account_number) throw new Error(`account ${address} has no number`);
@@ -616,7 +626,7 @@ async function registerPhase(accounts: Account[]) {
             signatures: [fromBase64(signedTx.signature.signature)],
         }).finish();
 
-        const res = await fetch(PULSAR_RPC_URL, {
+        const res = await fetchTimed(PULSAR_RPC_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
