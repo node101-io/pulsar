@@ -88,8 +88,11 @@ export const env = createEnv({
         // retryable failure but a widening deadlock: the cursor cannot
         // advance past the offending range, so every retry batches MORE
         // actions than the last while still paying the flat fee. Headroom is
-        // free (the fee does not scale with the limit), so take it.
-        PULSAR_GAS_LIMIT: z.coerce.number().int().positive().default(2_000_000),
+        // free (the fee does not scale with the limit), so take it. The old
+        // 2M default died exactly that death under the M1 campaign's traffic
+        // (gasUsed 2000895 — 895 over); 10M rides out ~250 actions per push
+        // and stays far under the fee comment's 50M validity ceiling.
+        PULSAR_GAS_LIMIT: z.coerce.number().int().positive().default(10_000_000),
         PUSH_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
 
         NODE_ENV: z.string().min(1).default("development"),
