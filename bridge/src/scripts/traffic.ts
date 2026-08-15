@@ -15,7 +15,6 @@ import {
     PrivateKey,
     PublicKey,
     UInt64,
-    checkZkappTransaction,
     fetchAccount,
 } from "o1js";
 import Client from "mina-signer";
@@ -33,7 +32,6 @@ import {
     ApprovalQuorumProgram,
     ActionStackProgram,
     setMinaNetwork,
-    withArchiveFailover,
     ENDPOINTS,
 } from "pulsar-contracts";
 import {
@@ -163,7 +161,6 @@ function envListOrDefault(name: string, fallback: string[]): string[] {
 function fetchTimed(input: string, init?: RequestInit): Promise<Response> {
     return fetch(input, { ...init, signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) });
 }
-
 // ---------------------------------------------------------------------------
 // Files
 
@@ -849,26 +846,53 @@ async function wavePhase(accounts: Account[], direction: "deposit" | "withdraw")
     logger.info(`${direction} wave complete`);
 }
 
+// Applied zkapp hashes in the node's bestChain, cached briefly: one query
+// answers a whole sweep instead of one slow lookup per transaction.
+//
+// This deliberately does NOT use o1js's checkZkappTransaction — that helper
+// scans a 20-block (~1h) window, so anything included earlier reads as
+// not-included and gets re-sent forever (the campaign's original money
+// leak, twice over). 290 blocks is the node's transition-frontier maximum,
+// a ~14.5h window; the wave revisits every tx far more often than that.
+let includedCache: { hashes: Set<string>; fetchedAt: number } | null = null;
+
+async function includedZkappHashes(): Promise<Set<string>> {
+    if (includedCache && Date.now() - includedCache.fetchedAt < 3 * 60_000) {
+        return includedCache.hashes;
+    }
+    const data = await gql<{
+        bestChain: {
+            transactions: { zkappCommands: { hash: string; failureReason: unknown }[] };
+        }[];
+    }>(
+        `query { bestChain(maxLength: 290) {
+            transactions { zkappCommands { hash failureReason { failures } } }
+        } }`,
+        {},
+    );
+    const hashes = new Set<string>();
+    for (const block of data.bestChain) {
+        for (const cmd of block.transactions.zkappCommands) {
+            // A failed-but-included tx consumed its nonce without depositing:
+            // the slot still needs a re-send, so treat it as absent.
+            if (cmd.failureReason === null) hashes.add(cmd.hash);
+        }
+    }
+    includedCache = { hashes, fetchedAt: Date.now() };
+    return hashes;
+}
+
 async function minaTxStatus(hash: string): Promise<"INCLUDED" | "PENDING" | "UNKNOWN"> {
-    // The node's transactionStatus only knows the transaction pool: it reports
-    // PENDING while a tx waits there and UNKNOWN forever after — including for
-    // transactions that were included long ago. The archive is the authority
-    // on inclusion, so ask it first and use the pool only to separate
-    // "in flight" from "gone".
     try {
-        // withArchiveFailover: the primary archive shares minascan's flaky
-        // path from this host; without the fallback a dead archive makes
-        // every included tx read as UNKNOWN and the wave re-sends forever.
-        const included = await withArchiveFailover(`inclusion check ${hash}`, () =>
-            checkZkappTransaction(hash),
-        );
-        if (included.success) return "INCLUDED";
+        if ((await includedZkappHashes()).has(hash)) return "INCLUDED";
     } catch (error) {
         // Fall through to the pool check; a wrong UNKNOWN is shielded by the
         // 30-minute staleness guard in wavePhase. Logged because a systematic
-        // archive failure must be visible, not swallowed.
-        logger.warn(`archive inclusion check failed for ${hash}: ${(error as Error).message}`);
+        // bestChain failure must be visible, not swallowed.
+        logger.warn(`bestChain inclusion check failed: ${(error as Error).message}`);
     }
+    // The pool only separates "in flight" from "gone": it reports PENDING
+    // while a tx waits there and UNKNOWN forever after inclusion.
     try {
         const data = await gql<{ transactionStatus: string }>(
             `query ($hash: String!) { transactionStatus(zkappTransaction: $hash) }`,
