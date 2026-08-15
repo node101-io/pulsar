@@ -4,6 +4,7 @@ packages:
   - bridge
   - chain-client
   - webapp
+  - docs
 
 allowBuilds:
   '@bufbuild/buf': true # buf CLI for chain-client proto:gen

@@ -1,0 +1,20 @@
+{
+  // Local path, not a URL: VS Code refuses to download schemas from domains
+  // it does not trust (unpkg among them), so a network $schema just shows an
+  // "untrusted" error instead of validating. pnpm's node_modules/wrangler is
+  // a symlink, which the editor resolves fine for a relative path like this.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "pulsar-docs",
+  "compatibility_date": "2026-08-15",
+  // Custom domain rather than a route pattern: Cloudflare then owns the DNS
+  // record and the certificate for this hostname, and every request to it
+  // reaches the Worker. The pulsarchain.xyz zone must be on the same account —
+  // `wrangler deploy` creates the record on first publish.
+  "routes": [{ "pattern": "docs.pulsarchain.xyz", "custom_domain": true }],
+  // Assets-only Worker: no script, Cloudflare serves the static build
+  // directly. VitePress emits 404.html; serve it for unmatched paths.
+  "assets": {
+    "directory": "./.vitepress/dist",
+    "not_found_handling": "404-page"
+  }
+}

@@ -1,0 +1,55 @@
+/**
+ * Pulsar brand for the docs, mirrored from the webapp's tokens
+ * (webapp/src/app/globals.css), which mirror the marketing site.
+ *
+ * Accent:  #ff5ab8 / strong #ff4da2 / deep #c9438f
+ * Ink:     #020106   Surface: #fff9fc   Line: #ece2e7
+ */
+
+@font-face {
+  font-family: "Aspekta";
+  src: url("/fonts/AspektaVF.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --vp-font-family-base: "Aspekta", ui-sans-serif, system-ui, sans-serif;
+
+  /* brand-1 = links/text, brand-2 = hover, brand-3 = solid buttons.
+     The deep shade carries text so links stay readable on white. */
+  --vp-c-brand-1: #c9438f;
+  --vp-c-brand-2: #ff4da2;
+  --vp-c-brand-3: #ff5ab8;
+  --vp-c-brand-soft: rgba(255, 90, 184, 0.14);
+
+  /* Solid buttons get ink text like the webapp's brand-button. */
+  --vp-button-brand-color: #ffffff;
+  --vp-button-brand-bg: #ff4da2;
+  --vp-button-brand-hover-color: #ffffff;
+  --vp-button-brand-hover-bg: #c9438f;
+  --vp-button-brand-active-bg: #c9438f;
+}
+
+/* The webapp's warm near-white surface instead of VitePress gray. */
+:root:not(.dark) {
+  --vp-c-bg-soft: #fff9fc;
+  --vp-c-bg-alt: #fff9fc;
+  --vp-c-divider: #ece2e7;
+  --vp-c-text-1: #020106;
+  --vp-sidebar-bg-color: #fff9fc;
+}
+
+.dark {
+  /* Light pink carries text on dark; the deep shade vanishes there. */
+  --vp-c-brand-1: #ff7ac4;
+  --vp-c-brand-2: #ff5ab8;
+  --vp-c-brand-3: #ff4da2;
+  --vp-c-brand-soft: rgba(255, 90, 184, 0.16);
+}
+
+/* Match the webapp's tight display titles. */
+.vp-doc h1 {
+  font-weight: 750;
+  letter-spacing: -0.03em;
+}
