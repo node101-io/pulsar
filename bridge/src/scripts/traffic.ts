@@ -15,6 +15,7 @@ import {
     PrivateKey,
     PublicKey,
     UInt64,
+    checkZkappTransaction,
     fetchAccount,
 } from "o1js";
 import Client from "mina-signer";
@@ -796,6 +797,18 @@ async function wavePhase(accounts: Account[], direction: "deposit" | "withdraw")
 }
 
 async function minaTxStatus(hash: string): Promise<"INCLUDED" | "PENDING" | "UNKNOWN"> {
+    // The node's transactionStatus only knows the transaction pool: it reports
+    // PENDING while a tx waits there and UNKNOWN forever after — including for
+    // transactions that were included long ago. The archive is the authority
+    // on inclusion, so ask it first and use the pool only to separate
+    // "in flight" from "gone".
+    try {
+        const included = await checkZkappTransaction(hash);
+        if (included.success) return "INCLUDED";
+    } catch {
+        // Archive hiccup: fall through to the pool check; a wrong UNKNOWN is
+        // shielded by the 30-minute staleness guard in wavePhase.
+    }
     try {
         const data = await gql<{ transactionStatus: string }>(
             `query ($hash: String!) { transactionStatus(zkappTransaction: $hash) }`,
