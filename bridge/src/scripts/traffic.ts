@@ -126,12 +126,32 @@ const JITTER_MAX_MS = intEnv("TRAFFIC_JITTER_MAX_MS", 15_000);
 
 const POLL_MS = 30_000;
 const MINA_GRAPHQL = ENDPOINTS.NODE[MINA_NETWORK];
+// Public node(s) the campaign falls back to when the primary stalls (seen
+// live: a minascan.io connection that opened and never answered). Only a
+// known-good default for devnet, since that's what the campaign runs
+// against; override or add mainnet/lightnet candidates via the env var.
+const MINA_NODE_DEFAULT_FALLBACKS: Record<"devnet" | "mainnet" | "lightnet", string[]> = {
+    // o1Labs-hosted daemons (see docs.minaprotocol.com Network endpoints).
+    devnet: ["https://devnet-plain-1.gcp.o1test.net/graphql"],
+    mainnet: ["https://mainnet-plain-1.gcp.o1test.net/graphql"],
+    lightnet: [],
+};
+const MINA_GRAPHQL_URLS = [
+    MINA_GRAPHQL,
+    ...envListOrDefault("TRAFFIC_MINA_NODE_FALLBACK_URLS", MINA_NODE_DEFAULT_FALLBACKS[MINA_NETWORK]),
+];
 const HTTP_TIMEOUT_MS = 30_000;
 
 function intEnv(name: string, fallback: number): number {
     const raw = process.env[name];
     const value = raw ? Number(raw) : NaN;
     return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
+function envListOrDefault(name: string, fallback: string[]): string[] {
+    const raw = process.env[name];
+    if (!raw) return fallback;
+    return raw.split(",").map((url) => url.trim()).filter(Boolean);
 }
 
 // A stalled connection (TCP up, server never answers) hangs a bare fetch
@@ -194,8 +214,12 @@ const randNano = (min: number, max: number) => String(min + Math.floor(Math.rand
 // ---------------------------------------------------------------------------
 // Mina GraphQL (payments and account reads — no o1js needed)
 
-async function gql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-    const res = await fetchTimed(MINA_GRAPHQL, {
+// Sticky: a fallback that answered stays selected for later calls, rather
+// than re-probing the primary (likely still down) on every single query.
+let activeNodeIndex = 0;
+
+async function gqlOnce<T>(url: string, query: string, variables: Record<string, unknown>): Promise<T> {
+    const res = await fetchTimed(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, variables }),
@@ -205,6 +229,24 @@ async function gql<T>(query: string, variables: Record<string, unknown>): Promis
     if (body.errors?.length) throw new Error(body.errors.map((e) => e.message).join("; "));
     if (!body.data) throw new Error("Mina GraphQL returned no data");
     return body.data;
+}
+
+async function gql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+    let lastError: unknown;
+    for (let step = 0; step < MINA_GRAPHQL_URLS.length; step++) {
+        const index = (activeNodeIndex + step) % MINA_GRAPHQL_URLS.length;
+        try {
+            const data = await gqlOnce<T>(MINA_GRAPHQL_URLS[index], query, variables);
+            if (index !== activeNodeIndex) {
+                logger.warn(`Mina node ${MINA_GRAPHQL_URLS[activeNodeIndex]} unresponsive, switched to ${MINA_GRAPHQL_URLS[index]}`);
+                activeNodeIndex = index;
+            }
+            return data;
+        } catch (error) {
+            lastError = error;
+        }
+    }
+    throw lastError;
 }
 
 /** Balance in nanomina and the nonce a NEW transaction should use. */
