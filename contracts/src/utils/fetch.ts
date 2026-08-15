@@ -1,6 +1,7 @@
 import { fetchLastBlock, Field, Mina, PublicKey, UInt32 } from 'o1js';
 import { log } from './loggers.js';
 import { PulsarAction } from '../types/PulsarAction.js';
+import { CalculateFinalActionState } from './actionQueueUtils.js';
 import { ARCHIVE_FALLBACKS, ENDPOINTS } from './constants.js';
 import { SettlementContract, SettlementEvent } from '../SettlementContract.js';
 
@@ -95,6 +96,27 @@ async function fetchRawActions(
   });
 }
 
+/**
+ * Every archive entry carries `hash` = the true action state AFTER applying
+ * that entry, so any returned slice can be verified locally: refold from
+ * `fromActionState` and require every step to land on the entry's own hash.
+ * A coherent chain that merely starts in the wrong place cannot pass either,
+ * because the first fold from OUR fromActionState would miss its hash.
+ */
+function sliceIsCoherent(
+  rawActions: { actions: string[][]; hash: string }[],
+  fromActionState: Field
+): boolean {
+  let state = fromActionState;
+  for (const entry of rawActions) {
+    state = CalculateFinalActionState(state, [
+      PulsarAction.fromRawAction(entry.actions[0]),
+    ]);
+    if (state.toString() !== entry.hash) return false;
+  }
+  return true;
+}
+
 async function fetchActions(
   address: PublicKey,
   fromActionState: Field,
@@ -106,13 +128,15 @@ async function fetchActions(
     endActionState
   );
 
-  if (rawActions.length === 0) {
-    // The archive can only slice the action history at block boundaries. A
-    // fromActionState that landed mid-block — e.g. a BATCH_SIZE cut inside a
-    // block that carried several dispatches — comes back empty even while
-    // actions are pending. Refetch the full history and slice locally on the
-    // per-action hash chain; callers verify the slice by refolding it against
-    // the account's stored action states, so a bad slice can never prove.
+  if (rawActions.length === 0 || !sliceIsCoherent(rawActions, fromActionState)) {
+    // The archive cannot be trusted to slice at a mid-block fromActionState —
+    // e.g. a BATCH_SIZE cut inside a block that carried several dispatches.
+    // Seen live in both flavors: an empty result, and (o1test, 2026-08-16) a
+    // NON-empty but incomplete subset that only the coherence refold above
+    // catches. Either way: refetch the full history and slice locally on the
+    // per-action hash chain; callers still verify the slice by refolding it
+    // against the account's stored action states, so a bad slice can never
+    // prove.
     rawActions = sliceActionHistory(
       await fetchRawActions(address),
       fromActionState,
