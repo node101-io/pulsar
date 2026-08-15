@@ -1,8 +1,9 @@
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { Queue } from "bullmq";
 import { Master } from "../master.js";
 import { connection } from "../redis.js";
 import { bridgeTxSenderQ } from "../queue.js";
-import { worker as processBridgeTx, ensureCompiled } from "./worker.js";
 import { sleep } from "../../common/sleep.js";
 import logger from "../../common/logger.js";
 import {
@@ -21,6 +22,7 @@ import {
     WORKER_TIMEOUT_MS,
     STALLED_INTERVAL_MS,
     MAX_FAIL_COUNT,
+    TRANSIENT_EXIT_CODE,
 } from "../../config/constants.js";
 
 export interface BridgeTxJob {
@@ -43,6 +45,59 @@ const FAILURE_BOOKKEEPING_PIPELINE = [
     },
 ];
 
+/**
+ * Run one reduce job in a child process (job-main.ts) and translate its exit
+ * into the failure vocabulary onJobFailed expects.
+ *
+ * A child, not an in-process call: o1js proving can freeze the event loop
+ * from native code, and a frozen loop runs no timers — the only supervision
+ * that survives it lives in another process. SIGKILL after WORKER_TIMEOUT_MS
+ * (~2x the slowest observed job) recovers the pipeline; the kill is booked
+ * as a real strike, because a prover that freezes deterministically on one
+ * batch must eventually trip the circuit breaker, not retry forever.
+ */
+function runReduceJobInChild(fromActionState: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const entry = fileURLToPath(new URL("./job-main.js", import.meta.url));
+        // execArgv forwards pm2's --max-old-space-size to the prover child.
+        const child = spawn(
+            process.execPath,
+            [...process.execArgv, entry, fromActionState],
+            { stdio: "inherit" },
+        );
+
+        let killedByTimeout = false;
+        const killer = setTimeout(() => {
+            killedByTimeout = true;
+            child.kill("SIGKILL");
+        }, WORKER_TIMEOUT_MS);
+
+        child.once("error", (error) => {
+            clearTimeout(killer);
+            reject(error);
+        });
+        child.once("exit", (code, signal) => {
+            clearTimeout(killer);
+            if (code === 0) return resolve();
+            if (code === TRANSIENT_EXIT_CODE) {
+                return reject(
+                    Object.assign(
+                        new Error(`reduce job child reported a transient failure for front ${fromActionState}`),
+                        { transient: true },
+                    ),
+                );
+            }
+            reject(
+                new Error(
+                    killedByTimeout
+                        ? `reduce job child killed after ${WORKER_TIMEOUT_MS}ms for front ${fromActionState} — prover likely froze`
+                        : `reduce job child exited with code ${code}, signal ${signal} for front ${fromActionState}`,
+                ),
+            );
+        });
+    });
+}
+
 export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
     private ctx!: MinaClientContext;
 
@@ -55,7 +110,7 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
             lockDurationMs: WORKER_TIMEOUT_MS,
             stalledIntervalMs: STALLED_INTERVAL_MS,
             processJob: async (_workerId, job) => {
-                await processBridgeTx(job.data);
+                await runReduceJobInChild(job.data.fromActionState);
             },
             onJobFailed: async (job, error) => {
                 // Environmental failures (archive lag/outage) heal on retry —
@@ -125,9 +180,9 @@ export class BridgeTxSenderMaster extends Master<BridgeTxJob> {
         await queue.obliterate({ force: true });
         await queue.close();
 
-        // Compile before any job can run — a lazy compile inside the job
-        // would burn most of the BullMQ lock window.
-        await ensureCompiled();
+        // No compile here: proving happens in the per-job child process
+        // (job-main.ts), which compiles from the shared on-disk cache. The
+        // master itself never proves, so it stays small and un-freezable.
     }
 
     async handleTask(): Promise<void> {

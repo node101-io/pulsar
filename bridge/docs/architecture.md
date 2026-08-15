@@ -47,6 +47,7 @@ One archive quirk matters here: the archive can only slice action history at **b
 - Submitting the `SettlementContract.reduce()` transaction to Mina
 - Tracking attempt/failure bookkeeping in MongoDB (`BridgeState`, a singleton)
 - Processing the queue front strictly in order with a single sequential BullMQ worker
+- Running each reduce job in a **child process** (`job-main.ts`): o1js proving can freeze the event loop from native code, and no in-process timer survives that — the master supervises the child from outside and SIGKILLs it after `WORKER_TIMEOUT_MS`, booking the kill as a strike. The child compiles from the shared on-disk cache and its prover heap dies with the job.
 
 ---
 
@@ -59,9 +60,9 @@ graph TD
     classDef worker fill:#eee,stroke:#999,stroke-dasharray: 5 5
     classDef external fill:#d8f3dc,stroke:#333,stroke-width:2px
 
-    subgraph Bridge [bridge — single process]
+    subgraph Bridge [bridge — main process]
         master[Master - 1s tick] --> queue[Redis Queue]
-        queue --> worker1[Worker - 1 sequential]
+        queue --> worker1[Worker - 1 sequential<br>child process per job]
     end
 
     Mina([Mina Node])

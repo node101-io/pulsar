@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./common/httpDefaults.js";
 import { initDb } from "./db/connection.js";
 import { masterRunner } from "./workers/bridge-tx-sender/master.js";
 import { startPusher } from "./services/pulsar/pusher.js";

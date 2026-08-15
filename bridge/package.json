@@ -36,6 +36,7 @@
         "pulsar-chain-client": "workspace:*",
         "pulsar-contracts": "workspace:*",
         "rimraf": "^6.1.3",
+        "undici": "^8.10.0",
         "zod": "^4.4.3"
     },
     "devDependencies": {
