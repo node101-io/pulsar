@@ -2,12 +2,45 @@ import { fileURLToPath } from "url";
 
 // Processors constants
 export const MASTER_SLEEP_INTERVAL_MS = 1000; // 1 second
+// BullMQ lock duration. Renewed from the master's event loop every
+// lockDuration/2, which is only dependable because proving no longer runs on
+// that loop (see workers/childProver.ts).
 export const WORKER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 export const STALLED_INTERVAL_MS = 5000; // 5 seconds
 export const BLOCK_EPOCH_SIZE = 8;
 export const PROOF_EPOCH_LEAF_COUNT = 4;
 export const PROOF_EPOCH_SIZE = BLOCK_EPOCH_SIZE * PROOF_EPOCH_LEAF_COUNT; // 32 blocks per proof epoch
 export const WORKER_COUNT = 10;
+
+// Wall-clock budget for ONE proof in its child process before the parent
+// SIGKILLs it (see workers/childProver.ts). A freeze-breaker, not a
+// performance SLA: keep it generous enough that it can never fire on healthy
+// work. Observed block proof ≈ 42s.
+export const PROVE_TIMEOUT_MS = Number(
+    process.env.PROVE_TIMEOUT_MS || 10 * 60 * 1000,
+); // 10 minutes
+if (!Number.isFinite(PROVE_TIMEOUT_MS) || PROVE_TIMEOUT_MS < 60_000)
+    throw new Error(
+        `PROVE_TIMEOUT_MS must be >= 60000, got "${process.env.PROVE_TIMEOUT_MS}"`,
+    );
+
+// How many block epochs may hold a 'processing' claim fleet-wide. Until the
+// child-process split, this was capped at 1 by accident: proving froze the
+// master's event loop, so the claim loop could not run ahead. With the loop
+// free, handleTask would claim the entire `waiting` backlog within seconds —
+// thousands of meaningless claims and one queued job per block. Set it to the
+// number of block-prover instances, so each can keep one epoch in flight.
+// `||`, not `??`: an empty string in .env means unset.
+export const MAX_IN_FLIGHT_BLOCK_EPOCHS = Number(
+    process.env.MAX_IN_FLIGHT_BLOCK_EPOCHS || 3,
+);
+if (
+    !Number.isInteger(MAX_IN_FLIGHT_BLOCK_EPOCHS) ||
+    MAX_IN_FLIGHT_BLOCK_EPOCHS < 1
+)
+    throw new Error(
+        `MAX_IN_FLIGHT_BLOCK_EPOCHS must be an integer >= 1, got "${process.env.MAX_IN_FLIGHT_BLOCK_EPOCHS}"`,
+    );
 // Settlement proof index in ProofEpoch.proofs[]
 export const PROOF_EPOCH_SETTLEMENT_INDEX = PROOF_EPOCH_LEAF_COUNT * 2 - 2;
 
@@ -61,7 +94,11 @@ if (!Number.isFinite(SETTLER_STALL_TIMEOUT_MS) || SETTLER_STALL_TIMEOUT_MS < 60_
 // txSending) whose document has not been touched for this long has a dead
 // owner — healthy workers refresh updatedAt well within it. Must exceed the
 // longest single proving step with margin, or the sweep steals live work.
-export const STALE_CLAIM_TIMEOUT_MS = 2 * WORKER_TIMEOUT_MS; // 10 minutes
+// Derived from PROVE_TIMEOUT_MS rather than guessed: nothing writes to the
+// claimed document while its proof runs, and PROVE_TIMEOUT_MS is now a HARD
+// upper bound on that silence (the child is killed at it), so twice that is
+// provably clear of any healthy prove.
+export const STALE_CLAIM_TIMEOUT_MS = 2 * PROVE_TIMEOUT_MS; // 20 minutes
 export const STALE_SWEEP_INTERVAL_MS = 60_000; // 1 minute
 
 // Monitor constants

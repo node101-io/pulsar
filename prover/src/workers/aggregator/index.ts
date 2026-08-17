@@ -1,7 +1,6 @@
 import "dotenv/config";
-import { setBackend } from "o1js";
-setBackend("native");
 
+// No o1js in this process. See workers/childProver.ts.
 import { initDb } from "../../db/index.js";
 import { masterRunner } from "./master.js";
 import logger from "../../common/logger.js";

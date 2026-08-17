@@ -1,53 +1,18 @@
-import { Types } from "mongoose";
+import { fileURLToPath } from "node:url";
 
 import {
     ProofEpochModel,
     BlockEpochModel,
     BlockModel,
-    storeProof,
-    fetchBlockRange,
 } from "../../db/index.js";
-import {
-    BLOCK_EPOCH_SIZE,
-    EPOCH_START_HEIGHT,
-    PROOF_EPOCH_LEAF_COUNT,
-    PROOF_EPOCH_SIZE,
-    CACHE_DIR,
-} from "../../config/constants.js";
-import { BlockStatus, ProofKind, ProofStatus } from "../../common/types.js";
+import { BlockStatus } from "../../common/types.js";
 import logger from "../../common/logger.js";
 import { BlockProverJob } from "../types.js";
-import { Cache, Field, PublicKey, Signature } from "o1js";
-import {
-    GeneratePulsarBlock,
-    GenerateSettlementProof,
-    SignaturePublicKeyList,
-    MultisigVerifierProgram,
-} from "pulsar-contracts";
+import { runProvingJobInChild } from "../childProver.js";
+import { proofEpochHeightFor, leafIndexFor } from "./helpers.js";
 
-// Well-formed but non-verifying signature (r=s=1) for non-signing validators.
-const DUMMY_SIGNATURE = Signature.fromValue({ r: 1n, s: 1n });
-
-let compiled = false;
-let compileLock: Promise<void> = Promise.resolve();
-async function ensureCompiled() {
-    compileLock = compileLock.then(async () => {
-        if (!compiled) {
-            await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
-            compiled = true;
-        }
-    });
-    await compileLock;
-}
-
-// o1js does not support concurrent proving within the same process.
-// All prove calls must be serialized.
-let provingQueue: Promise<void> = Promise.resolve();
-function serializeProving<T>(fn: () => Promise<T>): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-        provingQueue = provingQueue.then(() => fn().then(resolve, reject));
-    });
-}
+// Master side: no o1js here. See workers/childProver.ts.
+const PROVE_ENTRY = fileURLToPath(new URL("./prove-main.js", import.meta.url));
 
 export async function worker(task: BlockProverJob) {
     const { height: epochHeight, blockIndex } = task;
@@ -108,11 +73,11 @@ export async function worker(task: BlockProverJob) {
         return;
     }
 
-    let proofId;
+    // The child stores the leaf and marks the epoch done; the parent only
+    // owns the claim, so all it has to undo here is the claim itself.
     try {
-        proofId = await serializeProving(async () => {
-            await ensureCompiled();
-            return createProof(epochHeight);
+        await runProvingJobInChild(PROVE_ENTRY, [String(epochHeight)], {
+            epochHeight,
         });
     } catch (err) {
         await BlockEpochModel.findOneAndUpdate(
@@ -121,173 +86,4 @@ export async function worker(task: BlockProverJob) {
         );
         throw err;
     }
-
-    await createOrUpdateProofEpoch(epochHeight, proofId);
-
-    await BlockEpochModel.findOneAndUpdate(
-        { height: epochHeight },
-        { $set: { epochStatus: "done" as BlockStatus } },
-    );
-
-    logger.info(
-        `Settlement proof generated for epoch ${epochHeight}, epoch marked done`,
-        {
-            epochHeight,
-            proofId: proofId.toHexString(),
-            event: "epoch_proof_done",
-        },
-    );
-}
-
-export async function createProof(height: number) {
-    const rangeLow = height - 1; // include previous block as context for first pair
-    const rangeHigh = height + BLOCK_EPOCH_SIZE - 1;
-
-    const blockDocs = await fetchBlockRange(rangeLow, rangeHigh);
-
-    if (blockDocs.length !== BLOCK_EPOCH_SIZE + 1) {
-        throw new Error(
-            `Expected ${
-                BLOCK_EPOCH_SIZE + 1
-            } blocks for proof starting at height ${height}, but got ${
-                blockDocs.length
-            }`,
-        );
-    }
-
-    const blocks = [];
-    const signaturePubKeyLists: SignaturePublicKeyList[] = [];
-
-    for (let i = 1; i < blockDocs.length; i++) {
-        const prev = blockDocs[i - 1];
-        const cur = blockDocs[i];
-
-        const block = GeneratePulsarBlock(
-            Field.from(prev.validatorListHash),
-            Field.from(prev.stateRoot),
-            Field.from(prev.height),
-            Field.from(cur.validatorListHash),
-            Field.from(cur.stateRoot),
-            Field.from(cur.height),
-            Field.from(cur.actionsReducedRoot ?? "0"),
-        );
-        blocks.push(block);
-
-        // prev.validators is the FULL validator set in the chain's fold order
-        // (power ASC, consAddr ASC). Pair each validator with its signature and
-        // power to rebuild the exact leaf list + power-weighted quorum the
-        // circuit checks. A validator that did not sign gets a dummy signature
-        // (fails verify → excluded from accumulatedPower) but still contributes
-        // power + its merkle leaf, so we must NOT drop it or throw.
-        const voteExtByAddr = new Map(
-            cur.voteExt.map((ext) => [ext.validatorAddr, ext]),
-        );
-
-        const sigList = SignaturePublicKeyList.fromArray(
-            prev.validators.map(({ addr, power }) => {
-                const ext = voteExtByAddr.get(addr);
-                return [
-                    ext
-                        ? Signature.fromBase58(ext.signature)
-                        : DUMMY_SIGNATURE,
-                    PublicKey.fromBase58(addr),
-                    Field(power),
-                ];
-            }),
-        );
-        signaturePubKeyLists.push(sigList);
-    }
-
-    // // !DEBUG: verify signer hash matches prev.validatorListHash for each block pair
-    // for (let i = 1; i < blockDocs.length; i++) {
-    //     const prev = blockDocs[i - 1];
-    //     const cur = blockDocs[i];
-    //     const signerList = List.empty();
-    //     for (const ext of cur.voteExt) {
-    //         signerList.push(
-    //             Poseidon.hash(
-    //                 PublicKey.fromBase58(ext.validatorAddr).toFields(),
-    //             ),
-    //         );
-    //     }
-    //     const signerHash = signerList.hash.toString();
-    //     logger.debug(`Validator hash check ${prev.height}→${cur.height}`, {
-    //         prevValidatorListHash: prev.validatorListHash,
-    //         signerHash,
-    //         match: prev.validatorListHash === signerHash,
-    //         prevValidators: prev.validators,
-    //         curVoteExtSigners: cur.voteExt.map((e) => e.validatorAddr),
-    //         event: "validator_hash_debug",
-    //     });
-    // }
-
-    const settlementProof = await GenerateSettlementProof(
-        blocks,
-        signaturePubKeyLists,
-    );
-
-    const proofJson = JSON.stringify(settlementProof.toJSON());
-
-    const proofId = await storeProof(proofJson);
-
-    logger.info(`Created proof ${proofId.toHexString()} for block ${height}`);
-
-    return proofId;
-}
-
-/** Height of the proof epoch this block epoch's leaf belongs to. */
-export function proofEpochHeightFor(blockEpochHeight: number): number {
-    return (
-        EPOCH_START_HEIGHT +
-        Math.floor((blockEpochHeight - EPOCH_START_HEIGHT) / PROOF_EPOCH_SIZE) *
-            PROOF_EPOCH_SIZE
-    );
-}
-
-/** Leaf slot this block epoch's proof occupies within its proof epoch. */
-export function leafIndexFor(blockEpochHeight: number): number {
-    return (
-        Math.floor((blockEpochHeight - EPOCH_START_HEIGHT) / BLOCK_EPOCH_SIZE) %
-        PROOF_EPOCH_LEAF_COUNT
-    );
-}
-
-/**
- * Creates a new proof epoch document if it does not exist and sets the block proof at the correct leaf index.
- * Multiple block epochs (PROOF_EPOCH_LEAF_COUNT of them) contribute leaf proofs to a single proof epoch.
- */
-async function createOrUpdateProofEpoch(
-    blockEpochHeight: number,
-    proofId: Types.ObjectId,
-) {
-    const proofEpochHeight = proofEpochHeightFor(blockEpochHeight);
-    const leafIndex = leafIndexFor(blockEpochHeight);
-
-    await ProofEpochModel.updateOne(
-        { height: proofEpochHeight },
-        {
-            $setOnInsert: {
-                height: proofEpochHeight,
-                kind: "blockProof" as ProofKind,
-                proofs: Array(PROOF_EPOCH_LEAF_COUNT * 2 - 1).fill(null),
-                status: Array(PROOF_EPOCH_LEAF_COUNT - 1).fill(
-                    "waiting" as ProofStatus,
-                ),
-                failCount: 0,
-            },
-        },
-        { upsert: true },
-    );
-
-    const result = await ProofEpochModel.findOneAndUpdate(
-        { height: proofEpochHeight },
-        { $set: { [`proofs.${leafIndex}`]: proofId } },
-        { returnDocument: "after" },
-    );
-
-    logger.info(
-        `Stored block proof in proof epoch at height ${proofEpochHeight}, leaf index ${leafIndex}`,
-    );
-
-    return result;
 }

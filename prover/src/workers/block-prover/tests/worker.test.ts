@@ -3,8 +3,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../../db/index.js", () => ({
     ProofEpochModel: {
         findOne: vi.fn(),
-        updateOne: vi.fn(),
-        findOneAndUpdate: vi.fn(),
     },
     BlockEpochModel: {
         findOneAndUpdate: vi.fn(),
@@ -12,15 +10,10 @@ vi.mock("../../../db/index.js", () => ({
     BlockModel: {
         findOneAndUpdate: vi.fn(),
     },
-    storeProof: vi.fn(),
-    fetchBlockRange: vi.fn(),
 }));
 
-vi.mock("pulsar-contracts", () => ({
-    GeneratePulsarBlock: vi.fn(),
-    GenerateSettlementProof: vi.fn(),
-    SignaturePublicKeyList: { fromArray: vi.fn() },
-    MultisigVerifierProgram: { compile: vi.fn(async () => ({})) },
+vi.mock("../../childProver.js", () => ({
+    runProvingJobInChild: vi.fn(),
 }));
 
 vi.mock("../../../common/logger.js", () => ({
@@ -36,9 +29,8 @@ import {
     BlockEpochModel,
     BlockModel,
     ProofEpochModel,
-    fetchBlockRange,
-    storeProof,
 } from "../../../db/index.js";
+import { runProvingJobInChild } from "../../childProver.js";
 import { worker } from "../worker.js";
 
 describe("block-prover worker", () => {
@@ -57,8 +49,7 @@ describe("block-prover worker", () => {
             { height: 10 },
             { $set: { status: "done" } },
         );
-        expect(fetchBlockRange).not.toHaveBeenCalled();
-        expect(storeProof).not.toHaveBeenCalled();
+        expect(runProvingJobInChild).not.toHaveBeenCalled();
     });
 
     it("returns without proving while other blocks in the epoch are pending", async () => {
@@ -71,8 +62,7 @@ describe("block-prover worker", () => {
         await worker({ height: 8, blockIndex: 1 } as any);
 
         expect(ProofEpochModel.findOne).not.toHaveBeenCalled();
-        expect(fetchBlockRange).not.toHaveBeenCalled();
-        expect(storeProof).not.toHaveBeenCalled();
+        expect(runProvingJobInChild).not.toHaveBeenCalled();
     });
 
     it("skips proof generation when proofs already exist after failures", async () => {
@@ -89,8 +79,7 @@ describe("block-prover worker", () => {
 
         await worker({ height: 8, blockIndex: 7 } as any);
 
-        expect(fetchBlockRange).not.toHaveBeenCalled();
-        expect(storeProof).not.toHaveBeenCalled();
+        expect(runProvingJobInChild).not.toHaveBeenCalled();
         expect(BlockEpochModel.findOneAndUpdate).toHaveBeenLastCalledWith(
             { height: 8 },
             { $set: { epochStatus: "done" } },
@@ -111,15 +100,38 @@ describe("block-prover worker", () => {
             kind: "blockProof",
             proofs: [{}, {}, null, {}],
         } as any);
-        vi.mocked(fetchBlockRange).mockResolvedValue([] as any);
+
+        await worker({ height: 18, blockIndex: 7 } as any);
+
+        expect(runProvingJobInChild).toHaveBeenCalledWith(
+            expect.stringContaining("prove-main.js"),
+            ["18"],
+            { epochHeight: 18 },
+        );
+    });
+
+    it("returns the claim to waiting when the proving child fails", async () => {
+        // The child owns the leaf and the done-mark, so the only thing the
+        // parent has to undo is its own claim — otherwise the epoch stays
+        // 'processing' and only the age-gated sweep can free it.
+        vi.mocked(BlockEpochModel.findOneAndUpdate).mockResolvedValue({
+            height: 18,
+            failCount: 0,
+            status: Array(8).fill("done"),
+        } as any);
+        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
+            height: 2,
+            kind: "blockProof",
+            proofs: [{}, {}, null, {}],
+        } as any);
+        vi.mocked(runProvingJobInChild).mockRejectedValue(
+            new Error("prover froze"),
+        );
 
         await expect(
             worker({ height: 18, blockIndex: 7 } as any),
-        ).rejects.toThrow(/Expected .* blocks/);
+        ).rejects.toThrow("prover froze");
 
-        // it attempted to re-prove instead of skipping
-        expect(fetchBlockRange).toHaveBeenCalled();
-        // and returned the claim on failure
         expect(BlockEpochModel.findOneAndUpdate).toHaveBeenLastCalledWith(
             { height: 18 },
             { $set: { epochStatus: "waiting" } },

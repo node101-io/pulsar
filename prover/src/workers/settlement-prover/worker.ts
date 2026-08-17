@@ -1,79 +1,12 @@
-import { Types } from "mongoose";
-import { Cache, PublicKey } from "o1js";
-import {
-    SettlementProof,
-    MultisigVerifierProgram,
-    SettleAttestProgram,
-    ApprovalTailProgram,
-    ApprovalQuorumProgram,
-    ActionStackProgram,
-    SettlementContract,
-} from "pulsar-contracts";
+import { fileURLToPath } from "node:url";
 
 import logger from "../../common/logger.js";
 import { ProofEpochModel } from "../../db/models/ProofEpoch.js";
-import { getProof } from "../../db/models/Proof.js";
-import { ProofKind } from "../../common/types.js";
-import {
-    type MinaClientContext,
-    type MinaNetwork,
-    initMinaClientContext,
-} from "../../services/mina/client.js";
-import { proveSettlementTx } from "../../services/mina/settlement.js";
-import { epochLastPulsarBlock } from "../../common/epoch.js";
-import { CACHE_DIR } from "../../config/constants.js";
+import { runProvingJobInChild } from "../childProver.js";
 import { SettlementProverJob } from "../types.js";
 
-let compiled = false;
-let compileLock: Promise<void> = Promise.resolve();
-async function ensureCompiled() {
-    compileLock = compileLock.then(async () => {
-        if (!compiled) {
-            logger.info("Compiling ZK programs for settlement-prover…", {
-                event: "settlement_prover_compile_start",
-            });
-            await MultisigVerifierProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
-            await SettleAttestProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
-            // reduce verifies ApprovalQuorumProof, which verifies ApprovalTailProof —
-            // both VKs must exist before SettlementContract.compile.
-            await ApprovalTailProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
-            await ApprovalQuorumProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
-            await ActionStackProgram.compile({ cache: Cache.FileSystem(CACHE_DIR) });
-            await SettlementContract.compile({ cache: Cache.FileSystem(CACHE_DIR) });
-            compiled = true;
-            logger.info("ZK programs compiled for settlement-prover.", {
-                event: "settlement_prover_compile_done",
-            });
-        }
-    });
-    await compileLock;
-}
-
-// o1js does not support concurrent proving within the same process.
-let provingQueue: Promise<void> = Promise.resolve();
-function serializeProving<T>(fn: () => Promise<T>): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-        provingQueue = provingQueue.then(() => fn().then(resolve, reject));
-    });
-}
-
-let minaCtx: MinaClientContext | null = null;
-
-async function getMinaContext(): Promise<MinaClientContext> {
-    if (!minaCtx) {
-        const contractAddress = process.env.CONTRACT_ADDRESS;
-        if (!contractAddress) {
-            throw new Error("CONTRACT_ADDRESS is not set");
-        }
-        const network: MinaNetwork =
-            (process.env.MINA_NETWORK as MinaNetwork) || "lightnet";
-        minaCtx = await initMinaClientContext(
-            PublicKey.fromBase58(contractAddress),
-            network,
-        );
-    }
-    return minaCtx;
-}
+// Master side: no o1js here. See workers/childProver.ts.
+const PROVE_ENTRY = fileURLToPath(new URL("./prove-main.js", import.meta.url));
 
 export async function worker(task: SettlementProverJob): Promise<void> {
     const epoch = await ProofEpochModel.findOne({ height: task.height });
@@ -97,51 +30,12 @@ export async function worker(task: SettlementProverJob): Promise<void> {
         return;
     }
 
-    const settlementProofId = new Types.ObjectId(task.settlementProofId);
-    const settlementProofJson = await getProof(settlementProofId);
-    if (!settlementProofJson) {
-        throw new Error("Settlement proof is missing.");
-    }
-
-    const settlementProof = await SettlementProof.fromJSON(settlementProofJson);
-
-    const lastPulsarBlock = epochLastPulsarBlock(epoch.height);
-
-    const provedTxJson = await serializeProving(async () => {
-        await ensureCompiled();
-        const ctx = await getMinaContext();
-        return proveSettlementTx(ctx, settlementProof, lastPulsarBlock);
-    });
-
-    await setProofEpochSettlement(task.height, provedTxJson);
-}
-
-async function setProofEpochSettlement(
-    height: number,
-    provedTxJson: string | null,
-): Promise<void> {
-    const result = await ProofEpochModel.findOneAndUpdate(
-        {
-            height,
-            kind: "txProving" as ProofKind,
-        },
-        {
-            $set: {
-                kind: "settlement" as ProofKind,
-                provedTxJson,
-            },
-        },
+    // The child loads the root proof, proves the settle tx and moves the epoch
+    // to 'settlement'; the parent owns only the kind transition that claimed
+    // it, which the master's sweep returns to 'blockProof' if this fails.
+    await runProvingJobInChild(
+        PROVE_ENTRY,
+        [String(task.height), task.settlementProofId],
+        { epochHeight: task.height },
     );
-
-    if (!result) {
-        throw new Error(
-            `Proof epoch at height ${height} not found or not in txProving state.`,
-        );
-    }
-
-    logger.info("Proof epoch marked as settlement-ready after tx proving", {
-        epochHeight: height,
-        alreadySettled: provedTxJson === null,
-        event: "settlement_prover_epoch_ready",
-    });
 }

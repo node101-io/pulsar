@@ -19,7 +19,7 @@ import {
     getBlockData,
     storePulsarBlock,
 } from "../services/pulsar/client.js";
-import { createProof } from "../workers/block-prover/worker.js";
+import { createProof } from "../workers/block-prover/proving.js";
 import { BLOCK_EPOCH_SIZE, CACHE_DIR } from "../config/constants.js";
 import logger from "../common/logger.js";
 

@@ -4,6 +4,7 @@ import {
     STALLED_INTERVAL_MS,
     STALE_CLAIM_TIMEOUT_MS,
     MASTER_SLEEP_INTERVAL_MS,
+    MAX_IN_FLIGHT_BLOCK_EPOCHS,
     BLOCK_EPOCH_SIZE,
     PROOF_EPOCH_LEAF_COUNT,
 } from "../../config/constants.js";
@@ -104,6 +105,24 @@ export class BlockProverMaster extends Master<BlockProverJob> {
     }
 
     protected async handleTask(): Promise<void> {
+        // Back-pressure. Until proving moved into a child process, this loop
+        // could not run ahead of it — a frozen event loop claims nothing — so
+        // exactly one epoch was ever in flight and nothing had to say so. With
+        // the loop free, an unbounded claim loop would flip the whole `waiting`
+        // backlog (thousands of epochs) to 'processing' within seconds and
+        // queue a job per block behind it.
+        //
+        // Advisory, not a lock: siblings reading the same count can overshoot
+        // by at most one epoch each. The atomic status transition below is
+        // still what guarantees no two masters take the same epoch.
+        const inFlight = await BlockEpochModel.countDocuments({
+            epochStatus: "processing",
+        });
+        if (inFlight >= MAX_IN_FLIGHT_BLOCK_EPOCHS) {
+            await sleep(MASTER_SLEEP_INTERVAL_MS);
+            return;
+        }
+
         const epoch = await BlockEpochModel.findOneAndUpdate(
             {
                 blocks: { $not: { $elemMatch: { $eq: null } } },

@@ -1,43 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { epochLastPulsarBlock } from "../../../common/epoch.js";
 
 vi.mock("../../../db/models/ProofEpoch.js", () => ({
     ProofEpochModel: {
         findOne: vi.fn(),
-        findOneAndUpdate: vi.fn(),
     },
 }));
 
-vi.mock("../../../db/models/Proof.js", () => ({
-    getProof: vi.fn(),
-}));
-
-vi.mock("pulsar-contracts", () => ({
-    SettlementProof: {
-        fromJSON: vi.fn(async () => ({})),
-    },
-    MultisigVerifierProgram: { compile: vi.fn(async () => ({})) },
-    SettleAttestProgram: { compile: vi.fn(async () => ({})) },
-    ApprovalTailProgram: { compile: vi.fn(async () => ({})) },
-    ApprovalQuorumProgram: { compile: vi.fn(async () => ({})) },
-    ActionStackProgram: { compile: vi.fn(async () => ({})) },
-    SettlementContract: { compile: vi.fn(async () => ({})) },
-}));
-
-vi.mock("o1js", () => ({
-    PublicKey: {
-        fromBase58: vi.fn(() => ({})),
-    },
-    // config/cache.ts builds the shared compile cache at module load.
-    Cache: { FileSystem: vi.fn(() => ({})) },
-}));
-
-vi.mock("../../../services/mina/client.js", () => ({
-    initMinaClientContext: vi.fn(async () => ({ network: "lightnet" })),
-}));
-
-vi.mock("../../../services/mina/settlement.js", () => ({
-    proveSettlementTx: vi.fn(),
+vi.mock("../../childProver.js", () => ({
+    runProvingJobInChild: vi.fn(),
 }));
 
 vi.mock("../../../common/logger.js", () => ({
@@ -50,156 +20,64 @@ vi.mock("../../../common/logger.js", () => ({
 }));
 
 import { ProofEpochModel } from "../../../db/models/ProofEpoch.js";
-import { getProof } from "../../../db/models/Proof.js";
-import { proveSettlementTx } from "../../../services/mina/settlement.js";
+import { runProvingJobInChild } from "../../childProver.js";
 import { worker } from "../worker.js";
+
+const PROOF_ID = "507f1f77bcf86cd799439011";
 
 describe("settlement-prover worker", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        process.env.CONTRACT_ADDRESS = "B62qtest";
-        process.env.MINA_NETWORK = "lightnet";
     });
 
     it("throws when epoch not found", async () => {
         vi.mocked(ProofEpochModel.findOne).mockResolvedValue(null as any);
 
         await expect(
-            worker({ height: 10, settlementProofId: "507f1f77bcf86cd799439011" }),
+            worker({ height: 10, settlementProofId: PROOF_ID }),
         ).rejects.toThrow("ProofEpoch at height 10 not found.");
     });
 
-    it("skips proving when epoch kind is settlement (idempotency)", async () => {
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "settlement",
-        } as any);
+    it.each(["settlement", "txSending", "done"])(
+        "skips proving when epoch kind is %s (idempotency)",
+        async (kind) => {
+            vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
+                height: 16,
+                kind,
+            } as any);
 
-        await worker({ height: 16, settlementProofId: "507f1f77bcf86cd799439011" });
+            await worker({ height: 16, settlementProofId: PROOF_ID });
 
-        expect(getProof).not.toHaveBeenCalled();
-        expect(proveSettlementTx).not.toHaveBeenCalled();
-    });
+            expect(runProvingJobInChild).not.toHaveBeenCalled();
+        },
+    );
 
-    it("skips proving when epoch kind is txSending (idempotency)", async () => {
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "txSending",
-        } as any);
-
-        await worker({ height: 16, settlementProofId: "507f1f77bcf86cd799439011" });
-
-        expect(getProof).not.toHaveBeenCalled();
-        expect(proveSettlementTx).not.toHaveBeenCalled();
-    });
-
-    it("skips proving when epoch kind is done (idempotency)", async () => {
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "done",
-        } as any);
-
-        await worker({ height: 16, settlementProofId: "507f1f77bcf86cd799439011" });
-
-        expect(getProof).not.toHaveBeenCalled();
-        expect(proveSettlementTx).not.toHaveBeenCalled();
-    });
-
-    it("throws when settlement proof is missing", async () => {
+    it("hands the epoch to a proving child", async () => {
         vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
             height: 16,
             kind: "txProving",
         } as any);
-        vi.mocked(getProof).mockResolvedValue(null as any);
 
-        await expect(
-            worker({ height: 16, settlementProofId: "507f1f77bcf86cd799439011" }),
-        ).rejects.toThrow("Settlement proof is missing.");
-    });
+        await worker({ height: 16, settlementProofId: PROOF_ID });
 
-    it("calls proveSettlementTx with correct epochLastPulsarBlock", async () => {
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "txProving",
-        } as any);
-        vi.mocked(getProof).mockResolvedValue({} as any);
-        vi.mocked(proveSettlementTx).mockResolvedValue("provedJson");
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({} as any);
-
-        await worker({ height: 16, settlementProofId: "507f1f77bcf86cd799439011" });
-
-        expect(proveSettlementTx).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.anything(),
-            // epoch 16 spans blocks 16..47, so settling it lands at 47
-            epochLastPulsarBlock(16),
+        expect(runProvingJobInChild).toHaveBeenCalledWith(
+            expect.stringContaining("prove-main.js"),
+            ["16", PROOF_ID],
+            { epochHeight: 16 },
         );
     });
 
-    it("stores provedTxJson and sets kind=settlement", async () => {
+    it("propagates a failing child so the master can strike the epoch", async () => {
         vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
             height: 16,
             kind: "txProving",
         } as any);
-        vi.mocked(getProof).mockResolvedValue({} as any);
-        vi.mocked(proveSettlementTx).mockResolvedValue("provedJson");
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({} as any);
-
-        await worker({ height: 16, settlementProofId: "507f1f77bcf86cd799439011" });
-
-        expect(ProofEpochModel.findOneAndUpdate).toHaveBeenCalledWith(
-            { height: 16, kind: "txProving" },
-            { $set: { kind: "settlement", provedTxJson: "provedJson" } },
-        );
-    });
-
-    it("stores null provedTxJson when epoch already settled on Mina", async () => {
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "txProving",
-        } as any);
-        vi.mocked(getProof).mockResolvedValue({} as any);
-        vi.mocked(proveSettlementTx).mockResolvedValue(null);
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({} as any);
-
-        await worker({ height: 16, settlementProofId: "507f1f77bcf86cd799439011" });
-
-        expect(ProofEpochModel.findOneAndUpdate).toHaveBeenCalledWith(
-            { height: 16, kind: "txProving" },
-            { $set: { kind: "settlement", provedTxJson: null } },
-        );
-    });
-
-    it("throws when epoch cannot be marked settlement (concurrent update race)", async () => {
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "txProving",
-        } as any);
-        vi.mocked(getProof).mockResolvedValue({} as any);
-        vi.mocked(proveSettlementTx).mockResolvedValue("provedJson");
-        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue(null as any);
-
-        await expect(
-            worker({ height: 16, settlementProofId: "507f1f77bcf86cd799439011" }),
-        ).rejects.toThrow(
-            "Proof epoch at height 16 not found or not in txProving state.",
-        );
-    });
-
-    it("propagates error from proveSettlementTx without updating DB", async () => {
-        vi.mocked(ProofEpochModel.findOne).mockResolvedValue({
-            height: 16,
-            kind: "txProving",
-        } as any);
-        vi.mocked(getProof).mockResolvedValue({} as any);
-        vi.mocked(proveSettlementTx).mockRejectedValue(
-            new Error("prove failed"),
+        vi.mocked(runProvingJobInChild).mockRejectedValue(
+            new Error("prover froze"),
         );
 
         await expect(
-            worker({ height: 16, settlementProofId: "507f1f77bcf86cd799439011" }),
-        ).rejects.toThrow("prove failed");
-
-        expect(ProofEpochModel.findOneAndUpdate).not.toHaveBeenCalled();
+            worker({ height: 16, settlementProofId: PROOF_ID }),
+        ).rejects.toThrow("prover froze");
     });
 });

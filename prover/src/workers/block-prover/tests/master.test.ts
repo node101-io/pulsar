@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
     BLOCK_EPOCH_SIZE,
     MASTER_SLEEP_INTERVAL_MS,
+    MAX_IN_FLIGHT_BLOCK_EPOCHS,
 } from "../../../config/constants.js";
 
 vi.mock("../../../db/index.js", () => ({
@@ -9,6 +10,7 @@ vi.mock("../../../db/index.js", () => ({
         findOneAndUpdate: vi.fn(),
         updateOne: vi.fn(),
         updateMany: vi.fn(),
+        countDocuments: vi.fn(),
     },
     ProofEpochModel: {
         find: vi.fn(),
@@ -52,6 +54,36 @@ describe("block-prover master", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(ProofEpochModel.find).mockResolvedValue([] as any);
+        vi.mocked(BlockEpochModel.countDocuments).mockResolvedValue(0 as any);
+    });
+
+    it("does not claim another epoch once the in-flight cap is reached", async () => {
+        // Without this cap the claim loop, no longer blocked by in-process
+        // proving, flips the entire waiting backlog to 'processing' at once.
+        vi.mocked(BlockEpochModel.countDocuments).mockResolvedValue(
+            MAX_IN_FLIGHT_BLOCK_EPOCHS as any,
+        );
+
+        const m = new BlockProverMaster() as any;
+        await m.handleTask();
+
+        expect(BlockEpochModel.findOneAndUpdate).not.toHaveBeenCalled();
+        expect(blockProverQ.add).not.toHaveBeenCalled();
+        expect(sleep).toHaveBeenCalledWith(MASTER_SLEEP_INTERVAL_MS);
+    });
+
+    it("claims while below the in-flight cap", async () => {
+        vi.mocked(BlockEpochModel.countDocuments).mockResolvedValue(
+            (MAX_IN_FLIGHT_BLOCK_EPOCHS - 1) as any,
+        );
+        vi.mocked(BlockEpochModel.findOneAndUpdate).mockResolvedValue({
+            height: 8,
+        } as any);
+
+        const m = new BlockProverMaster() as any;
+        await m.handleTask();
+
+        expect(blockProverQ.add).toHaveBeenCalledTimes(BLOCK_EPOCH_SIZE);
     });
 
     it("queues one job per block of the epoch when epoch found", async () => {
