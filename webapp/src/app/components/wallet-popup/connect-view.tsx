@@ -217,11 +217,10 @@ export const ConnectView = ({ keyStore: keyStoreData, onOpenWallet, onWalletConn
         return;
       }
 
-      try {
-        await suggestPulsarToKeplr();
-      } catch (e) {
-        console.warn('Keplr suggest chain failed or not needed:', e);
-      }
+      // A precondition, not a nicety: connectPulsar cannot enable a chain the
+      // extension does not know. Swallowing this failure hid a broken chain
+      // config behind Keplr's "no modular chain info" for months.
+      await suggestPulsarToKeplr();
 
       await connectPulsar();
       onWalletConnected('pulsar');
@@ -231,8 +230,13 @@ export const ConnectView = ({ keyStore: keyStoreData, onOpenWallet, onWalletConn
       });
     } catch (error) {
       console.error('Failed to connect Keplr wallet:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      toast.error(`Failed to connect Keplr wallet: ${errorMessage}`, {
+      // Shown as-is: these messages already name the failed step and the fix, so
+      // a "Failed to connect" prefix would only bury the instruction.
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to connect Keplr wallet. Please try again.';
+      toast.error(errorMessage, {
         id: 'keplr-connection-failed'
       });
     }

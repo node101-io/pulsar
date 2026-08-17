@@ -73,11 +73,14 @@ export function buildKeplrChainConfigFromRegistry(
     coinDecimals,
   };
 
-  const gasPriceAvg = chain.fees?.feeTokens?.[0]?.fixedMinGasPrice ?? 0.025;
+  // The minimum gas price is a floor, not a midpoint: nothing under it is
+  // payable, so no step may sit below it. Keplr rejects the whole suggestion if
+  // low > average, which a hardcoded floor here used to cause on this denom.
+  const gasPriceMin = chain.fees?.feeTokens?.[0]?.fixedMinGasPrice ?? 0.025;
   const gasPriceStep = {
-    low: Math.max(0.01, gasPriceAvg * 0.6),
-    average: gasPriceAvg,
-    high: Math.max(gasPriceAvg, gasPriceAvg * 1.4),
+    low: gasPriceMin,
+    average: gasPriceMin,
+    high: gasPriceMin * 2,
   };
 
   const cfg: KeplrChainConfig = {
@@ -219,6 +222,14 @@ export function useKeplrInstalled(): boolean {
   return installed;
 }
 
+/**
+ * Registers Pulsar with the extension. Every other call here depends on it: an
+ * unregistered chain makes getKey, enable and signDirect all fail, and Keplr
+ * reports that as "There is no modular chain info for <id>", far from the cause.
+ *
+ * Failures are rethrown in the user's terms. A decline needs no retry logic:
+ * Keplr does not remember one, so pressing Connect again re-opens the approval.
+ */
 export async function suggestPulsarToKeplr(): Promise<void> {
   if (typeof window === "undefined")
     throw new Error("Not in a browser context");
@@ -230,6 +241,16 @@ export async function suggestPulsarToKeplr(): Promise<void> {
     consumerChain,
     consumerAssetList
   );
-  await keplr.experimentalSuggestChain(cfg);
+  try {
+    await keplr.experimentalSuggestChain(cfg);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (/reject/i.test(message)) {
+      throw new Error(
+        `Approve the request to add ${cfg.chainName} in Keplr, then connect again`,
+      );
+    }
+    throw new Error(`Could not add ${cfg.chainName} to Keplr: ${message}`);
+  }
   await keplr.enable(cfg.chainId);
 }

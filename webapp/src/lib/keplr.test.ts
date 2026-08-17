@@ -37,6 +37,21 @@ describe("buildKeplrChainConfigFromRegistry", () => {
     );
   });
 
+  it("orders the gas price steps as Keplr requires", () => {
+    // Keplr rejects the whole suggestion when low > average, leaving the chain
+    // unregistered and every wallet call failing. A hardcoded floor once put
+    // "low" a hundredfold above "average" on this denom.
+    const config = buildKeplrChainConfigFromRegistry(consumerChain, consumerAssetList);
+    const step = config.feeCurrencies[0]!.gasPriceStep!;
+
+    expect(step.low).toBeLessThanOrEqual(step.average);
+    expect(step.average).toBeLessThanOrEqual(step.high);
+    // Nothing below the chain's minimum is payable, so no step may sit under it.
+    expect(step.low).toBeGreaterThanOrEqual(
+      consumerChain.fees!.feeTokens[0]!.fixedMinGasPrice!,
+    );
+  });
+
   it("refuses an asset whose display denom has no unit", () => {
     // Silently guessing here is what let the wrong scale reach a wallet before.
     expect(() =>

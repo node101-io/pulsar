@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ProviderError, ChainInfoArgs, SignFieldsArgs, SignedFieldsData } from '../../lib/types';
 import toast from 'react-hot-toast';
+import { EXPECTED_MINA_NETWORK_IDS } from '../../lib/constants';
 
 interface WalletState {
   isConnected: boolean;
@@ -113,7 +114,22 @@ export function MinaWalletProvider({ children }: {
       }
 
       if (accounts && accounts.length > 0) {
-        const network = await window.mina?.requestNetwork();
+        let network = await window.mina?.requestNetwork();
+
+        if (network && !('message' in network)) {
+          // App assumes devnet; switch if necessary.
+          if (!EXPECTED_MINA_NETWORK_IDS.includes(network.networkID)) {
+            const switchResult = await window.mina?.switchChain({ networkID: 'mina:devnet' });
+            if (switchResult && !('message' in switchResult)) {
+              network = switchResult;
+            } else {
+              throw new Error(
+                `Please switch your Auro Wallet to devnet. ` +
+                `Currently on: ${network.networkID}`
+              );
+            }
+          }
+        }
 
         setWalletState(prev => ({
           ...prev,
@@ -128,6 +144,7 @@ export function MinaWalletProvider({ children }: {
         ...prev,
         isConnecting: false,
       }));
+      throw error;
     }
   };
 
