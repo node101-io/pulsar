@@ -15,6 +15,7 @@ export {
   APPROVAL_TAIL_CHUNK,
   ENDPOINTS,
   ARCHIVE_FALLBACKS,
+  NODE_FALLBACKS,
 };
 
 const SETTLEMENT_MATRIX_SIZE = 8;
@@ -124,3 +125,28 @@ const ARCHIVE_FALLBACKS: { [key in keyof typeof ENDPOINTS.ARCHIVE]: string[] } =
     // second instance to fall back to.
     lightnet: [],
   };
+
+// Daemon endpoints tried IN ORDER after ENDPOINTS.NODE fails — see
+// withNodeFailover in fetch.ts. Same sequential shape as ARCHIVE_FALLBACKS
+// and the same reason for existing: on 2026-08-22 Minascan's devnet node sat
+// in BOOTSTRAP, so `account(publicKey:)` answered null for EVERY address.
+// o1js turns that into "Could not find account", which reads exactly like a
+// contract that was never deployed — the prover cannot settle and the webapp
+// showed a funded wallet as empty.
+//
+// Node reads carry trust that archive reads do not. An action slice is
+// refolded against the contract's on-chain actionState before anything proves
+// it, but contract state, block height and the fee payer's nonce are taken as
+// given, so a wrong answer here becomes a wrong transaction. Keep this list to
+// endpoints we are willing to believe: o1Labs' own devnet/mainnet daemons,
+// free and without SLA — a second leg, not a substitute for running our own.
+const NODE_FALLBACKS: { [key in keyof typeof ENDPOINTS.NODE]: string[] } = {
+  devnet: envListOrDefault('MINA_NODE_FALLBACK_URLS', [
+    'https://devnet-plain-1.gcp.o1test.net/graphql',
+  ]),
+  mainnet: envListOrDefault('MINA_NODE_FALLBACK_URLS', [
+    'https://mainnet-plain-1.gcp.o1test.net/graphql',
+  ]),
+  // A lightnet daemon is the local docker container — nothing to fall back to.
+  lightnet: [],
+};

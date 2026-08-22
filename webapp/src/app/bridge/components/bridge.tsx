@@ -52,9 +52,10 @@ export default function Bridge() {
   const { data: connectedPulsarAddress } = usePulsarAddress();
   const pendingTransfers = usePendingBridgeTransfers(account);
 
-  const { data: minaBalanceData } = useMinaBalance(account, {
-    enabled: !!account && isConnected,
-  });
+  const { data: minaBalanceData, isError: minaUnreachable } = useMinaBalance(
+    account,
+    { enabled: !!account && isConnected },
+  );
 
   // The registered Pulsar account: where a deposit is credited, where a
   // withdrawal burns from. The registry decides this, not the connected
@@ -97,10 +98,12 @@ export default function Bridge() {
 
   const onExpectedNetwork =
     !network || EXPECTED_MINA_NETWORK_IDS.includes(network.networkID);
+  // No verdict against an unreadable balance: comparing to the 0n default
+  // mid-outage would flag every amount as over-balance.
   const isOverBalance =
     amountNano > 0n &&
     (isDeposit
-      ? amountNano + MINA_TX_FEE_NANOMINA > minaBalance
+      ? !minaUnreachable && amountNano + MINA_TX_FEE_NANOMINA > minaBalance
       : amountNano > pminaBalance);
   const isBelowMinimum =
     isDeposit && amountNano > 0n && amountNano < MINIMUM_DEPOSIT_NANOMINA;
@@ -128,7 +131,13 @@ export default function Bridge() {
     ? "Connect your Mina wallet"
     : !onExpectedNetwork
       ? `Auro is on ${network?.networkID} — switch to Devnet`
-      : !isRegistered
+      : minaUnreachable
+        // Mina's problem, and said so: a balance shown as 0.000 with a live
+        // deposit button reads as Pulsar having lost the funds. Everything
+        // downstream needs the same node anyway — the transaction could not
+        // be built either.
+        ? "Mina devnet is unavailable right now — not a Pulsar issue. Your balance is unaffected; try again later."
+        : !isRegistered
         ? `Register your keys before ${isDeposit ? "depositing" : "withdrawing"}`
         : isWrongDestination
           ? `This Mina account is registered to ${truncateAddress(pulsarAccount!)}, not the connected ${truncateAddress(connectedPulsarAddress!)} — the deposit would land there. Switch Keplr to that account.`
@@ -323,19 +332,30 @@ export default function Bridge() {
                   : `Insufficient ${isDeposit ? "MINA" : "pMINA"} balance`}
               </span>
             )}
-            <button
-              type="button"
-              className="text-ink-subtle hover:text-ink ml-auto cursor-pointer transition-colors"
-              title={
-                isDeposit
-                  ? `Balance minus the ${formatAmount(MINA_TX_FEE_NANOMINA)} MINA fee`
-                  : "Your registered account's full pMINA balance"
-              }
-              onClick={() => setAmount(formatAmount(maxSendable, DECIMALS))}
-            >
-              Max: <span className="tabular-nums">{formatAmount(maxSendable)}</span>{" "}
-              {isDeposit ? "MINA" : "pMINA"}
-            </button>
+            {/* An unreadable balance is not a zero balance: "Max: 0.000"
+                during a Mina outage tells a funded user their MINA is gone. */}
+            {isDeposit && minaUnreachable ? (
+              <span
+                className="text-ink-subtle ml-auto"
+                title="Mina devnet is unavailable — your balance cannot be read right now"
+              >
+                Max: <span className="tabular-nums">—</span> MINA
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="text-ink-subtle hover:text-ink ml-auto cursor-pointer transition-colors"
+                title={
+                  isDeposit
+                    ? `Balance minus the ${formatAmount(MINA_TX_FEE_NANOMINA)} MINA fee`
+                    : "Your registered account's full pMINA balance"
+                }
+                onClick={() => setAmount(formatAmount(maxSendable, DECIMALS))}
+              >
+                Max: <span className="tabular-nums">{formatAmount(maxSendable)}</span>{" "}
+                {isDeposit ? "MINA" : "pMINA"}
+              </button>
+            )}
           </div>
         </div>
 

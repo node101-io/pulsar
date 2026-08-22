@@ -17,6 +17,13 @@ vi.mock("pulsar-contracts/build/src/SettlementContract.js", () => ({
 
 vi.mock("pulsar-contracts/build/src/utils/fetch.js", () => ({
     setMinaNetwork: vi.fn(),
+    // Pass-through: the failover's retry contract is pinned in
+    // contracts/src/test/fetch.test.ts. Here it only has to not swallow the
+    // account errors these tests assert on.
+    withNodeFailover: vi.fn(async (_what: string, run: () => Promise<any>) =>
+        run(),
+    ),
+    activeNodeEndpoint: vi.fn(() => "https://node.devnet"),
 }));
 
 vi.mock("pulsar-contracts/build/src/utils/constants.js", () => ({

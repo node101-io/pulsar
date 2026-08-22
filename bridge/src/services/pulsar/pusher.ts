@@ -6,7 +6,10 @@ import {
 } from "@cosmjs/proto-signing";
 import { SigningStargateClient, defaultRegistryTypes } from "@cosmjs/stargate";
 import { fetchLastBlock } from "o1js";
-import { ENDPOINTS } from "pulsar-contracts/build/src/utils/constants.js";
+import {
+    activeNodeEndpoint,
+    withNodeFailover,
+} from "pulsar-contracts/build/src/utils/fetch.js";
 import {
     MSG_PUSH_NEW_ACTIONS_TYPE_URL,
     MsgPushNewActions,
@@ -208,9 +211,11 @@ async function pushTick(
     // does not delay the wrapper; the slack alone then covers the lag.
     const confirmationDepth = BigInt(params.confirmation_depth ?? "0");
 
-    const tip = (
-        await fetchLastBlock(ENDPOINTS.NODE[env.MINA_NETWORK])
-    ).blockchainLength.toBigint();
+    const tip = await withNodeFailover("Mina tip fetch", async () =>
+        (
+            await fetchLastBlock(activeNodeEndpoint(env.MINA_NETWORK))
+        ).blockchainLength.toBigint(),
+    );
 
     const decision = computePushDecision({
         cursor: (await fetchActionsBatch()).latestFetchedMinaHeight,

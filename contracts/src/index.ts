@@ -55,6 +55,7 @@ import {
   ENDPOINTS,
 } from './utils/constants.js';
 import {
+  activeNodeEndpoint,
   checkZkappTransaction,
   fetchActions,
   fetchRawActions,
@@ -64,6 +65,7 @@ import {
   sliceActionHistory,
   waitForTransaction,
   withArchiveFailover,
+  withNodeFailover,
 } from './utils/fetch.js';
 import {
   GenerateSettlementProof,
@@ -119,6 +121,7 @@ export {
   ACTION_QUEUE_SIZE,
   APPROVAL_TAIL_CHUNK,
   ENDPOINTS,
+  activeNodeEndpoint,
   checkZkappTransaction,
   fetchActions,
   fetchRawActions,
@@ -128,6 +131,7 @@ export {
   sliceActionHistory,
   waitForTransaction,
   withArchiveFailover,
+  withNodeFailover,
   GenerateSettlementProof,
   MergeSettlementProofs,
   GenerateSettlementPublicInput,

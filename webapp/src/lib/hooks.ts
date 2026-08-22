@@ -49,7 +49,18 @@ export function usePminaBalance(account: string | null | undefined, options?: {
   });
 }
 
-/** A Mina account's balance in nanomina. Zero when the account does not exist. */
+/**
+ * A Mina account's balance in nanomina. Zero when the account does not
+ * exist; an ERROR when Mina cannot be read — the two must not be conflated.
+ *
+ * The conflation is not hypothetical and not even detectable from the
+ * fetchAccount result alone: on 2026-08-22 Minascan's devnet daemon sat in
+ * BOOTSTRAP and answered `account: null` for EVERY address, which o1js
+ * reports as the same "does not exist" a genuinely fresh wallet gets. A
+ * funded wallet rendered as 0.000 MINA — a user reads that as the bridge
+ * having eaten their funds. Only the node's own syncStatus tells the cases
+ * apart, so a missing account is trusted exactly when the node is SYNCED.
+ */
 export function useMinaBalance(account: string | null | undefined, options?: {
   enabled?: boolean;
 }) {
@@ -61,10 +72,25 @@ export function useMinaBalance(account: string | null | undefined, options?: {
       const { fetchAccount } = await import('o1js');
       const accountInfo = await fetchAccount({ publicKey: account }, MINA_RPC_URL);
 
-       if (accountInfo.error || !accountInfo.account)
-         return 0n;
+      if (accountInfo.error || !accountInfo.account) {
+        const response = await fetch(MINA_RPC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: '{ syncStatus }' }),
+        });
+        const status = response.ok
+          ? ((await response.json()) as { data?: { syncStatus?: string } })
+              ?.data?.syncStatus
+          : null;
+        if (status !== 'SYNCED') {
+          throw new Error(
+            `Mina devnet node is not serving the ledger (${status ?? 'unreachable'})`,
+          );
+        }
+        return 0n;
+      }
 
-       return accountInfo.account.balance.toBigInt();
+      return accountInfo.account.balance.toBigInt();
     },
     enabled: !!account && (options?.enabled ?? true),
     staleTime: 30000,

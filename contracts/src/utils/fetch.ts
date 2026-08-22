@@ -2,10 +2,11 @@ import { fetchLastBlock, Field, Mina, PublicKey, UInt32 } from 'o1js';
 import { log } from './loggers.js';
 import { PulsarAction } from '../types/PulsarAction.js';
 import { CalculateFinalActionState } from './actionQueueUtils.js';
-import { ARCHIVE_FALLBACKS, ENDPOINTS } from './constants.js';
+import { ARCHIVE_FALLBACKS, ENDPOINTS, NODE_FALLBACKS } from './constants.js';
 import { SettlementContract, SettlementEvent } from '../SettlementContract.js';
 
 export {
+  activeNodeEndpoint,
   checkZkappTransaction,
   fetchActions,
   fetchRawActions,
@@ -15,6 +16,7 @@ export {
   sliceActionHistory,
   waitForTransaction,
   withArchiveFailover,
+  withNodeFailover,
 };
 
 // The network setMinaNetwork last configured, or null when it never ran —
@@ -23,32 +25,72 @@ export {
 // archive to reach anyway.
 let configuredNetwork: 'devnet' | 'mainnet' | 'lightnet' | null = null;
 
+// Which endpoint of each pair the active instance currently points at. Both
+// failovers rebuild the same o1js instance, so each has to preserve the
+// other's choice: a node failover that reset the archive would undo a
+// mid-outage archive fallback, and vice versa.
+let activeNodeUrl: string | null = null;
+let activeArchiveUrl: string | null = null;
+
+function useEndpoints(nodeUrl: string, archiveUrl: string) {
+  activeNodeUrl = nodeUrl;
+  activeArchiveUrl = archiveUrl;
+  Mina.setActiveInstance(Mina.Network({ mina: nodeUrl, archive: archiveUrl }));
+}
+
 function useArchiveEndpoint(archiveUrl: string) {
-  Mina.setActiveInstance(
-    Mina.Network({
-      mina: ENDPOINTS.NODE[configuredNetwork!],
-      archive: archiveUrl,
-    })
+  useEndpoints(activeNodeUrl ?? ENDPOINTS.NODE[configuredNetwork!], archiveUrl);
+}
+
+function useNodeEndpoint(nodeUrl: string) {
+  useEndpoints(
+    nodeUrl,
+    activeArchiveUrl ?? ENDPOINTS.ARCHIVE[configuredNetwork!]
   );
 }
 
 /**
- * Run an archive-backed fetch, walking ARCHIVE_FALLBACKS in order when it
- * fails. Sequential on purpose — o1js's own multi-endpoint support races
- * endpoints in pairs and a fast-failing primary wins the race (see the
- * ARCHIVE_FALLBACKS comment in constants.ts).
+ * The daemon URL the active instance is pointed at right now, which is NOT
+ * ENDPOINTS.NODE[network] once a failover has moved off the primary. Callers
+ * that talk to the node outside o1js (checkZkappTransaction, and anything
+ * else taking an `endpoint` string) must read it per call rather than
+ * capturing it at startup, or they keep polling the endpoint that just failed.
+ */
+function activeNodeEndpoint(
+  network: 'devnet' | 'mainnet' | 'lightnet' = 'devnet'
+) {
+  return activeNodeUrl ?? ENDPOINTS.NODE[network];
+}
+
+/**
+ * Run an endpoint-backed operation, walking the kind's fallback list in
+ * order when it fails. Sequential on purpose — o1js's own multi-endpoint
+ * support races endpoints in pairs and a fast-failing primary wins the race
+ * (see the ARCHIVE_FALLBACKS comment in constants.ts).
  *
  * The first attempt runs against whatever endpoint the active instance
  * already points at, so a fallback that worked stays sticky for later calls
  * (mid-outage the primary is not re-probed on every fetch). On total failure
  * the instance is reset to the primary and the LAST error propagates —
- * swallowing it into an empty result would make an archive outage
- * indistinguishable from a genuinely empty action queue.
+ * swallowing it into an empty result would make an outage indistinguishable
+ * from a genuinely empty answer.
+ *
+ * `run` must therefore re-read its endpoint on every attempt — through the
+ * active o1js instance (fetchAccount, fetchActions, tx send) or via
+ * activeNodeEndpoint(). A closure over a URL captured before the first
+ * attempt retries the dead endpoint N times and reports the fallback as
+ * broken too.
  */
-async function withArchiveFailover<T>(
+async function withEndpointFailover<T>(
+  kind: 'node' | 'archive',
   what: string,
   run: () => Promise<T>
 ): Promise<T> {
+  const [fallbacks, primary, activate] =
+    kind === 'node'
+      ? ([NODE_FALLBACKS, ENDPOINTS.NODE, useNodeEndpoint] as const)
+      : ([ARCHIVE_FALLBACKS, ENDPOINTS.ARCHIVE, useArchiveEndpoint] as const);
+
   let lastError: unknown;
   try {
     return await run();
@@ -56,22 +98,53 @@ async function withArchiveFailover<T>(
     lastError = error;
   }
   if (configuredNetwork !== null) {
-    for (const archiveUrl of ARCHIVE_FALLBACKS[configuredNetwork]) {
+    for (const url of fallbacks[configuredNetwork]) {
       console.warn(
         `${what} failed (${
           lastError instanceof Error ? lastError.message : lastError
-        }), retrying via fallback archive ${archiveUrl}`
+        }), retrying via fallback ${kind} ${url}`
       );
-      useArchiveEndpoint(archiveUrl);
+      activate(url);
       try {
         return await run();
       } catch (error) {
         lastError = error;
       }
     }
-    useArchiveEndpoint(ENDPOINTS.ARCHIVE[configuredNetwork]);
+    activate(primary[configuredNetwork]);
   }
   throw lastError;
+}
+
+/**
+ * Archive failover, born in the 2026-08-15 Minascan archive outage. Archive
+ * data needs no trust — callers refold every slice against the contract's
+ * on-chain actionState — so trying alternates is always safe.
+ */
+async function withArchiveFailover<T>(
+  what: string,
+  run: () => Promise<T>
+): Promise<T> {
+  return withEndpointFailover('archive', what, run);
+}
+
+/**
+ * Daemon failover, born in the 2026-08-22 Minascan node outage (BOOTSTRAP:
+ * every account read answered null). Unlike archive reads, node reads are
+ * taken on trust — see the NODE_FALLBACKS comment in constants.ts for why
+ * the list stays short.
+ *
+ * Note what this cannot catch: a daemon that answers happily from an
+ * incomplete ledger. o1js reports the BOOTSTRAP null-account as "Could not
+ * find account", so the failover fires — but a caller that maps a missing
+ * account onto "empty" instead of onto an error swallows the outage before
+ * it ever reaches here.
+ */
+async function withNodeFailover<T>(
+  what: string,
+  run: () => Promise<T>
+): Promise<T> {
+  return withEndpointFailover('node', what, run);
 }
 
 async function fetchRawActions(
@@ -196,9 +269,11 @@ async function fetchBlockHeight(
   network: 'devnet' | 'mainnet' | 'lightnet' = 'devnet'
 ) {
   try {
-    const lastBlock = await fetchLastBlock(ENDPOINTS.NODE[network]);
+    return await withNodeFailover('Block height fetch', async () => {
+      const lastBlock = await fetchLastBlock(activeNodeEndpoint(network));
 
-    return Number(lastBlock.blockchainLength.toBigint());
+      return Number(lastBlock.blockchainLength.toBigint());
+    });
   } catch (error) {
     console.error('Error fetching block height:', error);
     throw error;
@@ -235,14 +310,20 @@ async function fetchEvents(
 
 function setMinaNetwork(network: 'devnet' | 'mainnet' | 'lightnet' = 'devnet') {
   configuredNetwork = network;
-  useArchiveEndpoint(ENDPOINTS.ARCHIVE[network]);
+  useEndpoints(ENDPOINTS.NODE[network], ENDPOINTS.ARCHIVE[network]);
 
-  const fallbacks = ARCHIVE_FALLBACKS[network];
+  const nodeFallbacks = NODE_FALLBACKS[network];
+  const archiveFallbacks = ARCHIVE_FALLBACKS[network];
+  const listed = (fallbacks: string[]) =>
+    fallbacks.length > 0
+      ? ` (+${fallbacks.length} fallback(s): ${fallbacks.join(', ')})`
+      : '';
   console.log(
-    `Setting Mina network to ${network}, Mina endpoint: ${ENDPOINTS.NODE[network]}, Archive endpoint: ${ENDPOINTS.ARCHIVE[network]}` +
-      (fallbacks.length > 0
-        ? ` (+${fallbacks.length} fallback(s): ${fallbacks.join(', ')})`
-        : '')
+    `Setting Mina network to ${network}, ` +
+      `Mina endpoint: ${ENDPOINTS.NODE[network]}${listed(nodeFallbacks)}, ` +
+      `Archive endpoint: ${ENDPOINTS.ARCHIVE[network]}${listed(
+        archiveFallbacks
+      )}`
   );
 }
 

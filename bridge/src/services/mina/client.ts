@@ -1,6 +1,10 @@
 import { fetchAccount, PublicKey } from "o1js";
 import { SettlementContract } from "pulsar-contracts/build/src/SettlementContract.js";
-import { setMinaNetwork } from "pulsar-contracts/build/src/utils/fetch.js";
+import {
+    activeNodeEndpoint,
+    setMinaNetwork,
+    withNodeFailover,
+} from "pulsar-contracts/build/src/utils/fetch.js";
 import { ENDPOINTS } from "pulsar-contracts/build/src/utils/constants.js";
 import logger from "../../common/logger.js";
 import { env } from "../../config/env.js";
@@ -11,7 +15,11 @@ export interface MinaClientContext {
     contractAddress: PublicKey;
     contract: SettlementContract;
     network: MinaNetwork;
-    nodeEndpoint: string;
+    /**
+     * The daemon in use right now, re-read on access so a node failover is
+     * followed instead of pinned to whatever init happened to reach.
+     */
+    readonly nodeEndpoint: string;
     archiveEndpoint: string;
     /** Cached zkapp state array (Field.toString()) from last fetchAccount. Index = @state declaration order. */
     zkappState: string[];
@@ -36,19 +44,25 @@ export async function initMinaClientContext(): Promise<MinaClientContext> {
     const network: MinaNetwork = env.MINA_NETWORK;
     const contractAddressStr = env.CONTRACT_ADDRESS;
 
-    const nodeEndpoint = ENDPOINTS.NODE[network];
     const archiveEndpoint = ENDPOINTS.ARCHIVE[network];
 
     // setMinaNetwork internally calls Mina.setActiveInstance with the correct endpoints
     setMinaNetwork(network);
 
-    logger.info("Mina network configured", { network, nodeEndpoint, archiveEndpoint });
+    logger.info("Mina network configured", {
+        network,
+        nodeEndpoint: activeNodeEndpoint(network),
+        archiveEndpoint,
+    });
 
     const contractAddress = PublicKey.fromBase58(contractAddressStr);
-    const fetchResult = await fetchAccount({ publicKey: contractAddress });
-    if (fetchResult.error != null) {
-        throw new Error(`fetchAccount failed during init: ${fetchResult.error.statusText}`);
-    }
+    const fetchResult = await withNodeFailover("Contract account fetch", async () => {
+        const result = await fetchAccount({ publicKey: contractAddress });
+        if (result.error != null) {
+            throw new Error(`fetchAccount failed during init: ${result.error.statusText}`);
+        }
+        return result;
+    });
 
     const zkappState = (fetchResult.account?.zkapp?.appState ?? []).map((f: any) => f.toString());
     const actionStateHistory = (fetchResult.account?.zkapp?.actionState ?? []).map((f: any) => f.toString());
@@ -60,17 +74,30 @@ export async function initMinaClientContext(): Promise<MinaClientContext> {
         event: "mina_client_initialized",
     });
 
-    return { contractAddress, contract, network, nodeEndpoint, archiveEndpoint, zkappState, actionStateHistory };
+    return {
+        contractAddress,
+        contract,
+        network,
+        get nodeEndpoint() {
+            return activeNodeEndpoint(network);
+        },
+        archiveEndpoint,
+        zkappState,
+        actionStateHistory,
+    };
 }
 
 /**
  * Refreshes ctx.zkappState by fetching the account from the network.
  */
 export async function refreshContractState(ctx: MinaClientContext): Promise<void> {
-    const result = await fetchAccount({ publicKey: ctx.contractAddress });
-    if (result.error != null) {
-        throw new Error(`fetchAccount failed: ${result.error.statusText}`);
-    }
+    const result = await withNodeFailover("Contract account refresh", async () => {
+        const fetched = await fetchAccount({ publicKey: ctx.contractAddress });
+        if (fetched.error != null) {
+            throw new Error(`fetchAccount failed: ${fetched.error.statusText}`);
+        }
+        return fetched;
+    });
     const appState = result.account?.zkapp?.appState;
     if (!appState || appState.length === 0) {
         throw new Error("Contract has no zkapp state — is it deployed?");
