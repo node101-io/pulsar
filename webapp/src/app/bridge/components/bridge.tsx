@@ -6,11 +6,11 @@ import Image from "next/image";
 import { useMinaWallet } from "@/app/_providers/mina-wallet";
 import {
   EXPECTED_MINA_NETWORK_IDS,
-  MINA_RPC_URL,
   MINA_TX_FEE_NANOMINA,
   MINIMUM_DEPOSIT_NANOMINA,
   WITHDRAW_DOWN_PAYMENT_NANOMINA,
 } from "@/lib/constants";
+import { activeMinaNodeUrl } from "@/lib/mina-node";
 import { toast } from "react-hot-toast";
 import {
   useMinaPrice,
@@ -52,10 +52,11 @@ export default function Bridge() {
   const { data: connectedPulsarAddress } = usePulsarAddress();
   const pendingTransfers = usePendingBridgeTransfers(account);
 
-  const { data: minaBalanceData, isError: minaUnreachable } = useMinaBalance(
-    account,
-    { enabled: !!account && isConnected },
-  );
+  const {
+    data: minaBalanceData,
+    isError: minaUnreachable,
+    isLoading: minaBalanceLoading,
+  } = useMinaBalance(account, { enabled: !!account && isConnected });
 
   // The registered Pulsar account: where a deposit is credited, where a
   // withdrawal burns from. The registry decides this, not the connected
@@ -66,13 +67,21 @@ export default function Bridge() {
   // The withdrawable balance is the REGISTERED account's, which is why this is
   // keyed by the registry's answer and not by whatever Keplr has selected —
   // and why withdrawing needs no Cosmos wallet at all.
-  const { data: pminaBalanceData } = usePminaBalance(pulsarAccount, {
+  const {
+    data: pminaBalanceData,
+    isError: pminaUnreachable,
+    isLoading: pminaBalanceLoading,
+  } = usePminaBalance(pulsarAccount, {
     enabled: !!pulsarAccount,
   });
 
   const isDeposit = direction === "deposit";
   const minaBalance = minaBalanceData ?? 0n;
   const pminaBalance = pminaBalanceData ?? 0n;
+  // Loading and outage both mean the 0n defaults above are placeholders, not
+  // balances — nothing may render them or judge amounts against them.
+  const minaBalanceUnknown = minaUnreachable || minaBalanceLoading;
+  const pminaBalanceUnknown = pminaUnreachable || pminaBalanceLoading;
   const amountNano = parseAmount(amount);
 
   // Everything a withdrawal costs on the Mina side. The down payment rides in
@@ -103,13 +112,14 @@ export default function Bridge() {
   const isOverBalance =
     amountNano > 0n &&
     (isDeposit
-      ? !minaUnreachable && amountNano + MINA_TX_FEE_NANOMINA > minaBalance
-      : amountNano > pminaBalance);
+      ? !minaBalanceUnknown && amountNano + MINA_TX_FEE_NANOMINA > minaBalance
+      : !pminaBalanceUnknown && amountNano > pminaBalance);
   const isBelowMinimum =
     isDeposit && amountNano > 0n && amountNano < MINIMUM_DEPOSIT_NANOMINA;
   // Without this much MINA the withdrawal transaction itself cannot be built,
   // down payment included.
-  const cannotAffordWithdraw = !isDeposit && minaBalance < withdrawMinaCost;
+  const cannotAffordWithdraw =
+    !isDeposit && !minaBalanceUnknown && minaBalance < withdrawMinaCost;
 
   // Compiling takes minutes, so start as soon as a wallet is connected rather
   // than when the user clicks — otherwise the button appears to hang before
@@ -137,7 +147,11 @@ export default function Bridge() {
         // downstream needs the same node anyway — the transaction could not
         // be built either.
         ? "Mina devnet is unavailable right now — not a Pulsar issue. Your balance is unaffected; try again later."
-        : !isRegistered
+        // An over-balance withdrawal forfeits the down payment when the chain
+        // scans it, and the balance is exactly what cannot be checked here.
+        : !isDeposit && pminaUnreachable
+          ? "Your pMINA balance can't be read right now. Your balance is unaffected; try again later."
+          : !isRegistered
         ? `Register your keys before ${isDeposit ? "depositing" : "withdrawing"}`
         : isWrongDestination
           ? `This Mina account is registered to ${truncateAddress(pulsarAccount!)}, not the connected ${truncateAddress(connectedPulsarAddress!)} — the deposit would land there. Switch Keplr to that account.`
@@ -161,6 +175,11 @@ export default function Bridge() {
       }
 
       await initializeWorker();
+
+      // The worker pinned its node at init; a failover since then would leave
+      // it building against the daemon that died. Re-pinning is cheap — the
+      // compiled programs are untouched, only the endpoint moves.
+      await worker.setActiveInstance({ url: activeMinaNodeUrl() });
 
       const args = {
         sender: account,
@@ -211,7 +230,7 @@ export default function Bridge() {
       const pending = toast.loading("Waiting for confirmation on Mina…");
       const status = await worker.waitForTransaction({
         hash: result.hash,
-        rpcUrl: MINA_RPC_URL,
+        rpcUrl: activeMinaNodeUrl(),
       });
       toast.dismiss(pending);
 
@@ -332,14 +351,21 @@ export default function Bridge() {
                   : `Insufficient ${isDeposit ? "MINA" : "pMINA"} balance`}
               </span>
             )}
-            {/* An unreadable balance is not a zero balance: "Max: 0.000"
-                during a Mina outage tells a funded user their MINA is gone. */}
-            {isDeposit && minaUnreachable ? (
+            {/* An unread balance is not a zero balance: "Max: 0.000" while
+                loading or mid-outage tells a funded user their MINA is gone. */}
+            {(isDeposit ? minaBalanceUnknown : pminaBalanceUnknown) ? (
               <span
                 className="text-ink-subtle ml-auto"
-                title="Mina devnet is unavailable — your balance cannot be read right now"
+                title={
+                  (isDeposit ? minaUnreachable : pminaUnreachable)
+                    ? isDeposit
+                      ? "Mina devnet is unavailable — your balance cannot be read right now"
+                      : "Your pMINA balance cannot be read right now"
+                    : "Reading your balance…"
+                }
               >
-                Max: <span className="tabular-nums">—</span> MINA
+                Max: <span className="tabular-nums">—</span>{" "}
+                {isDeposit ? "MINA" : "pMINA"}
               </span>
             ) : (
               <button

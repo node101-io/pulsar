@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useRef, ReactNode, useEffect, useState } from "react";
 import WorkerClient from "@/lib/workerClient";
-import { BRIDGE_ADDRESS, MINA_RPC_URL } from "@/lib/constants";
+import { BRIDGE_ADDRESS } from "@/lib/constants";
+import { activeMinaNodeUrl } from "@/lib/mina-node";
 
 interface WorkerContextType {
     worker: WorkerClient | null;
@@ -55,8 +56,13 @@ export function WorkerProvider({ children }: WorkerProviderProps) {
 
         const initPromise = (async () => {
             try {
-                await workerRef.current!.setActiveInstance({ url: MINA_RPC_URL });
-                console.log("Mina instance set to", MINA_RPC_URL);
+                // The daemon the balance reads have settled on — mid-outage
+                // that is the fallback, not MINA_RPC_URL. handleSubmit re-pins
+                // before each transaction for the same reason: a failover
+                // after this init must not strand the worker on a dead node.
+                const nodeUrl = activeMinaNodeUrl();
+                await workerRef.current!.setActiveInstance({ url: nodeUrl });
+                console.log("Mina instance set to", nodeUrl);
                 await workerRef.current!.compile(
                     { contractAddress: BRIDGE_ADDRESS },
                     ({ compiledCount, totalPrograms }) => {

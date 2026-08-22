@@ -5,6 +5,17 @@ import type { Chain, AssetList } from "@chain-registry/types";
 export const MINA_NETWORK = "devnet";
 export const MINA_RPC_URL = "https://api.minascan.io/node/devnet/v1/graphql";
 
+// Daemons tried IN ORDER when MINA_RPC_URL fails — see lib/mina-node.ts.
+// Mirrors NODE_FALLBACKS in pulsar-contracts (importing it would pull o1js
+// into every page bundle), and for the same 2026-08-22 reason: Minascan's
+// devnet node sat in BOOTSTRAP and answered every account read with null,
+// which renders a funded wallet as 0.000 MINA. Node reads are taken on
+// trust — balance, nonce, tx acceptance — so the list stays short:
+// o1Labs' own daemon, free and without SLA.
+export const MINA_NODE_FALLBACK_URLS = [
+  "https://devnet-plain-1.gcp.o1test.net/graphql",
+];
+
 // Auro reports the connected network as "mina:<name>". A deposit built for
 // this contract and sent from another network fails in a way that reads like
 // a wallet bug, so the UI checks before it builds anything.

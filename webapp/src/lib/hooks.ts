@@ -12,7 +12,7 @@ import {
 } from "./utils"
 import type { BridgeScanProgress } from "./bridge-progress"
 import { getPulsarAddress, getPulsarPubkey } from "./keplr"
-import { MINA_RPC_URL } from "./constants"
+import { MinaNodeNotSyncedError, withMinaNodeFailover } from "./mina-node"
 import { resolveCosmosPublicKey, resolveMinaAddress } from "./registry"
 import {
   forgetPendingTransfer,
@@ -59,7 +59,9 @@ export function usePminaBalance(account: string | null | undefined, options?: {
  * reports as the same "does not exist" a genuinely fresh wallet gets. A
  * funded wallet rendered as 0.000 MINA — a user reads that as the bridge
  * having eaten their funds. Only the node's own syncStatus tells the cases
- * apart, so a missing account is trusted exactly when the node is SYNCED.
+ * apart, so a missing account is trusted exactly when the answering node is
+ * SYNCED — and an unsynced answer moves the read to the next daemon before
+ * anything surfaces to the UI.
  */
 export function useMinaBalance(account: string | null | undefined, options?: {
   enabled?: boolean;
@@ -70,32 +72,39 @@ export function useMinaBalance(account: string | null | undefined, options?: {
       if (!account) throw new Error('No account connected');
 
       const { fetchAccount } = await import('o1js');
-      const accountInfo = await fetchAccount({ publicKey: account }, MINA_RPC_URL);
+      return withMinaNodeFailover('Mina balance read', async (url) => {
+        const accountInfo = await fetchAccount({ publicKey: account }, url);
 
-      if (accountInfo.error || !accountInfo.account) {
-        const response = await fetch(MINA_RPC_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: '{ syncStatus }' }),
-        });
-        const status = response.ok
-          ? ((await response.json()) as { data?: { syncStatus?: string } })
-              ?.data?.syncStatus
-          : null;
-        if (status !== 'SYNCED') {
-          throw new Error(
-            `Mina devnet node is not serving the ledger (${status ?? 'unreachable'})`,
-          );
+        if (accountInfo.error || !accountInfo.account) {
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: '{ syncStatus }' }),
+          });
+          const status = response.ok
+            ? ((await response.json()) as { data?: { syncStatus?: string } })
+                ?.data?.syncStatus
+            : null;
+          if (status !== 'SYNCED') {
+            throw new MinaNodeNotSyncedError(
+              `Mina devnet node is not serving the ledger (${status ?? 'unreachable'})`,
+            );
+          }
+          return 0n;
         }
-        return 0n;
-      }
 
-      return accountInfo.account.balance.toBigInt();
+        return accountInfo.account.balance.toBigInt();
+      });
     },
     enabled: !!account && (options?.enabled ?? true),
     staleTime: 30000,
     gcTime: 5 * 60 * 1000,
-    retry: 3,
+    // Reaching the UI as unsynced means every daemon in the list declined —
+    // an answer, not a blip. Retrying only delays the outage warning by the
+    // whole backoff while the UI sits on its 0n default. Network failures
+    // still get the usual retries.
+    retry: (failureCount, error) =>
+      !(error instanceof MinaNodeNotSyncedError) && failureCount < 3,
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
     ...options,
   });

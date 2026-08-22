@@ -1,10 +1,10 @@
 import {
   BRIDGE_MODULE_ADDRESS,
-  MINA_RPC_URL,
   PMINA_DENOM,
   PULSAR_REST_URL,
   PULSAR_RPC_URL,
 } from "./constants";
+import { withMinaNodeFailover } from "./mina-node";
 import {
   BRIDGE_QUERY_LATEST_ACTION_HASHES,
   BRIDGE_QUERY_PARAMS,
@@ -359,29 +359,33 @@ export async function fetchPulsarHeight(): Promise<number> {
  * certainly has not been read yet.
  */
 export async function fetchMinaHeight(): Promise<number> {
-  const res = await fetch(MINA_RPC_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      query: "{ bestChain(maxLength: 1) { protocolState { consensusState { blockHeight } } } }",
-    }),
-  });
-  if (!res.ok) throw new Error(`Mina node returned ${res.status}`);
+  return withMinaNodeFailover("Mina height read", async (url) => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: "{ bestChain(maxLength: 1) { protocolState { consensusState { blockHeight } } } }",
+      }),
+    });
+    if (!res.ok) throw new Error(`Mina node returned ${res.status}`);
 
-  const body = (await res.json()) as {
-    data?: {
-      bestChain?: {
-        protocolState?: { consensusState?: { blockHeight?: string } };
-      }[];
+    const body = (await res.json()) as {
+      data?: {
+        bestChain?: {
+          protocolState?: { consensusState?: { blockHeight?: string } };
+        }[];
+      };
     };
-  };
-  const height = Number(
-    body.data?.bestChain?.[0]?.protocolState?.consensusState?.blockHeight,
-  );
-  if (!Number.isSafeInteger(height) || height <= 0) {
-    throw new Error("Mina node returned no block height");
-  }
-  return height;
+    const height = Number(
+      body.data?.bestChain?.[0]?.protocolState?.consensusState?.blockHeight,
+    );
+    if (!Number.isSafeInteger(height) || height <= 0) {
+      // A daemon in BOOTSTRAP has no best chain — same outage the balance
+      // read guards against, and the same reason to try the next daemon.
+      throw new Error("Mina node returned no block height");
+    }
+    return height;
+  });
 }
 
 /**
