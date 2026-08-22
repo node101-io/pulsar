@@ -31,6 +31,20 @@ import {
 
 let minaCtx: MinaClientContext | null = null;
 
+// Failures that say nothing about the PROOF: gateway 502/504s, refused or
+// reset connections, and a daemon that has no transition frontier yet
+// (Minascan mid-BOOTSTRAP answers sends with exactly those words). Counting
+// these toward MAX_FAIL_COUNT threw away a multi-hour settlement proof for
+// every third gateway hiccup — the 2026-08-21/22 outage re-proved the same
+// epoch in a loop while NO public endpoint could take a send at all.
+//
+// Deliberately a blacklist, not an allowlist of stale-proof verdicts: an
+// error shape nobody anticipated still falls through to the re-prove path,
+// so a genuinely stale proof can never wedge the pipeline forever — the
+// worst a miss costs is one wasted re-prove.
+const TRANSPORT_ERROR =
+    /\b50[234]\b|bad gateway|gateway time-?out|service unavailable|econnrefused|econnreset|etimedout|fetch failed|transition frontier/i;
+
 async function getMinaContext(): Promise<MinaClientContext> {
     if (!minaCtx) {
         const contractAddress = process.env.CONTRACT_ADDRESS;
@@ -57,8 +71,22 @@ export class SettlerMaster extends Master<SettlerJob> {
             processJob: async (_workerId, job) => {
                 await processSettlement(job.data);
             },
-            onJobFailed: async (job) => {
+            onJobFailed: async (job, error) => {
                 if (job?.data.height !== undefined) {
+                    if (TRANSPORT_ERROR.test(error?.message ?? "")) {
+                        // The proof never reached a daemon that judged it —
+                        // hand the epoch straight back to settlement without
+                        // advancing the fail counter. Only a real verdict may
+                        // push an epoch toward the re-prove path below.
+                        await ProofEpochModel.updateOne(
+                            {
+                                height: job.data.height,
+                                kind: "txSending" as ProofKind,
+                            },
+                            { $set: { kind: "settlement" as ProofKind } },
+                        );
+                        return;
+                    }
                     const updated = await ProofEpochModel.findOneAndUpdate(
                         {
                             height: job.data.height,

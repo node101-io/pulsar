@@ -1,9 +1,9 @@
-import { fetchAccount, PublicKey } from "o1js";
+import { PublicKey } from "o1js";
 import { SettlementContract } from "pulsar-contracts/build/src/SettlementContract.js";
 import {
     activeNodeEndpoint,
+    fetchCheckedAccount,
     setMinaNetwork,
-    withNodeFailover,
 } from "pulsar-contracts/build/src/utils/fetch.js";
 import { ENDPOINTS } from "pulsar-contracts/build/src/utils/constants.js";
 import logger from "../../common/logger.js";
@@ -56,16 +56,13 @@ export async function initMinaClientContext(): Promise<MinaClientContext> {
     });
 
     const contractAddress = PublicKey.fromBase58(contractAddressStr);
-    const fetchResult = await withNodeFailover("Contract account fetch", async () => {
-        const result = await fetchAccount({ publicKey: contractAddress });
-        if (result.error != null) {
-            throw new Error(`fetchAccount failed during init: ${result.error.statusText}`);
-        }
-        return result;
-    });
+    const account = await fetchCheckedAccount(
+        contractAddress,
+        "Contract account fetch",
+    );
 
-    const zkappState = (fetchResult.account?.zkapp?.appState ?? []).map((f: any) => f.toString());
-    const actionStateHistory = (fetchResult.account?.zkapp?.actionState ?? []).map((f: any) => f.toString());
+    const zkappState = (account.zkapp?.appState ?? []).map((f: any) => f.toString());
+    const actionStateHistory = (account.zkapp?.actionState ?? []).map((f: any) => f.toString());
     const contract = new SettlementContract(contractAddress);
 
     logger.info("Mina client initialized", {
@@ -91,19 +88,16 @@ export async function initMinaClientContext(): Promise<MinaClientContext> {
  * Refreshes ctx.zkappState by fetching the account from the network.
  */
 export async function refreshContractState(ctx: MinaClientContext): Promise<void> {
-    const result = await withNodeFailover("Contract account refresh", async () => {
-        const fetched = await fetchAccount({ publicKey: ctx.contractAddress });
-        if (fetched.error != null) {
-            throw new Error(`fetchAccount failed: ${fetched.error.statusText}`);
-        }
-        return fetched;
-    });
-    const appState = result.account?.zkapp?.appState;
+    const account = await fetchCheckedAccount(
+        ctx.contractAddress,
+        "Contract account refresh",
+    );
+    const appState = account.zkapp?.appState;
     if (!appState || appState.length === 0) {
         throw new Error("Contract has no zkapp state — is it deployed?");
     }
     ctx.zkappState = appState.map((f: any) => f.toString());
-    ctx.actionStateHistory = (result.account?.zkapp?.actionState ?? []).map(
+    ctx.actionStateHistory = (account.zkapp?.actionState ?? []).map(
         (f: any) => f.toString(),
     );
 }

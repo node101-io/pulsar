@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import { useMinaWallet } from "@/app/_providers/mina-wallet"
 import { usePulsarWallet } from "@/app/_providers/pulsar-wallet"
 import { useConnectedWallet } from "@/app/components/use-connected-wallet"
+import { Spinner } from "@/app/components/spinner"
 import type { WalletKind } from "@/lib/connected-wallet"
 import toast from "react-hot-toast"
 import { useKeyStore, useMinaPrice, usePminaBalance } from "@/lib/hooks"
@@ -84,11 +85,27 @@ export const MainView = ({ setCurrentView, setPopupWalletType, preferredWallet }
     setPopupWalletType(false);
   };
 
+  // An unread balance is not a zero balance — same rule as the bridge form.
+  // A read still in flight spins; one that failed shows the dash, because a
+  // spinner there would promise an answer that is not coming.
   const getBalance = () => {
+    if (isLoadingBalance) return <Spinner className="size-5" />;
+    if (balanceError)
+      return (
+        <span title="Your pMINA balance can't be read right now — the balance itself is unaffected">
+          <span className="tabular-nums">—</span> pMINA
+        </span>
+      );
     return `${formatAmount(pminaBalance ?? 0n)} pMINA`;
   };
 
   const getBalanceUSD = () => {
+    // No USD verdict on a balance that has not arrived — "$0.00" under the
+    // dash above restates the zero-lie in dollars. The empty line keeps the
+    // slot so the Refresh button does not jump.
+    if (isLoadingBalance || balanceError) {
+      return <h3 className="text-[13px] leading-none">&nbsp;</h3>;
+    }
     if (currentWallet === 'mina' && priceData && pminaBalance) {
       return (
         <h3 className={cn(
@@ -192,25 +209,24 @@ export const MainView = ({ setCurrentView, setPopupWalletType, preferredWallet }
             getBalanceUSD()
           )}
 
-          {!balanceError && (
-            <button
-              onClick={() => {
-                refetchBalance();
-                queryClient.invalidateQueries({ queryKey: ['minaPrice'] });
-              }}
-              disabled={isRefreshing}
-              className={cn(
-                "flex items-center gap-1 text-xs leading-none transition-colors",
-                isRefreshing
-                  ? "text-ink-subtle cursor-not-allowed"
-                  : "text-ink-subtle hover:text-ink cursor-pointer",
-              )}
-              title={isRefreshing ? "Refreshing…" : "Refresh balance & price"}
-            >
-              <span className={cn(isRefreshing && "animate-spin origin-[50%_60%]")}>↻</span>
-              Refresh
-            </button>
-          )}
+          {/* Shown on error too — a failed read is when retrying matters most. */}
+          <button
+            onClick={() => {
+              refetchBalance();
+              queryClient.invalidateQueries({ queryKey: ['minaPrice'] });
+            }}
+            disabled={isRefreshing}
+            className={cn(
+              "flex items-center gap-1 text-xs leading-none transition-colors",
+              isRefreshing
+                ? "text-ink-subtle cursor-not-allowed"
+                : "text-ink-subtle hover:text-ink cursor-pointer",
+            )}
+            title={isRefreshing ? "Refreshing…" : "Refresh balance & price"}
+          >
+            <span className={cn(isRefreshing && "animate-spin origin-[50%_60%]")}>↻</span>
+            Refresh
+          </button>
         </div>
 
         <div className="mt-4 flex gap-2">

@@ -17,9 +17,11 @@ export interface MasterConfig<JobData> {
         workerId: number,
         job: Job<JobData, void, string>,
     ) => Promise<void>;
-    // called when a job fails (e.g. increment fail count)
+    // called when a job fails (e.g. increment fail count); the error lets
+    // handlers tell a transport failure from a real verdict
     onJobFailed?: (
         job: Job<JobData, void, string> | undefined,
+        error?: Error,
     ) => Promise<void>;
 }
 
@@ -88,7 +90,7 @@ export abstract class Master<JobData> {
         });
 
         worker.on("failed", async (job, err) => {
-            if (onJobFailed && job) await onJobFailed(job);
+            if (onJobFailed && job) await onJobFailed(job, err);
             logger.error(
                 `${workerLabel} worker ${workerId} failed job ${job?.id}`,
                 { errorMessage: err?.message, stack: err?.stack, jobId: job?.id, data: job?.data },

@@ -11,6 +11,7 @@ import {
   WITHDRAW_DOWN_PAYMENT_NANOMINA,
 } from "@/lib/constants";
 import { activeMinaNodeUrl } from "@/lib/mina-node";
+import { Spinner } from "@/app/components/spinner";
 import { toast } from "react-hot-toast";
 import {
   useMinaPrice,
@@ -48,7 +49,7 @@ export default function Bridge() {
   const [isTransacting, setIsTransacting] = useState(false);
 
   const { data: priceData } = useMinaPrice();
-  const { data: keyStore } = useKeyStore(account);
+  const { data: keyStore, isLoading: keyStoreLoading } = useKeyStore(account);
   const { data: connectedPulsarAddress } = usePulsarAddress();
   const pendingTransfers = usePendingBridgeTransfers(account);
 
@@ -82,6 +83,22 @@ export default function Bridge() {
   // balances — nothing may render them or judge amounts against them.
   const minaBalanceUnknown = minaUnreachable || minaBalanceLoading;
   const pminaBalanceUnknown = pminaUnreachable || pminaBalanceLoading;
+
+  // Two different scopes, both direction-dependent, and they do NOT coincide:
+  // the amount field shows the balance of the token being SENT, while the
+  // submit gate needs every balance the transfer READS — a withdrawal spends
+  // pMINA but pays its fee and down payment in MINA.
+  //
+  // Loading and unreachable stay apart rather than collapsing into "unknown",
+  // because the field renders them differently: react-query holds a query
+  // pending across its retries, so a read still being retried spins, and only
+  // one that has given up shows the dash.
+  const sentBalanceLoading = isDeposit ? minaBalanceLoading : pminaBalanceLoading;
+  const sentBalanceUnreachable = isDeposit ? minaUnreachable : pminaUnreachable;
+  const requiredBalancesLoading =
+    minaBalanceLoading || (!isDeposit && pminaBalanceLoading);
+  const requiredBalanceUnreachable =
+    minaUnreachable || (!isDeposit && pminaUnreachable);
   const amountNano = parseAmount(amount);
 
   // Everything a withdrawal costs on the Mina side. The down payment rides in
@@ -137,33 +154,59 @@ export default function Bridge() {
     setAmount("");
   };
 
-  const blockedReason = !isConnected
-    ? "Connect your Mina wallet"
-    : !onExpectedNetwork
-      ? `Auro is on ${network?.networkID} — switch to Devnet`
-      : minaUnreachable
-        // Mina's problem, and said so: a balance shown as 0.000 with a live
-        // deposit button reads as Pulsar having lost the funds. Everything
-        // downstream needs the same node anyway — the transaction could not
-        // be built either.
-        ? "Mina devnet is unavailable right now — not a Pulsar issue. Your balance is unaffected; try again later."
-        // An over-balance withdrawal forfeits the down payment when the chain
-        // scans it, and the balance is exactly what cannot be checked here.
-        : !isDeposit && pminaUnreachable
-          ? "Your pMINA balance can't be read right now. Your balance is unaffected; try again later."
-          : !isRegistered
-        ? `Register your keys before ${isDeposit ? "depositing" : "withdrawing"}`
-        : isWrongDestination
-          ? `This Mina account is registered to ${truncateAddress(pulsarAccount!)}, not the connected ${truncateAddress(connectedPulsarAddress!)} — the deposit would land there. Switch Keplr to that account.`
-          : cannotAffordWithdraw
-            ? `Withdrawing needs ${formatAmount(withdrawMinaCost)} MINA on Mina — a ${formatAmount(WITHDRAW_DOWN_PAYMENT_NANOMINA)} MINA deposit returned when it settles, plus the ${formatAmount(MINA_TX_FEE_NANOMINA)} MINA fee`
-            : isBelowMinimum
-              ? `Minimum deposit is ${formatAmount(MINIMUM_DEPOSIT_NANOMINA)} MINA`
-              : isOverBalance
-                ? isDeposit
-                  ? `Insufficient MINA — ${formatAmount(MINA_TX_FEE_NANOMINA)} MINA is needed for the fee on top of the deposit`
-                  : `Insufficient pMINA — your registered account holds ${formatAmount(pminaBalance)}`
-                : null;
+  /**
+   * Why the transfer cannot be submitted, or null when it can. Ordered: what
+   * the user must fix outranks what they must wait for — but a wait comes
+   * before any verdict it decides, because a guard asserted against an answer
+   * that has not arrived is just the 0n-balance lie in another spot.
+   *
+   * Everything an answer has not arrived for blocks too. The guards below —
+   * over-balance, the minimum, the withdrawal's Mina-side cost — all read
+   * balances that default to 0n, so letting a submit through before they can
+   * run means signing against numbers nobody checked. On the withdrawal side
+   * that is not merely a failed transaction: the chain forfeits the down
+   * payment of a withdrawal it judges over-balance.
+   */
+  const blockReason = (): string | null => {
+    if (!isConnected) return "Connect your Mina wallet";
+    if (!onExpectedNetwork)
+      return `Auro is on ${network?.networkID} — switch to Devnet`;
+
+    // Mina's problem, and said so: a balance shown as 0.000 with a live
+    // deposit button reads as Pulsar having lost the funds. Everything
+    // downstream needs the same node anyway — the transaction could not be
+    // built either.
+    if (minaUnreachable)
+      return "Mina devnet is unavailable right now — not a Pulsar issue. Your balance is unaffected; try again later.";
+    if (!isDeposit && pminaUnreachable)
+      return "Your pMINA balance can't be read right now. Your balance is unaffected; try again later.";
+
+    // Not-yet-loaded is not not-registered: isRegistered is false while the
+    // registry query is still out, and asserting it then flashes onboarding
+    // at a user who completed it — the registration cousin of rendering the
+    // 0n balance default.
+    if (keyStoreLoading) return "Checking your registration…";
+    if (!isRegistered)
+      return `Register your keys before ${isDeposit ? "depositing" : "withdrawing"}`;
+    if (isWrongDestination)
+      return `This Mina account is registered to ${truncateAddress(pulsarAccount!)}, not the connected ${truncateAddress(connectedPulsarAddress!)} — the deposit would land there. Switch Keplr to that account.`;
+    if (cannotAffordWithdraw)
+      return `Withdrawing needs ${formatAmount(withdrawMinaCost)} MINA on Mina — a ${formatAmount(WITHDRAW_DOWN_PAYMENT_NANOMINA)} MINA deposit returned when it settles, plus the ${formatAmount(MINA_TX_FEE_NANOMINA)} MINA fee`;
+    if (isBelowMinimum)
+      return `Minimum deposit is ${formatAmount(MINIMUM_DEPOSIT_NANOMINA)} MINA`;
+    if (isOverBalance)
+      return isDeposit
+        ? `Insufficient MINA — ${formatAmount(MINA_TX_FEE_NANOMINA)} MINA is needed for the fee on top of the deposit`
+        : `Insufficient pMINA — your registered account holds ${formatAmount(pminaBalance)}`;
+
+    // Last among the waits: the balance guards above are each gated off
+    // while their read is out, so reaching here with one still loading means
+    // nothing has been checked against real numbers yet.
+    if (requiredBalancesLoading) return "Checking your balance…";
+
+    return null;
+  };
+  const blockedReason = blockReason();
 
   const handleSubmit = async () => {
     if (blockedReason || !account || !worker) return;
@@ -352,16 +395,26 @@ export default function Bridge() {
               </span>
             )}
             {/* An unread balance is not a zero balance: "Max: 0.000" while
-                loading or mid-outage tells a funded user their MINA is gone. */}
-            {(isDeposit ? minaBalanceUnknown : pminaBalanceUnknown) ? (
+                loading or mid-outage tells a funded user their MINA is gone.
+                The two are not the same shape, though — a spinner says the
+                answer is coming, so only the read still in flight gets one.
+                A failed read keeps the dash: spinning at a user whose node is
+                down promises a balance that will never arrive. */}
+            {sentBalanceLoading ? (
+              <span
+                className="text-ink-subtle ml-auto flex items-center gap-1.5"
+                title="Reading your balance…"
+              >
+                Max: <Spinner className="size-3" />
+                {isDeposit ? "MINA" : "pMINA"}
+              </span>
+            ) : sentBalanceUnreachable ? (
               <span
                 className="text-ink-subtle ml-auto"
                 title={
-                  (isDeposit ? minaUnreachable : pminaUnreachable)
-                    ? isDeposit
-                      ? "Mina devnet is unavailable — your balance cannot be read right now"
-                      : "Your pMINA balance cannot be read right now"
-                    : "Reading your balance…"
+                  isDeposit
+                    ? "Mina devnet is unavailable — your balance cannot be read right now"
+                    : "Your pMINA balance cannot be read right now"
                 }
               >
                 Max: <span className="tabular-nums">—</span>{" "}

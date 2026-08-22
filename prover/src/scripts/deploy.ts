@@ -24,9 +24,10 @@
  */
 
 import "dotenv/config";
-import { AccountUpdate, Cache, fetchAccount, Field, Mina, PrivateKey } from "o1js";
+import { AccountUpdate, Cache, Field, Mina, PrivateKey } from "o1js";
 import mongoose from "mongoose";
 import {
+    fetchCheckedAccount,
     setMinaNetwork,
     SettlementContract,
     MultisigVerifierProgram,
@@ -147,7 +148,9 @@ async function main() {
 
     // ── fetch signer ────────────────────────────────────────────────────────
     console.log(`Fetching signer account: ${signerPublicKey.toBase58()}`);
-    await fetchAccount({ publicKey: signerPublicKey });
+    // Checked on purpose: deploying through a dead node used to fail much
+    // later, inside tx building, with an error that read like a key problem.
+    await fetchCheckedAccount(signerPublicKey, "Signer fetch");
 
     // ── build & prove tx ────────────────────────────────────────────────────
     const contractInstance = new SettlementContract(contractPublicKey);

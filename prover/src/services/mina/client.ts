@@ -1,10 +1,10 @@
-import { fetchAccount, PublicKey } from "o1js";
+import { PublicKey } from "o1js";
 import {
     activeNodeEndpoint,
     fetchBlockHeight,
+    fetchCheckedAccount,
     setMinaNetwork,
     SettlementContract,
-    withNodeFailover,
 } from "pulsar-contracts";
 import logger from "../../common/logger.js";
 
@@ -22,35 +22,13 @@ export interface MinaClientContext {
     readonly endpoint: string;
 }
 
-/**
- * fetchAccount into the o1js cache, failing over to a fallback node when the
- * account cannot be read.
- *
- * The explicit throw is what makes the failover work at all: fetchAccount
- * RESOLVES with `{ error }` instead of rejecting, so a bare call cannot
- * distinguish "this node has no ledger" from "this account does not exist"
- * and withNodeFailover would never see a failure to retry.
- */
-async function fetchAccountOrThrow(publicKey: PublicKey) {
-    return withNodeFailover("Account fetch", async () => {
-        const result = await fetchAccount({ publicKey });
-        if (result.error || !result.account) {
-            throw new Error(
-                `Could not fetch account ${publicKey.toBase58()}: ` +
-                    `${result.error?.statusText ?? "not found in ledger"}`,
-            );
-        }
-        return result.account;
-    });
-}
-
 export async function initMinaClientContext(
     watchedAddress: PublicKey,
     network: MinaNetwork,
 ): Promise<MinaClientContext> {
     setMinaNetwork(network);
 
-    await fetchAccountOrThrow(watchedAddress);
+    await fetchCheckedAccount(watchedAddress, "Contract account fetch");
 
     const settlementContract = new SettlementContract(watchedAddress);
 
@@ -80,6 +58,6 @@ export async function getCurrentMinaBlockHeight(
 export async function getContractBlockHeight(
     ctx: MinaClientContext,
 ): Promise<number> {
-    await fetchAccountOrThrow(ctx.watchedAddress);
+    await fetchCheckedAccount(ctx.watchedAddress, "Contract account fetch");
     return Number(ctx.settlementContract.blockHeight.get().toString());
 }

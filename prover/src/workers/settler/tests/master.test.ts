@@ -313,3 +313,83 @@ describe("settler master (pipeline tick)", () => {
         );
     });
 });
+
+// Pins the proof-burn guard from the 2026-08-21/22 outage: every broadcast
+// 502/504'd, each third failure hit MAX_FAIL_COUNT and threw away a
+// multi-hour settlement proof, and the pipeline re-proved the same epoch in
+// a loop. A transport failure must hand the epoch back to settlement WITHOUT
+// advancing the counter; only a daemon that actually judged the tx may push
+// an epoch toward re-proving.
+describe("settler master (broadcast failure classification)", () => {
+    const JOB = { data: { height: 1234 } } as any;
+
+    async function fail(message: string) {
+        const master = new SettlerMaster();
+        await (master as any).config.onJobFailed(JOB, new Error(message));
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        process.env.CONTRACT_ADDRESS = "B62qtest";
+        process.env.MINA_NETWORK = "lightnet";
+    });
+
+    it.each([
+        // Verbatim from o1js during the outage — nginx in front of o1test.
+        'Transaction failed with errors:\n- {"statusCode":502,"statusText":"Bad Gateway"}',
+        // Minascan mid-outage, before its gateway started answering at all.
+        'Transaction failed with errors:\n- {"statusCode":504,"statusText":"Gateway Timeout"}',
+        // Minascan mid-BOOTSTRAP: the daemon's own words for "not my fault".
+        "Couldn't send zkApp command: (failure \"We don't have a transition frontier at the moment, so we're unable to verify any transactions.\")",
+        "fetch failed",
+        "connect ECONNREFUSED 1.2.3.4:443",
+    ])("returns the epoch to settlement without a failCount for: %s", async (message) => {
+        await fail(message);
+
+        expect(ProofEpochModel.updateOne).toHaveBeenCalledWith(
+            { height: JOB.data.height, kind: "txSending" },
+            { $set: { kind: "settlement" } },
+        );
+        expect(ProofEpochModel.findOneAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it("counts a real daemon rejection toward MAX_FAIL_COUNT", async () => {
+        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({
+            failCount: 1,
+        } as any);
+
+        await fail(
+            "Settlement broadcast rejected by the node: [\"Invalid_nonce\"]",
+        );
+
+        expect(ProofEpochModel.findOneAndUpdate).toHaveBeenCalledWith(
+            { height: JOB.data.height, kind: "txSending" },
+            { $inc: { failCount: 1 } },
+            { returnDocument: "after" },
+        );
+        // Below MAX_FAIL_COUNT: back to settlement, proof kept.
+        expect(ProofEpochModel.updateOne).toHaveBeenCalledWith(
+            { height: JOB.data.height },
+            { $set: { kind: "settlement" } },
+        );
+    });
+
+    it("burns the proof only when a real rejection trips MAX_FAIL_COUNT", async () => {
+        vi.mocked(ProofEpochModel.findOneAndUpdate).mockResolvedValue({
+            failCount: 3,
+        } as any);
+
+        await fail("Settlement broadcast rejected by the node: [\"whatever\"]");
+
+        expect(ProofEpochModel.updateOne).toHaveBeenCalledWith(
+            { height: JOB.data.height },
+            {
+                $set: {
+                    kind: "aggregation",
+                    provedTxJson: null,
+                    failCount: 0,
+                },
+            },
+        );
+    });
+});

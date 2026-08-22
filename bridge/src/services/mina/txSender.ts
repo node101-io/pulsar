@@ -1,5 +1,9 @@
-import { Bool, fetchAccount, Field, Mina, PrivateKey } from "o1js";
-import { waitForTransaction } from "pulsar-contracts/build/src/utils/fetch.js";
+import { Bool, Field, Mina, PrivateKey } from "o1js";
+import {
+    fetchCheckedAccount,
+    waitForTransaction,
+    withNodeFailover,
+} from "pulsar-contracts/build/src/utils/fetch.js";
 import type { ApprovalQuorumProof } from "pulsar-contracts/build/src/ApprovalQuorum.js";
 import type { ActionStackProof } from "pulsar-contracts/build/src/ActionStack.js";
 import type { Batch } from "pulsar-contracts/build/src/types/PulsarAction.js";
@@ -42,8 +46,8 @@ export async function proveReduceTx(params: ReduceTxParams): Promise<string> {
     const senderKey = PrivateKey.fromBase58(env.MINA_PRIVATE_KEY);
     const sender = senderKey.toPublicKey();
 
-    await fetchAccount({ publicKey: sender });
-    await fetchAccount({ publicKey: ctx.contractAddress });
+    await fetchCheckedAccount(sender, "Fee payer fetch");
+    await fetchCheckedAccount(ctx.contractAddress, "Contract account fetch");
 
     const tx = await Mina.transaction({ sender, fee }, async () => {
         await ctx.contract.reduce(
@@ -76,21 +80,35 @@ export async function sendProvedReduceTx(
 
     for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
         try {
-            // Refresh nonce in case it changed since prove()
+            // Refresh nonce in case it changed since prove(). Its own walk,
+            // NOT nested inside the broadcast walk below — nesting would
+            // multiply the walks into up-to-N^2 attempts per try.
             const sender = senderKey.toPublicKey();
-            await fetchAccount({ publicKey: sender });
-            const currentNonce = Mina.getAccount(sender).nonce.toString();
+            const account = await fetchCheckedAccount(
+                sender,
+                "Fee payer nonce fetch",
+            );
+            const currentNonce = account.nonce.toString();
 
-            const txData = JSON.parse(provedTxJson);
-            txData.feePayer.body.nonce = currentNonce;
+            // The send gets the walk too, and needs it MORE than reads: an
+            // endpoint can serve every read flawlessly while its gateway
+            // 502s every real sendZkapp body (o1test, 2026-08-22) — without
+            // the walk, MAX_RETRY hammered that same endpoint three times
+            // and gave up. Rebuilding per attempt keeps lazyAuthorization
+            // fresh; re-broadcasting an identical signed tx is a mempool
+            // no-op.
+            const txHash = await withNodeFailover("Reduce broadcast", async () => {
+                const txData = JSON.parse(provedTxJson);
+                txData.feePayer.body.nonce = currentNonce;
 
-            const signedTx = Mina.Transaction.fromJSON(txData);
-            (signedTx as any).transaction.feePayer.lazyAuthorization = {
-                kind: "lazy-signature",
-            };
+                const signedTx = Mina.Transaction.fromJSON(txData);
+                (signedTx as any).transaction.feePayer.lazyAuthorization = {
+                    kind: "lazy-signature",
+                };
 
-            const result = await signedTx.sign([senderKey]).send();
-            const txHash = result.hash;
+                const result = await signedTx.sign([senderKey]).send();
+                return result.hash;
+            });
 
             logger.info("Reduce TX sent", {
                 txHash,

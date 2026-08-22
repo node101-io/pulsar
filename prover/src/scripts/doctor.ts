@@ -11,7 +11,8 @@
  * MINA_NETWORK. Optional: MINA_PRIVATE_KEY (fee-payer balance check).
  */
 import "dotenv/config";
-import { PublicKey, PrivateKey, fetchAccount, Mina } from "o1js";
+import { PublicKey, PrivateKey } from "o1js";
+import { fetchCheckedAccount } from "pulsar-contracts";
 import {
     getLatestHeight,
     grpcCredentials,
@@ -111,8 +112,7 @@ async function main() {
             console.log(`${WARN} MINA_PRIVATE_KEY not set — skipping`);
         } else {
             const pub = PrivateKey.fromBase58(pk).toPublicKey();
-            await fetchAccount({ publicKey: pub });
-            const account = Mina.getAccount(pub);
+            const account = await fetchCheckedAccount(pub, "Fee payer fetch");
             const mina = Number(account.balance.toString()) / 1e9;
             const marker = mina < 2 ? BAD : mina < 10 ? WARN : OK;
             console.log(`${marker} balance              : ${mina.toFixed(2)} MINA`);

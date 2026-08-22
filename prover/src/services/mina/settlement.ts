@@ -1,7 +1,9 @@
-import { fetchAccount, Mina, PrivateKey, Transaction } from "o1js";
+import { Mina, PrivateKey, Transaction } from "o1js";
 import {
+    fetchCheckedAccount,
     GenerateSettleAttestProof,
     SettlementProof,
+    withNodeFailover,
 } from "pulsar-contracts";
 
 import logger from "../../common/logger.js";
@@ -34,7 +36,7 @@ export async function proveSettlementTx(
     const sender = PrivateKey.fromBase58(privateKeyBase58);
     const senderPublicKey = sender.toPublicKey();
 
-    await fetchAccount({ publicKey: senderPublicKey });
+    await fetchCheckedAccount(senderPublicKey, "Fee payer fetch");
 
     // The settle branch verifies the small SettleAttest adapter, not the
     // settlement proof itself (o1js wrap-bug workaround — SettleAttest.ts).
@@ -63,8 +65,11 @@ export async function fetchFeePayerLedgerNonce(): Promise<number> {
 
     const senderPublicKey =
         PrivateKey.fromBase58(privateKeyBase58).toPublicKey();
-    await fetchAccount({ publicKey: senderPublicKey });
-    return Number(Mina.getAccount(senderPublicKey).nonce.toString());
+    const account = await fetchCheckedAccount(
+        senderPublicKey,
+        "Fee payer nonce fetch",
+    );
+    return Number(account.nonce.toString());
 }
 
 /**
@@ -83,22 +88,32 @@ export async function broadcastProvedSettlement(
 
     const sender = PrivateKey.fromBase58(privateKeyBase58);
 
-    const txData = JSON.parse(provedTxJson);
-    txData.feePayer.body.nonce = String(nonce);
+    // The whole attempt sits inside the node failover, and sends need that
+    // walk MORE than reads do: an endpoint can serve every read flawlessly
+    // while its gateway 502s every real sendZkapp body (o1test, 2026-08-22),
+    // so a healthy sticky read instance proves nothing about broadcast. The
+    // tx is rebuilt and re-signed per attempt; re-broadcasting the same
+    // signed tx to a second node is safe — same hash, a duplicate is a
+    // mempool no-op.
+    const result = await withNodeFailover("Settlement broadcast", async () => {
+        const txData = JSON.parse(provedTxJson);
+        txData.feePayer.body.nonce = String(nonce);
 
-    const tx = Transaction.fromJSON(txData);
-    (tx as any).transaction.feePayer.lazyAuthorization = {
-        kind: "lazy-signature",
-    };
-    const result = await tx.sign([sender]).send();
+        const tx = Transaction.fromJSON(txData);
+        (tx as any).transaction.feePayer.lazyAuthorization = {
+            kind: "lazy-signature",
+        };
+        const sent = await tx.sign([sender]).send();
 
-    if ((result as { status?: string }).status === "rejected") {
-        throw new Error(
-            `Settlement broadcast rejected by the node: ${JSON.stringify(
-                (result as { errors?: unknown }).errors ?? "unknown",
-            )}`,
-        );
-    }
+        if ((sent as { status?: string }).status === "rejected") {
+            throw new Error(
+                `Settlement broadcast rejected by the node: ${JSON.stringify(
+                    (sent as { errors?: unknown }).errors ?? "unknown",
+                )}`,
+            );
+        }
+        return sent;
+    });
 
     logger.info("Settlement TX broadcast", {
         txHash: result.hash,

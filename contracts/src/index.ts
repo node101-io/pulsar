@@ -56,8 +56,10 @@ import {
 } from './utils/constants.js';
 import {
   activeNodeEndpoint,
+  checkedAccount,
   checkZkappTransaction,
   fetchActions,
+  fetchCheckedAccount,
   fetchRawActions,
   fetchBlockHeight,
   fetchEvents,
@@ -122,8 +124,10 @@ export {
   APPROVAL_TAIL_CHUNK,
   ENDPOINTS,
   activeNodeEndpoint,
+  checkedAccount,
   checkZkappTransaction,
   fetchActions,
+  fetchCheckedAccount,
   fetchRawActions,
   fetchBlockHeight,
   fetchEvents,

@@ -1,6 +1,7 @@
 import { Field } from 'o1js';
 import {
   activeNodeEndpoint,
+  checkedAccount,
   setMinaNetwork,
   sliceActionHistory,
   withArchiveFailover,
@@ -249,5 +250,52 @@ describe('withNodeFailover', () => {
     await withArchiveFailover('Test fetch', stub(1).run);
 
     expect(activeNodeEndpoint('devnet')).toBe(NODE_FALLBACKS.devnet[0]);
+  });
+
+  it('walks back to the primary when the sticky fallback fails', async () => {
+    // Pins the road-back discovered 2026-08-22: o1test served every READ,
+    // keeping the instance sticky there, while its gateway 502'd every real
+    // sendZkapp. A fallbacks-only walk (the fallback list holds only o1test)
+    // would have retried the same dead endpoint and never reached a
+    // recovered Minascan — broadcasts stay broken forever.
+    setMinaNetwork('devnet');
+    await withNodeFailover('Test read', stub(1).run);
+    expect(activeNodeEndpoint('devnet')).toBe(NODE_FALLBACKS.devnet[0]);
+
+    const { run, attempts } = stub(1, 'primary-result');
+    await expect(withNodeFailover('Test send', run)).resolves.toBe(
+      'primary-result'
+    );
+    // One failure on the sticky fallback, then the primary — not the
+    // fallback twice.
+    expect(attempts()).toBe(2);
+    expect(warns[warns.length - 1]).toContain(ENDPOINTS.NODE.devnet);
+    expect(activeNodeEndpoint('devnet')).toBe(ENDPOINTS.NODE.devnet);
+  });
+});
+
+// Pins the result mapping that arms the node failover: o1js's fetchAccount
+// RESOLVES with { error } instead of rejecting, so without this mapping a
+// dead node's answer sails through as "account does not exist" — the exact
+// misread that turned the 2026-08-22 BOOTSTRAP outage into "contract never
+// deployed".
+describe('checkedAccount', () => {
+  const publicKey = { toBase58: () => 'B62qtest' } as any;
+
+  it('returns the account when the node could read it', () => {
+    const account = { nonce: 5 } as any;
+    expect(checkedAccount(publicKey, { account } as any)).toBe(account);
+  });
+
+  it('throws the node error instead of returning nothing', () => {
+    expect(() =>
+      checkedAccount(publicKey, { error: { statusText: 'BOOTSTRAP' } } as any)
+    ).toThrow(/Could not fetch account B62qtest: BOOTSTRAP/);
+  });
+
+  it('throws on a missing account even without an error field', () => {
+    expect(() => checkedAccount(publicKey, {} as any)).toThrow(
+      /Could not fetch account B62qtest: not found in ledger/
+    );
   });
 });

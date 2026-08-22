@@ -1,4 +1,11 @@
-import { fetchLastBlock, Field, Mina, PublicKey, UInt32 } from 'o1js';
+import {
+  fetchAccount,
+  fetchLastBlock,
+  Field,
+  Mina,
+  PublicKey,
+  UInt32,
+} from 'o1js';
 import { log } from './loggers.js';
 import { PulsarAction } from '../types/PulsarAction.js';
 import { CalculateFinalActionState } from './actionQueueUtils.js';
@@ -7,8 +14,10 @@ import { SettlementContract, SettlementEvent } from '../SettlementContract.js';
 
 export {
   activeNodeEndpoint,
+  checkedAccount,
   checkZkappTransaction,
   fetchActions,
+  fetchCheckedAccount,
   fetchRawActions,
   fetchBlockHeight,
   fetchEvents,
@@ -63,15 +72,20 @@ function activeNodeEndpoint(
 }
 
 /**
- * Run an endpoint-backed operation, walking the kind's fallback list in
- * order when it fails. Sequential on purpose — o1js's own multi-endpoint
+ * Run an endpoint-backed operation, walking every other known endpoint of
+ * the kind when it fails. Sequential on purpose — o1js's own multi-endpoint
  * support races endpoints in pairs and a fast-failing primary wins the race
  * (see the ARCHIVE_FALLBACKS comment in constants.ts).
  *
  * The first attempt runs against whatever endpoint the active instance
  * already points at, so a fallback that worked stays sticky for later calls
- * (mid-outage the primary is not re-probed on every fetch). On total failure
- * the instance is reset to the primary and the LAST error propagates —
+ * (mid-outage the primary is not re-probed on every fetch). The walk then
+ * covers the PRIMARY too, not just the fallbacks — stickiness makes that
+ * necessary: a fallback can serve reads flawlessly while its gateway 502s
+ * every real sendZkapp body (o1test, 2026-08-22), and since the healthy
+ * reads keep the instance pinned there, a fallbacks-only walk would give
+ * broadcasts no road back to a recovered primary. On total failure the
+ * instance is reset to the primary and the LAST error propagates —
  * swallowing it into an empty result would make an outage indistinguishable
  * from a genuinely empty answer.
  *
@@ -86,10 +100,10 @@ async function withEndpointFailover<T>(
   what: string,
   run: () => Promise<T>
 ): Promise<T> {
-  const [fallbacks, primary, activate] =
+  const [fallbacks, primary, activate, active] =
     kind === 'node'
-      ? ([NODE_FALLBACKS, ENDPOINTS.NODE, useNodeEndpoint] as const)
-      : ([ARCHIVE_FALLBACKS, ENDPOINTS.ARCHIVE, useArchiveEndpoint] as const);
+      ? ([NODE_FALLBACKS, ENDPOINTS.NODE, useNodeEndpoint, activeNodeUrl] as const)
+      : ([ARCHIVE_FALLBACKS, ENDPOINTS.ARCHIVE, useArchiveEndpoint, activeArchiveUrl] as const);
 
   let lastError: unknown;
   try {
@@ -98,11 +112,18 @@ async function withEndpointFailover<T>(
     lastError = error;
   }
   if (configuredNetwork !== null) {
-    for (const url of fallbacks[configuredNetwork]) {
+    const firstUrl = active ?? primary[configuredNetwork];
+    const candidates = [
+      primary[configuredNetwork],
+      ...fallbacks[configuredNetwork],
+    ].filter(
+      (url, index, all) => all.indexOf(url) === index && url !== firstUrl
+    );
+    for (const url of candidates) {
       console.warn(
         `${what} failed (${
           lastError instanceof Error ? lastError.message : lastError
-        }), retrying via fallback ${kind} ${url}`
+        }), retrying via ${kind} ${url}`
       );
       activate(url);
       try {
@@ -145,6 +166,43 @@ async function withNodeFailover<T>(
   run: () => Promise<T>
 ): Promise<T> {
   return withEndpointFailover('node', what, run);
+}
+
+/**
+ * The result mapping fetchCheckedAccount applies: o1js's fetchAccount
+ * RESOLVES with `{ error }` instead of rejecting, so left unchecked it can
+ * neither arm the failover walk nor tell a dead node from a missing account
+ * — which is exactly how a daemon in BOOTSTRAP read as "contract never
+ * deployed" on 2026-08-22.
+ */
+function checkedAccount(
+  publicKey: PublicKey,
+  result: Awaited<ReturnType<typeof fetchAccount>>
+) {
+  if (result.error || !('account' in result) || !result.account) {
+    throw new Error(
+      `Could not fetch account ${publicKey.toBase58()}: ${
+        ('error' in result ? result.error?.statusText : undefined) ??
+        'not found in ledger'
+      }`
+    );
+  }
+  return result.account;
+}
+
+/**
+ * fetchAccount against the active instance, failover walk armed. Returns the
+ * account and leaves it in o1js's cache for subsequent .get() reads. This is
+ * THE way to read an account from the daemon — a bare fetchAccount call
+ * silently accepts a dead node's answer (see checkedAccount above).
+ */
+async function fetchCheckedAccount(
+  publicKey: PublicKey,
+  what = 'Account fetch'
+) {
+  return withNodeFailover(what, async () =>
+    checkedAccount(publicKey, await fetchAccount({ publicKey }))
+  );
 }
 
 async function fetchRawActions(

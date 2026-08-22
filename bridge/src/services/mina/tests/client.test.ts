@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockFetchAccount } = vi.hoisted(() => ({
-    mockFetchAccount: vi.fn(),
+const { mockFetchCheckedAccount } = vi.hoisted(() => ({
+    mockFetchCheckedAccount: vi.fn(),
 }));
 
 vi.mock("o1js", () => ({
-    fetchAccount: mockFetchAccount,
     PublicKey: {
         fromBase58: vi.fn((s: string) => ({ toBase58: () => s })),
     },
@@ -17,12 +16,10 @@ vi.mock("pulsar-contracts/build/src/SettlementContract.js", () => ({
 
 vi.mock("pulsar-contracts/build/src/utils/fetch.js", () => ({
     setMinaNetwork: vi.fn(),
-    // Pass-through: the failover's retry contract is pinned in
-    // contracts/src/test/fetch.test.ts. Here it only has to not swallow the
-    // account errors these tests assert on.
-    withNodeFailover: vi.fn(async (_what: string, run: () => Promise<any>) =>
-        run(),
-    ),
+    // The walk and the dead-node error mapping are pinned in
+    // contracts/src/test/fetch.test.ts; these tests only cover what the
+    // bridge layers ON TOP of a fetched account (zkapp-state handling).
+    fetchCheckedAccount: mockFetchCheckedAccount,
     activeNodeEndpoint: vi.fn(() => "https://node.devnet"),
 }));
 
@@ -52,13 +49,10 @@ function field(v: string) {
 
 function makeAccount(appState: string[], actionState: string[]) {
     return {
-        account: {
-            zkapp: {
-                appState: appState.map(field),
-                actionState: actionState.map(field),
-            },
+        zkapp: {
+            appState: appState.map(field),
+            actionState: actionState.map(field),
         },
-        error: null,
     };
 }
 
@@ -105,7 +99,7 @@ describe("refreshContractState", () => {
 
     it("updates zkappState AND actionStateHistory from the same snapshot", async () => {
         const ctx = makeCtx();
-        mockFetchAccount.mockResolvedValue(
+        mockFetchCheckedAccount.mockResolvedValue(
             makeAccount(["1", "2", "3", "4", "5"], ["a", "b", "c", "d", "e"]),
         );
 
@@ -115,22 +109,20 @@ describe("refreshContractState", () => {
         expect(ctx.actionStateHistory).toEqual(["a", "b", "c", "d", "e"]);
     });
 
-    it("throws when fetchAccount reports an error", async () => {
-        mockFetchAccount.mockResolvedValue({
-            account: undefined,
-            error: { statusText: "account not found" },
-        });
+    it("propagates an unreadable account instead of swallowing it", async () => {
+        // The mapping itself (dead node vs missing account) is pinned in
+        // contracts/src/test/fetch.test.ts — here only the propagation.
+        mockFetchCheckedAccount.mockRejectedValue(
+            new Error("Could not fetch account B62qTest: account not found"),
+        );
 
         await expect(refreshContractState(makeCtx())).rejects.toThrow(
-            /fetchAccount failed/,
+            /Could not fetch account/,
         );
     });
 
     it("throws when the account has no zkapp state (not deployed)", async () => {
-        mockFetchAccount.mockResolvedValue({
-            account: { zkapp: undefined },
-            error: null,
-        });
+        mockFetchCheckedAccount.mockResolvedValue({ zkapp: undefined });
 
         await expect(refreshContractState(makeCtx())).rejects.toThrow(
             /is it deployed/,

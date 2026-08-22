@@ -15,7 +15,6 @@ const mockTx = {
 };
 
 vi.mock("o1js", () => ({
-    fetchAccount: vi.fn().mockResolvedValue(undefined),
     Mina: {
         transaction: vi.fn(async (_opts: any, fn: () => Promise<void>) => {
             await fn();
@@ -37,6 +36,13 @@ vi.mock("pulsar-contracts", () => ({
     SettlementProof: {},
     GenerateSettleAttestProof: vi.fn(async () => ({})),
     waitForTransaction: vi.fn(),
+    // Pass-through / canned account: the walk and the error mapping are
+    // pinned in contracts/src/test/fetch.test.ts; here they only must not
+    // swallow errors.
+    withNodeFailover: vi.fn(async (_what: string, run: () => Promise<any>) =>
+        run(),
+    ),
+    fetchCheckedAccount: vi.fn(async () => ({ nonce: "5" })),
 }));
 
 vi.mock("../../../common/logger.js", () => ({

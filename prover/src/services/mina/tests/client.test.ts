@@ -5,19 +5,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 let activeEndpoint: string | null = null;
 
 vi.mock("o1js", () => ({
-    fetchAccount: vi.fn(),
     PublicKey: { fromBase58: vi.fn() },
 }));
 
 vi.mock("pulsar-contracts", () => ({
     fetchBlockHeight: vi.fn(),
     setMinaNetwork: vi.fn(),
-    // Pass-through: the failover's own retry contract is covered by
-    // contracts/src/test/fetch.test.ts. What matters here is that the client
-    // routes its account reads through it at all.
-    withNodeFailover: vi.fn(async (_what: string, run: () => Promise<any>) =>
-        run(),
-    ),
+    // The walk and the error mapping live in pulsar-contracts and are pinned
+    // by contracts/src/test/fetch.test.ts. What matters here is that the
+    // client routes every account read through fetchCheckedAccount at all.
+    fetchCheckedAccount: vi.fn(),
     activeNodeEndpoint: vi.fn((network: string) => activeEndpoint ?? network),
     SettlementContract: vi.fn().mockImplementation(function (this: any) {
         this.blockHeight = {
@@ -42,9 +39,9 @@ vi.mock("../../../common/logger.js", () => ({
     },
 }));
 
-import { fetchAccount } from "o1js";
 import {
     fetchBlockHeight,
+    fetchCheckedAccount,
     setMinaNetwork,
     SettlementContract,
     ENDPOINTS,
@@ -57,8 +54,8 @@ import {
 
 const mockAddress = { toBase58: () => "B62qtest" } as any;
 
-/** fetchAccount's shape for an account the node could actually read. */
-const readableAccount = { account: { publicKey: mockAddress } } as any;
+/** What fetchCheckedAccount resolves to for a readable account. */
+const readableAccount = { publicKey: mockAddress } as any;
 
 describe("mina client", () => {
     beforeEach(() => {
@@ -68,14 +65,15 @@ describe("mina client", () => {
 
     describe("initMinaClientContext", () => {
         it("sets network, fetches account, creates contract and returns context", async () => {
-            vi.mocked(fetchAccount).mockResolvedValue(readableAccount);
+            vi.mocked(fetchCheckedAccount).mockResolvedValue(readableAccount);
 
             const ctx = await initMinaClientContext(mockAddress, "devnet");
 
             expect(setMinaNetwork).toHaveBeenCalledWith("devnet");
-            expect(fetchAccount).toHaveBeenCalledWith({
-                publicKey: mockAddress,
-            });
+            expect(fetchCheckedAccount).toHaveBeenCalledWith(
+                mockAddress,
+                "Contract account fetch",
+            );
             expect(SettlementContract).toHaveBeenCalledWith(mockAddress);
             expect(ctx.network).toBe("devnet");
             expect(ctx.endpoint).toBe(ENDPOINTS.NODE.devnet);
@@ -83,7 +81,7 @@ describe("mina client", () => {
         });
 
         it("returns correct endpoint for lightnet", async () => {
-            vi.mocked(fetchAccount).mockResolvedValue(readableAccount);
+            vi.mocked(fetchCheckedAccount).mockResolvedValue(readableAccount);
             activeEndpoint = ENDPOINTS.NODE.lightnet;
 
             const ctx = await initMinaClientContext(mockAddress, "lightnet");
@@ -92,13 +90,13 @@ describe("mina client", () => {
         });
 
         it("throws when the node cannot read the account", async () => {
-            // fetchAccount RESOLVES with an error rather than rejecting. Left
-            // unchecked (as it was until 2026-08-22), a daemon in BOOTSTRAP —
-            // which answers null for every address — passed init silently and
-            // the contract only looked undeployed later, at blockHeight.get().
-            vi.mocked(fetchAccount).mockResolvedValue({
-                error: { statusText: "BOOTSTRAP" },
-            } as any);
+            // The BOOTSTRAP misread (a dead node's null answer passing init
+            // silently, until 2026-08-22) is now caught inside
+            // fetchCheckedAccount — pinned in contracts/src/test/fetch.test.ts.
+            // Here: the client must propagate it, not swallow it.
+            vi.mocked(fetchCheckedAccount).mockRejectedValue(
+                new Error("Could not fetch account B62qtest: BOOTSTRAP"),
+            );
 
             await expect(
                 initMinaClientContext(mockAddress, "devnet"),
@@ -106,7 +104,7 @@ describe("mina client", () => {
         });
 
         it("follows a later failover instead of pinning the startup endpoint", async () => {
-            vi.mocked(fetchAccount).mockResolvedValue(readableAccount);
+            vi.mocked(fetchCheckedAccount).mockResolvedValue(readableAccount);
 
             const ctx = await initMinaClientContext(mockAddress, "devnet");
             expect(ctx.endpoint).toBe(ENDPOINTS.NODE.devnet);
@@ -133,7 +131,7 @@ describe("mina client", () => {
 
     describe("getContractBlockHeight", () => {
         it("fetches account and returns blockHeight as number", async () => {
-            vi.mocked(fetchAccount).mockResolvedValue(readableAccount);
+            vi.mocked(fetchCheckedAccount).mockResolvedValue(readableAccount);
 
             const mockContract = {
                 blockHeight: {
@@ -149,9 +147,10 @@ describe("mina client", () => {
 
             const result = await getContractBlockHeight(ctx);
 
-            expect(fetchAccount).toHaveBeenCalledWith({
-                publicKey: mockAddress,
-            });
+            expect(fetchCheckedAccount).toHaveBeenCalledWith(
+                mockAddress,
+                "Contract account fetch",
+            );
             expect(result).toBe(800);
         });
     });

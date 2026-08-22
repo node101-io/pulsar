@@ -1,5 +1,8 @@
-import { fetchAccount, Field, PrivateKey, PublicKey, Signature } from "o1js";
-import { fetchActions } from "pulsar-contracts/build/src/utils/fetch.js";
+import { Field, PrivateKey, PublicKey, Signature } from "o1js";
+import {
+    fetchActions,
+    fetchCheckedAccount,
+} from "pulsar-contracts/build/src/utils/fetch.js";
 import {
     TendermintClient,
     fetchBridgeParams,
@@ -392,8 +395,10 @@ async function main() {
 
     try {
         const payer = PrivateKey.fromBase58(env.MINA_PRIVATE_KEY).toPublicKey();
-        const account = await fetchAccount({ publicKey: payer });
-        const balance = account.account?.balance.toBigInt() ?? 0n;
+        // Checked: the old `?? 0n` turned a dead node into "fee payer empty,
+        // top up" — a misdiagnosis pointing at the faucet during an outage.
+        const account = await fetchCheckedAccount(payer, "Fee payer fetch");
+        const balance = account.balance.toBigInt();
         const mina = Number(balance) / 1e9;
         // Each reduce attempt costs MINA_FEE and may re-send up to 3 times;
         // the bridge has no balance check of its own, so an empty payer
@@ -401,7 +406,7 @@ async function main() {
         const low = balance < BigInt(env.MINA_FEE) * 10n;
         console.log(
             `${low ? BAD : OK} fee payer      ${payer.toBase58()}  ` +
-                `${mina.toFixed(3)} MINA, nonce ${account.account?.nonce.toString() ?? "?"}`,
+                `${mina.toFixed(3)} MINA, nonce ${account.nonce.toString()}`,
         );
         if (low)
             setVerdict(
