@@ -35,7 +35,7 @@
         "cosmjs-types": "^0.10.1",
         "motion": "^13.1.0",
         "next": "15.5.23",
-        "o1js": "2.15.0",
+        "o1js": "3.0.0",
         "pulsar-chain-client": "workspace:*",
         "pulsar-contracts": "workspace:*",
         "react": "^19.2.8",
