@@ -1,8 +1,8 @@
 // The Cloudflare Worker in front of the exported site.
 //
 // Static files are served by the ASSETS binding, which also applies
-// public/_headers and public/_redirects. The only dynamic route is the MINA
-// price, kept here rather than in Next so the app can export statically.
+// public/_headers and public/_redirects. The dynamic routes live here rather
+// than in Next so the app can keep exporting statically.
 
 import { grantRegistrationFee, granterAddress, hasAllowance } from "./feegrant";
 
@@ -40,6 +40,26 @@ const PRICE_FALLBACK_KEY = "https://price-fallback.pulsar.internal/mina";
 const PULSAR_RPC_ORIGIN = "https://rpc.pulsarchain.xyz";
 const PULSAR_REST_ORIGIN = "https://rest.pulsarchain.xyz";
 
+// Keep in sync with MINA_NODE_PROXY_PATH in src/lib/constants.ts. Mirrored
+// rather than imported: this file typechecks with no DOM lib.
+const MINA_NODE_PATH = "/api/mina-node";
+
+// Fixed in code, never read from the request: a proxy that forwards wherever
+// the caller names is an open relay wearing our own origin.
+const MINA_NODE_UPSTREAM = "https://devnet.minaprotocol.network/graphql";
+
+// A hung daemon must fail fast — lib/mina-node.ts only reaches the next
+// endpoint once this one has actually failed.
+const MINA_NODE_TIMEOUT_MS = 15_000;
+
+const MINA_NODE_HEADERS = {
+  "Content-Type": "application/json",
+  // A stale nonce or balance does not read as stale, it builds an invalid
+  // transaction.
+  "Cache-Control": "no-store",
+  // The page is cross-origin isolated (see public/_headers).
+  "Cross-Origin-Resource-Policy": "same-origin",
+};
 
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
@@ -51,6 +71,10 @@ export default {
 
     if (url.pathname === "/api/feegrant") {
       return handleFeegrant(request, env);
+    }
+
+    if (url.pathname === MINA_NODE_PATH) {
+      return handleMinaNode(request);
     }
 
     // In development everything else comes from `next dev`, so the pages keep
@@ -169,6 +193,42 @@ async function handleFeegrant(request: Request, env: WorkerEnv): Promise<Respons
 
   await env.FEEGRANT_QUEUE.send({ address });
   return Response.json({ status: "pending", granter });
+}
+
+/**
+ * Mina's own devnet daemon, which serves no CORS headers and so cannot be
+ * called from a browser however healthy it is. On 2026-08-25 it was the only
+ * devnet endpoint answering at all, Minascan's node and archive both having
+ * gone to timeouts; proxying it from our origin is what lets the page fail
+ * over to it.
+ */
+async function handleMinaNode(request: Request): Promise<Response> {
+  if (request.method !== "POST") {
+    return Response.json({ error: "POST only" }, { status: 405, headers: MINA_NODE_HEADERS });
+  }
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(MINA_NODE_UPSTREAM, {
+      method: "POST",
+      // Only what GraphQL needs; the caller's cookies and Origin are not the
+      // daemon's business. Both bodies stream, so a zkApp command carrying a
+      // proof never lands in this Worker's memory.
+      headers: { "Content-Type": "application/json" },
+      body: request.body,
+      signal: AbortSignal.timeout(MINA_NODE_TIMEOUT_MS),
+    });
+  } catch (error) {
+    // A status rather than a throw: the caller's failover reads responses.
+    return Response.json(
+      { error: `Mina node unreachable: ${(error as Error).message}` },
+      { status: 502, headers: MINA_NODE_HEADERS },
+    );
+  }
+
+  // Status unaltered — a GraphQL error at 200 and a daemon in BOOTSTRAP have
+  // to stay distinguishable to the caller.
+  return new Response(upstream.body, { status: upstream.status, headers: MINA_NODE_HEADERS });
 }
 
 /**

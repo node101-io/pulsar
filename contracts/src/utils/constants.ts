@@ -138,13 +138,18 @@ const ARCHIVE_FALLBACKS: { [key in keyof typeof ENDPOINTS.ARCHIVE]: string[] } =
 // refolded against the contract's on-chain actionState before anything proves
 // it, but contract state, block height and the fee payer's nonce are taken as
 // given, so a wrong answer here becomes a wrong transaction. Keep this list to
-// endpoints we are willing to believe: o1Labs' own devnet/mainnet daemons,
-// free and without SLA — a second leg, not a substitute for running our own.
+// endpoints we are willing to believe: the Mina Foundation's daemons and
+// o1Labs', both free and without SLA — a second leg, not a substitute for
+// running our own. The Foundation's lead despite being the slower of the two,
+// because this list carries broadcasts as well as reads and o1test 502'd
+// every real sendZkapp through the 2026-08-22 outage.
 const NODE_FALLBACKS: { [key in keyof typeof ENDPOINTS.NODE]: string[] } = {
   devnet: envListOrDefault('MINA_NODE_FALLBACK_URLS', [
+    'https://devnet.minaprotocol.network/graphql',
     'https://devnet-plain-1.gcp.o1test.net/graphql',
   ]),
   mainnet: envListOrDefault('MINA_NODE_FALLBACK_URLS', [
+    'https://mainnet.minaprotocol.network/graphql',
     'https://mainnet-plain-1.gcp.o1test.net/graphql',
   ]),
   // A lightnet daemon is the local docker container — nothing to fall back to.

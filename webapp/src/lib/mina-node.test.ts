@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MINA_NODE_FALLBACK_URLS, MINA_RPC_URL } from "./constants";
 
+// Derived, not hardcoded: a longer list must fail these tests, not quietly
+// move which endpoint they assert.
 const FALLBACK = MINA_NODE_FALLBACK_URLS[0];
+const LAST_FALLBACK =
+  MINA_NODE_FALLBACK_URLS[MINA_NODE_FALLBACK_URLS.length - 1];
 
 // The sticky endpoint choice is module state, so each test gets a fresh
 // module — otherwise one test's failover leaks into the next.
@@ -61,7 +65,7 @@ describe("withMinaNodeFailover", () => {
       withMinaNodeFailover("read", async (url) => {
         throw new Error(`down: ${url}`);
       }),
-    ).rejects.toThrow(`down: ${FALLBACK}`);
+    ).rejects.toThrow(`down: ${LAST_FALLBACK}`);
 
     // Recovery starts from the endpoint we trust most, not from wherever the
     // walk happened to end.

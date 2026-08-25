@@ -5,14 +5,25 @@ import type { Chain, AssetList } from "@chain-registry/types";
 export const MINA_NETWORK = "devnet";
 export const MINA_RPC_URL = "https://api.minascan.io/node/devnet/v1/graphql";
 
+// Mina's own daemon, reached through our Worker because it serves no CORS
+// headers at all — see handleMinaNode in worker/index.ts, and keep this path
+// in sync with MINA_NODE_PATH there.
+export const MINA_NODE_PROXY_PATH = "/api/mina-node";
+
+// Absolute, because o1js rejects a relative endpoint outright (`new URL()` in
+// its checkForValidUrl). `location` is absent during the export and in tests.
+const ORIGIN = typeof location === "undefined" ? "" : location.origin;
+
 // Daemons tried IN ORDER when MINA_RPC_URL fails — see lib/mina-node.ts.
 // Mirrors NODE_FALLBACKS in pulsar-contracts (importing it would pull o1js
 // into every page bundle), and for the same 2026-08-22 reason: Minascan's
 // devnet node sat in BOOTSTRAP and answered every account read with null,
 // which renders a funded wallet as 0.000 MINA. Node reads are taken on
-// trust — balance, nonce, tx acceptance — so the list stays short:
-// o1Labs' own daemon, free and without SLA.
+// trust — balance, nonce, tx acceptance — so the list stays short: the Mina
+// Foundation's daemon and o1Labs', both free and without SLA. Same order as
+// NODE_FALLBACKS in pulsar-contracts, for the reason given there.
 export const MINA_NODE_FALLBACK_URLS = [
+  `${ORIGIN}${MINA_NODE_PROXY_PATH}`,
   "https://devnet-plain-1.gcp.o1test.net/graphql",
 ];
 

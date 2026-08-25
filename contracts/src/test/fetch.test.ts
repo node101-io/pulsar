@@ -255,9 +255,8 @@ describe('withNodeFailover', () => {
   it('walks back to the primary when the sticky fallback fails', async () => {
     // Pins the road-back discovered 2026-08-22: o1test served every READ,
     // keeping the instance sticky there, while its gateway 502'd every real
-    // sendZkapp. A fallbacks-only walk (the fallback list holds only o1test)
-    // would have retried the same dead endpoint and never reached a
-    // recovered Minascan — broadcasts stay broken forever.
+    // sendZkapp. A fallbacks-only walk would have retried dead endpoints and
+    // never reached a recovered Minascan — broadcasts stay broken forever.
     setMinaNetwork('devnet');
     await withNodeFailover('Test read', stub(1).run);
     expect(activeNodeEndpoint('devnet')).toBe(NODE_FALLBACKS.devnet[0]);
