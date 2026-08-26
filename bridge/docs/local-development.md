@@ -28,7 +28,7 @@ environment can and cannot exercise:
 | --- | --- |
 | contracts unit tests | The full circuit stack against REAL vote-extension bodies, self-signed with local keys (`MockApprovalQuorumProof` in `utils/testUtils.ts` — a chain stand-in signing the real message, not a fake signer of a fabricated one). No chain needed. |
 | lightnet + `lightnet-setup` | Contract deploy, action dispatch, archive reads, the master/worker loop up to the approval walk. Reduces WAIT (transient) unless a Pulsar chain is answering. |
-| lightnet + single-validator pulsar-chain | The whole pipeline, end to end. The bring-up order is fixed: deploy with anchors, then `MsgRebaseActionsRoot`, then `StartBlockHeight` — not negotiable, since an action dispatched before the chain's start height is never scanned. |
+| lightnet + single-validator pulsar-chain | The whole pipeline, end to end. The bring-up order is fixed: deploy with anchors, then seed the bridge genesis (`bridge_state` plus its root snapshot), then `StartBlockHeight` — not negotiable, since an action dispatched before the chain's start height is never scanned. |
 
 ---
 

@@ -454,8 +454,9 @@ export async function collectApprovalLeaves(
                 `empty leaf chain. Either the chain was reset under a live ` +
                 `contract or this node serves a different chain — reconcile ` +
                 `against the chain the contract actually settled, or rebase ` +
-                `the chain's actions root to the contract's cursor ` +
-                `(MsgRebaseActionsRoot).`,
+                `the chain's actions root to the contract's cursor. x/bridge ` +
+                `ships no rebase message, so a rebase means exporting genesis ` +
+                `and editing bridge_state plus actions_reduced_root_snapshots.`,
         );
     }
 
@@ -508,8 +509,9 @@ export async function collectApprovalLeaves(
                     `initial bridge state. The cursor is not a prefix of ` +
                     `this chain's leaf chain — a chain restarted from a ` +
                     `zero-height export (pre-restart history unreachable), ` +
-                    `or a chain/L1 divergence needing a governance rebase ` +
-                    `(MsgRebaseActionsRoot).`,
+                    `or a chain/L1 divergence needing a genesis-level rebase ` +
+                    `of bridge_state and actions_reduced_root_snapshots ` +
+                    `(x/bridge ships no rebase message).`,
             );
         // The chain consumes Mina strictly forward from its cursor, so
         // consecutive batches must meet exactly. A gap means this node served

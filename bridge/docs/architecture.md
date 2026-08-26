@@ -338,7 +338,7 @@ Leaves and roots share **one encoding and one decoder**: decimal field elements,
 The cursor can land **mid-push**, because a reduce may cut a batch anywhere — so every verified push keeps its full fold trace (`folds[i]` = cumulative root after leaf `i`), and the walk terminates exactly where a verified transition passes through the cursor, push boundary or not. The oldest slice is trimmed to start just past the cursor. Termination faults are all deterministic:
 
 - the node refuses a height-pinned read → `ApprovalHistoryPrunedError` (remedy: an archive Pulsar node, or manual reconciliation);
-- the walk reaches the initial bridge state (cosmos height 0) or the chain has never pushed while the cursor is non-zero → `ApprovalHistoryPrunedError` — the cursor is not a prefix of this chain's leaf chain (zero-height restart, or a chain/L1 divergence needing a governance `MsgRebaseActionsRoot`);
+- the walk reaches the initial bridge state (cosmos height 0) or the chain has never pushed while the cursor is non-zero → `ApprovalHistoryPrunedError` — the cursor is not a prefix of this chain's leaf chain (zero-height restart, or a chain/L1 divergence needing a genesis-level rebase of `bridge_state` and `actions_reduced_root_snapshots` — x/bridge ships no rebase message);
 - cosmos height 1 not folding from the empty root → `ApprovalHistoryPrunedError` — height 1's pre-state is genesis, which no query returns, and a non-empty genesis means a zero-height restart.
 
 An **empty slice** is not a fault: the cursor IS the tip, the chain simply has not adjudicated past it yet — the worker's `TransientReduceError` path ("waiting for the next push"). Reduce deliberately trails the chain cursor: a stalled pusher stalls reduces too, by design.
@@ -381,7 +381,7 @@ Failures are charged to the queue front (`txAttemptActionState`), not to a job: 
 | Reconstruction mismatch (refold ∉ 5-slot history) | strike | deterministic bad archive data |
 | Approval fold mismatch, non-meeting batches, or the leaf walk and the pinned vote extension disagreeing about the same height (`ApprovalIntegrityError`) | strike | data inconsistent with the on-chain `actions_reduced_root` transitions |
 | Wire response contradicts the gRPC wire spec (`ApprovalWireSpecError`) | strike | deterministic decode/shape fault (non-decimal field element, HTML 200, renamed field) or an unpinned request refused — needs the spec block in `actionHashes.ts` adjusted or the node upgraded, not a retry |
-| Cursor out of reach (`ApprovalHistoryPrunedError`) | strike | pruned pinned read, a never-pushed chain under a non-zero cursor, a zero-height restart, or the walk reaching the initial bridge state — the message says which, and which remedy (archive node, manual reconciliation, or governance `MsgRebaseActionsRoot`) |
+| Cursor out of reach (`ApprovalHistoryPrunedError`) | strike | pruned pinned read, a never-pushed chain under a non-zero cursor, a zero-height restart, or the walk reaching the initial bridge state — the message says which, and which remedy (archive node, manual reconciliation, or a genesis-level rebase) |
 | Chain leaf matches neither verdict of the action at its position (`BuildVerdictBatch`) | strike | chain/L1 divergence — a batch across it could never prove; remedy is a governance rebase |
 | Signed voting power below 2/3 even counting every persisted signature | strike | proving would fail in-circuit after minutes — failed fast instead |
 | Validator-set resolution, proving or send failure | strike | attributed via the stamped identity |
