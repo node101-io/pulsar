@@ -51,8 +51,16 @@ copy the `[rows]` output in.
 
 | Method   | Rows      |
 | -------- | --------- |
-| settle   | 418       |
-| deposit  | 1065      |
-| withdraw | 1033      |
-| reduce   | 14401     |
-| **Total**| **16917** |
+| settle   | 706       |
+| deposit  | 1934      |
+| withdraw | 1897      |
+| reduce   | 23329     |
+| **Total**| **27866** |
+
+Every method here grew 62-84% on the move to o1js 3.0.0 (settle 418, deposit
+1065, withdraw 1033, reduce 14401 under 2.15.0), while every zkProgram above is
+byte-identical. That split is the whole explanation: Mesa raised the on-chain
+state from 8 to 32 fields, so only circuits carrying an AccountUpdate's state
+and preconditions pay for it. `reduce` now sits at 36% of the 65,536 limit,
+up from 22% — still ample, but a retune reading this table should know the
+headroom moved.

@@ -97,6 +97,9 @@ describe('SettlementContract tests', () => {
     tailBase: number;
     tailRecursive: number;
     quorum: number;
+    settle: number;
+    deposit: number;
+    withdraw: number;
     reduce: number;
   };
 
@@ -523,6 +526,9 @@ describe('SettlementContract tests', () => {
       tailBase: tailAnalyze.proveBase.rows,
       tailRecursive: tailAnalyze.proveRecursive.rows,
       quorum: quorumAnalyze.verifySignatures.rows,
+      settle: contractAnalyze.settle.rows,
+      deposit: contractAnalyze.deposit.rows,
+      withdraw: contractAnalyze.withdraw.rows,
       reduce: contractAnalyze.reduce.rows,
     };
 
@@ -583,7 +589,9 @@ describe('SettlementContract tests', () => {
         `[rows] ApprovalQuorumProgram.verifySignatures=${rows.quorum}`
       );
       console.log(
-        `[rows] SettlementContract.reduce=${rows.reduce} (limit 65536)`
+        `[rows] SettlementContract.settle=${rows.settle} ` +
+          `deposit=${rows.deposit} withdraw=${rows.withdraw} ` +
+          `reduce=${rows.reduce} (limit 65536)`
       );
 
       expect(rows.tailBase).toBeLessThan(65536);
@@ -610,7 +618,10 @@ describe('SettlementContract tests', () => {
           .split(/^### /m)
           .find((block) => block.startsWith(circuit));
         const match = section?.match(
-          new RegExp(`\\|\\s*${method}\\s*\\|\\s*(\\d+)\\s*\\|`)
+          new RegExp(
+            `\\|\\s*\\*{0,2}${method}\\*{0,2}\\s*\\|` +
+              `\\s*\\*{0,2}(\\d+)\\*{0,2}\\s*\\|`
+          )
         );
         if (!match) {
           throw new Error(`benchmark.md records no rows for ${circuit}.${method}`);
@@ -627,7 +638,17 @@ describe('SettlementContract tests', () => {
       expect(recordedRows('ApprovalQuorumProgram', 'verifySignatures')).toBe(
         rows.quorum
       );
+      expect(recordedRows('SettlementContract', 'settle')).toBe(rows.settle);
+      expect(recordedRows('SettlementContract', 'deposit')).toBe(rows.deposit);
+      expect(recordedRows('SettlementContract', 'withdraw')).toBe(
+        rows.withdraw
+      );
       expect(recordedRows('SettlementContract', 'reduce')).toBe(rows.reduce);
+      // The table's own total, so a half-updated table fails instead of
+      // reading as authoritative.
+      expect(recordedRows('SettlementContract', 'Total')).toBe(
+        rows.settle + rows.deposit + rows.withdraw + rows.reduce
+      );
     });
   });
 
