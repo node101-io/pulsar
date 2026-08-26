@@ -96,8 +96,8 @@ async function backfillMissingVoteExtensions(
 export async function startPulsarSync(): Promise<void> {
     const lastStored = await fetchLastStoredBlock();
     // currentHeight = 0 means nothing stored yet; loop will start at h = 1.
-    // We only process block H when latestHeight >= H + 2 so that
-    // x-cosmos-block-height: H+2 is guaranteed to return vote extensions for H.
+    // We only process block H once latestHeight >= H + VOTE_EXT_PERSISTENCE_LAG,
+    // which is the height getVoteExtsByHeight pins to read H's signatures.
     let currentHeight = lastStored?.height ?? 0;
 
     const rpcAddress = process.env.PULSAR_GRPC_ENDPOINT || "localhost:9090";

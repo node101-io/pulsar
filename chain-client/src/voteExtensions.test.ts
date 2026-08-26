@@ -5,6 +5,7 @@ import type { Metadata } from "@grpc/grpc-js";
 import { Field, PublicKey } from "o1js";
 
 import {
+    VOTE_EXT_BODY_HEIGHT_OFFSET,
     VOTE_EXT_PERSISTENCE_LAG,
     fetchSignedVoteExtension,
     fetchVoteExtBody,
@@ -54,7 +55,8 @@ const fixture = JSON.parse(
     };
 };
 
-type WireBody = (typeof fixture.vectors)[number]["wire"];
+type WireVector = (typeof fixture.vectors)[number];
+type WireBody = WireVector["wire"];
 
 function protoBody(wire: WireBody) {
     return {
@@ -97,14 +99,18 @@ function pubkeyWire(base58: string): Uint8Array {
 
 function abciClientServing(
     body: ReturnType<typeof protoBody> | undefined,
-    requests?: Array<{ vote_extension_height?: string }>,
+    requests?: Array<{ vote_extension_height?: string; pinnedAt?: string }>,
 ) {
     return {
         voteExtBodyByHeight: (
             req: { vote_extension_height?: string },
+            metadata: Metadata,
             cb: (err: null, res: { vote_ext_body?: typeof body }) => void,
         ) => {
-            requests?.push(req);
+            requests?.push({
+                ...req,
+                pinnedAt: metadata.get("x-cosmos-block-height")[0] as string,
+            });
             cb(null, { vote_ext_body: body });
         },
     };
@@ -132,13 +138,19 @@ function vpClientServing(
     };
 }
 
+// A cosmos height is int64, a JS number only names it exactly below 2^53.
+const namesExactly = (h: string) => String(Number(h)) === h;
+
 describe("fetchVoteExtBody", () => {
-    for (const vector of fixture.vectors) {
+    for (const vector of fixture.vectors.filter((v: WireVector) =>
+        namesExactly(v.fields.currentBlockHeight),
+    )) {
         it(`decodes the chain-signed wire body (${vector.description})`, async () => {
+            const signedHeight = Number(vector.fields.currentBlockHeight);
             const requests: Array<{ vote_extension_height?: string }> = [];
             const body = await fetchVoteExtBody(
                 abciClientServing(protoBody(vector.wire), requests),
-                7,
+                signedHeight,
             );
 
             // Byte->field conventions pinned digit-for-digit against
@@ -146,15 +158,59 @@ describe("fetchVoteExtBody", () => {
             expect(body).toEqual(vector.fields);
             // Bodies are keyed by the height where the extension was
             // PRODUCED = signed height + 2.
-            expect(requests).toEqual([{ vote_extension_height: "9" }]);
+            expect(requests).toEqual([
+                {
+                    vote_extension_height: String(
+                        signedHeight + VOTE_EXT_BODY_HEIGHT_OFFSET,
+                    ),
+                    // Read pinned to the height fetchVoteExtSignatures pins,
+                    // so body and signatures come from one state snapshot;
+                    // unpinned, the chain recomputes the body against the tip
+                    // and its pruned snapshot window rejects older heights.
+                    pinnedAt: String(signedHeight + VOTE_EXT_PERSISTENCE_LAG),
+                },
+            ]);
         });
     }
+
+    it("rejects a body describing another state height", async () => {
+        // The body self-identifies its height, so the +2 offset is checked
+        // rather than trusted: a body for a neighbouring height would
+        // otherwise be consumed as this height's signed message, and the
+        // quorum would verify against something nobody signed.
+        const vector = fixture.vectors[0];
+        await expect(
+            fetchVoteExtBody(
+                abciClientServing(protoBody(vector.wire)),
+                Number(vector.fields.currentBlockHeight) + 1,
+            ),
+        ).rejects.toThrow("height convention drifted");
+    });
+
+    it("rejects an int64 height no JS number can name (>= 2^53)", async () => {
+        // Not hypothetical: the fixture carries such a vector. The request is
+        // built from the number, so a rounded height would silently ask for
+        // the wrong body — the guard is what turns that into a failure.
+        const vector = fixture.vectors.find(
+            (v: WireVector) => !namesExactly(v.fields.currentBlockHeight),
+        );
+        expect(vector).toBeDefined();
+        await expect(
+            fetchVoteExtBody(
+                abciClientServing(protoBody(vector!.wire)),
+                Number(vector!.fields.currentBlockHeight),
+            ),
+        ).rejects.toThrow("height convention drifted");
+    });
 
     it("rejects an app hash that is not 32 bytes", async () => {
         const wire = protoBody(fixture.vectors[0].wire);
         wire.current_state_root = wire.current_state_root.subarray(0, 31);
         await expect(
-            fetchVoteExtBody(abciClientServing(wire), 7),
+            fetchVoteExtBody(
+                abciClientServing(wire),
+                Number(fixture.vectors[0].fields.currentBlockHeight),
+            ),
         ).rejects.toThrow("32 bytes");
     });
 
@@ -168,13 +224,19 @@ describe("fetchVoteExtBody", () => {
         }
         wire.next_validator_set_hash = Uint8Array.from(modBytes);
         await expect(
-            fetchVoteExtBody(abciClientServing(wire), 7),
+            fetchVoteExtBody(
+                abciClientServing(wire),
+                Number(fixture.vectors[0].fields.currentBlockHeight),
+            ),
         ).rejects.toThrow("field modulus");
     });
 
     it("rejects an empty response", async () => {
         await expect(
-            fetchVoteExtBody(abciClientServing(undefined), 7),
+            fetchVoteExtBody(
+                abciClientServing(undefined),
+                Number(fixture.vectors[0].fields.currentBlockHeight),
+            ),
         ).rejects.toThrow("empty VoteExtBodyByHeight");
     });
 });

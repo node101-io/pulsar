@@ -7,14 +7,15 @@ import {
     grpcUnary,
     isServiceError,
     parseMinaPubkeyFromBytes,
-    protoBufferToDecStr,
     protoBytesToBuffer,
+    fetchVoteExtBody,
     sortValidatorsByPower,
+    VOTE_EXT_BODY_HEIGHT_OFFSET,
     type AbciQueryClient,
     type GetBlockByHeightResponse,
     type KeyregistryClient,
     type ProtoBytes,
-    type QueryVoteExtBodyByHeightResponse,
+    type VoteExtBodyFields,
     type QueryVoteExtensionsResponse,
     type TendermintClient,
     type VotePersistenceClient,
@@ -150,19 +151,28 @@ async function getVoteExtBody(
     nextValidatorSetHash: string;
     actionsReducedRoot: string;
 }> {
-    // VoteExtBody for block H is accessible via VoteExtBodyByHeight(H+2).
-    const bodyHeight = height + 2;
+    // The height arithmetic, the pinned read and the byte->field conventions
+    // all live in pulsar-chain-client, which exists so the bridge and the
+    // prover cannot drift apart on them. A private copy here already cost us
+    // once: the same unpinned read had to be fixed twice, and finding only
+    // one of the two would have left the other silently broken. What stays
+    // is the prover's projection of that body — the two app-hash halves
+    // folded into the single field the circuit consumes, plus the ingest
+    // loop's logging.
+    //
+    // Three guards arrive with the shared reader that this copy lacked: an
+    // app hash that is not 32 bytes, a field at or beyond the modulus, and a
+    // body describing a different state height now all throw instead of
+    // decoding to something no validator signed. Below EPOCH_START_HEIGHT
+    // getBlockData catches that and falls back to the header; at or above it
+    // the throw is the point.
+    const bodyHeight = height + VOTE_EXT_BODY_HEIGHT_OFFSET;
 
-    let res: QueryVoteExtBodyByHeightResponse;
+    let fields: VoteExtBodyFields;
     try {
-        res = await grpcUnary<QueryVoteExtBodyByHeightResponse>((cb) =>
-            abciClient.voteExtBodyByHeight(
-                { vote_extension_height: String(bodyHeight) },
-                cb,
-            ),
-        );
+        fields = await fetchVoteExtBody(abciClient, height);
     } catch (err) {
-        logger.error("VoteExtBodyByHeight gRPC call failed", {
+        logger.error("VoteExtBody fetch failed", {
             message: isServiceError(err) ? err.message : String(err),
             code: isServiceError(err) ? err.code : undefined,
             blockHeight: height,
@@ -172,46 +182,45 @@ async function getVoteExtBody(
         throw err;
     }
 
-    const body = res.vote_ext_body;
-    if (!body) {
-        throw new Error(
-            `empty VoteExtBodyByHeight response for height ${bodyHeight}`,
-        );
-    }
-
-    const stateRoot = appHashToStateRootField(body.current_state_root);
-    const nextValidatorSetHash = protoBufferToDecStr(
-        body.next_validator_set_hash,
+    const stateRoot = stateRootFieldFromHalves(
+        fields.stateRootHi,
+        fields.stateRootLo,
     );
-
-    // Same encoding as the hashes above: raw big-endian field bytes, decoded
-    // with the shared reader. The validators sign this exact field element,
-    // so any other reading of the same bytes proves a different block.
-    const actionsReducedRoot = protoBufferToDecStr(body.actions_reduced_root);
 
     logger.debug("VoteExtBody fetched", {
         blockHeight: height,
         stateRoot,
-        nextValidatorSetHash,
-        actionsReducedRoot,
+        nextValidatorSetHash: fields.nextValidatorSetHash,
+        actionsReducedRoot: fields.actionsReducedRoot,
         event: "vote_ext_body_fetched",
     });
 
-    return { stateRoot, nextValidatorSetHash, actionsReducedRoot };
+    return {
+        stateRoot,
+        nextValidatorSetHash: fields.nextValidatorSetHash,
+        actionsReducedRoot: fields.actionsReducedRoot,
+    };
 }
 
 // The AppHash is a raw 32-byte (256-bit) hash that overflows the Mina field, so
 // the chain commits stateRoot = Poseidon([ BE(appHash[0:16]), BE(appHash[16:32]) ]).
 // The prover must reproduce the exact same field for signatures to verify.
+function stateRootFieldFromHalves(hi: string | bigint, lo: string | bigint) {
+    return Poseidon.hash([Field(hi), Field(lo)]).toString();
+}
+
+// Only the header fallback still starts from raw AppHash bytes; the signed
+// body arrives pre-split by the shared reader.
 function appHashToStateRootField(val: ProtoBytes | null | undefined): string {
     const buf = protoBytesToBuffer(val);
     if (buf.length === 0) return "0";
     if (buf.length !== 32) {
         throw new Error(`AppHash must be 32 bytes, got ${buf.length}`);
     }
-    const hi = BigInt("0x" + buf.subarray(0, 16).toString("hex"));
-    const lo = BigInt("0x" + buf.subarray(16, 32).toString("hex"));
-    return Poseidon.hash([Field(hi), Field(lo)]).toString();
+    return stateRootFieldFromHalves(
+        BigInt("0x" + buf.subarray(0, 16).toString("hex")),
+        BigInt("0x" + buf.subarray(16, 32).toString("hex")),
+    );
 }
 
 export async function getVoteExtsByHeight(

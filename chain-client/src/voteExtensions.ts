@@ -25,7 +25,15 @@ import { decodeMinaSignature, parseMinaPubkeyFromBytes } from "./parser.js";
 //   (x/votepersistence/keeper/query_vote_extensions.go) therefore returns the
 //   signatures over H's body, self-identified by
 //   persisted_vote_extensions_block_height = H.
-export const VOTE_EXT_PERSISTENCE_LAG = 3;
+//
+// So the lag IS the body offset plus one, and that one height serves BOTH
+// reads: VoteExtBodyByHeight refuses a vote-ext height that is not strictly
+// below the pinned height (abci/query_vote_ext_body_by_height.go), and
+// H + OFFSET + 1 is the lowest that clears it. Body and signatures therefore
+// come from a single state snapshot by construction, not by coincidence —
+// which is what makes the pinned reads below safe to pair.
+export const VOTE_EXT_BODY_HEIGHT_OFFSET = 2;
+export const VOTE_EXT_PERSISTENCE_LAG = VOTE_EXT_BODY_HEIGHT_OFFSET + 1;
 
 /**
  * The signed body decoded to decimal field-element strings. Field-for-field
@@ -96,9 +104,27 @@ export async function fetchVoteExtBody(
     abciClient: Pick<AbciQueryClient, "voteExtBodyByHeight">,
     signedHeight: number,
 ): Promise<VoteExtBodyFields> {
+    // The chain stores no bodies: VoteExtBodyByHeight recomputes one against
+    // whatever state the query lands on, and its actions-root read reaches
+    // back only as far as the pruned snapshot window. Unpinned, that is the
+    // tip's window, so every body older than a few pushes fails. Pin what
+    // fetchVoteExtSignatures pins, so body and signatures come from one
+    // snapshot; it is also the lowest height the chain accepts, since the
+    // query rejects a vote-ext height not strictly below it.
+    const metadata = new Metadata();
+    metadata.add(
+        "x-cosmos-block-height",
+        String(signedHeight + VOTE_EXT_PERSISTENCE_LAG),
+    );
+
     const res = await grpcUnary<QueryVoteExtBodyByHeightResponse>((cb) =>
         abciClient.voteExtBodyByHeight(
-            { vote_extension_height: String(signedHeight + 2) },
+            {
+                vote_extension_height: String(
+                    signedHeight + VOTE_EXT_BODY_HEIGHT_OFFSET,
+                ),
+            },
+            metadata,
             cb,
         ),
     );
@@ -117,6 +143,20 @@ export async function fetchVoteExtBody(
         );
     }
 
+    // The body self-identifies the state height it describes, so the offset
+    // above is checkable rather than assumed: a body for another height would
+    // otherwise be consumed as this one's signed message.
+    const currentBlockHeight = String(body.current_block_height ?? "0");
+    if (currentBlockHeight !== String(signedHeight)) {
+        throw new Error(
+            `VoteExtBodyByHeight(${
+                signedHeight + VOTE_EXT_BODY_HEIGHT_OFFSET
+            }) returned a body for ` +
+                `state height ${currentBlockHeight}, expected ` +
+                `${signedHeight} — the chain's height convention drifted`,
+        );
+    }
+
     return {
         nextValidatorSetHash: decStrFromBytesBE(
             protoBytesToBuffer(body.next_validator_set_hash),
@@ -124,7 +164,7 @@ export async function fetchVoteExtBody(
         ),
         stateRootHi: decStrFromBytesBEReduce(appHash.subarray(0, 16)),
         stateRootLo: decStrFromBytesBEReduce(appHash.subarray(16, 32)),
-        currentBlockHeight: String(body.current_block_height ?? "0"),
+        currentBlockHeight,
         actionsReducedRoot: decStrFromBytesBE(
             protoBytesToBuffer(body.actions_reduced_root),
             "actions_reduced_root",
@@ -183,18 +223,12 @@ export async function fetchSignedVoteExtension(
     vpClient: Pick<VotePersistenceClient, "voteExtensions">,
     signedHeight: number,
 ): Promise<SignedVoteExtRecord> {
+    // The pairing assert lives in fetchVoteExtBody, which owns the offset it
+    // checks; this only has to fetch both halves at the same height.
     const [body, signatures] = await Promise.all([
         fetchVoteExtBody(abciClient, signedHeight),
         fetchVoteExtSignatures(vpClient, signedHeight),
     ]);
-
-    if (body.currentBlockHeight !== String(signedHeight)) {
-        throw new Error(
-            `VoteExtBodyByHeight(${signedHeight + 2}) returned a body for ` +
-                `state height ${body.currentBlockHeight}, expected ` +
-                `${signedHeight} — the chain's height convention drifted`,
-        );
-    }
 
     return { cosmosHeight: signedHeight, body, signatures };
 }

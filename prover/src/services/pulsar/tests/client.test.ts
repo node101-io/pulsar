@@ -13,6 +13,7 @@ import {
     getVoteExtsByHeight,
     storePulsarBlock,
 } from "../client.js";
+import { VOTE_EXT_PERSISTENCE_LAG } from "../../../config/constants.js";
 import * as db from "../../../db/index.js";
 
 vi.mock("../../../db/index.js");
@@ -32,6 +33,16 @@ const CHAIN_ACTIONS_ROOT_VECTOR = {
     base64: "KKhZhIikWJfh4jhbhfpmmeq1ZdrPvTIbZtwKcsCe9Ro=",
     decimal:
         "18389962078741328244067350182709210827719642147845999328709309946826497914138",
+};
+
+// Verbatim from contracts/src/test/fixtures/voteExtBody.vectors.json. A
+// validator-set root is a 32-byte big-endian FIELD, not a pubkey blob: the
+// 33-byte X||isOdd encoding read as one exceeds the modulus, which the shared
+// reader now rejects instead of decoding to a field nobody signed.
+const CHAIN_VALIDATOR_SET_HASH_VECTOR = {
+    base64: "DlzqXBJxC94Pa4QIQY2CoEkD9jipzCP1JYg+GuKHu/w=",
+    decimal:
+        "6496547301027708989324844883824628131366163431900776788938253436566404316156",
 };
 
 // 33-byte Mina pubkey bytes: X[32] || isOdd[1]
@@ -273,10 +284,13 @@ describe("pulsar client", () => {
             };
 
             const mockAbciClient = {
-                voteExtBodyByHeight: vi.fn((req, callback) => {
+                voteExtBodyByHeight: vi.fn((req, metadata, callback) => {
                     callback(null, {
                         vote_ext_body: {
-                            next_validator_set_hash: pubkeyBytes,
+                            next_validator_set_hash: Buffer.from(
+                                CHAIN_VALIDATOR_SET_HASH_VECTOR.base64,
+                                "base64",
+                            ),
                             current_state_root: Buffer.alloc(32, 0),
                             current_block_height: "100",
                             actions_reduced_root: Buffer.from(
@@ -297,6 +311,13 @@ describe("pulsar client", () => {
             );
 
             expect(blockData.height).toBe(100);
+            // The signed body's nextValidatorSetHash IS the block's
+            // validatorListHash; the circuit recomputes the set root and
+            // compares against it, so a misdecoded field here proves a
+            // different block.
+            expect(blockData.validatorListHash).toBe(
+                CHAIN_VALIDATOR_SET_HASH_VECTOR.decimal,
+            );
             expect(blockData.stateRoot).toBeDefined();
             expect(Array.isArray(blockData.validators)).toBe(true);
             expect(Array.isArray(blockData.voteExt)).toBe(true);
@@ -307,6 +328,16 @@ describe("pulsar client", () => {
             expect(blockData.actionsReducedRoot).toBe(
                 CHAIN_ACTIONS_ROOT_VECTOR.decimal,
             );
+            // The body must be read at the height getVoteExtsByHeight pins,
+            // so it and its signatures come from one state snapshot. Unpinned,
+            // the chain recomputes the body against the tip, where the pruned
+            // actions-root snapshot window rejects anything but the newest few
+            // heights — and sync always trails the tip by exactly this lag.
+            const [, pinned] =
+                mockAbciClient.voteExtBodyByHeight.mock.calls[0];
+            expect(pinned.get("x-cosmos-block-height")).toEqual([
+                String(100 + VOTE_EXT_PERSISTENCE_LAG),
+            ]);
         });
 
         it("refuses the header fallback for a block the circuit verifies", async () => {
@@ -316,7 +347,7 @@ describe("pulsar client", () => {
             // match — the block 1623 incident. Sync must retry the height
             // instead.
             const mockAbciClient = {
-                voteExtBodyByHeight: vi.fn((req, callback) => {
+                voteExtBodyByHeight: vi.fn((req, metadata, callback) => {
                     callback(new Error("transient unavailable"), null);
                 }),
             };
@@ -344,7 +375,7 @@ describe("pulsar client", () => {
             const pubkeyBytes = makePubkeyBytes(mockPubkey);
 
             const mockAbciClient = {
-                voteExtBodyByHeight: vi.fn((req, callback) => {
+                voteExtBodyByHeight: vi.fn((req, metadata, callback) => {
                     callback(new Error("no historical info"), null);
                 }),
             };
@@ -419,7 +450,7 @@ describe("pulsar client", () => {
         it("refuses a zero actions root even from a SUCCESSFUL body fetch", async () => {
             // The body arrives, but its root field is empty -> decodes to "0".
             const mockAbciClient = {
-                voteExtBodyByHeight: vi.fn((req, callback) => {
+                voteExtBodyByHeight: vi.fn((req, metadata, callback) => {
                     callback(null, {
                         vote_ext_body: {
                             next_validator_set_hash: Buffer.alloc(32, 1),

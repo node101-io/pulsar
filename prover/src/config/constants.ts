@@ -64,9 +64,10 @@ if (!Number.isInteger(EPOCH_START_HEIGHT) || EPOCH_START_HEIGHT < 2)
 // reads from EPOCH_START_HEIGHT - 1, so this block's stateRoot,
 // validatorListHash and height are the SettlementContract's initial state.
 export const ANCHOR_BLOCK_HEIGHT = EPOCH_START_HEIGHT - 1;
-// The chain persists block H's vote extensions at H + this, so H is only
-// queryable once the chain has produced that later block.
-export const VOTE_EXT_PERSISTENCE_LAG = 3;
+// Re-exported, not redeclared: the height arithmetic is the chain's, and two
+// copies of it drift into signatures attached to the wrong message. The
+// derivation is documented at its single source.
+export { VOTE_EXT_PERSISTENCE_LAG } from "pulsar-chain-client";
 
 // Settler pipeline constants
 // Max settle txs broadcast ahead of on-chain confirmation. Settles chain by
