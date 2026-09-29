@@ -82,6 +82,7 @@ class SettlementContract extends SmartContract {
       merkleListRoot: Field;
       stateRoot: Field;
       blockHeight: Field;
+      approvalCursor: Field;
     }
   ) {
     await super.deploy(args);
@@ -97,9 +98,11 @@ class SettlementContract extends SmartContract {
     this.merkleListRoot.set(args.merkleListRoot);
     this.stateRoot.set(args.stateRoot);
     this.blockHeight.set(args.blockHeight);
-    // m = 0 of the cursor invariant: zero L1 actions consumed, zero chain
-    // leaves consumed — Field(0) is the chain's empty actions root.
-    this.approvalCursor.set(Field(0));
+    // m of the cursor invariant: number of chain leaves already consumed
+    // by the chain this contract is resuming against. Field(0) only when
+    // starting from the chain's empty actions root; otherwise the caller
+    // must pass the chain's current root R.
+    this.approvalCursor.set(args.approvalCursor);
   }
 
   /**

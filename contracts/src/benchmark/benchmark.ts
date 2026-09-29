@@ -234,6 +234,7 @@ async function deployAndInitializeContract() {
         merkleListRoot: merkleList.hash,
         stateRoot: Field(0),
         blockHeight: Field(0),
+        approvalCursor: Field(0),
       });
     })
   );

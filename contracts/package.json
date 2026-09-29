@@ -43,6 +43,6 @@
   },
   "private": true,
   "dependencies": {
-    "o1js": "3.0.0"
+    "o1js": "3.1.0"
   }
 }
