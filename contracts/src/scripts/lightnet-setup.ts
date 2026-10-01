@@ -153,6 +153,7 @@ async function main() {
       merkleListRoot,
       stateRoot: Field(0),
       blockHeight: Field(0),
+      approvalCursor: Field(0),
     });
   });
   await waitForTx(deployTx, [deployerKey, contractKey], 'deploy');

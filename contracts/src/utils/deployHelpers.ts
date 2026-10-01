@@ -90,6 +90,7 @@ async function deployAndInitializeContract(
         merkleListRoot: validatorList.hash,
         stateRoot: Field(0),
         blockHeight: Field(0),
+        approvalCursor: Field(0),
       });
     }
   );

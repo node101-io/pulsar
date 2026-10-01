@@ -47,8 +47,8 @@ importers:
         specifier: ^9.7.3
         version: 9.7.3
       o1js:
-        specifier: 3.0.0
-        version: 3.0.0
+        specifier: 3.1.0
+        version: 3.1.0
       pino:
         specifier: ^10.3.1
         version: 10.3.1
@@ -90,8 +90,8 @@ importers:
         specifier: ^1.14.4
         version: 1.14.4
       o1js:
-        specifier: 3.0.0
-        version: 3.0.0
+        specifier: 3.1.0
+        version: 3.1.0
     devDependencies:
       '@bufbuild/buf':
         specifier: ^1.71.0
@@ -115,8 +115,8 @@ importers:
   contracts:
     dependencies:
       o1js:
-        specifier: 3.0.0
-        version: 3.0.0
+        specifier: 3.1.0
+        version: 3.1.0
     devDependencies:
       '@babel/preset-env':
         specifier: ^7.29.7
@@ -188,8 +188,8 @@ importers:
         specifier: ^1.14.4
         version: 1.14.4
       '@o1js/native':
-        specifier: ^2.15.0
-        version: 2.15.0
+        specifier: 3.0.0
+        version: 3.0.0
       '@types/inquirer':
         specifier: ^9.0.10
         version: 9.0.10
@@ -215,8 +215,8 @@ importers:
         specifier: ^3.3.2
         version: 3.3.2
       o1js:
-        specifier: 3.0.0
-        version: 3.0.0
+        specifier: 3.1.0
+        version: 3.1.0
       pulsar-chain-client:
         specifier: workspace:*
         version: link:../chain-client
@@ -285,8 +285,8 @@ importers:
         specifier: 15.5.23
         version: 15.5.23(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       o1js:
-        specifier: 3.0.0
-        version: 3.0.0
+        specifier: 3.1.0
+        version: 3.1.0
       pulsar-chain-client:
         specifier: workspace:*
         version: link:../chain-client
@@ -2290,19 +2290,9 @@ packages:
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
 
-  '@o1js/native-darwin-arm64@2.15.0':
-    resolution: {integrity: sha512-4S1hf6Z6KLI1ITnbecMS6y3q3D+IqIGjF9vC5xSHQETUGPS0IFbWGUwai/52RIfH65eXBK5MXWYwwAlc6rcz5g==}
-    cpu: [arm64]
-    os: [darwin]
-
   '@o1js/native-darwin-arm64@3.0.0':
     resolution: {integrity: sha512-IosDj1L2gifEI8em/WdZsVZWrgKolskMlKOqnHX8su0YLaKFCmibVTztbFNPc9IJJtmzAYCeSY+gfFzRMRlIcA==}
     cpu: [arm64]
-    os: [darwin]
-
-  '@o1js/native-darwin-x64@2.15.0':
-    resolution: {integrity: sha512-zsCvwBJK3j9yDcfpdK0QypaQKTRFnQTmCH989JEYr61yqFQ5Uxz03oEVkCU02p2+w2bZzKWIy/7rTTAVaCiYqg==}
-    cpu: [x64]
     os: [darwin]
 
   '@o1js/native-darwin-x64@3.0.0':
@@ -2310,28 +2300,15 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@o1js/native-linux-arm64@2.15.0':
-    resolution: {integrity: sha512-Fa1tWgvrZSCDpJ2c4rHZKnfhxpZc/XkqGNVW5gDocr6FArSpWyEyKn0tPJJKtDUIzkUCozjxnFO8EWws0HJ6MA==}
-    cpu: [arm64]
-    os: [linux]
-
   '@o1js/native-linux-arm64@3.0.0':
     resolution: {integrity: sha512-RcbLDwFSSLcey01jiPBBMdZt9moLrzcUgGjxEd9glyCiXyfre4baDwfNw/5vBoCTY//6lirq2ohk+NH9d4bTfQ==}
     cpu: [arm64]
-    os: [linux]
-
-  '@o1js/native-linux-x64@2.15.0':
-    resolution: {integrity: sha512-D2Z3NBb7mtehYRzPPlCT+m4/ojJYyo0MJc/9f0MtwIXIlTRL1jVBg6qH8TQdIK5j3LYlFuAhjDqaWfjAxQGwMA==}
-    cpu: [x64]
     os: [linux]
 
   '@o1js/native-linux-x64@3.0.0':
     resolution: {integrity: sha512-qmsYxlGSzgEgN+EzJw+MbhD7lBFttBIh3N9peNf54CKvam1ZIIz4vMJdu6flVCRPBH090vSkAgcD1eNNwvQDmw==}
     cpu: [x64]
     os: [linux]
-
-  '@o1js/native@2.15.0':
-    resolution: {integrity: sha512-te/piape+Nn9bgctqZk1ARnBMilKwq+IkWT4Z4jKh3HNuGj/Z5rngVGMRAPzJzxyjQEh7Dm+/BN6M9D6VY0kdw==}
 
   '@o1js/native@3.0.0':
     resolution: {integrity: sha512-hVnEZTeHgaZ7hNwwUsCdmRz5RjXRnfvlP5c2/OUaKWMHtwW6NeVZhJ877IUwxwbCbwFKZwe0eYxMpiQ9rP1Bug==}
@@ -5592,8 +5569,8 @@ packages:
     resolution: {integrity: sha512-S48WzZW777zhNIrn7gxOlISNAqi9ZC/uQFnRdbeIHhZhCA6UqpkOT8T1G7BvfdgP4Er8gF4sUbaS0i7QvIfCWw==}
     engines: {node: '>=8'}
 
-  o1js@3.0.0:
-    resolution: {integrity: sha512-+HH4vi2EpzVSFBNK+UzGvsyElxeF1TzrK5tBHC/pTExk/nj17rQ78vT7WFYvr6UrysJw+zzFF0fKVm1yqr4Jgw==}
+  o1js@3.1.0:
+    resolution: {integrity: sha512-uYpSAsQeLv6DKmahf3UxlmUVVJk9NhkLAjMg6UzpUU85S8230HuqbLyWPuGHdRTO3rFVQwE69u0ihsOG1qc3NA==}
     engines: {node: '>=22.19.5'}
     hasBin: true
 
@@ -8862,36 +8839,17 @@ snapshots:
 
   '@nolyfill/is-core-module@1.0.39': {}
 
-  '@o1js/native-darwin-arm64@2.15.0':
-    optional: true
-
   '@o1js/native-darwin-arm64@3.0.0':
-    optional: true
-
-  '@o1js/native-darwin-x64@2.15.0':
     optional: true
 
   '@o1js/native-darwin-x64@3.0.0':
     optional: true
 
-  '@o1js/native-linux-arm64@2.15.0':
-    optional: true
-
   '@o1js/native-linux-arm64@3.0.0':
-    optional: true
-
-  '@o1js/native-linux-x64@2.15.0':
     optional: true
 
   '@o1js/native-linux-x64@3.0.0':
     optional: true
-
-  '@o1js/native@2.15.0':
-    optionalDependencies:
-      '@o1js/native-darwin-arm64': 2.15.0
-      '@o1js/native-darwin-x64': 2.15.0
-      '@o1js/native-linux-arm64': 2.15.0
-      '@o1js/native-linux-x64': 2.15.0
 
   '@o1js/native@3.0.0':
     optionalDependencies:
@@ -8899,7 +8857,6 @@ snapshots:
       '@o1js/native-darwin-x64': 3.0.0
       '@o1js/native-linux-arm64': 3.0.0
       '@o1js/native-linux-x64': 3.0.0
-    optional: true
 
   '@oxc-project/types@0.139.0': {}
 
@@ -10781,7 +10738,7 @@ snapshots:
       '@typescript-eslint/parser': 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-react: 7.37.5(eslint@9.39.4(jiti@2.7.0))
@@ -10801,7 +10758,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3
@@ -10816,14 +10773,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.14.0(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-module-utils@2.14.0(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
@@ -10838,7 +10795,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-module-utils: 2.14.0(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-module-utils: 2.14.0(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
       hasown: 2.0.4
       is-core-module: 2.16.2
       is-glob: 4.0.3
@@ -12510,7 +12467,7 @@ snapshots:
     dependencies:
       path-key: 3.1.1
 
-  o1js@3.0.0:
+  o1js@3.1.0:
     dependencies:
       '@noble/hashes': 1.8.0
       blakejs: 1.2.1
@@ -12519,8 +12476,6 @@ snapshots:
       reflect-metadata: 0.1.14
       stacktrace-js: 2.0.2
       tslib: 2.8.1
-    optionalDependencies:
-      '@o1js/native': 3.0.0
 
   object-assign@4.1.1: {}
 

@@ -150,7 +150,8 @@ describe('SettlementContract tests', () => {
     zkappPrivateKey: PrivateKey,
     merkleListRoot: Field,
     stateRoot: Field = Field(0),
-    blockHeight: Field = Field(0)
+    blockHeight: Field = Field(0),
+    approvalCursor: Field = Field(0)
   ) {
     const deployerAccount = deployerKey.toPublicKey();
     const tx = await Mina.transaction(
@@ -158,7 +159,12 @@ describe('SettlementContract tests', () => {
       async () => {
         AccountUpdate.fundNewAccount(deployerAccount);
         // anchors live in deploy(); the permissionless initialize is gone
-        await zkapp.deploy({ merkleListRoot, stateRoot, blockHeight });
+        await zkapp.deploy({
+          merkleListRoot,
+          stateRoot,
+          blockHeight,
+          approvalCursor,
+        });
       }
     );
 

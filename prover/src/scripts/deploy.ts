@@ -39,6 +39,7 @@ import {
 
 import {
     BridgeQueryClient,
+    fetchActionsReducedRoot,
     fetchBridgeParams,
     grpcCredentials,
 } from "pulsar-chain-client";
@@ -90,6 +91,29 @@ async function assertAddressMatchesChain(deployAddress: string) {
     console.log(`Deploy address matches the chain's params: ${configured}`);
 }
 
+/**
+ * The chain's current cumulative approval root R (x/bridge
+ * Query/ActionsReducedRoot). The new contract must deploy with
+ * approvalCursor = R so its cursor invariant lines up with the chain's
+ * actions root it is resuming against — deploying with Field(0) against a
+ * chain that has already reduced m > 0 leaves wedges the contract forever.
+ */
+async function fetchChainApprovalRoot(): Promise<Field> {
+    const endpoint = process.env.PULSAR_GRPC_ENDPOINT;
+    if (!endpoint)
+        throw new Error(
+            "PULSAR_GRPC_ENDPOINT is not set — cannot read the chain's " +
+                "current approval root R to anchor approvalCursor.",
+        );
+    const client = new BridgeQueryClient(endpoint, grpcCredentials(endpoint));
+    const { actions_reduced_root } = await fetchActionsReducedRoot(client);
+    if (!actions_reduced_root)
+        throw new Error(
+            `x/bridge Query/ActionsReducedRoot on ${endpoint} served no actions_reduced_root.`,
+        );
+    return Field.from(actions_reduced_root);
+}
+
 // ── anchor resolution ────────────────────────────────────────────────────────
 
 /** Connects, delegates to the shared resolver, disconnects. */
@@ -127,6 +151,9 @@ async function main() {
     const contractPublicKey = contractPrivateKey.toPublicKey();
 
     await assertAddressMatchesChain(contractPublicKey.toBase58());
+
+    const approvalCursor = await fetchChainApprovalRoot();
+    console.log(`Chain approval root R: ${approvalCursor.toString()}`);
 
     // ── network ─────────────────────────────────────────────────────────────
     setMinaNetwork(network);
@@ -166,7 +193,12 @@ async function main() {
     const tx = await Mina.transaction({ sender: signerPublicKey, fee }, async () => {
         AccountUpdate.fundNewAccount(signerPublicKey);
         // anchors live in deploy(); the permissionless initialize is gone
-        await contractInstance.deploy({ merkleListRoot, stateRoot, blockHeight });
+        await contractInstance.deploy({
+            merkleListRoot,
+            stateRoot,
+            blockHeight,
+            approvalCursor,
+        });
     });
 
     console.log("Proving transaction…");
