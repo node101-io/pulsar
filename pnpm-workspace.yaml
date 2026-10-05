@@ -6,6 +6,11 @@ packages:
   - webapp
   - docs
 
+# o1js 3.1.0 lists @o1js/native 3.1.0 as an optional dependency, which is not
+# published yet; without this pnpm skips it and o1js finds no native backend.
+overrides:
+  '@o1js/native': 3.0.0
+
 allowBuilds:
   '@bufbuild/buf': true # buf CLI for chain-client proto:gen
   msgpackr-extract: true # bullmq native codec
